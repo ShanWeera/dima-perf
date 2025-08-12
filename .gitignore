@@ -1,0 +1,24 @@
+# Rust/Cargo
+/target/
+**/*.rs.bk
+
+# Coverage and profiling
+/*.profraw
+/coverage/
+
+# OS / Editor files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.*
+
+# Project outputs
+/output.json
+
+# Optional: ignore Cargo.lock for libraries (uncomment if this is a library only)
+# Cargo.lock

@@ -1,0 +1,27 @@
+[package]
+name = "dima"
+version = "0.1.0"
+edition = "2021"
+authors = ["Shan Tharanga <stwm2@student.london.ac.uk>"]
+description = "DiMA - Diversity Motif Analyser: A native Rust library for analyzing k-mer diversity in FASTA sequences"
+license = "MIT"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+bio = "1.4"
+linreg = "0.2"
+rand = "0.8"
+rayon = "1.7"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+statrs = "0.16"
+clap = { version = "4.5", features = ["derive"] }
+hashbrown = { version = "0.14", features = ["serde", "rayon"] }
+ahash = "0.8"
+indicatif = { version = "0.17", features = ["rayon"] }
+sysinfo = "0.30"
+
+[dev-dependencies]
+# Add test dependencies if needed 
