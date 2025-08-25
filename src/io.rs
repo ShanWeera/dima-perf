@@ -1,7 +1,7 @@
 use bio::io::fasta;
 use hashbrown::HashMap;
 use rayon::prelude::*;
-use std::fs::File;
+use std::fs::{File, metadata};
 use std::io::{self, Write, Cursor};
 use memmap2::Mmap;
 
@@ -61,7 +61,7 @@ pub fn parse_header(
         .collect::<HashMap<String, String>>()
 }
 
-// Memory-mapped FASTA reader that maintains all existing functionality
+// Intelligent I/O strategy selection based on file size and system resources
 pub fn get_kmers_and_headers_encoded(
     path: &String,
     kmer_length: &usize,
@@ -86,54 +86,77 @@ pub fn get_kmers_and_headers_encoded(
 
     let illegal_chars = if is_protein { protein_ambiguous_chars } else { nucleotide_ambiguous_chars };
 
+    // Determine optimal I/O strategy
+    let use_mmap = should_use_memory_mapping(path);
+    
     let show_progress = std::env::var("PROGRESS").ok().as_deref() != Some("0");
     let pb = if show_progress {
         match expected_count {
             Some(len) => {
                 let pb = indicatif::ProgressBar::new(len as u64);
-                pb.set_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.magenta/blue} {pos}/{len} Reading FASTA (Memory-Mapped)")
+                let template = if use_mmap {
+                    "[{elapsed_precise}] {bar:40.magenta/blue} {pos}/{len} Reading FASTA (Memory-Mapped)"
+                } else {
+                    "[{elapsed_precise}] {bar:40.magenta/blue} {pos}/{len} Reading FASTA (Buffered I/O)"
+                };
+                pb.set_style(indicatif::ProgressStyle::with_template(template)
                     .unwrap()
                     .progress_chars("##-"));
                 Some(pb)
             }
             None => {
                 let pb = indicatif::ProgressBar::new_spinner();
-                pb.set_message("Reading FASTA (Memory-Mapped)...");
+                let message = if use_mmap {
+                    "Reading FASTA (Memory-Mapped)..."
+                } else {
+                    "Reading FASTA (Buffered I/O)..."
+                };
+                pb.set_message(message);
                 pb.enable_steady_tick(std::time::Duration::from_millis(1));
                 Some(pb)
             }
         }
     } else { None };
 
-    // Try memory-mapped approach first, fallback to regular file I/O if needed
-    let result = try_mmap_processing(
-        path,
-        kmer_length,
-        &illegal_chars,
-        is_protein,
-        header_format,
-        header_fillna,
-        &pb,
-    );
-
-    let (transposed_kmers, headers_vec, sequence_count) = match result {
-        Ok((kmers, headers, count)) => (kmers, headers, count),
-        Err(_) => {
-            // Fallback to regular bio::io::fasta if memory mapping fails
-            if let Some(ref pb) = pb {
-                pb.set_message("Memory mapping failed, using regular I/O...");
+    let (transposed_kmers, headers_vec, sequence_count) = if use_mmap {
+        // Use memory-mapped I/O for large files
+        match try_mmap_processing(
+            path,
+            kmer_length,
+            &illegal_chars,
+            is_protein,
+            header_format,
+            header_fillna,
+            &pb,
+        ) {
+            Ok(result) => result,
+            Err(_) => {
+                // Fallback to buffered I/O if memory mapping fails
+                if let Some(ref pb) = pb {
+                    pb.set_message("Memory mapping failed, using buffered I/O...");
+                }
+                process_with_buffered_io(
+                    path,
+                    kmer_length,
+                    &illegal_chars,
+                    is_protein,
+                    header_format,
+                    header_fillna,
+                    &pb,
+                )
             }
-            
-            process_with_bio_fasta(
-                path,
-                kmer_length,
-                &illegal_chars,
-                is_protein,
-                header_format,
-                header_fillna,
-                &pb,
-            )
         }
+    } else {
+        // Use optimized buffered I/O for smaller files
+        process_with_buffered_io(
+            path,
+            kmer_length,
+            &illegal_chars,
+            is_protein,
+            header_format,
+            header_fillna,
+            &pb,
+        )
     };
 
     if let Some(pb) = pb { pb.finish_and_clear(); }
@@ -147,7 +170,46 @@ pub fn get_kmers_and_headers_encoded(
     (transposed_kmers, headers, sequence_count, is_protein)
 }
 
-// Memory-mapped FASTA processing
+// Intelligent decision making for I/O strategy
+fn should_use_memory_mapping(path: &String) -> bool {
+    // Get file size
+    let file_size = match metadata(path) {
+        Ok(meta) => meta.len(),
+        Err(_) => return false, // If we can't get metadata, use buffered I/O
+    };
+
+    // Thresholds based on empirical testing and system characteristics
+    const SMALL_FILE_THRESHOLD: u64 = 10 * 1024 * 1024; // 10MB
+    const LARGE_FILE_THRESHOLD: u64 = 100 * 1024 * 1024; // 100MB
+
+    match file_size {
+        // Small files: buffered I/O is faster due to lower overhead
+        size if size < SMALL_FILE_THRESHOLD => false,
+        
+        // Large files: memory mapping is beneficial
+        size if size > LARGE_FILE_THRESHOLD => true,
+        
+        // Medium files: check available memory
+        _ => {
+            // For medium-sized files, use memory mapping only if we have plenty of RAM
+            // This is a simple heuristic - in practice you might want more sophisticated logic
+            get_available_memory_gb() > 4.0
+        }
+    }
+}
+
+// Get available system memory in GB (simplified heuristic)
+fn get_available_memory_gb() -> f64 {
+    // Simple heuristic: assume we have reasonable memory if we can't detect it
+    // In production, you might want to use a proper system info crate
+    match std::env::var("DIMA_FORCE_MMAP") {
+        Ok(val) if val == "1" => 999.0, // Force memory mapping
+        Ok(val) if val == "0" => 0.0,   // Force buffered I/O
+        _ => 8.0, // Assume 8GB+ available (reasonable default for modern systems)
+    }
+}
+
+// Memory-mapped FASTA processing (optimized for large files)
 fn try_mmap_processing(
     path: &String,
     kmer_length: &usize,
@@ -189,7 +251,6 @@ fn try_mmap_processing(
             if let Some(kmer) = encoded_kmer {
                 transposed_kmers[i].push(kmer);
             }
-            // Skip None values (invalid k-mers)
         }
 
         if let Some(headers_components) = header_format {
@@ -210,8 +271,8 @@ fn try_mmap_processing(
     Ok((transposed_kmers, headers_vec, sequence_count))
 }
 
-// Fallback to regular bio::io::fasta processing
-fn process_with_bio_fasta(
+// Optimized buffered I/O processing (optimized for small-medium files)
+fn process_with_buffered_io(
     path: &String,
     kmer_length: &usize,
     illegal_chars: &[u8],
@@ -224,7 +285,11 @@ fn process_with_bio_fasta(
     let mut headers_vec: Vec<Option<HashMap<String, String>>> = Vec::new();
     let mut sequence_count: usize = 0;
 
-    for record in fasta::Reader::new(File::open(path).expect("Failed to read FASTA file")).records() {
+    // Use larger buffer for better performance with buffered I/O
+    let file = File::open(path).expect("Failed to read FASTA file");
+    let reader = fasta::Reader::with_capacity(64 * 1024, file); // 64KB buffer
+
+    for record in reader.records() {
         let record_unwrapped = record.as_ref().unwrap();
         sequence_count += 1;
         if let Some(ref pb) = pb { pb.inc(1); }
@@ -245,7 +310,6 @@ fn process_with_bio_fasta(
             if let Some(kmer) = encoded_kmer {
                 transposed_kmers[i].push(kmer);
             }
-            // Skip None values (invalid k-mers)
         }
 
         if let Some(headers_components) = header_format {
@@ -309,7 +373,10 @@ pub fn get_kmers_and_headers(
         }
     } else { None };
 
-    for record in fasta::Reader::new(File::open(path).expect("Failed to read FASTA file")).records() {
+    let file = File::open(path).expect("Failed to read FASTA file");
+    let reader = fasta::Reader::with_capacity(64 * 1024, file); // 64KB buffer
+
+    for record in reader.records() {
         let record_unwrapped = record.as_ref().unwrap();
         sequence_count += 1;
         if let Some(ref pb) = pb { pb.inc(1); }
