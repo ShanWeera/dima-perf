@@ -62,13 +62,7 @@ struct Cli {
     #[arg(long = "no-metadata")]
     no_metadata: bool,
 
-    /// Only compute entropies and supports, omit variant lists and metadata
-    #[arg(long = "summary-only")]
-    summary_only: bool,
 
-    /// Disable automatic fallback to summary-only mode for large files
-    #[arg(long = "force-full-analysis")]
-    force_full_analysis: bool,
 
     /// Number of Rayon worker threads (defaults to number of CPUs)
     #[arg(long = "threads")]
@@ -82,7 +76,7 @@ fn main() {
         let _ = rayon::ThreadPoolBuilder::new().num_threads(n_threads).build_global();
     }
 
-    let header_format = if cli.no_metadata || cli.summary_only {
+    let header_format = if cli.no_metadata {
         None
     } else {
         cli.header_format
@@ -90,7 +84,7 @@ fn main() {
             .map(|s| s.split('|').map(|v| v.trim().to_string()).collect())
     };
 
-    let metadata_fields = if cli.no_metadata || cli.summary_only {
+    let metadata_fields = if cli.no_metadata {
         None
     } else {
         cli.metadata_fields
@@ -112,8 +106,6 @@ fn main() {
         alphabet,
         Some(cli.header_fillna),
         metadata_fields,
-        cli.summary_only,
-        cli.force_full_analysis,
     );
 
     if cli.hcs_only {

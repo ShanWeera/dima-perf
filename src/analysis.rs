@@ -2,7 +2,7 @@ use hashbrown::HashMap;
 use rayon::prelude::*;
 use statrs::statistics::Statistics;
 
-use crate::io::{get_kmers_and_headers_encoded, estimate_msa_dimensions};
+use crate::io::get_kmers_and_headers_encoded;
 use crate::entropy::calculate_entropy_encoded;
 use crate::kmer::{count_kmers_encoded, decode_kmer};
 use crate::models::{Results, Position, Variant, highest_entropy};
@@ -15,36 +15,15 @@ pub fn get_results_objs(
     header_format: Option<Vec<String>>,
     alphabet: Option<String>,
     header_fillna: Option<String>,
-    metadata_fields: Option<Vec<String>>, // new
-    summary_only: bool,                   // new
-    force_full_analysis: bool,            // new
+    metadata_fields: Option<Vec<String>>,
 ) -> Results {
     let show_progress = std::env::var("PROGRESS").ok().as_deref() != Some("0");
     let early_pb = if show_progress {
         let pb = indicatif::ProgressBar::new_spinner();
-        pb.set_message("Preparing analysis...");
+        pb.set_message("Reading FASTA and building k-mer matrix...");
         pb.enable_steady_tick(std::time::Duration::from_millis(1));
         Some(pb)
     } else { None };
-
-    // Heuristic memory check
-    let (seq_count, seq_len) = estimate_msa_dimensions(&path).unwrap_or((0, 0));
-    let positions = if seq_len >= kmer_length { seq_len - kmer_length + 1 } else { 0 };
-    let avg_kmer_bytes = kmer_length; // lower bound; UTF-8 bytes == chars here
-    let estimated_bytes: u128 = (positions as u128)
-        .saturating_mul(seq_count as u128)
-        .saturating_mul(avg_kmer_bytes as u128);
-
-    let mut sys = sysinfo::System::new();
-    sys.refresh_memory();
-    let avail_bytes = sys.available_memory() as u128; // in bytes
-
-    let mut force_summary = summary_only;
-    if !summary_only && !force_full_analysis && estimated_bytes > (avail_bytes / 4) {
-        force_summary = true;
-    }
-
-    if let Some(pb) = &early_pb { pb.set_message("Reading FASTA and building k-mer matrix..."); }
 
     let (encoded_kmers, headers, sequence_count, is_protein) = get_kmers_and_headers_encoded(
         &path,
@@ -52,24 +31,10 @@ pub fn get_results_objs(
         header_format.as_ref(),
         header_fillna.as_ref(),
         alphabet.as_ref(),
-        if seq_count > 0 { Some(seq_count) } else { None },
+        None,
     );
 
     if let Some(pb) = early_pb { pb.finish_and_clear(); }
-
-    let show_progress = std::env::var("PROGRESS").ok().as_deref() != Some("0");
-
-    if show_progress && force_summary && !summary_only {
-        let pb = indicatif::ProgressBar::new_spinner();
-        pb.set_message("Low memory detected. Switching to summary-only mode.");
-        pb.finish_and_clear();
-    }
-
-    if show_progress && !force_summary && !summary_only && force_full_analysis && estimated_bytes > (avail_bytes / 4) {
-        let pb = indicatif::ProgressBar::new_spinner();
-        pb.set_message("Warning: Large dataset detected but --force-full-analysis enabled. This may use significant memory.");
-        pb.finish_and_clear();
-    }
 
     let position_entropies: Vec<f64> = if show_progress {
         let pb = indicatif::ProgressBar::new(encoded_kmers.len() as u64);
@@ -104,23 +69,7 @@ pub fn get_results_objs(
             .enumerate()
             .map(|(idx, position_count)| {
                 let support = encoded_kmers[idx].len();
-                let out = if force_summary {
-                    Position::new(
-                        idx + 1,
-                        position_entropies[idx],
-                        support,
-                        None,
-                        if support == 0 {
-                            Some("NS".to_owned())
-                        } else if support < support_threshold {
-                            Some("LS".to_owned())
-                        } else if support == support_threshold {
-                            Some("ELS".to_owned())
-                        } else {
-                            None
-                        },
-                    )
-                } else {
+                let out = {
                     let mut variants = position_count
                         .iter()
                         .map(|(&encoded_sequence, count_data)| {
@@ -197,23 +146,7 @@ pub fn get_results_objs(
             .enumerate()
             .map(|(idx, position_count)| {
                 let support = encoded_kmers[idx].len();
-                if force_summary {
-                    return Position::new(
-                        idx + 1,
-                        position_entropies[idx],
-                        support,
-                        None,
-                        if support == 0 {
-                            Some("NS".to_owned())
-                        } else if support < support_threshold {
-                            Some("LS".to_owned())
-                        } else if support == support_threshold {
-                            Some("ELS".to_owned())
-                        } else {
-                            None
-                        },
-                    );
-                }
+
                 let mut variants = position_count
                     .iter()
                     .map(|(&encoded_sequence, count_data)| {

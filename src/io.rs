@@ -18,17 +18,7 @@ pub fn save_file(content: &str, path: &str) -> Result<(), io::Error> {
     }
 }
 
-pub fn estimate_msa_dimensions(path: &String) -> io::Result<(usize, usize)> {
-    // Returns (sequence_count, sequence_length)
-    let mut count = 0usize;
-    let mut length = 0usize;
-    for rec in fasta::Reader::new(File::open(path)?).records() {
-        let rec = rec?;
-        if length == 0 { length = rec.seq().len(); }
-        count += 1;
-    }
-    Ok((count, length))
-}
+
 
 pub fn parse_header(
     header: &String,
