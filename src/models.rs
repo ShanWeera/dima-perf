@@ -136,6 +136,21 @@ impl Results {
             Ok(serde_json::to_string_pretty(&self).unwrap())
         }
     }
+    
+    /// Save results in binary format for improved performance
+    pub fn to_binary(&self, path: String, config: Option<crate::binary::BinaryFormatConfig>) -> Result<(), std::io::Error> {
+        crate::binary::BinaryFormat::write_to_file(self, &path, config)
+    }
+    
+    /// Load results from binary format
+    pub fn from_binary(path: String) -> Result<Results, std::io::Error> {
+        crate::binary::BinaryFormat::read_from_file(&path)
+    }
+    
+    /// Compare JSON vs binary format sizes
+    pub fn compare_formats(&self) -> Result<(usize, usize, f64), std::io::Error> {
+        crate::binary::BinaryFormat::compare_formats(self)
+    }
 }
 
 impl fmt::Display for Position {
