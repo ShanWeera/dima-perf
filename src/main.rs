@@ -66,6 +66,10 @@ struct Cli {
     #[arg(long = "summary-only")]
     summary_only: bool,
 
+    /// Disable automatic fallback to summary-only mode for large files
+    #[arg(long = "force-full-analysis")]
+    force_full_analysis: bool,
+
     /// Number of Rayon worker threads (defaults to number of CPUs)
     #[arg(long = "threads")]
     threads: Option<usize>,
@@ -109,6 +113,7 @@ fn main() {
         Some(cli.header_fillna),
         metadata_fields,
         cli.summary_only,
+        cli.force_full_analysis,
     );
 
     if cli.hcs_only {

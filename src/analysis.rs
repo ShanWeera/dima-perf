@@ -2,9 +2,9 @@ use hashbrown::HashMap;
 use rayon::prelude::*;
 use statrs::statistics::Statistics;
 
-use crate::io::{get_kmers_and_headers, estimate_msa_dimensions};
-use crate::entropy::calculate_entropy;
-use crate::kmer::count_kmers;
+use crate::io::{get_kmers_and_headers_encoded, estimate_msa_dimensions};
+use crate::entropy::calculate_entropy_encoded;
+use crate::kmer::{count_kmers_encoded, decode_kmer};
 use crate::models::{Results, Position, Variant, highest_entropy};
 
 pub fn get_results_objs(
@@ -17,6 +17,7 @@ pub fn get_results_objs(
     header_fillna: Option<String>,
     metadata_fields: Option<Vec<String>>, // new
     summary_only: bool,                   // new
+    force_full_analysis: bool,            // new
 ) -> Results {
     let show_progress = std::env::var("PROGRESS").ok().as_deref() != Some("0");
     let early_pb = if show_progress {
@@ -39,13 +40,13 @@ pub fn get_results_objs(
     let avail_bytes = sys.available_memory() as u128; // in bytes
 
     let mut force_summary = summary_only;
-    if !summary_only && estimated_bytes > (avail_bytes / 4) {
+    if !summary_only && !force_full_analysis && estimated_bytes > (avail_bytes / 4) {
         force_summary = true;
     }
 
     if let Some(pb) = &early_pb { pb.set_message("Reading FASTA and building k-mer matrix..."); }
 
-    let (kmers, headers, sequence_count) = get_kmers_and_headers(
+    let (encoded_kmers, headers, sequence_count, is_protein) = get_kmers_and_headers_encoded(
         &path,
         &kmer_length,
         header_format.as_ref(),
@@ -56,14 +57,6 @@ pub fn get_results_objs(
 
     if let Some(pb) = early_pb { pb.finish_and_clear(); }
 
-    let position_slices = kmers
-        .into_par_iter()
-        .map(|position_kmers| position_kmers
-            .into_iter()
-            .map(|item| item.into_boxed_str())
-            .collect::<Vec<Box<str>>>())
-        .collect::<Vec<Vec<Box<str>>>>();
-
     let show_progress = std::env::var("PROGRESS").ok().as_deref() != Some("0");
 
     if show_progress && force_summary && !summary_only {
@@ -72,15 +65,21 @@ pub fn get_results_objs(
         pb.finish_and_clear();
     }
 
+    if show_progress && !force_summary && !summary_only && force_full_analysis && estimated_bytes > (avail_bytes / 4) {
+        let pb = indicatif::ProgressBar::new_spinner();
+        pb.set_message("Warning: Large dataset detected but --force-full-analysis enabled. This may use significant memory.");
+        pb.finish_and_clear();
+    }
+
     let position_entropies: Vec<f64> = if show_progress {
-        let pb = indicatif::ProgressBar::new(position_slices.len() as u64);
+        let pb = indicatif::ProgressBar::new(encoded_kmers.len() as u64);
         pb.set_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} Entropy")
             .unwrap()
             .progress_chars("##-"));
-        let ent = position_slices
+        let ent = encoded_kmers
             .par_iter()
             .map(|position_kmers| {
-                let v = calculate_entropy(position_kmers, &support_threshold);
+                let v = calculate_entropy_encoded(position_kmers, &support_threshold);
                 pb.inc(1);
                 v
             })
@@ -88,23 +87,23 @@ pub fn get_results_objs(
         pb.finish_and_clear();
         ent
     } else {
-        position_slices
+        encoded_kmers
             .par_iter()
-            .map(|position_kmers| calculate_entropy(position_kmers, &support_threshold))
+            .map(|position_kmers| calculate_entropy_encoded(position_kmers, &support_threshold))
             .collect()
     };
 
     let positions: Vec<Position> = if show_progress {
-        let pb = indicatif::ProgressBar::new(position_slices.len() as u64);
+        let pb = indicatif::ProgressBar::new(encoded_kmers.len() as u64);
         pb.set_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.green/blue} {pos}/{len} Positions")
             .unwrap()
             .progress_chars("##-"));
-        let pos = position_slices
+        let pos = encoded_kmers
             .par_iter()
-            .map(|position_kmers| count_kmers(position_kmers))
+            .map(|position_kmers| count_kmers_encoded(position_kmers))
             .enumerate()
             .map(|(idx, position_count)| {
-                let support = position_slices[idx].len();
+                let support = encoded_kmers[idx].len();
                 let out = if force_summary {
                     Position::new(
                         idx + 1,
@@ -124,11 +123,12 @@ pub fn get_results_objs(
                 } else {
                     let mut variants = position_count
                         .iter()
-                        .map(|(sequence, count_data)| {
+                        .map(|(&encoded_sequence, count_data)| {
+                            let sequence = decode_kmer(encoded_sequence, kmer_length, is_protein);
                             let mut variant = Variant {
-                                sequence: sequence.to_string(),
+                                sequence,
                                 count: count_data.0,
-                                incidence: ((count_data.0 as f32 / position_slices[idx].len() as f32) * 100_f32),
+                                incidence: ((count_data.0 as f32 / encoded_kmers[idx].len() as f32) * 100_f32),
                                 metadata: None,
                                 motif_short: None,
                                 motif_long: None,
@@ -191,12 +191,12 @@ pub fn get_results_objs(
         pb.finish_and_clear();
         pos
     } else {
-        position_slices
+        encoded_kmers
             .par_iter()
-            .map(|position_kmers| count_kmers(position_kmers))
+            .map(|position_kmers| count_kmers_encoded(position_kmers))
             .enumerate()
             .map(|(idx, position_count)| {
-                let support = position_slices[idx].len();
+                let support = encoded_kmers[idx].len();
                 if force_summary {
                     return Position::new(
                         idx + 1,
@@ -216,11 +216,12 @@ pub fn get_results_objs(
                 }
                 let mut variants = position_count
                     .iter()
-                    .map(|(sequence, count_data)| {
+                    .map(|(&encoded_sequence, count_data)| {
+                        let sequence = decode_kmer(encoded_sequence, kmer_length, is_protein);
                         let mut variant = Variant {
-                            sequence: sequence.to_string(),
+                            sequence,
                             count: count_data.0,
-                            incidence: ((count_data.0 as f32 / position_slices[idx].len() as f32) * 100_f32),
+                            incidence: ((count_data.0 as f32 / encoded_kmers[idx].len() as f32) * 100_f32),
                             metadata: None,
                             motif_short: None,
                             motif_long: None,
