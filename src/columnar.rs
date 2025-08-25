@@ -17,6 +17,7 @@ use rayon::prelude::*;
 use serde::{Serialize, Deserialize};
 
 use crate::zero_copy::StringInterner;
+use crate::indexing::{MetadataIndexManager, IndexConfig};
 
 /// Column-oriented metadata storage container
 /// 
@@ -388,9 +389,11 @@ impl ColumnarOperations {
     }
 }
 
-/// Compatibility layer for existing code
+/// Enhanced compatibility layer with indexing support
 pub struct ColumnarMetadataAdapter {
     columnar: ColumnarMetadata,
+    index_manager: Option<MetadataIndexManager>,
+    indexing_enabled: bool,
 }
 
 impl ColumnarMetadataAdapter {
@@ -400,7 +403,64 @@ impl ColumnarMetadataAdapter {
         row_metadata: Vec<Option<HashMap<String, String>>>,
     ) -> Self {
         let columnar = ColumnarMetadata::from_row_metadata(field_names, &row_metadata);
-        Self { columnar }
+        Self { 
+            columnar,
+            index_manager: None,
+            indexing_enabled: false,
+        }
+    }
+    
+    /// Create adapter with indexing enabled
+    pub fn from_row_metadata_with_indexing(
+        field_names: Vec<String>,
+        row_metadata: Vec<Option<HashMap<String, String>>>,
+    ) -> Self {
+        let columnar = ColumnarMetadata::from_row_metadata(field_names, &row_metadata);
+        let index_manager = columnar.build_indices();
+        
+        Self { 
+            columnar,
+            index_manager: Some(index_manager),
+            indexing_enabled: true,
+        }
+    }
+    
+    /// Create adapter with custom index configuration
+    pub fn from_row_metadata_with_config(
+        field_names: Vec<String>,
+        row_metadata: Vec<Option<HashMap<String, String>>>,
+        index_config: IndexConfig,
+    ) -> Self {
+        let columnar = ColumnarMetadata::from_row_metadata(field_names, &row_metadata);
+        let index_manager = columnar.build_indices_with_config(index_config);
+        
+        Self { 
+            columnar,
+            index_manager: Some(index_manager),
+            indexing_enabled: true,
+        }
+    }
+    
+    /// Enable indexing on existing adapter
+    pub fn enable_indexing(&mut self) {
+        if !self.indexing_enabled {
+            let index_manager = self.columnar.build_indices();
+            self.index_manager = Some(index_manager);
+            self.indexing_enabled = true;
+        }
+    }
+    
+    /// Enable indexing with custom configuration
+    pub fn enable_indexing_with_config(&mut self, config: IndexConfig) {
+        let index_manager = self.columnar.build_indices_with_config(config);
+        self.index_manager = Some(index_manager);
+        self.indexing_enabled = true;
+    }
+    
+    /// Disable indexing to save memory
+    pub fn disable_indexing(&mut self) {
+        self.index_manager = None;
+        self.indexing_enabled = false;
     }
     
     /// Get metadata in original format for compatibility
@@ -418,13 +478,166 @@ impl ColumnarMetadataAdapter {
         &mut self.columnar
     }
     
-    /// Aggregate metadata for variant processing (optimized)
+    /// Aggregate metadata for variant processing (optimized with indexing)
     pub fn aggregate_for_variant_indices(
-        &self,
+        &mut self,
         indices: &[usize],
         fields: &[String],
     ) -> HashMap<String, HashMap<String, usize>> {
+        // Use indexed aggregation if available
+        if self.indexing_enabled {
+            if let Some(ref mut index_manager) = self.index_manager {
+                return Self::aggregate_with_indices_static(index_manager, indices, fields);
+            }
+        }
+        
+        // Fallback to columnar aggregation
         self.columnar.aggregate_metadata_for_indices_parallel(indices, fields)
+    }
+    
+    /// Fast field value lookup using indices
+    pub fn lookup_field_value(&mut self, field_name: &str, value: &str) -> Vec<usize> {
+        if self.indexing_enabled {
+            if let Some(ref mut index_manager) = self.index_manager {
+                return index_manager.lookup_field_value(field_name, value);
+            }
+        }
+        
+        // Fallback to columnar lookup
+        self.columnar.filter_by_field_value(field_name, value)
+    }
+    
+    /// Multi-field query with AND logic (indexed)
+    pub fn query_and(&mut self, field_queries: &[(&str, &str)]) -> Vec<usize> {
+        if self.indexing_enabled {
+            if let Some(ref mut index_manager) = self.index_manager {
+                return index_manager.query_and(field_queries);
+            }
+        }
+        
+        // Fallback to sequential filtering
+        let mut result: Option<Vec<usize>> = None;
+        for (field_name, value) in field_queries {
+            let field_results = self.columnar.filter_by_field_value(field_name, value);
+            match result {
+                Some(ref current) => {
+                    // Intersection
+                    let intersection: Vec<usize> = current.iter()
+                        .filter(|&&idx| field_results.contains(&idx))
+                        .copied()
+                        .collect();
+                    result = Some(intersection);
+                }
+                None => {
+                    result = Some(field_results);
+                }
+            }
+        }
+        result.unwrap_or_else(Vec::new)
+    }
+    
+    /// Multi-field query with OR logic (indexed)
+    pub fn query_or(&mut self, field_queries: &[(&str, &str)]) -> Vec<usize> {
+        if self.indexing_enabled {
+            if let Some(ref mut index_manager) = self.index_manager {
+                return index_manager.query_or(field_queries);
+            }
+        }
+        
+        // Fallback to sequential filtering with union
+        let mut result = std::collections::HashSet::new();
+        for (field_name, value) in field_queries {
+            let field_results = self.columnar.filter_by_field_value(field_name, value);
+            result.extend(field_results);
+        }
+        result.into_iter().collect()
+    }
+    
+    /// Get field value counts (optimized with indexing)
+    pub fn get_field_value_counts(&mut self, field_name: &str) -> HashMap<String, usize> {
+        if self.indexing_enabled {
+            if let Some(ref mut index_manager) = self.index_manager {
+                return index_manager.get_field_value_counts(field_name);
+            }
+        }
+        
+        // Fallback to columnar method
+        self.columnar.get_field_value_counts(field_name).unwrap_or_else(HashMap::new)
+    }
+    
+    /// Get unique field values (optimized with indexing)
+    pub fn get_unique_field_values(&mut self, field_name: &str) -> Vec<String> {
+        if self.indexing_enabled {
+            if let Some(ref mut index_manager) = self.index_manager {
+                return index_manager.get_unique_field_values(field_name);
+            }
+        }
+        
+        // Fallback to columnar method
+        self.columnar.get_field_value_counts(field_name)
+            .map(|counts| counts.keys().cloned().collect())
+            .unwrap_or_else(Vec::new)
+    }
+    
+    /// Optimized metadata aggregation using indices (static method)
+    fn aggregate_with_indices_static(
+        index_manager: &mut MetadataIndexManager,
+        indices: &[usize],
+        fields: &[String],
+    ) -> HashMap<String, HashMap<String, usize>> {
+        let mut result = HashMap::new();
+        
+        for field_name in fields {
+            let mut field_counts = HashMap::new();
+            
+            // Get all unique values for this field
+            let unique_values = index_manager.get_unique_field_values(field_name);
+            
+            // For each unique value, count how many of our indices match
+            for value in unique_values {
+                let value_indices = index_manager.lookup_field_value(field_name, &value);
+                
+                // Count intersection with our target indices
+                let count = indices.iter()
+                    .filter(|&&idx| value_indices.contains(&idx))
+                    .count();
+                
+                if count > 0 {
+                    field_counts.insert(value, count);
+                }
+            }
+            
+            if !field_counts.is_empty() {
+                result.insert(field_name.clone(), field_counts);
+            }
+        }
+        
+        result
+    }
+    
+    /// Get indexing statistics
+    pub fn get_index_stats(&self) -> Option<crate::indexing::IndexManagerStats> {
+        if self.indexing_enabled {
+            self.index_manager.as_ref().map(|manager| manager.get_comprehensive_stats())
+        } else {
+            None
+        }
+    }
+    
+    /// Check if indexing is enabled
+    pub fn is_indexing_enabled(&self) -> bool {
+        self.indexing_enabled
+    }
+    
+    /// Get total memory usage including indices
+    pub fn get_total_memory_usage(&self) -> usize {
+        let mut total = self.columnar.estimate_memory_usage();
+        
+        if let Some(ref index_manager) = self.index_manager {
+            total += index_manager.get_total_memory_usage();
+        }
+        
+        total
     }
 }
 
@@ -582,7 +795,7 @@ mod tests {
         let field_names = vec!["Date".to_string(), "Country".to_string(), "Species".to_string()];
         let row_metadata = create_test_metadata();
         
-        let adapter = ColumnarMetadataAdapter::from_row_metadata(field_names.clone(), row_metadata.clone());
+        let mut adapter = ColumnarMetadataAdapter::from_row_metadata(field_names.clone(), row_metadata.clone());
         
         let converted_back = adapter.get_row_metadata();
         assert_eq!(converted_back.len(), row_metadata.len());

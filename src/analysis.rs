@@ -101,8 +101,8 @@ pub fn get_results_objs_columnar(
                             motif_long: None,
                         };
 
-                        // Use columnar metadata for optimized aggregation
-                        if let Some(ref columnar_adapter) = columnar_headers {
+                        // Use non-indexed columnar aggregation for compatibility
+                        if let Some(ref columnar_adapter) = &columnar_headers {
                             let fields: Vec<String> = match &metadata_fields {
                                 Some(only) => header_format.as_ref().unwrap().iter()
                                     .filter(|f| only.contains(f))
@@ -112,8 +112,8 @@ pub fn get_results_objs_columnar(
                             };
 
                             if !fields.is_empty() {
-                                // Use optimized columnar aggregation
-                                let metadata = columnar_adapter.aggregate_for_variant_indices(
+                                // Use columnar aggregation (non-indexed to avoid borrowing issues)
+                                let metadata = columnar_adapter.get_columnar().aggregate_metadata_for_indices_parallel(
                                     &count_data.1, 
                                     &fields
                                 );
@@ -160,8 +160,8 @@ pub fn get_results_objs_columnar(
                             motif_long: None,
                         };
 
-                        // Use columnar metadata for optimized aggregation
-                        if let Some(ref columnar_adapter) = columnar_headers {
+                        // Use non-indexed columnar aggregation for compatibility
+                        if let Some(ref columnar_adapter) = &columnar_headers {
                             let fields: Vec<String> = match &metadata_fields {
                                 Some(only) => header_format.as_ref().unwrap().iter()
                                     .filter(|f| only.contains(f))
@@ -171,8 +171,8 @@ pub fn get_results_objs_columnar(
                             };
 
                             if !fields.is_empty() {
-                                // Use optimized columnar aggregation
-                                let metadata = columnar_adapter.aggregate_for_variant_indices(
+                                // Use columnar aggregation (non-indexed to avoid borrowing issues)
+                                let metadata = columnar_adapter.get_columnar().aggregate_metadata_for_indices_parallel(
                                     &count_data.1, 
                                     &fields
                                 );

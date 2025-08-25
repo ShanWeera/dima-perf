@@ -71,6 +71,10 @@ struct Cli {
     /// Use columnar metadata storage for improved performance
     #[arg(long = "columnar")]
     columnar: bool,
+
+    /// Enable metadata indexing for 80-95% faster lookups
+    #[arg(long = "indexing")]
+    indexing: bool,
 }
 
 fn main() {

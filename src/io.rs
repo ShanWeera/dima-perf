@@ -9,6 +9,7 @@ use crate::kmer::{sliding_window, sliding_window_encoded};
 use crate::zero_copy::parse_header_zero_copy;
 use crate::columnar::ColumnarMetadataAdapter;
 
+
 pub fn save_file(content: &str, path: &str) -> Result<(), io::Error> {
     if let Ok(mut f) = File::create(path) {
         if f.write_all(content.as_bytes()).is_ok() {
@@ -113,7 +114,7 @@ pub fn get_kmers_and_headers_encoded_columnar(
     
     // Convert to columnar format if we have headers
     let columnar_headers = if let (Some(headers), Some(format)) = (row_headers, header_format) {
-        let adapter = ColumnarMetadataAdapter::from_row_metadata(format.clone(), headers);
+        let adapter = ColumnarMetadataAdapter::from_row_metadata_with_indexing(format.clone(), headers);
         Some(adapter)
     } else {
         None
