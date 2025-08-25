@@ -22,6 +22,7 @@ use crate::simd_string::{SimdDelimiterParser, SimdStringTrimmer};
 /// 
 /// This provides significant memory savings when processing many sequences
 /// with repetitive header field names and common metadata values.
+#[derive(Debug)]
 pub struct StringInterner {
     // Use Arc<str> for shared ownership of interned strings
     strings: RwLock<BTreeMap<String, Arc<str>>>,

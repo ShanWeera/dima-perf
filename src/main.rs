@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 
-use dima::get_results_objs;
+use dima::{get_results_objs, get_results_objs_columnar};
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
 pub enum Alphabet {
@@ -67,6 +67,10 @@ struct Cli {
     /// Number of Rayon worker threads (defaults to number of CPUs)
     #[arg(long = "threads")]
     threads: Option<usize>,
+
+    /// Use columnar metadata storage for improved performance
+    #[arg(long = "columnar")]
+    columnar: bool,
 }
 
 fn main() {
@@ -97,16 +101,29 @@ fn main() {
         Alphabet::Nucleotide => Some("nucleotide".to_string()),
     };
 
-    let results = get_results_objs(
-        cli.input.to_string_lossy().to_string(),
-        cli.kmer_length,
-        cli.support_threshold,
-        cli.query_name,
-        header_format,
-        alphabet,
-        Some(cli.header_fillna),
-        metadata_fields,
-    );
+    let results = if cli.columnar {
+        get_results_objs_columnar(
+            cli.input.to_string_lossy().to_string(),
+            cli.kmer_length,
+            cli.support_threshold,
+            cli.query_name,
+            header_format,
+            alphabet,
+            Some(cli.header_fillna),
+            metadata_fields,
+        )
+    } else {
+        get_results_objs(
+            cli.input.to_string_lossy().to_string(),
+            cli.kmer_length,
+            cli.support_threshold,
+            cli.query_name,
+            header_format,
+            alphabet,
+            Some(cli.header_fillna),
+            metadata_fields,
+        )
+    };
 
     if cli.hcs_only {
         match results.get_hcs(
