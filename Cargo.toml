@@ -23,6 +23,7 @@ ahash = "0.8"
 indicatif = { version = "0.17", features = ["rayon"] }
 memmap2 = "0.9"
 wide = { version = "0.7", features = ["std"] }
+libm = "0.2"
 
 [dev-dependencies]
 # Add test dependencies if needed

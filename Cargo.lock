@@ -345,6 +345,7 @@ dependencies = [
  "clap",
  "hashbrown 0.14.5",
  "indicatif",
+ "libm",
  "linreg",
  "memmap2",
  "rand",
