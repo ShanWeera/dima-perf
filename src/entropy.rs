@@ -3,7 +3,7 @@ use rand::seq::SliceRandom;
 use hashbrown::HashMap;
 
 // SIMD imports for vectorized entropy calculations
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use wide::*;
 
 /// Fast logarithm approximation using libm for high precision
@@ -18,16 +18,19 @@ fn fast_log2_f64(x: f64) -> f64 {
 }
 
 /// SIMD-optimized vectorized logarithm calculation for f64x4 vectors
-#[cfg(target_arch = "x86_64")]
+/// Supports both x86_64 (SSE/AVX) and ARM64 (NEON) architectures
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 #[inline(always)]
 fn vectorized_log2_f64x4(values: f64x4) -> f64x4 {
-    // Extract individual values and apply fast log2
-    let a = fast_log2_f64(values.extract(0));
-    let b = fast_log2_f64(values.extract(1));
-    let c = fast_log2_f64(values.extract(2));
-    let d = fast_log2_f64(values.extract(3));
-    
-    f64x4::new(a, b, c, d)
+    // Convert to array, apply fast log2, and convert back
+    let array: [f64; 4] = values.to_array();
+    let result = [
+        fast_log2_f64(array[0]),
+        fast_log2_f64(array[1]),
+        fast_log2_f64(array[2]),
+        fast_log2_f64(array[3]),
+    ];
+    f64x4::new(result)
 }
 
 /// Vectorized Shannon's entropy calculation using SIMD operations
@@ -39,10 +42,11 @@ fn vectorized_log2_f64x4(values: f64x4) -> f64x4 {
 /// - Reducing scalar operations and improving cache locality
 /// 
 /// Performance characteristics:
-/// - 20-40% faster than scalar implementation for large count arrays
+/// - 20-40% faster than scalar implementation for large count arrays on x86_64 and ARM64
 /// - Automatic fallback to scalar code for small arrays or unsupported architectures
 /// - Maintains identical precision to original implementation
-#[cfg(target_arch = "x86_64")]
+/// - Uses SSE/AVX on x86_64 and NEON on ARM64 (Apple Silicon)
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 pub fn shannons_entropy_vectorized(counts: &[(u64, usize)], total_count: usize) -> f64 {
     if counts.is_empty() || total_count == 0 { return 0.0; }
     
@@ -56,12 +60,13 @@ pub fn shannons_entropy_vectorized(counts: &[(u64, usize)], total_count: usize) 
     // SIMD processing for chunks of 4
     for chunk in chunks {
         // Load counts into SIMD vector
-        let counts_vec = f64x4::new(
+        let counts_array = [
             chunk[0].1 as f64,
             chunk[1].1 as f64,
             chunk[2].1 as f64,
             chunk[3].1 as f64,
-        );
+        ];
+        let counts_vec = f64x4::new(counts_array);
         
         // Vectorized probability calculation: p = count / total
         let total_vec = f64x4::splat(total_f64);
@@ -73,8 +78,9 @@ pub fn shannons_entropy_vectorized(counts: &[(u64, usize)], total_count: usize) 
         // Vectorized multiplication: p * log2(p)
         let p_log_p = probabilities * log_probs;
         
-        // Sum the results
-        entropy_sum += p_log_p.sum();
+        // Sum the results (convert to array and sum manually)
+        let p_log_p_array = p_log_p.to_array();
+        entropy_sum += p_log_p_array[0] + p_log_p_array[1] + p_log_p_array[2] + p_log_p_array[3];
     }
     
     // Handle remainder with scalar operations
@@ -86,8 +92,8 @@ pub fn shannons_entropy_vectorized(counts: &[(u64, usize)], total_count: usize) 
     if entropy_sum == 0.0 { 0.0 } else { -entropy_sum }
 }
 
-/// Fallback vectorized entropy for non-x86_64 architectures
-#[cfg(not(target_arch = "x86_64"))]
+/// Fallback vectorized entropy for architectures without SIMD support
+#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
 pub fn shannons_entropy_vectorized(counts: &[(u64, usize)], total_count: usize) -> f64 {
     shannons_entropy_scalar_optimized(counts, total_count)
 }
@@ -395,16 +401,19 @@ mod tests {
         println!("Speedup: {:.2}x", scalar_time.as_nanos() as f64 / vectorized_time.as_nanos() as f64);
     }
 
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
     #[test]
     fn test_simd_log2_vectorization() {
-        let values = f64x4::new(1.0, 2.0, 4.0, 8.0);
+        let values = f64x4::new([1.0, 2.0, 4.0, 8.0]);
         let result = vectorized_log2_f64x4(values);
         
-        let expected = f64x4::new(0.0, 1.0, 2.0, 3.0);
+        let expected = f64x4::new([0.0, 1.0, 2.0, 3.0]);
+        
+        let result_array = result.to_array();
+        let expected_array = expected.to_array();
         
         for i in 0..4 {
-            assert!((result.extract(i) - expected.extract(i)).abs() < 1e-10);
+            assert!((result_array[i] - expected_array[i]).abs() < 1e-10);
         }
     }
 

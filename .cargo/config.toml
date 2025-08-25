@@ -1,0 +1,19 @@
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+ar = "x86_64-w64-mingw32-ar"
+
+# Optimize for performance
+[profile.release-optimized]
+inherits = "release"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# Platform-specific optimizations
+[target.x86_64-pc-windows-gnu.env]
+CC_x86_64_pc_windows_gnu = "x86_64-w64-mingw32-gcc"
+CXX_x86_64_pc_windows_gnu = "x86_64-w64-mingw32-g++"
+
+[target.aarch64-apple-darwin.env]
+# Apple Silicon optimizations will use native toolchain
