@@ -342,6 +342,7 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "bio",
+ "bytemuck",
  "clap",
  "hashbrown 0.14.5",
  "indicatif",
