@@ -1,242 +1,530 @@
-# DiMA - Diversity Motif Analyser (Native Rust)
+# DiMA - Diversity Motif Analyser
 
-A native Rust CLI and library for analyzing k-mer diversity in FASTA sequences. This is a conversion of the original PyO3-based Python extension to pure Rust.
+A high-performance command-line tool for analyzing protein and nucleotide sequence diversity using k-mer based entropy analysis.
 
-## Features
+---
 
-- Analyze k-mer diversity in protein and nucleotide sequences
-- Calculate Shannon entropy with statistical correction
-- Identify motif variants (Index, Major, Minor, Unique)
-- Export results to JSON or binary format
-- Extract highly conserved sequences (HCS)
-- High-performance parallel processing using Rayon
-- **Robust character validation** with whitelist-based filtering
-- Columnar metadata storage for improved performance
-- Binary output format for 50-70% faster I/O
+## Table of Contents
 
-## CLI Usage
+- [Overview](#overview)
+  - [What is DiMA?](#what-is-dima)
+  - [Key Features](#key-features)
+  - [Diversity Motifs](#diversity-motifs)
+- [Installation](#installation)
+  - [Pre-built Binaries](#pre-built-binaries)
+  - [Build from Source](#build-from-source)
+- [Quick Start](#quick-start)
+- [Usage Guide](#usage-guide)
+  - [Basic Analysis](#basic-analysis)
+  - [Working with Metadata](#working-with-metadata)
+  - [Extracting Conserved Sequences](#extracting-conserved-sequences)
+  - [Output Formats](#output-formats)
+  - [Performance Optimization](#performance-optimization)
+  - [Character Validation](#character-validation)
+- [Command Reference](#command-reference)
+  - [analyze Command](#analyze-command)
+  - [deflate Command](#deflate-command)
+- [Output Format](#output-format)
+  - [JSON Structure](#json-structure)
+  - [Understanding the Results](#understanding-the-results)
+- [Examples](#examples)
+  - [Basic Example](#basic-example)
+  - [With Metadata Aggregation](#with-metadata-aggregation)
+  - [Highly Conserved Sequences](#highly-conserved-sequences)
+  - [Binary Output for Large Datasets](#binary-output-for-large-datasets)
+- [Performance](#performance)
+- [Publications](#publications)
+- [License](#license)
 
-Install Rust first, then:
+---
+
+## Overview
+
+### What is DiMA?
+
+Protein sequence diversity is one of the major challenges in the design of diagnostic, prophylactic, and therapeutic interventions against viruses. **DiMA** (Diversity Motif Analyser) is a tool designed to facilitate the dissection of protein sequence diversity dynamics.
+
+DiMA provides a quantitative measure of sequence diversity by using **Shannon's entropy**, applied via a user-defined k-mer sliding window. The entropy value is corrected for sample size bias by applying a statistical adjustment through linear regression extrapolation.
+
+### Key Features
+
+- **K-mer Sliding Window Analysis**: Analyze sequence diversity at each position using configurable k-mer lengths
+- **Shannon's Entropy**: Quantify diversity with sample-size corrected entropy calculations
+- **Diversity Motif Classification**: Automatically classify variants as Index, Major, Minor, or Unique
+- **Metadata Aggregation**: Track the distribution of metadata (country, date, host, etc.) per variant
+- **Highly Conserved Sequences (HCS)**: Extract conserved regions for vaccine design and epitope mapping
+- **High Performance**: Written in Rust with parallel processing, capable of analyzing millions of sequences
+- **Flexible Output**: JSON and compact binary formats with optional compression
+- **Strict Validation**: Configurable character validation with detailed reporting
+
+### Diversity Motifs
+
+At each k-mer position, distinct sequences are classified into motifs based on their incidence:
+
+| Motif | Short | Description |
+|-------|-------|-------------|
+| **Index** | I | The predominant sequence (highest count, appears more than once) |
+| **Major** | Ma | The second most common sequence (after Index) |
+| **Minor** | Mi | Sequences between Major and Unique in frequency |
+| **Unique** | U | Sequences that appear only once |
+
+---
+
+## Installation
+
+### Pre-built Binaries
+
+Download the latest release for your platform from the [Releases](https://github.com/BVU-BILSAB/DiMA/releases) page.
+
+**Linux / macOS:**
+```bash
+# Download and extract
+curl -LO https://github.com/BVU-BILSAB/DiMA/releases/latest/download/dima-<version>-<platform>.tar.gz
+tar -xzf dima-*.tar.gz
+
+# Move to PATH
+sudo mv dima-*/dima /usr/local/bin/
+
+# Verify installation
+dima --help
+```
+
+**Windows (PowerShell):**
+```powershell
+# Download and extract
+Invoke-WebRequest -Uri "https://github.com/BVU-BILSAB/DiMA/releases/latest/download/dima-<version>-x86_64-pc-windows-msvc.zip" -OutFile "dima.zip"
+Expand-Archive -Path "dima.zip" -DestinationPath "."
+
+# Add to PATH or run directly
+.\dima.exe --help
+```
+
+### Build from Source
+
+Requires [Rust](https://rustup.rs/) 1.70 or later.
 
 ```bash
+# Clone the repository
+git clone https://github.com/BVU-BILSAB/DiMA.git
+cd DiMA
+
+# Build release binary
 cargo build --release
+
+# Binary is at ./target/release/dima
 ./target/release/dima --help
 ```
 
-### Basic Examples
+---
+
+## Quick Start
 
 ```bash
-# Full analysis to stdout
-./target/release/dima analyze -i data/sequences.fasta -k 9 -t 30 -n "Sample 1"
+# Basic analysis
+dima analyze -i sequences.fasta -o results.json
 
-# Save full results to a file
-./target/release/dima analyze -i data/sequences.fasta -o results.json
+# With metadata extraction
+dima analyze -i sequences.fasta -o results.json --header-format "accession|country|date"
 
-# Provide header format and alphabet
-./target/release/dima analyze -i data/sequences.fasta --header-format "country|date|patient" --alphabet nucleotide
+# Extract highly conserved sequences
+dima analyze -i sequences.fasta --hcs --hcs-threshold 95
 
-# Extract HCS only (with optional threshold) and print to stdout
-./target/release/dima analyze -i data/sequences.fasta --hcs --hcs-threshold 5
-
-# Extract HCS and write to a file
-./target/release/dima analyze -i data/sequences.fasta --hcs -o hcs.json
+# High-performance mode for large datasets
+dima analyze -i large_dataset.fasta -o results --columnar --binary
 ```
+
+---
+
+## Usage Guide
+
+### Basic Analysis
+
+The simplest usage analyzes a FASTA file and outputs diversity metrics:
+
+```bash
+dima analyze -i aligned_sequences.fasta -o results.json
+```
+
+**Input requirements:**
+- FASTA file with **aligned sequences** (all sequences must be the same length)
+- Sequences can be protein (default) or nucleotide
+
+**Key parameters:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `-k, --kmer` | 9 | K-mer length (sliding window size) |
+| `-t, --threshold` | 30 | Support threshold for entropy extrapolation |
+| `-n, --name` | "Unknown Protein" | Sample/query name in output |
+| `--alphabet` | protein | Sequence type: `protein` or `nucleotide` |
+
+### Working with Metadata
+
+FASTA headers often contain metadata separated by pipes (`|`). DiMA can parse this metadata and aggregate it per variant:
+
+**Example FASTA header:**
+```
+>USA|2023-01-15|Human|Delta
+MFVFLVLLPLVSSQCVNLTTRTQLPPAYTNS...
+```
+
+**Command:**
+```bash
+dima analyze -i sequences.fasta -o results.json \
+  --header-format "country|date|host|variant"
+```
+
+**Filtering metadata fields:**
+
+To aggregate only specific fields (reducing memory and output size):
+
+```bash
+dima analyze -i sequences.fasta -o results.json \
+  --header-format "country|date|host|variant" \
+  --metadata-fields "country|variant"
+```
+
+**Handling missing values:**
+
+```bash
+dima analyze -i sequences.fasta -o results.json \
+  --header-format "country|date|host" \
+  --header-fillna "Unknown"
+```
+
+### Extracting Conserved Sequences
+
+Highly Conserved Sequences (HCS) are regions where the same k-mer appears most frequently across all sequences. These are valuable for vaccine design and identifying stable epitopes.
+
+```bash
+# Extract all conserved sequences
+dima analyze -i sequences.fasta --hcs
+
+# Only sequences present in ≥95% of samples
+dima analyze -i sequences.fasta --hcs --hcs-threshold 95
+
+# Save to file
+dima analyze -i sequences.fasta --hcs --hcs-threshold 95 -o conserved.json
+```
+
+### Output Formats
+
+**JSON (default):**
+```bash
+dima analyze -i sequences.fasta -o results.json
+```
+
+**Binary format** (50-70% faster I/O, 90%+ smaller files):
+```bash
+# With LZ4 compression (default, best balance)
+dima analyze -i sequences.fasta -o results --binary
+
+# With Zstd compression (maximum compression)
+dima analyze -i sequences.fasta -o results --binary --compression 2
+
+# No compression (fastest)
+dima analyze -i sequences.fasta -o results --binary --compression 0
+```
+
+**Converting binary back to JSON:**
+```bash
+dima deflate -i results.dima -o results.json
+```
+
+### Performance Optimization
+
+For large datasets (>100,000 sequences), use these optimizations:
+
+```bash
+# Columnar storage (14% faster with metadata)
+dima analyze -i large.fasta -o results.json --columnar --header-format "..."
+
+# Combined optimizations
+dima analyze -i large.fasta -o results --columnar --binary --header-format "..."
+
+# Limit thread count
+dima analyze -i large.fasta -o results.json --threads 4
+```
+
+| Flag | Effect | Best For |
+|------|--------|----------|
+| `--columnar` | 14-17% faster metadata processing | Large datasets with metadata |
+| `--binary` | 90%+ smaller output, faster I/O | Storage, archival, transfer |
+| `--threads N` | Limit parallelism | Shared systems, containers |
 
 ### Character Validation
 
-DiMA uses **whitelist-based character validation** to ensure only valid biological sequences are processed. This prevents invalid characters like `#`, `*`, `@`, numbers, etc. from appearing in k-mers.
+DiMA validates sequence characters to ensure data quality:
 
-#### Validation Modes
+**Validation modes:**
 
-```bash
-# Strict mode (DEFAULT, RECOMMENDED): Only accept valid alphabet characters
-# Protein: A, C, D, E, F, G, H, I, K, L, M, N, P, Q, R, S, T, V, W, Y (20 amino acids)
-# Nucleotide: A, C, G, T, U (5 nucleotides)
-./target/release/dima analyze -i sequences.fasta --validation strict
-
-# Permissive mode: Accept valid + known ambiguous characters (X, B, N, etc.)
-# Only completely invalid characters (#, *, etc.) cause NA k-mers
-./target/release/dima analyze -i sequences.fasta --validation permissive
-
-# Report mode: Accept all characters but report statistics about invalid ones
-./target/release/dima analyze -i sequences.fasta --validation report --report-invalid
-```
-
-#### Additional Validation Options
+| Mode | Description |
+|------|-------------|
+| `strict` (default) | Only canonical characters (20 amino acids or ACGTU) |
+| `permissive` | Also accepts IUPAC ambiguity codes (X, B, N, etc.) |
+| `report` | Accepts all, tracks statistics |
 
 ```bash
-# Allow lowercase characters (auto-converted to uppercase)
-./target/release/dima analyze -i sequences.fasta --allow-lowercase
+# Strict mode (recommended)
+dima analyze -i sequences.fasta -o results.json --validation strict
 
-# Report statistics about invalid characters found
-./target/release/dima analyze -i sequences.fasta --report-invalid
+# Allow ambiguous codes
+dima analyze -i sequences.fasta -o results.json --validation permissive
+
+# Handle lowercase input
+dima analyze -i sequences.fasta -o results.json --allow-lowercase
+
+# Report validation statistics
+dima analyze -i sequences.fasta -o results.json --report-invalid
 ```
 
-### Character Classification
+**Valid characters:**
 
-| Category | Protein | Nucleotide | Behavior |
-|----------|---------|------------|----------|
-| **Valid** | `ACDEFGHIKLMNPQRSTVWY` | `ACGTU` | Encoded in k-mer |
-| **Ambiguous** | `XBJZOU` | `RYKMSWBDHVN` | Causes NA in strict mode |
-| **Gap** | `-` | `-` | Causes NA (alignment gap) |
-| **Invalid** | All other characters | All other characters | Always causes NA + warning |
+| Alphabet | Valid | Ambiguous (permissive mode) |
+|----------|-------|----------------------------|
+| Protein | `ACDEFGHIKLMNPQRSTVWY` | `XBJZOU` |
+| Nucleotide | `ACGTU` | `RYKMSWBDHVN` |
 
-### Performance Options
+---
 
-```bash
-# Use columnar metadata storage for improved performance
-./target/release/dima analyze -i sequences.fasta --columnar
+## Command Reference
 
-# Enable metadata indexing for faster lookups
-./target/release/dima analyze -i sequences.fasta --indexing
+### analyze Command
 
-# Use binary output format for faster I/O
-./target/release/dima analyze -i sequences.fasta -o results --binary
-
-# Specify compression level (0=none, 1=lz4, 2=zstd)
-./target/release/dima analyze -i sequences.fasta -o results --binary --compression 2
-
-# Decompress binary format back to JSON
-./target/release/dima deflate -i results.dima -o results.json
-```
-
-### All CLI Options
+Analyze a FASTA file and generate diversity motif results.
 
 ```
-Options:
-  -i, --input <FASTA>          Path to the FASTA file
-  -k, --kmer <INT>             K-mer length (default: 9)
-  -t, --threshold <INT>        Support threshold (default: 30)
-  -n, --name <STR>             Query/sample name (default: "Unknown Protein")
-  --header-format <STR>        Header fields separated by '|'
-  --metadata-fields <STR>      Restrict metadata to these fields (subset of header-format)
-  --header-fillna <STR>        Fill NA for empty header fields (default: "Unknown")
-  --alphabet <protein|nucleotide>  Sequence alphabet (default: protein)
-  -o, --output <FILE>          Output JSON file path
-  --hcs                        Output only Highly Conserved Sequences
-  --hcs-threshold <FLOAT>      Minimum incidence for HCS items (percent)
-  --no-metadata                Disable per-variant metadata aggregation
-  --threads <INT>              Number of Rayon worker threads
-  --columnar                   Use columnar metadata storage
-  --indexing                   Enable metadata indexing
-  --binary                     Use binary format for output
-  --compression <0|1|2>        Binary format compression level
-
-Character Validation Options:
-  --validation <strict|permissive|report>  Character validation mode (default: strict)
-  --allow-lowercase            Allow lowercase characters (converted to uppercase)
-  --report-invalid             Report statistics about invalid characters
+dima analyze [OPTIONS] --input <FASTA>
 ```
 
-## Library Usage
+**Required:**
 
-Add to your `Cargo.toml`:
+| Option | Description |
+|--------|-------------|
+| `-i, --input <FASTA>` | Path to the aligned FASTA file |
 
-```toml
-[dependencies]
-dima = { path = "." }
+**Analysis Parameters:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-k, --kmer <N>` | 9 | K-mer length for sliding window |
+| `-t, --threshold <N>` | 30 | Support threshold for entropy calculation |
+| `-n, --name <NAME>` | "Unknown Protein" | Sample/query name |
+| `--alphabet <TYPE>` | protein | `protein` or `nucleotide` |
+
+**Metadata Options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--header-format <FMT>` | - | Pipe-separated field names (e.g., `"country\|date\|host"`) |
+| `--metadata-fields <FMT>` | - | Subset of fields to aggregate |
+| `--header-fillna <VAL>` | "Unknown" | Replacement for empty fields |
+
+**Output Options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-o, --output <FILE>` | stdout | Output file path |
+| `--hcs` | false | Output only Highly Conserved Sequences |
+| `--hcs-threshold <N>` | - | Minimum incidence % for HCS (0-100) |
+| `--binary` | false | Use binary format (.dima) |
+| `--compression <N>` | 1 | Binary compression: 0=none, 1=LZ4, 2=Zstd |
+
+**Performance Options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--threads <N>` | all CPUs | Number of parallel threads |
+| `--columnar` | false | Use columnar storage (faster with metadata) |
+| `--indexing` | false | Enable metadata indexing |
+
+**Validation Options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--validation <MODE>` | strict | `strict`, `permissive`, or `report` |
+| `--allow-lowercase` | false | Convert lowercase to uppercase |
+| `--report-invalid` | false | Print validation statistics to stderr |
+
+### deflate Command
+
+Convert binary format (.dima) back to JSON.
+
+```
+dima deflate [OPTIONS] --input <BINARY>
 ```
 
-### Basic Usage
+| Option | Description |
+|--------|-------------|
+| `-i, --input <BINARY>` | Path to the .dima file |
+| `-o, --output <FILE>` | Output JSON file (stdout if not specified) |
+| `--no-pretty` | Output compact JSON without formatting |
 
-```rust
-use dima::{get_results_objs, AnalysisConfig, ValidationMode};
+---
 
-fn main() {
-    // Default strict validation (recommended)
-    let (results, _stats) = get_results_objs(
-        "path/to/sequences.fasta".to_string(),
-        9,  // k-mer length
-        30, // support threshold
-        "Sample Name".to_string(),
-        None, // header format
-        Some("protein".to_string()), // alphabet
-        None, // header fill NA
-        None, // metadata fields
-        None, // use default config (strict validation)
-    );
-    println!("{}", results);
-}
-```
+## Output Format
 
-### With Custom Validation Config
+### JSON Structure
 
-```rust
-use dima::{get_results_objs, AnalysisConfig, ValidationMode};
-
-fn main() {
-    let config = AnalysisConfig::new()
-        .with_validation_mode(ValidationMode::Permissive)
-        .with_allow_lowercase(true)
-        .with_report_invalid(true);
-    
-    let (results, stats) = get_results_objs(
-        "path/to/sequences.fasta".to_string(),
-        9, 30,
-        "Sample Name".to_string(),
-        None, Some("protein".to_string()), None, None,
-        Some(config),
-    );
-    
-    // Print validation statistics if available
-    if let Some(validation_stats) = stats {
-        eprintln!("{}", validation_stats.summary());
+```json
+{
+  "sequence_count": 1000,
+  "support_threshold": 30,
+  "low_support_count": 5,
+  "query_name": "SARS-CoV-2 Spike",
+  "kmer_length": 9,
+  "average_entropy": 0.156,
+  "highest_entropy_position": 484,
+  "highest_entropy_value": 2.31,
+  "results": [
+    {
+      "position": 1,
+      "entropy": 0.0,
+      "support": 1000,
+      "low_support": null,
+      "distinct_variants_count": 1,
+      "distinct_variants_incidence": 100.0,
+      "total_variants_incidence": 0.0,
+      "diversity_motifs": [
+        {
+          "sequence": "MFVFLVLLP",
+          "count": 998,
+          "incidence": 99.8,
+          "motif_short": "I",
+          "motif_long": "Index",
+          "metadata": {
+            "country": {"USA": 450, "UK": 300, "Germany": 248},
+            "date": {"2023-01": 500, "2023-02": 498}
+          }
+        },
+        {
+          "sequence": "MFVFLVLLQ",
+          "count": 2,
+          "incidence": 0.2,
+          "motif_short": "U",
+          "motif_long": "Unique",
+          "metadata": {
+            "country": {"USA": 2},
+            "date": {"2023-01": 2}
+          }
+        }
+      ]
     }
-    
-    println!("{}", results);
+  ]
 }
 ```
 
-### Direct Character Validation
+### Understanding the Results
 
-```rust
-use dima::{CharacterValidator, AlphabetType, ValidationMode};
+**Top-level fields:**
 
-fn main() {
-    let validator = CharacterValidator::with_options(
-        AlphabetType::Protein,
-        ValidationMode::Strict,
-        false, // don't allow lowercase
-    );
-    
-    // Check individual characters
-    assert!(validator.is_valid(b'A'));  // Valid amino acid
-    assert!(!validator.is_valid(b'#')); // Invalid character
-    assert!(!validator.is_valid(b'X')); // Ambiguous (invalid in strict mode)
-    
-    // Check entire k-mer window
-    assert!(!validator.window_has_invalid(b"ACDEF"));  // All valid
-    assert!(validator.window_has_invalid(b"ACD#F"));   // Contains invalid
-}
-```
+| Field | Description |
+|-------|-------------|
+| `sequence_count` | Total number of sequences analyzed |
+| `support_threshold` | Minimum support for reliable entropy |
+| `low_support_count` | Positions with support below threshold |
+| `kmer_length` | K-mer window size used |
+| `average_entropy` | Mean entropy across all positions |
+| `highest_entropy_position` | Position with maximum diversity |
+| `highest_entropy_value` | Maximum entropy value |
 
-## Building
+**Per-position fields:**
+
+| Field | Description |
+|-------|-------------|
+| `position` | 1-indexed position in the alignment |
+| `entropy` | Shannon's entropy (0 = conserved, higher = diverse) |
+| `support` | Number of valid k-mers at this position |
+| `low_support` | Label if support is low: `NS`, `LS`, or `ELS` |
+| `distinct_variants_count` | Number of unique k-mer sequences (excluding Index) |
+| `diversity_motifs` | Array of variant details |
+
+**Low support labels:**
+
+| Label | Meaning |
+|-------|---------|
+| `NS` | No Support (support = 0) |
+| `LS` | Low Support (support < threshold) |
+| `ELS` | Exactly Low Support (support = threshold) |
+| `null` | Normal support (support > threshold) |
+
+---
+
+## Examples
+
+### Basic Example
 
 ```bash
-cargo build --release
+# Analyze protein sequences with default settings
+dima analyze -i spike_protein.fasta -o results.json -n "SARS-CoV-2 Spike"
 ```
 
-## Testing
+### With Metadata Aggregation
 
 ```bash
-cargo test
+# Header format: >USA|2023-01-15|Human|Delta
+dima analyze -i sequences.fasta -o results.json \
+  --header-format "country|date|host|variant" \
+  --name "Global SARS-CoV-2"
 ```
 
-## Why Whitelist-Based Validation?
+### Highly Conserved Sequences
 
-The original implementation used a blacklist approach that only filtered known ambiguous characters. This allowed unexpected characters like `#`, `*`, `@`, numbers, etc. to slip through into k-mers.
+```bash
+# Extract sequences conserved in ≥98% of samples
+dima analyze -i sequences.fasta --hcs --hcs-threshold 98 -o conserved.json
+```
 
-The new whitelist approach:
-- **Only allows valid biological characters** (20 amino acids or 5 nucleotides)
-- **Explicitly handles ambiguous characters** with proper classification
-- **Rejects all unknown characters** by default
-- **Provides detailed reporting** of data quality issues
-- **Is configurable** for different use cases
+Output:
+```json
+["MFVFLVLLPLVSSQCVNLTTRTQLPPAYTN", "FQFCNDPFLGVYYHKNNKSW"]
+```
 
-## Author
+### Binary Output for Large Datasets
 
-Shan Tharanga <stwm2@student.london.ac.uk>
+```bash
+# Analyze with maximum performance
+dima analyze -i large_dataset.fasta \
+  -o results \
+  --columnar \
+  --binary \
+  --compression 2 \
+  --header-format "country|date" \
+  --name "Large Analysis"
+
+# Later, convert to JSON if needed
+dima deflate -i results.dima -o results.json
+```
+
+---
+
+## Performance
+
+DiMA is optimized for high-throughput analysis. Benchmark on 2.3M sequences (Apple M3 Pro, 11 cores):
+
+| Configuration | Runtime | Output Size |
+|---------------|---------|-------------|
+| Baseline (no metadata) | 128s | 29 MB |
+| With metadata | 207s | 132 MB |
+| With metadata + `--columnar` | 178s | 132 MB |
+| With metadata + `--columnar --binary` | 179s | 15 MB |
+
+**Key insights:**
+- `--columnar` provides **14% speedup** when processing metadata
+- `--binary --compression 1` reduces output size by **90%**
+- Without metadata, baseline is fastest (no optimization needed)
+
+See [BENCHMARK.md](BENCHMARK.md) for detailed performance analysis.
+
+---
+
+## Publications
+
+- DiMA: A tool for analysis of viral protein sequence diversity dynamics  
+  https://arxiv.org/abs/2205.13915
+
+---
 
 ## License
 
-MIT License
+MIT License - see [LICENSE](LICENSE) for details.
