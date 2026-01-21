@@ -131,6 +131,12 @@ The name appears in the output as:
 FASTA headers often contain metadata separated by pipe '|' characters.
 This option tells DiMA how to parse and name each field for aggregation.
 
+If not provided, metadata processing is disabled entirely:
+  - FASTA headers are ignored (only sequences are processed)
+  - No metadata aggregation per variant
+  - Variants have "metadata": null in output
+  - Faster processing and lower memory usage
+
 Format specification:
   - Fields are separated by '|' in the format string
   - The format MUST match the number of '|' separators in headers
@@ -156,8 +162,7 @@ This produces metadata aggregation per k-mer variant:
 Important:
   - If format field count != header field count, analysis will fail
   - Empty fields are replaced with --header-fillna value (default: "Unknown")
-  - Use --metadata-fields to aggregate only specific fields
-  - Use --no-metadata to skip all header parsing (faster)"#;
+  - Use --metadata-fields to aggregate only specific fields"#;
 
     // -------------------------------------------------------------------------
     // Metadata Fields (--metadata-fields)
@@ -334,31 +339,6 @@ Recommended values:
   - <50:    Not typically useful (too variable)
 
 Note: Only effective when --hcs is specified."#;
-
-    // -------------------------------------------------------------------------
-    // No Metadata (--no-metadata)
-    // -------------------------------------------------------------------------
-    pub const NO_METADATA_HELP: &str = "Skip header parsing and metadata aggregation (faster)";
-
-    pub const NO_METADATA_LONG_HELP: &str = r#"Disable all header parsing and per-variant metadata aggregation.
-
-When enabled:
-  - FASTA headers are ignored (only sequences are processed)
-  - No metadata aggregation per variant
-  - Variants have "metadata": null in output
-
-Performance benefits:
-  - Faster processing (no header parsing overhead)
-  - Lower memory usage (no metadata HashMaps)
-  - Smaller output files
-
-Use when:
-  - You only need diversity/entropy analysis
-  - Headers don't contain useful metadata
-  - Processing very large datasets where speed matters
-  - Headers don't follow a consistent pipe-separated format
-
-Note: This flag overrides --header-format and --metadata-fields."#;
 
     // -------------------------------------------------------------------------
     // Threads (--threads)

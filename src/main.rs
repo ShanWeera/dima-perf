@@ -112,11 +112,6 @@ struct AnalyzeArgs {
           long_help = help::analyze::HCS_THRESHOLD_LONG_HELP)]
     hcs_threshold: Option<f32>,
 
-    #[arg(long = "no-metadata",
-          help = help::analyze::NO_METADATA_HELP,
-          long_help = help::analyze::NO_METADATA_LONG_HELP)]
-    no_metadata: bool,
-
     #[arg(long = "threads",
           help = help::analyze::THREADS_HELP,
           long_help = help::analyze::THREADS_LONG_HELP)]
@@ -190,21 +185,15 @@ fn run_analyze(cli: AnalyzeArgs) {
         let _ = rayon::ThreadPoolBuilder::new().num_threads(n_threads).build_global();
     }
 
-    let header_format = if cli.no_metadata {
-        None
-    } else {
-        cli.header_format
-            .as_ref()
-            .map(|s| s.split('|').map(|v| v.trim().to_string()).collect())
-    };
+    // Parse header format if provided (None disables metadata processing)
+    let header_format = cli.header_format
+        .as_ref()
+        .map(|s| s.split('|').map(|v| v.trim().to_string()).collect());
 
-    let metadata_fields = if cli.no_metadata {
-        None
-    } else {
-        cli.metadata_fields
-            .as_ref()
-            .map(|s| s.split('|').map(|v| v.trim().to_string()).collect())
-    };
+    // Parse metadata fields filter (only relevant if header_format is provided)
+    let metadata_fields = cli.metadata_fields
+        .as_ref()
+        .map(|s| s.split('|').map(|v| v.trim().to_string()).collect());
 
     let alphabet = match cli.alphabet {
         Alphabet::Protein => Some("protein".to_string()),
