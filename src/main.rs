@@ -4,10 +4,12 @@ use clap::{Parser, ValueEnum, Subcommand};
 
 use dima::{
     ValidationMode,
-    get_results_objs_validated, 
-    get_results_objs_columnar_validated,
+    get_results_objs, 
+    get_results_objs_columnar,
     AnalysisConfig,
 };
+
+mod help;
 
 #[derive(Copy, Clone, Debug, ValueEnum, PartialEq, Eq)]
 pub enum Alphabet {
@@ -55,116 +57,122 @@ enum Commands {
 
 #[derive(Parser, Debug)]
 struct AnalyzeArgs {
-    /// Path to the FASTA file
-    #[arg(short = 'i', long = "input", value_name = "FASTA")]
+    #[arg(short = 'i', long = "input", value_name = "FASTA",
+          help = help::analyze::INPUT_HELP,
+          long_help = help::analyze::INPUT_LONG_HELP)]
     input: PathBuf,
 
-    /// K-mer length
-    #[arg(short = 'k', long = "kmer", default_value_t = 9)]
+    #[arg(short = 'k', long = "kmer", default_value_t = 9,
+          help = help::analyze::KMER_HELP,
+          long_help = help::analyze::KMER_LONG_HELP)]
     kmer_length: usize,
 
-    /// Support threshold
-    #[arg(short = 't', long = "threshold", default_value_t = 30)]
+    #[arg(short = 't', long = "threshold", default_value_t = 30,
+          help = help::analyze::THRESHOLD_HELP,
+          long_help = help::analyze::THRESHOLD_LONG_HELP)]
     support_threshold: usize,
 
-    /// Query/sample name
-    #[arg(short = 'n', long = "name", default_value = "Unknown Protein")]
+    #[arg(short = 'n', long = "name", default_value = "Unknown Protein",
+          help = help::analyze::NAME_HELP,
+          long_help = help::analyze::NAME_LONG_HELP)]
     query_name: String,
 
-    /// Header format fields separated by '|', e.g., "country|date|patient"
-    #[arg(long = "header-format")]
+    #[arg(long = "header-format",
+          help = help::analyze::HEADER_FORMAT_HELP,
+          long_help = help::analyze::HEADER_FORMAT_LONG_HELP)]
     header_format: Option<String>,
 
-    /// Restrict metadata to these fields (subset of header-format), separated by '|'
-    #[arg(long = "metadata-fields")]
+    #[arg(long = "metadata-fields",
+          help = help::analyze::METADATA_FIELDS_HELP,
+          long_help = help::analyze::METADATA_FIELDS_LONG_HELP)]
     metadata_fields: Option<String>,
 
-    /// Fill NA for empty header fields
-    #[arg(long = "header-fillna", default_value = "Unknown")]
+    #[arg(long = "header-fillna", default_value = "Unknown",
+          help = help::analyze::HEADER_FILLNA_HELP,
+          long_help = help::analyze::HEADER_FILLNA_LONG_HELP)]
     header_fillna: String,
 
-    /// Alphabet: protein or nucleotide
-    #[arg(long = "alphabet", value_enum, default_value_t = Alphabet::Protein)]
+    #[arg(long = "alphabet", value_enum, default_value_t = Alphabet::Protein,
+          help = help::analyze::ALPHABET_HELP,
+          long_help = help::analyze::ALPHABET_LONG_HELP)]
     alphabet: Alphabet,
 
-    /// Output file to write JSON results. If not provided, prints to stdout
-    #[arg(short = 'o', long = "output")]
+    #[arg(short = 'o', long = "output",
+          help = help::analyze::OUTPUT_HELP,
+          long_help = help::analyze::OUTPUT_LONG_HELP)]
     output: Option<PathBuf>,
 
-    /// Only print HCS (highly conserved sequences) instead of full JSON
-    #[arg(long = "hcs")]
+    #[arg(long = "hcs",
+          help = help::analyze::HCS_HELP,
+          long_help = help::analyze::HCS_LONG_HELP)]
     hcs_only: bool,
 
-    /// HCS incidence threshold percentage (0-100). Only used when --hcs is passed
-    #[arg(long = "hcs-threshold")]
+    #[arg(long = "hcs-threshold",
+          help = help::analyze::HCS_THRESHOLD_HELP,
+          long_help = help::analyze::HCS_THRESHOLD_LONG_HELP)]
     hcs_threshold: Option<f32>,
 
-    /// Disable per-variant metadata aggregation to improve speed and memory
-    #[arg(long = "no-metadata")]
+    #[arg(long = "no-metadata",
+          help = help::analyze::NO_METADATA_HELP,
+          long_help = help::analyze::NO_METADATA_LONG_HELP)]
     no_metadata: bool,
 
-    /// Number of Rayon worker threads (defaults to number of CPUs)
-    #[arg(long = "threads")]
+    #[arg(long = "threads",
+          help = help::analyze::THREADS_HELP,
+          long_help = help::analyze::THREADS_LONG_HELP)]
     threads: Option<usize>,
 
-    /// Use columnar metadata storage for improved performance
-    #[arg(long = "columnar")]
+    #[arg(long = "columnar",
+          help = help::analyze::COLUMNAR_HELP,
+          long_help = help::analyze::COLUMNAR_LONG_HELP)]
     columnar: bool,
 
-    /// Enable metadata indexing for 80-95% faster lookups
-    #[arg(long = "indexing")]
+    #[arg(long = "indexing",
+          help = help::analyze::INDEXING_HELP,
+          long_help = help::analyze::INDEXING_LONG_HELP)]
     indexing: bool,
 
-    /// Use binary format for 50-70% faster I/O (output file will have .dima extension)
-    #[arg(long = "binary")]
+    #[arg(long = "binary",
+          help = help::analyze::BINARY_HELP,
+          long_help = help::analyze::BINARY_LONG_HELP)]
     binary: bool,
 
-    /// Binary format compression level (0=none, 1=lz4, 2=zstd)
-    #[arg(long = "compression", default_value = "1")]
+    #[arg(long = "compression", default_value = "1",
+          help = help::analyze::COMPRESSION_HELP,
+          long_help = help::analyze::COMPRESSION_LONG_HELP)]
     compression: u8,
 
-    // =========================================================================
-    // Character Validation Options
-    // =========================================================================
-
-    /// Character validation mode for k-mer generation.
-    /// 
-    /// - strict: Only accept valid alphabet characters (20 amino acids or 4/5 nucleotides).
-    ///           This is the RECOMMENDED mode for scientific accuracy. Invalid characters
-    ///           like #, *, @, numbers will cause k-mers to be marked as NA.
-    /// 
-    /// - permissive: Accept valid + known ambiguous characters (X, B, N, etc.).
-    ///               Only completely invalid characters (#, *, etc.) cause NA k-mers.
-    /// 
-    /// - report: Accept all characters but report invalid ones found.
-    ///           Useful for data quality assessment.
-    #[arg(long = "validation", value_enum, default_value_t = ValidationModeArg::Strict)]
+    #[arg(long = "validation", value_enum, default_value_t = ValidationModeArg::Strict,
+          help = help::analyze::VALIDATION_HELP,
+          long_help = help::analyze::VALIDATION_LONG_HELP)]
     validation: ValidationModeArg,
 
-    /// Allow lowercase characters in sequences.
-    /// When enabled, lowercase letters (a-z) are automatically converted to uppercase.
-    /// By default, lowercase characters are treated as invalid.
-    #[arg(long = "allow-lowercase")]
+    #[arg(long = "allow-lowercase",
+          help = help::analyze::ALLOW_LOWERCASE_HELP,
+          long_help = help::analyze::ALLOW_LOWERCASE_LONG_HELP)]
     allow_lowercase: bool,
 
-    /// Report statistics about invalid characters found during processing.
-    /// Shows counts of valid, ambiguous, gap, and invalid characters.
-    #[arg(long = "report-invalid")]
+    #[arg(long = "report-invalid",
+          help = help::analyze::REPORT_INVALID_HELP,
+          long_help = help::analyze::REPORT_INVALID_LONG_HELP)]
     report_invalid: bool,
 }
 
 #[derive(Parser, Debug)]
 struct DeflateArgs {
-    /// Path to the binary (.dima) file to decompress
-    #[arg(short = 'i', long = "input", value_name = "BINARY")]
+    #[arg(short = 'i', long = "input", value_name = "BINARY",
+          help = help::deflate::INPUT_HELP,
+          long_help = help::deflate::INPUT_LONG_HELP)]
     input: PathBuf,
 
-    /// Output JSON file path. If not provided, prints to stdout
-    #[arg(short = 'o', long = "output")]
+    #[arg(short = 'o', long = "output",
+          help = help::deflate::OUTPUT_HELP,
+          long_help = help::deflate::OUTPUT_LONG_HELP)]
     output: Option<PathBuf>,
 
-    /// Disable pretty printing (compact JSON output)
-    #[arg(long = "no-pretty")]
+    #[arg(long = "no-pretty",
+          help = help::deflate::NO_PRETTY_HELP,
+          long_help = help::deflate::NO_PRETTY_LONG_HELP)]
     no_pretty: bool,
 }
 
@@ -211,7 +219,7 @@ fn run_analyze(cli: AnalyzeArgs) {
 
     // Run analysis with validation
     let (results, validation_stats) = if cli.columnar {
-        get_results_objs_columnar_validated(
+        get_results_objs_columnar(
             cli.input.to_string_lossy().to_string(),
             cli.kmer_length,
             cli.support_threshold,
@@ -223,7 +231,7 @@ fn run_analyze(cli: AnalyzeArgs) {
             Some(analysis_config),
         )
     } else {
-        get_results_objs_validated(
+        get_results_objs(
             cli.input.to_string_lossy().to_string(),
             cli.kmer_length,
             cli.support_threshold,

@@ -137,14 +137,14 @@ Add to your `Cargo.toml`:
 dima = { path = "." }
 ```
 
-### Basic Usage (Recommended - Validated)
+### Basic Usage
 
 ```rust
-use dima::{get_results_objs_validated, AnalysisConfig, ValidationMode};
+use dima::{get_results_objs, AnalysisConfig, ValidationMode};
 
 fn main() {
     // Default strict validation (recommended)
-    let (results, _stats) = get_results_objs_validated(
+    let (results, _stats) = get_results_objs(
         "path/to/sequences.fasta".to_string(),
         9,  // k-mer length
         30, // support threshold
@@ -162,7 +162,7 @@ fn main() {
 ### With Custom Validation Config
 
 ```rust
-use dima::{get_results_objs_validated, AnalysisConfig, ValidationMode};
+use dima::{get_results_objs, AnalysisConfig, ValidationMode};
 
 fn main() {
     let config = AnalysisConfig::new()
@@ -170,7 +170,7 @@ fn main() {
         .with_allow_lowercase(true)
         .with_report_invalid(true);
     
-    let (results, stats) = get_results_objs_validated(
+    let (results, stats) = get_results_objs(
         "path/to/sequences.fasta".to_string(),
         9, 30,
         "Sample Name".to_string(),

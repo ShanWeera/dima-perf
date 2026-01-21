@@ -10,10 +10,6 @@ use crate::kmer::{sliding_window_validated, sliding_window_string_validated};
 use crate::zero_copy::parse_header_zero_copy;
 use crate::columnar::ColumnarMetadataAdapter;
 
-// Re-export deprecated functions for backward compatibility
-#[allow(deprecated)]
-use crate::kmer::{sliding_window, sliding_window_encoded};
-
 
 pub fn save_file(content: &str, path: &str) -> Result<(), io::Error> {
     if let Ok(mut f) = File::create(path) {
@@ -27,7 +23,7 @@ pub fn save_file(content: &str, path: &str) -> Result<(), io::Error> {
     }
 }
 
-/// Original scalar header parsing function (maintained for backward compatibility)
+/// Scalar header parsing function
 pub fn parse_header_scalar(
     header: &String,
     format: &Vec<String>,
@@ -121,11 +117,10 @@ impl KmerExtractionConfig {
     }
 }
 
-/// New validated version of get_kmers_and_headers_encoded using CharacterValidator
+/// Extract k-mers and headers from a FASTA file with whitelist-based validation
 /// 
-/// This is the recommended function for k-mer extraction. It uses a whitelist-based
-/// character validation approach that rejects any character not in the valid 
-/// biological alphabet (20 amino acids or 4/5 nucleotides).
+/// This function uses a whitelist-based character validation approach that rejects 
+/// any character not in the valid biological alphabet (20 amino acids or 5 nucleotides).
 /// 
 /// # Arguments
 /// * `path` - Path to the FASTA file
@@ -135,6 +130,13 @@ impl KmerExtractionConfig {
 /// * `alphabet` - "protein" or "nucleotide" (defaults to "protein")
 /// * `config` - Optional KmerExtractionConfig for validation options
 /// * `expected_count` - Optional expected sequence count for progress bar
+/// 
+/// # Returns
+/// * `Vec<Vec<u64>>` - Transposed encoded k-mers (position-oriented)
+/// * `Option<Vec<Option<HashMap<String, String>>>>` - Headers (if format provided)
+/// * `usize` - Sequence count
+/// * `bool` - Is protein flag
+/// * `Option<ValidationStats>` - Validation statistics (if reporting enabled)
 pub fn get_kmers_and_headers_validated(
     path: &String,
     kmer_length: &usize,
@@ -144,11 +146,11 @@ pub fn get_kmers_and_headers_validated(
     config: Option<KmerExtractionConfig>,
     expected_count: Option<usize>,
 ) -> (
-    Vec<Vec<u64>>,                                    // transposed encoded kmers
-    Option<Vec<Option<HashMap<String, String>>>>,    // headers
-    usize,                                           // sequence count
-    bool,                                            // is_protein flag
-    Option<ValidationStats>,                         // validation statistics (if reporting enabled)
+    Vec<Vec<u64>>,
+    Option<Vec<Option<HashMap<String, String>>>>,
+    usize,
+    bool,
+    Option<ValidationStats>,
 ) {
     let config = config.unwrap_or_default();
     
@@ -177,9 +179,9 @@ pub fn get_kmers_and_headers_validated(
             Some(len) => {
                 let pb = indicatif::ProgressBar::new(len as u64);
                 let template = if use_mmap {
-                    "[{elapsed_precise}] {bar:40.magenta/blue} {pos}/{len} Reading FASTA (Memory-Mapped, Validated)"
+                    "[{elapsed_precise}] {bar:40.magenta/blue} {pos}/{len} Reading FASTA (Memory-Mapped)"
                 } else {
-                    "[{elapsed_precise}] {bar:40.magenta/blue} {pos}/{len} Reading FASTA (Buffered I/O, Validated)"
+                    "[{elapsed_precise}] {bar:40.magenta/blue} {pos}/{len} Reading FASTA (Buffered I/O)"
                 };
                 pb.set_style(indicatif::ProgressStyle::with_template(template)
                     .unwrap()
@@ -189,9 +191,9 @@ pub fn get_kmers_and_headers_validated(
             None => {
                 let pb = indicatif::ProgressBar::new_spinner();
                 let message = if use_mmap {
-                    "Reading FASTA (Memory-Mapped, Validated)..."
+                    "Reading FASTA (Memory-Mapped)..."
                 } else {
-                    "Reading FASTA (Buffered I/O, Validated)..."
+                    "Reading FASTA (Buffered I/O)..."
                 };
                 pb.set_message(message);
                 pb.enable_steady_tick(std::time::Duration::from_millis(1));
@@ -201,7 +203,7 @@ pub fn get_kmers_and_headers_validated(
     } else { None };
 
     let (transposed_kmers, headers_vec, sequence_count) = if use_mmap {
-        match try_mmap_processing_validated(
+        match try_mmap_processing(
             path,
             kmer_length,
             &validator,
@@ -214,7 +216,7 @@ pub fn get_kmers_and_headers_validated(
                 if let Some(ref pb) = pb {
                     pb.set_message("Memory mapping failed, using buffered I/O...");
                 }
-                process_with_buffered_io_validated(
+                process_with_buffered_io(
                     path,
                     kmer_length,
                     &validator,
@@ -225,7 +227,7 @@ pub fn get_kmers_and_headers_validated(
             }
         }
     } else {
-        process_with_buffered_io_validated(
+        process_with_buffered_io(
             path,
             kmer_length,
             &validator,
@@ -247,7 +249,7 @@ pub fn get_kmers_and_headers_validated(
 }
 
 /// Memory-mapped FASTA processing with CharacterValidator
-fn try_mmap_processing_validated(
+fn try_mmap_processing(
     path: &String,
     kmer_length: &usize,
     validator: &CharacterValidator,
@@ -306,7 +308,7 @@ fn try_mmap_processing_validated(
 }
 
 /// Buffered I/O FASTA processing with CharacterValidator
-fn process_with_buffered_io_validated(
+fn process_with_buffered_io(
     path: &String,
     kmer_length: &usize,
     validator: &CharacterValidator,
@@ -361,8 +363,11 @@ fn process_with_buffered_io_validated(
     (transposed_kmers, headers_vec, sequence_count)
 }
 
-/// Columnar metadata version with CharacterValidator
-pub fn get_kmers_and_headers_encoded_columnar_validated(
+/// Extract k-mers and headers with columnar metadata storage
+/// 
+/// Same as `get_kmers_and_headers_validated` but returns metadata in columnar format
+/// for improved cache locality and performance.
+pub fn get_kmers_and_headers_encoded_columnar(
     path: &String,
     kmer_length: &usize,
     header_format: Option<&Vec<String>>,
@@ -391,166 +396,15 @@ pub fn get_kmers_and_headers_encoded_columnar_validated(
     (kmers, columnar_headers, sequence_count, is_protein, stats)
 }
 
-// ============================================================================
-// Legacy functions for backward compatibility
-// These use the old blacklist approach but are maintained for existing code
-// ============================================================================
-
-/// Columnar metadata version of get_kmers_and_headers_encoded (legacy)
-#[deprecated(
-    since = "2.0.0",
-    note = "Use get_kmers_and_headers_encoded_columnar_validated for robust whitelist-based validation"
-)]
-pub fn get_kmers_and_headers_encoded_columnar(
-    path: &String,
-    kmer_length: &usize,
-    header_format: Option<&Vec<String>>,
-    header_fillna: Option<&String>,
-    alphabet: Option<&String>,
-    expected_count: Option<usize>,
-) -> (
-    Vec<Vec<u64>>,
-    Option<ColumnarMetadataAdapter>,
-    usize,
-    bool,
-) {
-    #[allow(deprecated)]
-    let (kmers, row_headers, sequence_count, is_protein) = get_kmers_and_headers_encoded(
-        path, kmer_length, header_format, header_fillna, alphabet, expected_count
-    );
-    
-    let columnar_headers = if let (Some(headers), Some(format)) = (row_headers, header_format) {
-        let adapter = ColumnarMetadataAdapter::from_row_metadata_with_indexing(format.clone(), headers);
-        Some(adapter)
-    } else {
-        None
-    };
-    
-    (kmers, columnar_headers, sequence_count, is_protein)
-}
-
-/// Legacy get_kmers_and_headers_encoded with blacklist approach
-/// 
-/// DEPRECATED: This function uses a blacklist approach which may allow invalid
-/// characters like #, *, @, etc. to pass through. Use get_kmers_and_headers_validated instead.
-#[deprecated(
-    since = "2.0.0",
-    note = "Use get_kmers_and_headers_validated for robust whitelist-based validation"
-)]
-pub fn get_kmers_and_headers_encoded(
-    path: &String,
-    kmer_length: &usize,
-    header_format: Option<&Vec<String>>,
-    header_fillna: Option<&String>,
-    alphabet: Option<&String>,
-    expected_count: Option<usize>,
-) -> (
-    Vec<Vec<u64>>,
-    Option<Vec<Option<HashMap<String, String>>>>,
-    usize,
-    bool,
-) {
-    let protein_ambiguous_chars = vec![b'-', b'X', b'B', b'J', b'Z', b'O', b'U'];
-    let nucleotide_ambiguous_chars = vec![b'-', b'R', b'Y', b'K', b'M', b'S', b'W', b'B', b'D', b'H', b'V', b'N'];
-
-    let is_protein = if let Some(residue_alphabet) = alphabet {
-        residue_alphabet == "protein"
-    } else {
-        true
-    };
-
-    let illegal_chars = if is_protein { protein_ambiguous_chars } else { nucleotide_ambiguous_chars };
-
-    let use_mmap = should_use_memory_mapping(path);
-    
-    let show_progress = std::env::var("PROGRESS").ok().as_deref() != Some("0");
-    let pb = if show_progress {
-        match expected_count {
-            Some(len) => {
-                let pb = indicatif::ProgressBar::new(len as u64);
-                let template = if use_mmap {
-                    "[{elapsed_precise}] {bar:40.magenta/blue} {pos}/{len} Reading FASTA (Memory-Mapped)"
-                } else {
-                    "[{elapsed_precise}] {bar:40.magenta/blue} {pos}/{len} Reading FASTA (Buffered I/O)"
-                };
-                pb.set_style(indicatif::ProgressStyle::with_template(template)
-                    .unwrap()
-                    .progress_chars("##-"));
-                Some(pb)
-            }
-            None => {
-                let pb = indicatif::ProgressBar::new_spinner();
-                let message = if use_mmap {
-                    "Reading FASTA (Memory-Mapped)..."
-                } else {
-                    "Reading FASTA (Buffered I/O)..."
-                };
-                pb.set_message(message);
-                pb.enable_steady_tick(std::time::Duration::from_millis(1));
-                Some(pb)
-            }
-        }
-    } else { None };
-
-    #[allow(deprecated)]
-    let (transposed_kmers, headers_vec, sequence_count) = if use_mmap {
-        match try_mmap_processing_legacy(
-            path,
-            kmer_length,
-            &illegal_chars,
-            is_protein,
-            header_format,
-            header_fillna,
-            &pb,
-        ) {
-            Ok(result) => result,
-            Err(_) => {
-                if let Some(ref pb) = pb {
-                    pb.set_message("Memory mapping failed, using buffered I/O...");
-                }
-                process_with_buffered_io_legacy(
-                    path,
-                    kmer_length,
-                    &illegal_chars,
-                    is_protein,
-                    header_format,
-                    header_fillna,
-                    &pb,
-                )
-            }
-        }
-    } else {
-        process_with_buffered_io_legacy(
-            path,
-            kmer_length,
-            &illegal_chars,
-            is_protein,
-            header_format,
-            header_fillna,
-            &pb,
-        )
-    };
-
-    if let Some(pb) = pb { pb.finish_and_clear(); }
-
-    let headers: Option<Vec<Option<HashMap<String, String>>>> = if header_format.is_none() {
-        None
-    } else {
-        Some(headers_vec)
-    };
-
-    (transposed_kmers, headers, sequence_count, is_protein)
-}
-
-// Intelligent decision making for I/O strategy
+// Intelligent decision making for I/O strategy based on file size
 fn should_use_memory_mapping(path: &String) -> bool {
     let file_size = match metadata(path) {
         Ok(meta) => meta.len(),
         Err(_) => return false,
     };
 
-    const SMALL_FILE_THRESHOLD: u64 = 10 * 1024 * 1024;
-    const LARGE_FILE_THRESHOLD: u64 = 100 * 1024 * 1024;
+    const SMALL_FILE_THRESHOLD: u64 = 10 * 1024 * 1024;  // 10MB
+    const LARGE_FILE_THRESHOLD: u64 = 100 * 1024 * 1024; // 100MB
 
     match file_size {
         size if size < SMALL_FILE_THRESHOLD => false,
@@ -567,230 +421,9 @@ fn get_available_memory_gb() -> f64 {
     }
 }
 
-// Legacy memory-mapped processing
-#[allow(deprecated)]
-fn try_mmap_processing_legacy(
-    path: &String,
-    kmer_length: &usize,
-    illegal_chars: &[u8],
-    is_protein: bool,
-    header_format: Option<&Vec<String>>,
-    header_fillna: Option<&String>,
-    pb: &Option<indicatif::ProgressBar>,
-) -> io::Result<(Vec<Vec<u64>>, Vec<Option<HashMap<String, String>>>, usize)> {
-    let file = File::open(path)?;
-    let mmap = unsafe { Mmap::map(&file)? };
-    
-    let mut transposed_kmers: Vec<Vec<u64>> = Vec::new();
-    let mut headers_vec: Vec<Option<HashMap<String, String>>> = Vec::new();
-    let mut sequence_count: usize = 0;
-
-    let cursor = Cursor::new(&mmap[..]);
-    let reader = fasta::Reader::new(cursor);
-
-    for record_result in reader.records() {
-        let record = record_result?;
-        sequence_count += 1;
-        if let Some(ref pb) = pb { pb.inc(1); }
-
-        let sequence_bytes = record.seq();
-        #[allow(deprecated)]
-        let encoded_kmers = sliding_window_encoded(
-            sequence_bytes,
-            *kmer_length,
-            is_protein,
-            illegal_chars,
-        );
-
-        if transposed_kmers.is_empty() {
-            transposed_kmers = vec![Vec::with_capacity(1024); encoded_kmers.len()];
-        }
-
-        for (i, encoded_kmer) in encoded_kmers.into_iter().enumerate() {
-            if let Some(kmer) = encoded_kmer {
-                transposed_kmers[i].push(kmer);
-            }
-        }
-
-        if let Some(headers_components) = header_format {
-            let fixed_header: String = if let Some(desc) = record.desc() {
-                [record.id(), desc].join(" ")
-            } else {
-                record.id().to_string()
-            };
-
-            if let Some(fill_na) = header_fillna {
-                headers_vec.push(Some(parse_header(&fixed_header, headers_components, fill_na)));
-            } else {
-                headers_vec.push(Some(parse_header(&fixed_header, headers_components, &"Unknown".to_string())));
-            }
-        }
-    }
-
-    Ok((transposed_kmers, headers_vec, sequence_count))
-}
-
-// Legacy buffered I/O processing
-#[allow(deprecated)]
-fn process_with_buffered_io_legacy(
-    path: &String,
-    kmer_length: &usize,
-    illegal_chars: &[u8],
-    is_protein: bool,
-    header_format: Option<&Vec<String>>,
-    header_fillna: Option<&String>,
-    pb: &Option<indicatif::ProgressBar>,
-) -> (Vec<Vec<u64>>, Vec<Option<HashMap<String, String>>>, usize) {
-    let mut transposed_kmers: Vec<Vec<u64>> = Vec::new();
-    let mut headers_vec: Vec<Option<HashMap<String, String>>> = Vec::new();
-    let mut sequence_count: usize = 0;
-
-    let file = File::open(path).expect("Failed to read FASTA file");
-    let reader = fasta::Reader::with_capacity(64 * 1024, file);
-
-    for record in reader.records() {
-        let record_unwrapped = record.as_ref().unwrap();
-        sequence_count += 1;
-        if let Some(ref pb) = pb { pb.inc(1); }
-
-        let sequence_bytes = record_unwrapped.seq();
-        #[allow(deprecated)]
-        let encoded_kmers = sliding_window_encoded(
-            sequence_bytes,
-            *kmer_length,
-            is_protein,
-            illegal_chars,
-        );
-
-        if transposed_kmers.is_empty() {
-            transposed_kmers = vec![Vec::with_capacity(1024); encoded_kmers.len()];
-        }
-
-        for (i, encoded_kmer) in encoded_kmers.into_iter().enumerate() {
-            if let Some(kmer) = encoded_kmer {
-                transposed_kmers[i].push(kmer);
-            }
-        }
-
-        if let Some(headers_components) = header_format {
-            let fixed_header: String = if let Some(desc) = record_unwrapped.desc() {
-                [record_unwrapped.id(), desc].join(" ")
-            } else {
-                record_unwrapped.id().to_string()
-            };
-
-            if let Some(fill_na) = header_fillna {
-                headers_vec.push(Some(parse_header(&fixed_header, headers_components, fill_na)));
-            } else {
-                headers_vec.push(Some(parse_header(&fixed_header, headers_components, &"Unknown".to_string())));
-            }
-        }
-    }
-
-    (transposed_kmers, headers_vec, sequence_count)
-}
-
-/// Legacy string-based function for backward compatibility
-#[deprecated(
-    since = "2.0.0",
-    note = "Use get_kmers_and_headers_validated for robust whitelist-based validation"
-)]
-pub fn get_kmers_and_headers(
-    path: &String,
-    kmer_length: &usize,
-    header_format: Option<&Vec<String>>,
-    header_fillna: Option<&String>,
-    alphabet: Option<&String>,
-    expected_count: Option<usize>,
-) -> (
-    Vec<Vec<String>>,
-    Option<Vec<Option<HashMap<String, String>>>>,
-    usize,
-) {
-    let protein_ambiguous_chars = vec!['-', 'X', 'B', 'J', 'Z', 'O', 'U'];
-    let nucleotide_ambiguous_chars = vec!['-', 'R', 'Y', 'K', 'M', 'S', 'W', 'B', 'D', 'H', 'V', 'N'];
-
-    let illegal_chars = if let Some(residue_alphabet) = alphabet {
-        if residue_alphabet == "protein" { protein_ambiguous_chars } else { nucleotide_ambiguous_chars }
-    } else { protein_ambiguous_chars };
-
-    let mut transposed_kmers: Vec<Vec<String>> = Vec::new();
-    let mut headers_vec: Vec<Option<HashMap<String, String>>> = Vec::new();
-    let mut sequence_count: usize = 0;
-
-    let show_progress = std::env::var("PROGRESS").ok().as_deref() != Some("0");
-    let pb = if show_progress {
-        match expected_count {
-            Some(len) => {
-                let pb = indicatif::ProgressBar::new(len as u64);
-                pb.set_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.magenta/blue} {pos}/{len} Reading FASTA")
-                    .unwrap()
-                    .progress_chars("##-"));
-                Some(pb)
-            }
-            None => {
-                let pb = indicatif::ProgressBar::new_spinner();
-                pb.set_message("Reading FASTA...");
-                pb.enable_steady_tick(std::time::Duration::from_millis(1));
-                Some(pb)
-            }
-        }
-    } else { None };
-
-    let file = File::open(path).expect("Failed to read FASTA file");
-    let reader = fasta::Reader::with_capacity(64 * 1024, file);
-
-    for record in reader.records() {
-        let record_unwrapped = record.as_ref().unwrap();
-        sequence_count += 1;
-        if let Some(ref pb) = pb { pb.inc(1); }
-
-        #[allow(deprecated)]
-        let kmers = sliding_window(
-            &String::from_utf8(Vec::from(record_unwrapped.seq())).unwrap(),
-            &kmer_length,
-            &illegal_chars,
-        );
-
-        if transposed_kmers.is_empty() {
-            transposed_kmers = vec![Vec::with_capacity(1024); kmers.len()];
-        }
-
-        for (i, k) in kmers.into_iter().enumerate() {
-            transposed_kmers[i].push(k);
-        }
-
-        if let Some(headers_components) = header_format {
-            let fixed_header: String = if let Some(desc) = record_unwrapped.desc() {
-                [record_unwrapped.id(), desc].join(" ")
-            } else {
-                record_unwrapped.id().to_string()
-            };
-
-            if let Some(fill_na) = header_fillna {
-                headers_vec.push(Some(parse_header(&fixed_header, headers_components, fill_na)));
-            } else {
-                headers_vec.push(Some(parse_header(&fixed_header, headers_components, &"Unknown".to_string())));
-            }
-        }
-    }
-
-    if let Some(pb) = pb { pb.finish_and_clear(); }
-
-    transposed_kmers
-        .par_iter_mut()
-        .for_each(|kmer_position| kmer_position.retain(|kmer| kmer != "NA"));
-
-    let headers: Option<Vec<Option<HashMap<String, String>>>> = if header_format.is_none() {
-        None
-    } else {
-        Some(headers_vec)
-    };
-
-    (transposed_kmers, headers, sequence_count)
-}
-
-/// New string-based function with CharacterValidator
+/// String-based k-mer extraction with CharacterValidator
+/// 
+/// Returns k-mers as strings instead of encoded values.
 pub fn get_kmers_and_headers_string_validated(
     path: &String,
     kmer_length: &usize,
@@ -824,14 +457,14 @@ pub fn get_kmers_and_headers_string_validated(
         match expected_count {
             Some(len) => {
                 let pb = indicatif::ProgressBar::new(len as u64);
-                pb.set_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.magenta/blue} {pos}/{len} Reading FASTA (Validated)")
+                pb.set_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.magenta/blue} {pos}/{len} Reading FASTA")
                     .unwrap()
                     .progress_chars("##-"));
                 Some(pb)
             }
             None => {
                 let pb = indicatif::ProgressBar::new_spinner();
-                pb.set_message("Reading FASTA (Validated)...");
+                pb.set_message("Reading FASTA...");
                 pb.enable_steady_tick(std::time::Duration::from_millis(1));
                 Some(pb)
             }

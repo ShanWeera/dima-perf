@@ -1,6 +1,4 @@
 use hashbrown::HashMap;
-#[cfg(target_arch = "x86_64")]
-use wide::*;
 
 use crate::alphabet::CharacterValidator;
 
@@ -32,11 +30,12 @@ pub fn encode_kmer_validated(kmer: &[u8], validator: &CharacterValidator) -> Opt
     Some(encoded)
 }
 
-/// Legacy encode function for backward compatibility
-/// Uses the old encoding tables directly
+/// Encode a k-mer for the specified alphabet type
+/// 
+/// Creates a temporary validator internally. For better performance when
+/// processing many k-mers, use `encode_kmer_validated` with a pre-created validator.
 #[inline(always)]
 pub fn encode_kmer(kmer: &[u8], is_protein: bool) -> Option<u64> {
-    // Create a temporary validator for encoding
     let validator = if is_protein {
         CharacterValidator::protein()
     } else {
@@ -70,10 +69,10 @@ pub fn decode_kmer(encoded: u64, kmer_length: usize, is_protein: bool) -> String
     String::from_utf8(result).unwrap()
 }
 
-/// SIMD-optimized sliding window using CharacterValidator
+/// Generate k-mers from a sequence using whitelist-based character validation
 /// 
-/// This is the new preferred function that uses the robust whitelist-based
-/// character validation from the alphabet module.
+/// This function uses the robust whitelist-based character validation from 
+/// the alphabet module to ensure only valid biological sequences are processed.
 /// 
 /// # Arguments
 /// * `sequence` - The sequence bytes to process
@@ -81,7 +80,8 @@ pub fn decode_kmer(encoded: u64, kmer_length: usize, is_protein: bool) -> String
 /// * `validator` - CharacterValidator configured for the appropriate alphabet
 /// 
 /// # Returns
-/// Vector of Option<u64> where None indicates an invalid k-mer
+/// Vector of Option<u64> where None indicates an invalid k-mer (contains
+/// invalid or ambiguous characters depending on validation mode)
 pub fn sliding_window_validated(
     sequence: &[u8],
     kmer_length: usize,
@@ -106,10 +106,16 @@ pub fn sliding_window_validated(
     result
 }
 
-/// Batch processing version using CharacterValidator
+/// Batch processing version for very large sequences
 /// 
 /// This function processes sequences in chunks to optimize memory usage
 /// and cache locality for extremely large inputs.
+/// 
+/// # Arguments
+/// * `sequence` - The sequence bytes to process
+/// * `kmer_length` - Length of k-mers to generate
+/// * `validator` - CharacterValidator configured for the appropriate alphabet
+/// * `batch_size` - Size of each processing batch
 pub fn sliding_window_validated_batched(
     sequence: &[u8],
     kmer_length: usize,
@@ -154,162 +160,11 @@ pub fn sliding_window_validated_batched(
     result
 }
 
-// ============================================================================
-// Legacy functions maintained for backward compatibility
-// These internally use the new CharacterValidator system
-// ============================================================================
-
-// SIMD-optimized illegal character lookup tables (legacy)
-struct IllegalCharLookup {
-    table: [bool; 256],
-    #[cfg(target_arch = "x86_64")]
-    simd_masks: Vec<u8x16>,
-}
-
-impl IllegalCharLookup {
-    fn new(illegal_chars: &[u8]) -> Self {
-        let mut table = [false; 256];
-        for &ch in illegal_chars {
-            table[ch as usize] = true;
-        }
-
-        Self {
-            table,
-            #[cfg(target_arch = "x86_64")]
-            simd_masks: illegal_chars.iter().map(|&ch| u8x16::splat(ch)).collect(),
-        }
-    }
-
-    #[inline(always)]
-    fn contains_illegal_scalar(&self, window: &[u8]) -> bool {
-        window.iter().any(|&b| self.table[b as usize])
-    }
-
-    #[cfg(target_arch = "x86_64")]
-    #[inline(always)]
-    fn contains_illegal_simd(&self, window: &[u8]) -> bool {
-        // For small windows, scalar is faster due to SIMD setup overhead
-        if window.len() < 16 {
-            return self.contains_illegal_scalar(window);
-        }
-
-        // Process 16-byte chunks with SIMD
-        let chunks = window.chunks_exact(16);
-        let remainder = chunks.remainder();
-
-        for chunk in chunks {
-            // Load 16 bytes into SIMD register
-            let data = u8x16::from([
-                chunk[0], chunk[1], chunk[2], chunk[3],
-                chunk[4], chunk[5], chunk[6], chunk[7],
-                chunk[8], chunk[9], chunk[10], chunk[11],
-                chunk[12], chunk[13], chunk[14], chunk[15],
-            ]);
-
-            // Check against each illegal character mask
-            for &mask in &self.simd_masks {
-                let comparison = data.cmp_eq(mask);
-                if comparison.any() {
-                    return true;
-                }
-            }
-        }
-
-        // Handle remainder with scalar code
-        self.contains_illegal_scalar(remainder)
-    }
-
-    #[cfg(not(target_arch = "x86_64"))]
-    #[inline(always)]
-    fn contains_illegal_simd(&self, window: &[u8]) -> bool {
-        // Fallback to scalar implementation on non-x86_64 architectures
-        self.contains_illegal_scalar(window)
-    }
-
-    #[inline(always)]
-    fn contains_illegal(&self, window: &[u8]) -> bool {
-        // Choose optimal implementation based on window size and architecture
-        if window.len() >= 16 && cfg!(target_arch = "x86_64") {
-            self.contains_illegal_simd(window)
-        } else {
-            self.contains_illegal_scalar(window)
-        }
-    }
-}
-
-// Thread-local cache for lookup tables to avoid repeated allocations
-thread_local! {
-    static PROTEIN_LOOKUP_CACHE: std::cell::RefCell<Option<IllegalCharLookup>> = std::cell::RefCell::new(None);
-    static NUCLEOTIDE_LOOKUP_CACHE: std::cell::RefCell<Option<IllegalCharLookup>> = std::cell::RefCell::new(None);
-}
-
-fn get_or_create_lookup(illegal_chars: &[u8], is_protein: bool) -> IllegalCharLookup {
-    if is_protein {
-        PROTEIN_LOOKUP_CACHE.with(|cache| {
-            let mut cache_ref = cache.borrow_mut();
-            if cache_ref.is_none() {
-                *cache_ref = Some(IllegalCharLookup::new(illegal_chars));
-            }
-            // We need to create a new one each time since we can't return a reference
-            // This is still faster than recreating the SIMD masks each time
-            IllegalCharLookup::new(illegal_chars)
-        })
-    } else {
-        NUCLEOTIDE_LOOKUP_CACHE.with(|cache| {
-            let mut cache_ref = cache.borrow_mut();
-            if cache_ref.is_none() {
-                *cache_ref = Some(IllegalCharLookup::new(illegal_chars));
-            }
-            IllegalCharLookup::new(illegal_chars)
-        })
-    }
-}
-
-/// Legacy SIMD-optimized sliding window with illegal character detection
+/// Convenience function for sliding window with default validation
 /// 
-/// This function is maintained for backward compatibility.
-/// For new code, prefer `sliding_window_validated` which uses the robust
-/// whitelist-based validation.
-/// 
-/// # Deprecation Notice
-/// This function uses a blacklist approach which may allow invalid characters
-/// like #, *, @, etc. to pass through. Use `sliding_window_validated` instead.
-#[deprecated(
-    since = "2.0.0",
-    note = "Use sliding_window_validated with CharacterValidator for robust whitelist-based validation"
-)]
-pub fn sliding_window_encoded(
-    sequence: &[u8],
-    kmer_length: usize,
-    is_protein: bool,
-    illegal_chars: &[u8],
-) -> Vec<Option<u64>> {
-    if sequence.len() < kmer_length {
-        return Vec::new();
-    }
-
-    let result_capacity = sequence.len() - kmer_length + 1;
-    let mut result = Vec::with_capacity(result_capacity);
-
-    // Create optimized lookup table for illegal character detection
-    let lookup = get_or_create_lookup(illegal_chars, is_protein);
-
-    // Process each k-mer window
-    for window in sequence.windows(kmer_length) {
-        if lookup.contains_illegal(window) {
-            result.push(None);
-        } else {
-            result.push(encode_kmer(window, is_protein));
-        }
-    }
-
-    result
-}
-
-/// New sliding window function that uses CharacterValidator internally
-/// 
-/// This is a drop-in replacement for the deprecated sliding_window_encoded
-/// that uses whitelist-based validation internally.
+/// Creates a validator internally based on `is_protein` flag.
+/// For better performance when processing many sequences, create a 
+/// `CharacterValidator` once and use `sliding_window_validated` directly.
 pub fn sliding_window_encoded_safe(
     sequence: &[u8],
     kmer_length: usize,
@@ -323,59 +178,7 @@ pub fn sliding_window_encoded_safe(
     sliding_window_validated(sequence, kmer_length, &validator)
 }
 
-/// Legacy batch processing version
-#[deprecated(
-    since = "2.0.0",
-    note = "Use sliding_window_validated_batched with CharacterValidator for robust validation"
-)]
-pub fn sliding_window_encoded_batched(
-    sequence: &[u8],
-    kmer_length: usize,
-    is_protein: bool,
-    illegal_chars: &[u8],
-    batch_size: usize,
-) -> Vec<Option<u64>> {
-    if sequence.len() < kmer_length {
-        return Vec::new();
-    }
-
-    let total_kmers = sequence.len() - kmer_length + 1;
-    let mut result = Vec::with_capacity(total_kmers);
-    
-    let lookup = get_or_create_lookup(illegal_chars, is_protein);
-
-    // Process in overlapping batches to maintain k-mer continuity
-    let mut start = 0;
-    while start < sequence.len() {
-        let end = std::cmp::min(start + batch_size, sequence.len());
-        let batch = &sequence[start..end];
-        
-        // Ensure we don't go beyond valid k-mer positions
-        let batch_kmer_end = if end == sequence.len() {
-            batch.len()
-        } else {
-            batch.len().saturating_sub(kmer_length - 1)
-        };
-
-        for window in batch.windows(kmer_length).take(batch_kmer_end.saturating_sub(kmer_length - 1)) {
-            if lookup.contains_illegal(window) {
-                result.push(None);
-            } else {
-                result.push(encode_kmer(window, is_protein));
-            }
-        }
-
-        // Move start position, accounting for k-mer overlap
-        start += batch_size.saturating_sub(kmer_length - 1);
-        if start >= sequence.len() {
-            break;
-        }
-    }
-
-    result
-}
-
-// Legacy functions maintained for backward compatibility
+/// Check if a prefix string has an overlap with the start of another string
 pub fn has_overlap_end(prefix: &str, next: &str) -> bool {
     let max_overlap = prefix.len().min(next.len());
     for k in (1..=max_overlap).rev() {
@@ -386,34 +189,10 @@ pub fn has_overlap_end(prefix: &str, next: &str) -> bool {
     false
 }
 
-/// Legacy string-based sliding window
+/// String-based sliding window with CharacterValidator
 /// 
-/// This function uses the old blacklist approach.
-/// For new code, use the byte-based functions with CharacterValidator.
-#[deprecated(
-    since = "2.0.0",
-    note = "Use sliding_window_validated for robust whitelist-based validation"
-)]
-pub fn sliding_window(
-    sequence: &String,
-    kmer_length: &usize,
-    illegal_chars: &Vec<char>,
-) -> Vec<String> {
-    sequence
-        .chars()
-        .collect::<Vec<char>>()
-        .windows(*kmer_length)
-        .map(|kmer_chars| {
-            let iter = kmer_chars.into_iter();
-            if iter.clone().any(|f| illegal_chars.contains(f)) {
-                return String::from("NA");
-            }
-            iter.collect()
-        })
-        .collect::<Vec<String>>()
-}
-
-/// New string-based sliding window using CharacterValidator
+/// Returns strings instead of encoded values. K-mers containing invalid
+/// characters are returned as "NA".
 pub fn sliding_window_string_validated(
     sequence: &str,
     kmer_length: usize,
@@ -437,6 +216,7 @@ pub fn sliding_window_string_validated(
         .collect()
 }
 
+/// Count k-mers and track their indices (string version)
 pub fn count_kmers<'a>(kmers: &'a [Box<str>]) -> HashMap<&'a str, (usize, Vec<usize>)> {
     let mut counts: HashMap<&'a str, (usize, Vec<usize>)> = HashMap::new();
     kmers
@@ -451,6 +231,8 @@ pub fn count_kmers<'a>(kmers: &'a [Box<str>]) -> HashMap<&'a str, (usize, Vec<us
 }
 
 /// Optimized k-mer counting with better memory allocation patterns
+/// 
+/// Returns a map from encoded k-mer to (count, indices).
 pub fn count_kmers_encoded(kmers: &[u64]) -> HashMap<u64, (usize, Vec<usize>)> {
     // Pre-allocate with better capacity estimation based on expected uniqueness
     let estimated_unique = std::cmp::min(kmers.len(), kmers.len() / 4 + 100);
@@ -474,6 +256,7 @@ pub fn count_kmers_encoded(kmers: &[u64]) -> HashMap<u64, (usize, Vec<usize>)> {
     counts
 }
 
+/// Transpose k-mers from sequence-oriented to position-oriented layout
 pub fn transpose_kmers(kmers: &Vec<&Vec<String>>) -> Vec<Vec<String>> {
     assert!(!kmers.is_empty());
     let len = kmers[0].len();
@@ -614,7 +397,7 @@ mod tests {
 
     #[test]
     fn test_safe_encoded_function() {
-        // Test the new safe function that uses whitelist internally
+        // Test the convenience function that uses whitelist internally
         let sequence = b"ACDEFG";
         let result = sliding_window_encoded_safe(sequence, 3, true);
         assert_eq!(result.len(), 4);
@@ -655,16 +438,5 @@ mod tests {
         assert!(!validator.should_invalidate_kmer(b'X'));
         assert!(!validator.should_invalidate_kmer(b'#'));
         assert!(!validator.should_invalidate_kmer(b'A'));
-    }
-
-    #[allow(deprecated)]
-    #[test]
-    fn test_legacy_function_still_works() {
-        // Test that the deprecated function still works for backward compatibility
-        let sequence = b"ACDEFG";
-        let illegal_chars = &[b'-', b'X', b'B'];
-        let result = sliding_window_encoded(sequence, 3, true, illegal_chars);
-        assert_eq!(result.len(), 4);
-        assert!(result.iter().all(|x| x.is_some()));
     }
 }
