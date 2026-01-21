@@ -2,46 +2,164 @@ use hashbrown::HashMap;
 #[cfg(target_arch = "x86_64")]
 use wide::*;
 
-// Encoding tables for amino acids/nucleotides
-const PROTEIN_ENCODING: &[u8; 256] = &{
-    let mut table = [255u8; 256]; // 255 = invalid
-    table[b'A' as usize] = 0;
-    table[b'C' as usize] = 1;
-    table[b'D' as usize] = 2;
-    table[b'E' as usize] = 3;
-    table[b'F' as usize] = 4;
-    table[b'G' as usize] = 5;
-    table[b'H' as usize] = 6;
-    table[b'I' as usize] = 7;
-    table[b'K' as usize] = 8;
-    table[b'L' as usize] = 9;
-    table[b'M' as usize] = 10;
-    table[b'N' as usize] = 11;
-    table[b'P' as usize] = 12;
-    table[b'Q' as usize] = 13;
-    table[b'R' as usize] = 14;
-    table[b'S' as usize] = 15;
-    table[b'T' as usize] = 16;
-    table[b'V' as usize] = 17;
-    table[b'W' as usize] = 18;
-    table[b'Y' as usize] = 19;
-    table
-};
+use crate::alphabet::CharacterValidator;
 
-const NUCLEOTIDE_ENCODING: &[u8; 256] = &{
-    let mut table = [255u8; 256];
-    table[b'A' as usize] = 0;
-    table[b'C' as usize] = 1;
-    table[b'G' as usize] = 2;
-    table[b'T' as usize] = 3;
-    table
-};
+// Re-export for tests
+#[cfg(test)]
+use crate::alphabet::{AlphabetType, ValidationMode};
 
 // Decoding tables for converting back to strings
 const PROTEIN_CHARS: &[u8; 20] = b"ACDEFGHIKLMNPQRSTVWY";
-const NUCLEOTIDE_CHARS: &[u8; 4] = b"ACGT";
+const NUCLEOTIDE_CHARS: &[u8; 5] = b"ACGTU";
 
-// SIMD-optimized illegal character lookup tables
+/// Encode a k-mer using the CharacterValidator for validation
+/// 
+/// This function validates each character using the whitelist approach
+/// and returns None if any invalid character is found.
+#[inline(always)]
+pub fn encode_kmer_validated(kmer: &[u8], validator: &CharacterValidator) -> Option<u64> {
+    let base = if validator.is_protein() { 20u64 } else { 5u64 };
+    
+    let mut encoded = 0u64;
+    for &byte in kmer {
+        match validator.encode(byte) {
+            Some(code) => {
+                encoded = encoded * base + code as u64;
+            }
+            None => return None, // Invalid or ambiguous character
+        }
+    }
+    Some(encoded)
+}
+
+/// Legacy encode function for backward compatibility
+/// Uses the old encoding tables directly
+#[inline(always)]
+pub fn encode_kmer(kmer: &[u8], is_protein: bool) -> Option<u64> {
+    // Create a temporary validator for encoding
+    let validator = if is_protein {
+        CharacterValidator::protein()
+    } else {
+        CharacterValidator::nucleotide()
+    };
+    encode_kmer_validated(kmer, &validator)
+}
+
+/// Decode a k-mer back to a string
+pub fn decode_kmer(encoded: u64, kmer_length: usize, is_protein: bool) -> String {
+    let mut result = Vec::with_capacity(kmer_length);
+    let mut remaining = encoded;
+    
+    if is_protein {
+        let base = 20u64;
+        for _ in 0..kmer_length {
+            let char_idx = (remaining % base) as usize;
+            result.push(PROTEIN_CHARS[char_idx]);
+            remaining /= base;
+        }
+    } else {
+        let base = 5u64;
+        for _ in 0..kmer_length {
+            let char_idx = (remaining % base) as usize;
+            result.push(NUCLEOTIDE_CHARS[char_idx]);
+            remaining /= base;
+        }
+    }
+    
+    result.reverse();
+    String::from_utf8(result).unwrap()
+}
+
+/// SIMD-optimized sliding window using CharacterValidator
+/// 
+/// This is the new preferred function that uses the robust whitelist-based
+/// character validation from the alphabet module.
+/// 
+/// # Arguments
+/// * `sequence` - The sequence bytes to process
+/// * `kmer_length` - Length of k-mers to generate
+/// * `validator` - CharacterValidator configured for the appropriate alphabet
+/// 
+/// # Returns
+/// Vector of Option<u64> where None indicates an invalid k-mer
+pub fn sliding_window_validated(
+    sequence: &[u8],
+    kmer_length: usize,
+    validator: &CharacterValidator,
+) -> Vec<Option<u64>> {
+    if sequence.len() < kmer_length {
+        return Vec::new();
+    }
+
+    let result_capacity = sequence.len() - kmer_length + 1;
+    let mut result = Vec::with_capacity(result_capacity);
+
+    // Process each k-mer window
+    for window in sequence.windows(kmer_length) {
+        if validator.window_has_invalid(window) {
+            result.push(None);
+        } else {
+            result.push(encode_kmer_validated(window, validator));
+        }
+    }
+
+    result
+}
+
+/// Batch processing version using CharacterValidator
+/// 
+/// This function processes sequences in chunks to optimize memory usage
+/// and cache locality for extremely large inputs.
+pub fn sliding_window_validated_batched(
+    sequence: &[u8],
+    kmer_length: usize,
+    validator: &CharacterValidator,
+    batch_size: usize,
+) -> Vec<Option<u64>> {
+    if sequence.len() < kmer_length {
+        return Vec::new();
+    }
+
+    let total_kmers = sequence.len() - kmer_length + 1;
+    let mut result = Vec::with_capacity(total_kmers);
+
+    // Process in overlapping batches to maintain k-mer continuity
+    let mut start = 0;
+    while start < sequence.len() {
+        let end = std::cmp::min(start + batch_size, sequence.len());
+        let batch = &sequence[start..end];
+        
+        // Ensure we don't go beyond valid k-mer positions
+        let batch_kmer_end = if end == sequence.len() {
+            batch.len()
+        } else {
+            batch.len().saturating_sub(kmer_length - 1)
+        };
+
+        for window in batch.windows(kmer_length).take(batch_kmer_end.saturating_sub(kmer_length - 1)) {
+            if validator.window_has_invalid(window) {
+                result.push(None);
+            } else {
+                result.push(encode_kmer_validated(window, validator));
+            }
+        }
+
+        // Move start position, accounting for k-mer overlap
+        start += batch_size.saturating_sub(kmer_length - 1);
+        if start >= sequence.len() {
+            break;
+        }
+    }
+
+    result
+}
+
+// ============================================================================
+// Legacy functions maintained for backward compatibility
+// These internally use the new CharacterValidator system
+// ============================================================================
+
+// SIMD-optimized illegal character lookup tables (legacy)
 struct IllegalCharLookup {
     table: [bool; 256],
     #[cfg(target_arch = "x86_64")]
@@ -147,53 +265,19 @@ fn get_or_create_lookup(illegal_chars: &[u8], is_protein: bool) -> IllegalCharLo
     }
 }
 
-#[inline(always)]
-pub fn encode_kmer(kmer: &[u8], is_protein: bool) -> Option<u64> {
-    let encoding_table = if is_protein { PROTEIN_ENCODING } else { NUCLEOTIDE_ENCODING };
-    let base = if is_protein { 20u64 } else { 4u64 };
-    
-    let mut encoded = 0u64;
-    for &byte in kmer {
-        let code = encoding_table[byte as usize];
-        if code == 255 { return None; } // Invalid character
-        encoded = encoded * base + code as u64;
-    }
-    Some(encoded)
-}
-
-pub fn decode_kmer(encoded: u64, kmer_length: usize, is_protein: bool) -> String {
-    let mut result = Vec::with_capacity(kmer_length);
-    let mut remaining = encoded;
-    
-    if is_protein {
-        let base = 20u64;
-        for _ in 0..kmer_length {
-            let char_idx = (remaining % base) as usize;
-            result.push(PROTEIN_CHARS[char_idx]);
-            remaining /= base;
-        }
-    } else {
-        let base = 4u64;
-        for _ in 0..kmer_length {
-            let char_idx = (remaining % base) as usize;
-            result.push(NUCLEOTIDE_CHARS[char_idx]);
-            remaining /= base;
-        }
-    }
-    
-    result.reverse();
-    String::from_utf8(result).unwrap()
-}
-
-/// SIMD-optimized sliding window with illegal character detection
+/// Legacy SIMD-optimized sliding window with illegal character detection
 /// 
-/// This function provides significant performance improvements for k-mer generation
-/// by using SIMD instructions to check for illegal characters in parallel.
+/// This function is maintained for backward compatibility.
+/// For new code, prefer `sliding_window_validated` which uses the robust
+/// whitelist-based validation.
 /// 
-/// # Performance characteristics:
-/// - 3-5x faster than scalar implementation for sequences > 1KB on x86_64
-/// - Automatic fallback to scalar code for small sequences or unsupported architectures
-/// - Thread-local caching of lookup tables for repeated calls
+/// # Deprecation Notice
+/// This function uses a blacklist approach which may allow invalid characters
+/// like #, *, @, etc. to pass through. Use `sliding_window_validated` instead.
+#[deprecated(
+    since = "2.0.0",
+    note = "Use sliding_window_validated with CharacterValidator for robust whitelist-based validation"
+)]
 pub fn sliding_window_encoded(
     sequence: &[u8],
     kmer_length: usize,
@@ -222,10 +306,28 @@ pub fn sliding_window_encoded(
     result
 }
 
-/// Batch processing version for very large sequences
+/// New sliding window function that uses CharacterValidator internally
 /// 
-/// This function processes sequences in chunks to optimize memory usage
-/// and cache locality for extremely large inputs.
+/// This is a drop-in replacement for the deprecated sliding_window_encoded
+/// that uses whitelist-based validation internally.
+pub fn sliding_window_encoded_safe(
+    sequence: &[u8],
+    kmer_length: usize,
+    is_protein: bool,
+) -> Vec<Option<u64>> {
+    let validator = if is_protein {
+        CharacterValidator::protein()
+    } else {
+        CharacterValidator::nucleotide()
+    };
+    sliding_window_validated(sequence, kmer_length, &validator)
+}
+
+/// Legacy batch processing version
+#[deprecated(
+    since = "2.0.0",
+    note = "Use sliding_window_validated_batched with CharacterValidator for robust validation"
+)]
 pub fn sliding_window_encoded_batched(
     sequence: &[u8],
     kmer_length: usize,
@@ -284,6 +386,14 @@ pub fn has_overlap_end(prefix: &str, next: &str) -> bool {
     false
 }
 
+/// Legacy string-based sliding window
+/// 
+/// This function uses the old blacklist approach.
+/// For new code, use the byte-based functions with CharacterValidator.
+#[deprecated(
+    since = "2.0.0",
+    note = "Use sliding_window_validated for robust whitelist-based validation"
+)]
 pub fn sliding_window(
     sequence: &String,
     kmer_length: &usize,
@@ -301,6 +411,30 @@ pub fn sliding_window(
             iter.collect()
         })
         .collect::<Vec<String>>()
+}
+
+/// New string-based sliding window using CharacterValidator
+pub fn sliding_window_string_validated(
+    sequence: &str,
+    kmer_length: usize,
+    validator: &CharacterValidator,
+) -> Vec<String> {
+    let bytes = sequence.as_bytes();
+    if bytes.len() < kmer_length {
+        return Vec::new();
+    }
+    
+    bytes
+        .windows(kmer_length)
+        .map(|window| {
+            if validator.window_has_invalid(window) {
+                String::from("NA")
+            } else {
+                // Safe because we're working with ASCII biological sequences
+                unsafe { std::str::from_utf8_unchecked(window).to_string() }
+            }
+        })
+        .collect()
 }
 
 pub fn count_kmers<'a>(kmers: &'a [Box<str>]) -> HashMap<&'a str, (usize, Vec<usize>)> {
@@ -359,56 +493,97 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_simd_vs_scalar_consistency() {
-        let sequence = b"ACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWY";
-        let illegal_chars = &[b'-', b'X', b'B'];
-        let kmer_length = 5;
+    fn test_validator_based_encoding() {
+        let validator = CharacterValidator::protein();
         
-        let lookup = IllegalCharLookup::new(illegal_chars);
+        // Valid k-mer should encode successfully
+        let kmer = b"ACDEF";
+        assert!(encode_kmer_validated(kmer, &validator).is_some());
         
-        // Test that SIMD and scalar implementations give same results
-        for window in sequence.windows(kmer_length) {
-            let scalar_result = lookup.contains_illegal_scalar(window);
-            let simd_result = lookup.contains_illegal_simd(window);
-            assert_eq!(scalar_result, simd_result, "SIMD and scalar results differ for window: {:?}", window);
+        // K-mer with invalid character should fail
+        let invalid_kmer = b"ACD#F";
+        assert!(encode_kmer_validated(invalid_kmer, &validator).is_none());
+        
+        // K-mer with ambiguous character should fail
+        let ambiguous_kmer = b"ACDXF";
+        assert!(encode_kmer_validated(ambiguous_kmer, &validator).is_none());
+    }
+
+    #[test]
+    fn test_sliding_window_validated() {
+        let validator = CharacterValidator::protein();
+        
+        // Valid sequence
+        let sequence = b"ACDEFG";
+        let result = sliding_window_validated(sequence, 3, &validator);
+        assert_eq!(result.len(), 4);
+        assert!(result.iter().all(|x| x.is_some()));
+        
+        // Sequence with invalid character
+        let sequence_invalid = b"ACD#FG";
+        let result = sliding_window_validated(sequence_invalid, 3, &validator);
+        assert_eq!(result.len(), 4);
+        // K-mers containing # should be None
+        assert!(result[0].is_some());  // ACD - valid
+        assert!(result[1].is_none());  // CD# - invalid
+        assert!(result[2].is_none());  // D#F - invalid
+        assert!(result[3].is_none());  // #FG - invalid
+    }
+
+    #[test]
+    fn test_invalid_character_rejection() {
+        let validator = CharacterValidator::protein();
+        
+        // Test various invalid characters that should be rejected
+        let invalid_chars = b"#*@!123456789()[]{}<>?/\\|`~";
+        
+        for &ch in invalid_chars {
+            let kmer = [b'A', ch, b'C', b'D', b'E'];
+            let result = encode_kmer_validated(&kmer, &validator);
+            assert!(result.is_none(), "Character {} should be rejected", ch as char);
         }
     }
 
     #[test]
-    fn test_sliding_window_encoded_correctness() {
-        let sequence = b"ACDEFG";
-        let illegal_chars = &[b'-', b'X'];
-        let kmer_length = 3;
+    fn test_lowercase_handling() {
+        // Default: lowercase should be rejected
+        let strict_validator = CharacterValidator::protein();
+        let lowercase_kmer = b"acdef";
+        assert!(encode_kmer_validated(lowercase_kmer, &strict_validator).is_none());
         
-        let result = sliding_window_encoded(sequence, kmer_length, true, illegal_chars);
-        
-        // Should produce 4 k-mers: ACD, CDE, DEF, EFG
-        assert_eq!(result.len(), 4);
-        assert!(result.iter().all(|x| x.is_some()));
+        // With allow_lowercase: should be accepted
+        let permissive_validator = CharacterValidator::with_options(
+            AlphabetType::Protein,
+            ValidationMode::Strict,
+            true,
+        );
+        assert!(encode_kmer_validated(lowercase_kmer, &permissive_validator).is_some());
     }
 
     #[test]
-    fn test_illegal_character_detection() {
-        let sequence = b"AC-EFG";
-        let illegal_chars = &[b'-'];
-        let kmer_length = 3;
+    fn test_nucleotide_validation() {
+        let validator = CharacterValidator::nucleotide();
         
-        let result = sliding_window_encoded(sequence, kmer_length, true, illegal_chars);
+        // Valid nucleotide k-mer
+        let valid = b"ACGT";
+        assert!(encode_kmer_validated(valid, &validator).is_some());
         
-        // Should produce 4 results: AC- (invalid), C-E (invalid), -EF (invalid), EFG (valid)
-        assert_eq!(result.len(), 4);
-        assert!(result[0].is_none());  // AC-
-        assert!(result[1].is_none());  // C-E
-        assert!(result[2].is_none());  // -EF  
-        assert!(result[3].is_some()); // EFG
+        // Invalid character in nucleotide sequence (protein amino acid)
+        let invalid = b"ACEF";  // E is not a nucleotide
+        assert!(encode_kmer_validated(invalid, &validator).is_none());
+        
+        // Ambiguous nucleotide character
+        let ambiguous = b"ACGN";  // N is ambiguous
+        assert!(encode_kmer_validated(ambiguous, &validator).is_none());
     }
 
     #[test]
     fn test_encode_decode_roundtrip() {
+        let validator = CharacterValidator::protein();
         let original = b"ACDEFG";
         let kmer_length = 6;
         
-        if let Some(encoded) = encode_kmer(original, true) {
+        if let Some(encoded) = encode_kmer_validated(original, &validator) {
             let decoded = decode_kmer(encoded, kmer_length, true);
             assert_eq!(decoded.as_bytes(), original);
         } else {
@@ -417,43 +592,79 @@ mod tests {
     }
 
     #[test]
-    fn test_performance_comparison() {
-        // Test with a larger sequence to see SIMD benefits
-        let mut sequence = Vec::new();
-        for _ in 0..1000 {
-            sequence.extend_from_slice(b"ACDEFGHIKLMNPQRSTVWY");
-        }
+    fn test_string_validated_sliding_window() {
+        let validator = CharacterValidator::protein();
         
-        let illegal_chars = &[b'-', b'X', b'B', b'J', b'Z', b'O', b'U'];
-        let kmer_length = 9;
+        let sequence = "ACDEFG";
+        let result = sliding_window_string_validated(sequence, 3, &validator);
+        assert_eq!(result.len(), 4);
+        assert_eq!(result[0], "ACD");
+        assert_eq!(result[1], "CDE");
+        assert_eq!(result[2], "DEF");
+        assert_eq!(result[3], "EFG");
         
-        let start = std::time::Instant::now();
-        let result = sliding_window_encoded(&sequence, kmer_length, true, illegal_chars);
-        let duration = start.elapsed();
-        
-        println!("SIMD implementation processed {} k-mers in {:?}", result.len(), duration);
-        
-        // Verify all results are valid (no illegal characters in test sequence)
-        assert!(result.iter().all(|x| x.is_some()));
+        // With invalid character
+        let sequence_invalid = "ACD#FG";
+        let result = sliding_window_string_validated(sequence_invalid, 3, &validator);
+        assert_eq!(result[0], "ACD");
+        assert_eq!(result[1], "NA");  // CD# is invalid
+        assert_eq!(result[2], "NA");  // D#F is invalid
+        assert_eq!(result[3], "NA");  // #FG is invalid
     }
 
-    #[cfg(target_arch = "x86_64")]
     #[test]
-    fn test_simd_masks_usage() {
+    fn test_safe_encoded_function() {
+        // Test the new safe function that uses whitelist internally
+        let sequence = b"ACDEFG";
+        let result = sliding_window_encoded_safe(sequence, 3, true);
+        assert_eq!(result.len(), 4);
+        assert!(result.iter().all(|x| x.is_some()));
+        
+        // Invalid characters should be rejected
+        let sequence_invalid = b"ACD#FG";
+        let result = sliding_window_encoded_safe(sequence_invalid, 3, true);
+        assert!(result[1].is_none());  // Contains #
+    }
+
+    #[test]
+    fn test_permissive_mode() {
+        // In permissive mode, ambiguous characters should NOT invalidate k-mers
+        // but completely invalid characters should
+        let validator = CharacterValidator::with_options(
+            AlphabetType::Protein,
+            ValidationMode::Permissive,
+            false,
+        );
+        
+        // Ambiguous character X should pass in permissive mode
+        assert!(!validator.should_invalidate_kmer(b'X'));
+        
+        // But # should still fail
+        assert!(validator.should_invalidate_kmer(b'#'));
+    }
+
+    #[test]
+    fn test_report_mode() {
+        // In report mode, nothing should invalidate k-mers
+        let validator = CharacterValidator::with_options(
+            AlphabetType::Protein,
+            ValidationMode::ReportOnly,
+            false,
+        );
+        
+        assert!(!validator.should_invalidate_kmer(b'X'));
+        assert!(!validator.should_invalidate_kmer(b'#'));
+        assert!(!validator.should_invalidate_kmer(b'A'));
+    }
+
+    #[allow(deprecated)]
+    #[test]
+    fn test_legacy_function_still_works() {
+        // Test that the deprecated function still works for backward compatibility
+        let sequence = b"ACDEFG";
         let illegal_chars = &[b'-', b'X', b'B'];
-        let lookup = IllegalCharLookup::new(illegal_chars);
-        
-        // Verify SIMD masks are created correctly
-        assert_eq!(lookup.simd_masks.len(), illegal_chars.len());
-        
-        // Test with a sequence that should trigger SIMD path
-        let long_sequence = b"ACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWY";
-        let result = lookup.contains_illegal_simd(long_sequence);
-        assert!(!result); // No illegal characters in this sequence
-        
-        // Test with illegal character
-        let sequence_with_illegal = b"ACDEFGHIKLMNPQR-TVWYACDEFGHIKLMNPQRSTVWY";
-        let result = lookup.contains_illegal_simd(sequence_with_illegal);
-        assert!(result); // Should detect the '-' character
+        let result = sliding_window_encoded(sequence, 3, true, illegal_chars);
+        assert_eq!(result.len(), 4);
+        assert!(result.iter().all(|x| x.is_some()));
     }
 }

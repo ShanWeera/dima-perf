@@ -2,12 +2,39 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum, Subcommand};
 
-use dima::{get_results_objs, get_results_objs_columnar};
+use dima::{
+    ValidationMode,
+    get_results_objs_validated, 
+    get_results_objs_columnar_validated,
+    AnalysisConfig,
+};
 
-#[derive(Copy, Clone, Debug, ValueEnum)]
+#[derive(Copy, Clone, Debug, ValueEnum, PartialEq, Eq)]
 pub enum Alphabet {
     Protein,
     Nucleotide,
+}
+
+/// Validation mode for character checking
+#[derive(Copy, Clone, Debug, ValueEnum, Default)]
+pub enum ValidationModeArg {
+    /// Only accept valid alphabet characters (whitelist approach) - RECOMMENDED
+    #[default]
+    Strict,
+    /// Accept valid + ambiguous characters, reject only completely invalid
+    Permissive,
+    /// Accept all characters but report invalid ones
+    Report,
+}
+
+impl From<ValidationModeArg> for ValidationMode {
+    fn from(arg: ValidationModeArg) -> Self {
+        match arg {
+            ValidationModeArg::Strict => ValidationMode::Strict,
+            ValidationModeArg::Permissive => ValidationMode::Permissive,
+            ValidationModeArg::Report => ValidationMode::ReportOnly,
+        }
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -76,8 +103,6 @@ struct AnalyzeArgs {
     #[arg(long = "no-metadata")]
     no_metadata: bool,
 
-
-
     /// Number of Rayon worker threads (defaults to number of CPUs)
     #[arg(long = "threads")]
     threads: Option<usize>,
@@ -97,6 +122,35 @@ struct AnalyzeArgs {
     /// Binary format compression level (0=none, 1=lz4, 2=zstd)
     #[arg(long = "compression", default_value = "1")]
     compression: u8,
+
+    // =========================================================================
+    // Character Validation Options
+    // =========================================================================
+
+    /// Character validation mode for k-mer generation.
+    /// 
+    /// - strict: Only accept valid alphabet characters (20 amino acids or 4/5 nucleotides).
+    ///           This is the RECOMMENDED mode for scientific accuracy. Invalid characters
+    ///           like #, *, @, numbers will cause k-mers to be marked as NA.
+    /// 
+    /// - permissive: Accept valid + known ambiguous characters (X, B, N, etc.).
+    ///               Only completely invalid characters (#, *, etc.) cause NA k-mers.
+    /// 
+    /// - report: Accept all characters but report invalid ones found.
+    ///           Useful for data quality assessment.
+    #[arg(long = "validation", value_enum, default_value_t = ValidationModeArg::Strict)]
+    validation: ValidationModeArg,
+
+    /// Allow lowercase characters in sequences.
+    /// When enabled, lowercase letters (a-z) are automatically converted to uppercase.
+    /// By default, lowercase characters are treated as invalid.
+    #[arg(long = "allow-lowercase")]
+    allow_lowercase: bool,
+
+    /// Report statistics about invalid characters found during processing.
+    /// Shows counts of valid, ambiguous, gap, and invalid characters.
+    #[arg(long = "report-invalid")]
+    report_invalid: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -149,8 +203,15 @@ fn run_analyze(cli: AnalyzeArgs) {
         Alphabet::Nucleotide => Some("nucleotide".to_string()),
     };
 
-    let results = if cli.columnar {
-        get_results_objs_columnar(
+    // Build analysis config from CLI options
+    let analysis_config = AnalysisConfig::new()
+        .with_validation_mode(cli.validation.into())
+        .with_allow_lowercase(cli.allow_lowercase)
+        .with_report_invalid(cli.report_invalid);
+
+    // Run analysis with validation
+    let (results, validation_stats) = if cli.columnar {
+        get_results_objs_columnar_validated(
             cli.input.to_string_lossy().to_string(),
             cli.kmer_length,
             cli.support_threshold,
@@ -159,9 +220,10 @@ fn run_analyze(cli: AnalyzeArgs) {
             alphabet,
             Some(cli.header_fillna),
             metadata_fields,
+            Some(analysis_config),
         )
     } else {
-        get_results_objs(
+        get_results_objs_validated(
             cli.input.to_string_lossy().to_string(),
             cli.kmer_length,
             cli.support_threshold,
@@ -170,8 +232,26 @@ fn run_analyze(cli: AnalyzeArgs) {
             alphabet,
             Some(cli.header_fillna),
             metadata_fields,
+            Some(analysis_config),
         )
     };
+
+    // Report validation statistics if requested
+    if cli.report_invalid {
+        if let Some(stats) = validation_stats {
+            let summary = stats.summary();
+            eprintln!("\n{}", summary);
+            
+            // Warn if invalid characters were found
+            if summary.invalid_chars > 0 {
+                eprintln!("\nWarning: {} invalid characters were found in the input sequences.", 
+                         summary.invalid_chars);
+                eprintln!("These characters are not part of the standard {} alphabet.",
+                         if cli.alphabet == Alphabet::Protein { "protein (20 amino acids)" } else { "nucleotide (ACGTU)" });
+                eprintln!("K-mers containing invalid characters were marked as NA.\n");
+            }
+        }
+    }
 
     if cli.hcs_only {
         match results.get_hcs(
@@ -326,4 +406,4 @@ fn run_deflate(args: DeflateArgs) {
         // Print to stdout
         println!("{}", json_output);
     }
-} 
+}
