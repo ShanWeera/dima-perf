@@ -1,0 +1,264 @@
+name: Release
+
+on:
+  release:
+    types: [created]
+
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: dima
+
+permissions:
+  contents: write
+
+jobs:
+  # Build job - builds for all target platforms
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64 (glibc)
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            platform_name: Linux x86_64
+
+          # Linux x86_64 (musl - static binary)
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            archive: tar.gz
+            platform_name: Linux x86_64 (musl)
+            cross: true
+
+          # Linux ARM64 (glibc)
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            platform_name: Linux ARM64
+            cross: true
+
+          # Linux ARM64 (musl - static binary)
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            archive: tar.gz
+            platform_name: Linux ARM64 (musl)
+            cross: true
+
+          # macOS Intel
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+            archive: tar.gz
+            platform_name: macOS Intel (x86_64)
+
+          # macOS Apple Silicon
+          - target: aarch64-apple-darwin
+            os: macos-14
+            archive: tar.gz
+            platform_name: macOS Apple Silicon (ARM64)
+
+          # Windows x86_64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+            platform_name: Windows x86_64
+
+          # Windows ARM64
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+            platform_name: Windows ARM64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools
+        if: matrix.cross
+        uses: taiki-e/install-action@cross
+
+      - name: Install musl tools (Linux musl targets)
+        if: contains(matrix.target, 'musl') && !matrix.cross
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Build binary (native)
+        if: ${{ !matrix.cross }}
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Build binary (cross)
+        if: matrix.cross
+        run: cross build --release --locked --target ${{ matrix.target }}
+
+      - name: Create archive directory
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          ARCHIVE_NAME="${{ env.BINARY_NAME }}-${VERSION}-${{ matrix.target }}"
+          mkdir -p "dist/${ARCHIVE_NAME}"
+          
+          # Copy binary
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            cp "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}.exe" "dist/${ARCHIVE_NAME}/"
+          else
+            cp "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}" "dist/${ARCHIVE_NAME}/"
+          fi
+          
+          # Copy documentation
+          cp README.md "dist/${ARCHIVE_NAME}/" 2>/dev/null || true
+          cp LICENSE "dist/${ARCHIVE_NAME}/" 2>/dev/null || true
+          cp BENCHMARK.md "dist/${ARCHIVE_NAME}/" 2>/dev/null || true
+
+      - name: Create tarball (Unix)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          ARCHIVE_NAME="${{ env.BINARY_NAME }}-${VERSION}-${{ matrix.target }}"
+          cd dist
+          tar -czvf "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}"
+          echo "ASSET_PATH=dist/${ARCHIVE_NAME}.tar.gz" >> $GITHUB_ENV
+          echo "ASSET_NAME=${ARCHIVE_NAME}.tar.gz" >> $GITHUB_ENV
+
+      - name: Create zip archive (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $VERSION = "${{ github.ref_name }}"
+          $ARCHIVE_NAME = "${{ env.BINARY_NAME }}-${VERSION}-${{ matrix.target }}"
+          Compress-Archive -Path "dist\${ARCHIVE_NAME}\*" -DestinationPath "dist\${ARCHIVE_NAME}.zip"
+          echo "ASSET_PATH=dist/${ARCHIVE_NAME}.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "ASSET_NAME=${ARCHIVE_NAME}.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ASSET_PATH }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Output artifact info
+        id: artifact-info
+        shell: bash
+        run: |
+          echo "platform_name=${{ matrix.platform_name }}" >> $GITHUB_OUTPUT
+          echo "asset_name=${{ env.ASSET_NAME }}" >> $GITHUB_OUTPUT
+          echo "target=${{ matrix.target }}" >> $GITHUB_OUTPUT
+
+    outputs:
+      # Note: Matrix outputs only capture the last job's values
+      # We'll reconstruct the table in the update-release job
+      version: ${{ github.ref_name }}
+
+  # Update release body with download table
+  update-release:
+    name: Update Release Body
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate release body with download table
+        id: release-body
+        env:
+          VERSION: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
+          
+          # Create the release body with download table
+          cat << 'HEADER' > release_body.md
+          ## Installation
+          
+          Download the appropriate binary for your platform from the table below, extract it, and add it to your PATH.
+          
+          ### Pre-built Binaries
+          
+          | Platform | Architecture | Download |
+          |----------|--------------|----------|
+          HEADER
+          
+          # Add download links for each platform
+          echo "| Linux | x86_64 (glibc) | [dima-${VERSION}-x86_64-unknown-linux-gnu.tar.gz](${BASE_URL}/dima-${VERSION}-x86_64-unknown-linux-gnu.tar.gz) |" >> release_body.md
+          echo "| Linux | x86_64 (musl/static) | [dima-${VERSION}-x86_64-unknown-linux-musl.tar.gz](${BASE_URL}/dima-${VERSION}-x86_64-unknown-linux-musl.tar.gz) |" >> release_body.md
+          echo "| Linux | ARM64 (glibc) | [dima-${VERSION}-aarch64-unknown-linux-gnu.tar.gz](${BASE_URL}/dima-${VERSION}-aarch64-unknown-linux-gnu.tar.gz) |" >> release_body.md
+          echo "| Linux | ARM64 (musl/static) | [dima-${VERSION}-aarch64-unknown-linux-musl.tar.gz](${BASE_URL}/dima-${VERSION}-aarch64-unknown-linux-musl.tar.gz) |" >> release_body.md
+          echo "| macOS | Intel (x86_64) | [dima-${VERSION}-x86_64-apple-darwin.tar.gz](${BASE_URL}/dima-${VERSION}-x86_64-apple-darwin.tar.gz) |" >> release_body.md
+          echo "| macOS | Apple Silicon (ARM64) | [dima-${VERSION}-aarch64-apple-darwin.tar.gz](${BASE_URL}/dima-${VERSION}-aarch64-apple-darwin.tar.gz) |" >> release_body.md
+          echo "| Windows | x86_64 | [dima-${VERSION}-x86_64-pc-windows-msvc.zip](${BASE_URL}/dima-${VERSION}-x86_64-pc-windows-msvc.zip) |" >> release_body.md
+          echo "| Windows | ARM64 | [dima-${VERSION}-aarch64-pc-windows-msvc.zip](${BASE_URL}/dima-${VERSION}-aarch64-pc-windows-msvc.zip) |" >> release_body.md
+          
+          # Add installation instructions
+          cat << 'FOOTER' >> release_body.md
+          
+          ### Quick Install (Unix/Linux/macOS)
+          
+          ```bash
+          # Download and extract (replace URL with your platform)
+          curl -LO <download-url>
+          tar -xzf dima-*.tar.gz
+          
+          # Move to PATH
+          sudo mv dima-*/dima /usr/local/bin/
+          
+          # Verify installation
+          dima --version
+          ```
+          
+          ### Quick Install (Windows PowerShell)
+          
+          ```powershell
+          # Download and extract
+          Invoke-WebRequest -Uri "<download-url>" -OutFile "dima.zip"
+          Expand-Archive -Path "dima.zip" -DestinationPath "."
+          
+          # Add to PATH or move to a directory in PATH
+          # Verify installation
+          .\dima.exe --version
+          ```
+          
+          ### Build from Source
+          
+          ```bash
+          # Requires Rust toolchain
+          cargo install --git https://github.com/${{ github.repository }} --tag ${VERSION}
+          ```
+          
+          ---
+          
+          **Note:** 
+          - `musl` builds are statically linked and work on any Linux distribution without dependencies
+          - `glibc` builds require a compatible glibc version (most modern distributions)
+          - For Alpine Linux or Docker containers, use the `musl` builds
+          FOOTER
+          
+          # Store body for the next step
+          echo "RELEASE_BODY<<EOF" >> $GITHUB_ENV
+          cat release_body.md >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Update release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: ${{ env.RELEASE_BODY }}
+          append_body: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Optional: Publish to crates.io
+  # Uncomment and add CARGO_REGISTRY_TOKEN secret to enable
+  # publish-crate:
+  #   name: Publish to crates.io
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: dtolnay/rust-toolchain@stable
+  #     - name: Publish
+  #       run: cargo publish
+  #       env:
+  #         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
