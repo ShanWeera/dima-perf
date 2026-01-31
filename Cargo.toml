@@ -1,13 +1,33 @@
-[package]
-name = "dima"
+[workspace]
+members = [".", "src-tauri"]
+default-members = ["."]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["Shan Tharanga <stwm2@student.london.ac.uk>"]
-description = "DiMA - Diversity Motif Analyser: A native Rust library for analyzing k-mer diversity in FASTA sequences"
 license = "MIT"
 
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+
+[package]
+name = "dima"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors = ["Shan Tharanga <stwm2@student.london.ac.uk>"]
+description = "DiMA - Diversity Motif Analyser: A native Rust library for analyzing k-mer diversity in FASTA sequences"
+
 [lib]
+name = "dima_lib"
 path = "src/lib.rs"
+
+[[bin]]
+name = "dima"
+path = "src/main.rs"
 
 [dependencies]
 bio = "1.4"

@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use std::fmt;
 use hashbrown::HashMap;
 
@@ -6,13 +6,13 @@ use crate::kmer::has_overlap_end;
 use std::fs::File;
 use std::io::BufWriter;
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct HighestEntropy {
     pub position: usize,
     pub entropy: f64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Results {
     pub sequence_count: usize,
     pub support_threshold: usize,
@@ -24,7 +24,7 @@ pub struct Results {
     pub results: Vec<Position>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Position {
     pub position: usize,
     pub low_support: Option<String>,
@@ -36,7 +36,7 @@ pub struct Position {
     pub diversity_motifs: Option<Vec<Variant>>,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Variant {
     pub sequence: String,
     pub count: usize,
