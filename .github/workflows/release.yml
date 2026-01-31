@@ -12,8 +12,8 @@ permissions:
   contents: write
 
 jobs:
-  # Build job - builds for all target platforms
-  build:
+  # Build CLI - builds CLI for all target platforms
+  build-cli:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -156,10 +156,85 @@ jobs:
       # We'll reconstruct the table in the update-release job
       version: ${{ github.ref_name }}
 
+  # Build GUI - builds Tauri app for desktop platforms
+  build-gui:
+    name: Build GUI ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+            platform_name: Linux x86_64
+
+          # macOS Intel
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+            platform_name: macOS Intel
+
+          # macOS Apple Silicon
+          - target: aarch64-apple-darwin
+            os: macos-14
+            platform_name: macOS Apple Silicon
+
+          # Windows x86_64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            platform_name: Windows x86_64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: ui
+
+      - name: Install Tauri CLI
+        run: npm install -g @tauri-apps/cli@^2
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: src-tauri
+          tauriScript: npx tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: ${{ github.ref_name }}
+          releaseBody: ''
+          releaseDraft: false
+          prerelease: false
+          args: --target ${{ matrix.target }}
+
   # Update release body with download table
   update-release:
     name: Update Release Body
-    needs: build
+    needs: [build-cli, build-gui]
     runs-on: ubuntu-latest
     steps:
       - name: Generate release body with download table
@@ -169,20 +244,40 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
+          # Remove 'v' prefix for version number if present
+          VER_NUM="${VERSION#v}"
           
-          # Create the release body with download table
+          # Create the release body with download tables
           cat << 'HEADER' > release_body.md
-          ## Installation
+          ## DiMA Desktop (GUI Application)
           
-          Download the appropriate binary for your platform from the table below, extract it, and add it to your PATH.
+          Download the desktop application for your platform:
           
-          ### Pre-built Binaries
+          | Platform | Download |
+          |----------|----------|
+          HEADER
+          
+          # Add GUI download links (productName is DiMA-Desktop)
+          echo "| macOS (Intel) | [DiMA-Desktop_${VER_NUM}_x64.dmg](${BASE_URL}/DiMA-Desktop_${VER_NUM}_x64.dmg) |" >> release_body.md
+          echo "| macOS (Apple Silicon) | [DiMA-Desktop_${VER_NUM}_aarch64.dmg](${BASE_URL}/DiMA-Desktop_${VER_NUM}_aarch64.dmg) |" >> release_body.md
+          echo "| Windows (Installer) | [DiMA-Desktop_${VER_NUM}_x64-setup.exe](${BASE_URL}/DiMA-Desktop_${VER_NUM}_x64-setup.exe) |" >> release_body.md
+          echo "| Windows (MSI) | [DiMA-Desktop_${VER_NUM}_x64_en-US.msi](${BASE_URL}/DiMA-Desktop_${VER_NUM}_x64_en-US.msi) |" >> release_body.md
+          echo "| Linux (AppImage) | [DiMA-Desktop_${VER_NUM}_amd64.AppImage](${BASE_URL}/DiMA-Desktop_${VER_NUM}_amd64.AppImage) |" >> release_body.md
+          echo "| Linux (deb) | [dima-desktop_${VER_NUM}_amd64.deb](${BASE_URL}/dima-desktop_${VER_NUM}_amd64.deb) |" >> release_body.md
+          
+          cat << 'CLI_HEADER' >> release_body.md
+          
+          ---
+          
+          ## DiMA CLI (Command-Line Tool)
+          
+          Download the CLI binary for your platform:
           
           | Platform | Architecture | Download |
           |----------|--------------|----------|
-          HEADER
+          CLI_HEADER
           
-          # Add download links for each platform
+          # Add CLI download links for each platform
           echo "| Linux | x86_64 (glibc) | [dima-${VERSION}-x86_64-unknown-linux-gnu.tar.gz](${BASE_URL}/dima-${VERSION}-x86_64-unknown-linux-gnu.tar.gz) |" >> release_body.md
           echo "| Linux | x86_64 (musl/static) | [dima-${VERSION}-x86_64-unknown-linux-musl.tar.gz](${BASE_URL}/dima-${VERSION}-x86_64-unknown-linux-musl.tar.gz) |" >> release_body.md
           echo "| Linux | ARM64 (glibc) | [dima-${VERSION}-aarch64-unknown-linux-gnu.tar.gz](${BASE_URL}/dima-${VERSION}-aarch64-unknown-linux-gnu.tar.gz) |" >> release_body.md
