@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum, Subcommand};
 
-use dima::{
+use dima_lib::{
     ValidationMode,
     get_results_objs, 
     get_results_objs_columnar,
@@ -278,16 +278,16 @@ fn run_analyze(cli: AnalyzeArgs) {
             };
             
             let compression_type = match cli.compression {
-                0 => dima::binary::CompressionType::None,
-                1 => dima::binary::CompressionType::Lz4,
-                2 => dima::binary::CompressionType::Zstd,
+                0 => dima_lib::binary::CompressionType::None,
+                1 => dima_lib::binary::CompressionType::Lz4,
+                2 => dima_lib::binary::CompressionType::Zstd,
                 _ => {
                     eprintln!("Invalid compression type: {}. Use 0=none, 1=lz4, 2=zstd", cli.compression);
                     std::process::exit(1);
                 }
             };
             
-            let config = dima::binary::BinaryFormatConfig {
+            let config = dima_lib::binary::BinaryFormatConfig {
                 compression: compression_type,
                 compression_level: 1,
                 string_interning: true,
@@ -344,7 +344,7 @@ fn run_deflate(args: DeflateArgs) {
     }
 
     // Read binary format
-    let results = match dima::models::Results::from_binary(args.input.to_string_lossy().to_string()) {
+    let results = match dima_lib::models::Results::from_binary(args.input.to_string_lossy().to_string()) {
         Ok(results) => results,
         Err(e) => {
             eprintln!("Error reading binary file '{}': {}", args.input.display(), e);
