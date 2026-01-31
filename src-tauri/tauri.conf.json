@@ -1,0 +1,71 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "DiMA-Desktop",
+  "version": "0.1.0",
+  "identifier": "com.dima.desktop",
+  "build": {
+    "beforeDevCommand": { "script": "npm run dev", "cwd": "../ui" },
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": { "script": "npm run build", "cwd": "../ui" },
+    "frontendDist": "../ui/dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "DiMA Desktop",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1024,
+        "minHeight": 768,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "transparent": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [],
+    "fileAssociations": [
+      {
+        "ext": ["dima"],
+        "name": "DiMA Results",
+        "description": "DiMA Analysis Results File",
+        "role": "Viewer"
+      }
+    ],
+    "category": "Education",
+    "shortDescription": "Diversity Motif Analyser",
+    "longDescription": "DiMA Desktop is a GUI application for analyzing protein and nucleotide sequence diversity using k-mer based entropy analysis.",
+    "macOS": {
+      "entitlements": null,
+      "exceptionDomain": "",
+      "frameworks": [],
+      "providerShortName": null,
+      "signingIdentity": null
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
+  }
+}
