@@ -127,7 +127,7 @@ dima analyze -i sequences.fasta -o results.json
 dima analyze -i sequences.fasta -o results.json --header-format "accession|country|date"
 
 # Extract highly conserved sequences
-dima analyze -i sequences.fasta --hcs --hcs-threshold 95
+dima analyze -i sequences.fasta --hcs-output conserved.json --hcs-threshold 95
 
 # High-performance mode for large datasets
 dima analyze -i large_dataset.fasta -o results --columnar --binary
@@ -197,14 +197,14 @@ dima analyze -i sequences.fasta -o results.json \
 Highly Conserved Sequences (HCS) are regions where the same k-mer appears most frequently across all sequences. These are valuable for vaccine design and identifying stable epitopes.
 
 ```bash
-# Extract all conserved sequences
-dima analyze -i sequences.fasta --hcs
+# Extract all conserved sequences to a file
+dima analyze -i sequences.fasta --hcs-output conserved.json
 
 # Only sequences present in ≥95% of samples
-dima analyze -i sequences.fasta --hcs --hcs-threshold 95
+dima analyze -i sequences.fasta --hcs-output conserved.json --hcs-threshold 95
 
-# Save to file
-dima analyze -i sequences.fasta --hcs --hcs-threshold 95 -o conserved.json
+# Generate both full results and HCS output in one go
+dima analyze -i sequences.fasta -o results.json --hcs-output conserved.json --hcs-threshold 95
 ```
 
 ### Output Formats
@@ -325,7 +325,7 @@ dima analyze [OPTIONS] --input <FASTA>
 | Option | Default | Description |
 |--------|---------|-------------|
 | `-o, --output <FILE>` | stdout | Output file path |
-| `--hcs` | false | Output only Highly Conserved Sequences |
+| `--hcs-output <FILE>` | - | Output file path for Highly Conserved Sequences |
 | `--hcs-threshold <N>` | - | Minimum incidence % for HCS (0-100) |
 | `--binary` | false | Use binary format (.dima) |
 | `--compression <N>` | 1 | Binary compression: 0=none, 1=LZ4, 2=Zstd |
@@ -472,7 +472,7 @@ dima analyze -i sequences.fasta -o results.json \
 
 ```bash
 # Extract sequences conserved in ≥98% of samples
-dima analyze -i sequences.fasta --hcs --hcs-threshold 98 -o conserved.json
+dima analyze -i sequences.fasta --hcs-output conserved.json --hcs-threshold 98
 ```
 
 Output:
