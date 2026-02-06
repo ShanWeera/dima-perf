@@ -33,6 +33,10 @@ directories = "5"
 thiserror = "1"
 base64 = "0.22"
 rand = "0.8"
+reqwest = { version = "0.12", features = ["json"] }
+
+# Bioinformatics
+bio = "1.4"
 
 [features]
 default = ["custom-protocol"]

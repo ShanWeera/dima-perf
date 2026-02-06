@@ -437,3 +437,45 @@ export async function loadFilterPresets(): Promise<FilterPreset[]> {
     },
   }));
 }
+
+// ============================================================================
+// PDB Structure Commands
+// ============================================================================
+
+import type { ChainInfo, PositionMapping } from './types';
+
+/**
+ * Fetch a PDB file from RCSB PDB by ID
+ */
+export async function fetchPdb(pdbId: string): Promise<string> {
+  return invoke('fetch_pdb', { pdbId });
+}
+
+/**
+ * Parse PDB content and extract sequence information for each chain
+ */
+export async function parsePdbSequence(pdbContent: string): Promise<ChainInfo[]> {
+  return invoke('parse_pdb_sequence', { pdbContent });
+}
+
+/**
+ * Align MSA sequence to PDB sequence and return position mapping
+ */
+export async function alignSequences(
+  msaSequence: string,
+  pdbSequence: string,
+  pdbResidueNumbers: number[]
+): Promise<PositionMapping> {
+  return invoke('align_sequences', { msaSequence, pdbSequence, pdbResidueNumbers });
+}
+
+/**
+ * Create a direct 1:1 position mapping with an optional offset
+ */
+export async function createDirectMapping(
+  msaPositions: number[],
+  pdbResidueNumbers: number[],
+  offset: number
+): Promise<PositionMapping> {
+  return invoke('create_direct_mapping', { msaPositions, pdbResidueNumbers, offset });
+}

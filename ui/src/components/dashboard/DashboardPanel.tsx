@@ -53,15 +53,15 @@ export function DashboardPanel({
 
   return (
     <div className={cn(
-      "flex h-full flex-col overflow-visible rounded-lg border bg-card shadow-sm",
+      "flex h-full flex-col overflow-hidden rounded-lg border bg-card shadow-sm",
       className
     )}>
       {/* Panel Header */}
-      <div className="panel-handle flex cursor-move items-center justify-between border-b bg-muted/50 px-3 py-2">
-        <div className="flex items-center gap-2">
+      <div className="panel-handle flex cursor-move items-center justify-between border-b bg-muted/50 px-3 py-2 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
           <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
           <div className="min-w-0">
-            <h3 className="text-sm font-medium">{title}</h3>
+            <h3 className="text-sm font-medium truncate">{title}</h3>
             {subtitle && (
               <p className="text-xs text-muted-foreground truncate">{subtitle}</p>
             )}
@@ -75,7 +75,7 @@ export function DashboardPanel({
         </button>
       </div>
       {/* Panel Content */}
-      <div className="flex-1 overflow-visible min-h-0 min-w-0">
+      <div className="flex-1 overflow-auto min-h-0 min-w-0">
         {children}
       </div>
     </div>
