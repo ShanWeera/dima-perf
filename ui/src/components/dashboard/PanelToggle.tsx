@@ -19,6 +19,7 @@ const PANEL_INFO = [
   { id: 'variant-distribution', title: 'Motif Distribution' },
   { id: 'metadata-chart', title: 'Sequence Metadata' },
   { id: 'hcs-map', title: 'Highly Conserved Sequences' },
+  { id: 'pdb-viewer', title: '3D Structure' },
 ];
 
 export function PanelToggle({ hiddenPanels, onTogglePanel }: PanelToggleProps) {

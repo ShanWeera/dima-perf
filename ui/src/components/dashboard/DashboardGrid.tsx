@@ -13,6 +13,7 @@ import { VariantPieChart } from '@/components/charts/VariantPieChart';
 import { MetadataPieChart } from '@/components/charts/MetadataPieChart';
 import { PositionExplorer } from '@/components/charts/PositionExplorer';
 import { HCSMap } from '@/components/charts/HCSMap';
+import { PDBViewer } from '@/components/charts/PDBViewer';
 import { DashboardPanel } from './DashboardPanel';
 import { VariantModal } from './VariantModal';
 
@@ -89,7 +90,8 @@ const DEFAULT_LAYOUT: Layout[] = [
   { i: 'variant-distribution', x: 0, y: 7, w: 4, h: 5, minW: 3, minH: 4 },
   { i: 'position-explorer', x: 4, y: 7, w: 4, h: 5, minW: 3, minH: 4 },
   { i: 'metadata-chart', x: 8, y: 7, w: 4, h: 5, minW: 3, minH: 4 },
-  { i: 'hcs-map', x: 0, y: 12, w: 12, h: 3, minW: 4, minH: 2 },
+  { i: 'hcs-map', x: 0, y: 12, w: 6, h: 3, minW: 4, minH: 2 },
+  { i: 'pdb-viewer', x: 6, y: 12, w: 6, h: 6, minW: 4, minH: 5 },
 ];
 
 export function DashboardGrid({
@@ -210,6 +212,17 @@ export function DashboardGrid({
                 positions={results.results}
                 threshold={hcsThreshold}
                 onThresholdChange={setHcsThreshold}
+              />
+            </DashboardPanel>
+          </div>
+        )}
+
+        {!hiddenPanels.includes('pdb-viewer') && (
+          <div key="pdb-viewer" className="h-full">
+            <DashboardPanel title="3D Structure" subtitle="PDB structure with HCS highlighting" panelId="pdb-viewer">
+              <PDBViewer
+                positions={results.results}
+                hcsThreshold={hcsThreshold}
               />
             </DashboardPanel>
           </div>
