@@ -102,10 +102,10 @@ struct AnalyzeArgs {
           long_help = help::analyze::OUTPUT_LONG_HELP)]
     output: Option<PathBuf>,
 
-    #[arg(long = "hcs",
-          help = help::analyze::HCS_HELP,
-          long_help = help::analyze::HCS_LONG_HELP)]
-    hcs_only: bool,
+    #[arg(long = "hcs-output", value_name = "HCS_FILE",
+          help = help::analyze::HCS_OUTPUT_HELP,
+          long_help = help::analyze::HCS_OUTPUT_LONG_HELP)]
+    hcs_output: Option<PathBuf>,
 
     #[arg(long = "hcs-threshold",
           help = help::analyze::HCS_THRESHOLD_HELP,
@@ -250,24 +250,23 @@ fn run_analyze(cli: AnalyzeArgs) {
         }
     }
 
-    if cli.hcs_only {
+    // Write HCS output if --hcs-output is specified
+    if let Some(ref hcs_path) = cli.hcs_output {
         match results.get_hcs(
-            cli.output.as_ref().map(|p| p.to_string_lossy().to_string()),
+            Some(hcs_path.to_string_lossy().to_string()),
             cli.hcs_threshold,
         ) {
-            Ok(hcs) => {
-                if cli.output.is_none() {
-                    println!("{}", serde_json::to_string_pretty(&hcs).unwrap());
-                }
+            Ok(_) => {
+                eprintln!("HCS results saved to: {}", hcs_path.display());
             }
             Err(e) => {
                 eprintln!("Error writing HCS: {}", e);
                 std::process::exit(1);
             }
         }
-        return;
     }
 
+    // Write normal output if -o/--output is specified
     if let Some(out) = cli.output {
         if cli.binary {
             // Use binary format

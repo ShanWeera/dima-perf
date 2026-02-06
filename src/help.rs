@@ -276,18 +276,26 @@ Examples:
   -o results --binary       # Creates results.dima
   -o results.json --binary  # Creates results.dima (extension replaced)
 
+Can be combined with --hcs-output to generate both the full analysis
+results and HCS output in a single run:
+  -o results.json --hcs-output hcs.json
+
 Note: Binary format requires -o/--output (cannot stream to stdout)."#;
 
     // -------------------------------------------------------------------------
-    // HCS Mode (--hcs)
+    // HCS Output (--hcs-output)
     // -------------------------------------------------------------------------
-    pub const HCS_HELP: &str = "Output only Highly Conserved Sequences (Index variants)";
+    pub const HCS_OUTPUT_HELP: &str = "Output file path for Highly Conserved Sequences (Index variants)";
 
-    pub const HCS_LONG_HELP: &str = r#"Output only Highly Conserved Sequences instead of full analysis.
+    pub const HCS_OUTPUT_LONG_HELP: &str = r#"Output file path for Highly Conserved Sequences (HCS).
 
 HCS (Highly Conserved Sequences) are regions where the same k-mer appears
 most frequently across all sequences. These are extracted from variants
 classified as "Index" (motif_short = "I").
+
+When specified, HCS results are written to the given file as a JSON array.
+This can be used alongside -o/--output to generate both the full analysis
+results and the HCS output in a single run.
 
 How Index variants are classified:
   - Must have the highest count at that position
@@ -307,6 +315,11 @@ Use cases:
   - Identify conserved epitopes for vaccine design
   - Find evolutionarily stable protein regions
   - Extract consensus sequences from alignments
+
+Examples:
+  --hcs-output hcs.json                       # HCS only
+  -o results.json --hcs-output hcs.json       # Both outputs in one go
+  --hcs-output hcs.json --hcs-threshold 95    # HCS with threshold
 
 Combine with --hcs-threshold to filter by conservation level."#;
 
@@ -328,9 +341,9 @@ How it works:
   - Higher threshold = fewer sequences (more stringent conservation)
 
 Examples:
-  --hcs --hcs-threshold 95   # Variants in ≥95% of sequences
-  --hcs --hcs-threshold 80   # Variants in ≥80% of sequences
-  --hcs                      # All Index variants (no threshold)
+  --hcs-output hcs.json --hcs-threshold 95   # Variants in ≥95% of sequences
+  --hcs-output hcs.json --hcs-threshold 80   # Variants in ≥80% of sequences
+  --hcs-output hcs.json                      # All Index variants (no threshold)
 
 Recommended values:
   - 95-100: Highly conserved regions (vaccine targets)
@@ -338,7 +351,7 @@ Recommended values:
   - 50-80:  Semi-conserved regions
   - <50:    Not typically useful (too variable)
 
-Note: Only effective when --hcs is specified."#;
+Note: Only effective when --hcs-output is specified."#;
 
     // -------------------------------------------------------------------------
     // Threads (--threads)
