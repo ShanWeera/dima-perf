@@ -55,6 +55,11 @@ fn main() {
             commands::settings::get_documents_path,
             commands::settings::reveal_in_explorer,
             commands::settings::create_new_window,
+            // PDB commands
+            commands::pdb::fetch_pdb,
+            commands::pdb::parse_pdb_sequence,
+            commands::pdb::align_sequences,
+            commands::pdb::create_direct_mapping,
         ])
         .setup(|app| {
             // Initialize app data directory

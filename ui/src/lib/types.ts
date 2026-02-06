@@ -282,6 +282,40 @@ export interface FilterPreset {
 }
 
 // ============================================================================
+// PDB/Structure Types
+// ============================================================================
+
+/**
+ * Information about a chain in a PDB file
+ */
+export interface ChainInfo {
+  chain_id: string;
+  sequence: string;
+  residue_numbers: number[];
+}
+
+/**
+ * Position mapping between MSA positions and PDB residue numbers
+ */
+export interface PositionMapping {
+  msa_to_pdb: Record<number, number>;
+  alignment_score: number;
+  coverage: number;
+}
+
+/**
+ * PDB viewer state
+ */
+export interface PDBViewerState {
+  pdbData: string | null;
+  chains: ChainInfo[];
+  selectedChain: string;
+  mappingMode: 'direct' | 'auto';
+  offset: number;
+  positionMapping: PositionMapping | null;
+}
+
+// ============================================================================
 // Settings Types
 // ============================================================================
 
