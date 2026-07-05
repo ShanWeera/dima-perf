@@ -232,7 +232,8 @@ fn validate_fasta_blocking(
         // Cooperative cancellation check every CANCEL_CHECK_INTERVAL lines (Fix 4.29).
         // Avoids per-line atomic load overhead while keeping cancel latency under ~100ms
         // for typical line lengths.
-        if line_number.is_multiple_of(CANCEL_CHECK_INTERVAL) && cancel_flag.load(Ordering::Relaxed) {
+        if line_number.is_multiple_of(CANCEL_CHECK_INTERVAL) && cancel_flag.load(Ordering::Relaxed)
+        {
             return Err(AppError::Cancelled("Validation cancelled".to_string()));
         }
 
