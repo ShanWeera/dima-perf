@@ -1,0 +1,10 @@
+# pnpm 11+ workspace manifest (required even for single-package projects)
+packages:
+  - "."
+
+# Allow postinstall scripts for packages that need platform-specific binaries.
+# esbuild: Astro/Vite's JavaScript bundler (downloads native binary)
+# sharp: Astro's image optimization library (downloads native binary)
+allowBuilds:
+  esbuild: true
+  sharp: true
