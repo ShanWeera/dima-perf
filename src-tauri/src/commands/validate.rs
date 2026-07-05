@@ -232,7 +232,7 @@ fn validate_fasta_blocking(
         // Cooperative cancellation check every CANCEL_CHECK_INTERVAL lines (Fix 4.29).
         // Avoids per-line atomic load overhead while keeping cancel latency under ~100ms
         // for typical line lengths.
-        if line_number % CANCEL_CHECK_INTERVAL == 0 && cancel_flag.load(Ordering::Relaxed) {
+        if line_number.is_multiple_of(CANCEL_CHECK_INTERVAL) && cancel_flag.load(Ordering::Relaxed) {
             return Err(AppError::Cancelled("Validation cancelled".to_string()));
         }
 
@@ -327,7 +327,7 @@ fn validate_fasta_blocking(
             streaming_line_count += 1;
 
             // Cancellation check during the streaming tail pass (Fix 4.29)
-            if streaming_line_count % CANCEL_CHECK_INTERVAL == 0
+            if streaming_line_count.is_multiple_of(CANCEL_CHECK_INTERVAL)
                 && cancel_flag.load(Ordering::Relaxed)
             {
                 return Err(AppError::Cancelled("Validation cancelled".to_string()));
@@ -467,11 +467,10 @@ fn validate_fasta_blocking(
             .map(|(seq, hdr)| (seq.len() + hdr.len() + 3) as u64)
             .sum();
         let avg_bytes_per_seq = scanned_bytes / (sample_count as u64).max(1);
-        if avg_bytes_per_seq > 0 {
-            (file_size_bytes / avg_bytes_per_seq) as usize
-        } else {
-            sequences.len()
-        }
+        file_size_bytes
+            .checked_div(avg_bytes_per_seq)
+            .map(|v| v as usize)
+            .unwrap_or(sequences.len())
     } else {
         sequences.len()
     };
