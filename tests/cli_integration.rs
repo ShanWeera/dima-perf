@@ -70,7 +70,13 @@ fn test_dima_output_without_file_returns_usage_error() {
     let fasta = aligned_protein_fasta();
     Command::cargo_bin("dima")
         .unwrap()
-        .args(["analyze", "-i", fasta.path().to_str().unwrap(), "-O", "dima"])
+        .args([
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "-O",
+            "dima",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("--output required for -O dima"));
@@ -82,9 +88,15 @@ fn test_invalid_compression_returns_usage_error() {
     Command::cargo_bin("dima")
         .unwrap()
         .args([
-            "analyze", "-i", fasta.path().to_str().unwrap(),
-            "-O", "dima", "-o", "/tmp/test.dima",
-            "--compression", "5",
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "-O",
+            "dima",
+            "-o",
+            "/tmp/test.dima",
+            "--compression",
+            "5",
         ])
         .assert()
         .failure()
@@ -97,8 +109,11 @@ fn test_duplicate_header_fields_returns_usage_error() {
     Command::cargo_bin("dima")
         .unwrap()
         .args([
-            "analyze", "-i", fasta.path().to_str().unwrap(),
-            "--header-format", "country|date|country",
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "--header-format",
+            "country|date|country",
         ])
         .assert()
         .failure()
@@ -112,12 +127,15 @@ fn test_basic_analysis_stdout_json() {
     let fasta = aligned_protein_fasta();
     let output = Command::cargo_bin("dima")
         .unwrap()
-
         .args(["analyze", "-i", fasta.path().to_str().unwrap(), "-k", "3"])
         .output()
         .expect("failed to run dima");
 
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let json: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("invalid JSON output");
@@ -133,19 +151,37 @@ fn test_jsonl_output_format() {
     let fasta = aligned_protein_fasta();
     let output = Command::cargo_bin("dima")
         .unwrap()
-        .args(["analyze", "-i", fasta.path().to_str().unwrap(), "-k", "3", "-O", "jsonl"])
+        .args([
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "-k",
+            "3",
+            "-O",
+            "jsonl",
+        ])
         .output()
         .expect("failed to run dima");
 
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     // JSONL: each non-empty line should be valid JSON (one Position per line)
     let lines: Vec<&str> = stdout.lines().filter(|l| !l.is_empty()).collect();
-    assert!(!lines.is_empty(), "JSONL output should have at least one line");
+    assert!(
+        !lines.is_empty(),
+        "JSONL output should have at least one line"
+    );
     for line in &lines {
-        let parsed: serde_json::Value = serde_json::from_str(line)
-            .expect("each JSONL line should be valid JSON");
-        assert!(parsed["position"].is_u64(), "each line should have a 'position' field");
+        let parsed: serde_json::Value =
+            serde_json::from_str(line).expect("each JSONL line should be valid JSON");
+        assert!(
+            parsed["position"].is_u64(),
+            "each line should have a 'position' field"
+        );
     }
 }
 
@@ -157,8 +193,15 @@ fn test_output_to_file() {
 
     Command::cargo_bin("dima")
         .unwrap()
-
-        .args(["analyze", "-i", fasta.path().to_str().unwrap(), "-k", "3", "-o", &output_path])
+        .args([
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "-k",
+            "3",
+            "-o",
+            &output_path,
+        ])
         .assert()
         .success();
 
@@ -178,9 +221,15 @@ fn test_binary_roundtrip() {
     Command::cargo_bin("dima")
         .unwrap()
         .args([
-            "analyze", "-i", fasta.path().to_str().unwrap(),
-            "-k", "3", "-O", "dima",
-            "-o", binary_path.to_str().unwrap(),
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "-k",
+            "3",
+            "-O",
+            "dima",
+            "-o",
+            binary_path.to_str().unwrap(),
         ])
         .assert()
         .success();
@@ -191,8 +240,11 @@ fn test_binary_roundtrip() {
     Command::cargo_bin("dima")
         .unwrap()
         .args([
-            "view", "-i", binary_path.to_str().unwrap(),
-            "-o", json_path.to_str().unwrap(),
+            "view",
+            "-i",
+            binary_path.to_str().unwrap(),
+            "-o",
+            json_path.to_str().unwrap(),
         ])
         .assert()
         .success();
@@ -214,12 +266,15 @@ fn test_protein_default_kmer_is_9() {
 
     let output = Command::cargo_bin("dima")
         .unwrap()
-
         .args(["analyze", "-i", fasta.path().to_str().unwrap()])
         .output()
         .expect("failed to run dima");
 
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["kmer_length"], 9, "protein default k-mer should be 9");
 }
@@ -228,21 +283,30 @@ fn test_protein_default_kmer_is_9() {
 fn test_nucleotide_default_kmer_is_27() {
     // Need at least 27 nt for a single k-mer window
     let seq = "ACGTACGTACGTACGTACGTACGTACGTACGT"; // 32 nt
-    let fasta = create_test_fasta(&[
-        ("seq1", seq),
-        ("seq2", seq),
-    ]);
+    let fasta = create_test_fasta(&[("seq1", seq), ("seq2", seq)]);
 
     let output = Command::cargo_bin("dima")
         .unwrap()
-
-        .args(["analyze", "-i", fasta.path().to_str().unwrap(), "--alphabet", "nucleotide"])
+        .args([
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "--alphabet",
+            "nucleotide",
+        ])
         .output()
         .expect("failed to run dima");
 
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["kmer_length"], 27, "nucleotide default k-mer should be 27");
+    assert_eq!(
+        json["kmer_length"], 27,
+        "nucleotide default k-mer should be 27"
+    );
 }
 
 // ─── ELS Tag Test ────────────────────────────────────────────────────────────
@@ -261,15 +325,23 @@ fn test_els_tag_when_support_equals_threshold() {
 
     let output = Command::cargo_bin("dima")
         .unwrap()
-
         .args([
-            "analyze", "-i", fasta.path().to_str().unwrap(),
-            "-k", "9", "-t", "5",
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "-k",
+            "9",
+            "-t",
+            "5",
         ])
         .output()
         .expect("failed to run dima");
 
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
 
     // When support == threshold, low_support should be "ELS"
@@ -337,15 +409,23 @@ fn test_metadata_with_header_format() {
 
     let output = Command::cargo_bin("dima")
         .unwrap()
-
         .args([
-            "analyze", "-i", fasta.path().to_str().unwrap(),
-            "-k", "3", "--header-format", "country|year|patient",
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "-k",
+            "3",
+            "--header-format",
+            "country|year|patient",
         ])
         .output()
         .expect("failed to run dima");
 
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
 
     // Check that metadata is present in variants
@@ -356,7 +436,10 @@ fn test_metadata_with_header_format() {
     assert!(!variants.is_empty());
     // At least one variant should have metadata
     let has_metadata = variants.iter().any(|v| !v["metadata"].is_null());
-    assert!(has_metadata, "variants should have metadata when --header-format is specified");
+    assert!(
+        has_metadata,
+        "variants should have metadata when --header-format is specified"
+    );
 }
 
 // ─── Empty Field Name Validation ─────────────────────────────────────────────
@@ -369,8 +452,11 @@ fn test_empty_field_name_in_header_format_returns_error() {
     Command::cargo_bin("dima")
         .unwrap()
         .args([
-            "analyze", "-i", fasta.path().to_str().unwrap(),
-            "--header-format", "country||year",
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "--header-format",
+            "country||year",
         ])
         .assert()
         .failure()
@@ -385,8 +471,11 @@ fn test_leading_pipe_in_header_format_returns_error() {
     Command::cargo_bin("dima")
         .unwrap()
         .args([
-            "analyze", "-i", fasta.path().to_str().unwrap(),
-            "--header-format", "|country|year",
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "--header-format",
+            "|country|year",
         ])
         .assert()
         .failure()
@@ -401,10 +490,14 @@ fn test_hcs_threshold_without_output_warns() {
 
     let output = Command::cargo_bin("dima")
         .unwrap()
-
         .args([
-            "analyze", "-i", fasta.path().to_str().unwrap(),
-            "-k", "3", "--hcs-threshold", "50.0",
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "-k",
+            "3",
+            "--hcs-threshold",
+            "50.0",
         ])
         .output()
         .expect("failed to run dima");
@@ -413,7 +506,8 @@ fn test_hcs_threshold_without_output_warns() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("--hcs-threshold has no effect without --hcs-output"),
-        "Expected warning about --hcs-threshold, got stderr: {}", stderr
+        "Expected warning about --hcs-threshold, got stderr: {}",
+        stderr
     );
 }
 
@@ -425,11 +519,7 @@ fn test_analysis_prints_summary_to_stderr() {
 
     let output = Command::cargo_bin("dima")
         .unwrap()
-
-        .args([
-            "analyze", "-i", fasta.path().to_str().unwrap(),
-            "-k", "3",
-        ])
+        .args(["analyze", "-i", fasta.path().to_str().unwrap(), "-k", "3"])
         .output()
         .expect("failed to run dima");
 
@@ -437,7 +527,8 @@ fn test_analysis_prints_summary_to_stderr() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("analysis complete") && stderr.contains("positions"),
-        "Expected completion summary on stderr, got: {}", stderr
+        "Expected completion summary on stderr, got: {}",
+        stderr
     );
 }
 
@@ -451,8 +542,13 @@ fn test_kmer_exceeds_protein_max_via_alphabet() {
     Command::cargo_bin("dima")
         .unwrap()
         .args([
-            "analyze", "-i", fasta.path().to_str().unwrap(),
-            "-k", "15", "--alphabet", "protein",
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "-k",
+            "15",
+            "--alphabet",
+            "protein",
         ])
         .assert()
         .failure()
@@ -471,15 +567,23 @@ fn test_nucleotide_default_query_name() {
 
     let output = Command::cargo_bin("dima")
         .unwrap()
-
         .args([
-            "analyze", "-i", fasta.path().to_str().unwrap(),
-            "-k", "3", "--alphabet", "nucleotide",
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "-k",
+            "3",
+            "--alphabet",
+            "nucleotide",
         ])
         .output()
         .expect("failed to run dima");
 
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["query_name"].as_str().unwrap(), "Unknown Nucleotide");
 }
@@ -490,15 +594,15 @@ fn test_protein_default_query_name() {
 
     let output = Command::cargo_bin("dima")
         .unwrap()
-
-        .args([
-            "analyze", "-i", fasta.path().to_str().unwrap(),
-            "-k", "3",
-        ])
+        .args(["analyze", "-i", fasta.path().to_str().unwrap(), "-k", "3"])
         .output()
         .expect("failed to run dima");
 
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["query_name"].as_str().unwrap(), "Unknown Protein");
 }
@@ -516,7 +620,6 @@ fn test_identical_sequences_zero_entropy() {
 
     let output = Command::cargo_bin("dima")
         .unwrap()
-
         .args(["analyze", "-i", fasta.path().to_str().unwrap(), "-k", "3"])
         .output()
         .expect("failed to run dima");
@@ -525,8 +628,12 @@ fn test_identical_sequences_zero_entropy() {
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let results = json["results"].as_array().unwrap();
     for pos in results {
-        assert_eq!(pos["entropy"].as_f64().unwrap(), 0.0,
-            "Expected zero entropy for identical sequences at position {}", pos["position"]);
+        assert_eq!(
+            pos["entropy"].as_f64().unwrap(),
+            0.0,
+            "Expected zero entropy for identical sequences at position {}",
+            pos["position"]
+        );
         // Single variant should be 100% Index motif
         let motifs = pos["diversity_motifs"].as_array().unwrap();
         assert_eq!(motifs.len(), 1);
@@ -541,7 +648,6 @@ fn test_single_sequence_zero_entropy() {
 
     let output = Command::cargo_bin("dima")
         .unwrap()
-
         .args(["analyze", "-i", fasta.path().to_str().unwrap(), "-k", "3"])
         .output()
         .expect("failed to run dima");
@@ -557,12 +663,11 @@ fn test_unequal_length_sequences_error() {
     // MSA validation: sequences must have equal length
     let fasta = create_test_fasta(&[
         ("s1", "ACDEFGHIKL"),
-        ("s2", "ACDEFG"),  // shorter — invalid MSA
+        ("s2", "ACDEFG"), // shorter — invalid MSA
     ]);
 
     Command::cargo_bin("dima")
         .unwrap()
-
         .args(["analyze", "-i", fasta.path().to_str().unwrap(), "-k", "3"])
         .assert()
         .failure()
@@ -580,10 +685,14 @@ fn test_low_support_labels_ns_and_ls() {
 
     let output = Command::cargo_bin("dima")
         .unwrap()
-
         .args([
-            "analyze", "-i", fasta.path().to_str().unwrap(),
-            "-k", "3", "-t", "5",
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "-k",
+            "3",
+            "-t",
+            "5",
         ])
         .output()
         .expect("failed to run dima");
@@ -593,8 +702,12 @@ fn test_low_support_labels_ns_and_ls() {
     let results = json["results"].as_array().unwrap();
     // All positions have support=3 < threshold=5, so all should be "LS"
     for pos in results {
-        assert_eq!(pos["low_support"].as_str().unwrap(), "LS",
-            "position {} should have LS label", pos["position"]);
+        assert_eq!(
+            pos["low_support"].as_str().unwrap(),
+            "LS",
+            "position {} should have LS label",
+            pos["position"]
+        );
     }
 }
 
@@ -604,7 +717,6 @@ fn test_json_output_has_required_fields() {
 
     let output = Command::cargo_bin("dima")
         .unwrap()
-
         .args(["analyze", "-i", fasta.path().to_str().unwrap(), "-k", "3"])
         .output()
         .expect("failed to run dima");
@@ -634,7 +746,8 @@ fn test_json_output_has_required_fields() {
 
 #[test]
 fn test_completions_bash() {
-    Command::cargo_bin("dima").unwrap()
+    Command::cargo_bin("dima")
+        .unwrap()
         .args(["completions", "bash"])
         .assert()
         .success()
@@ -643,7 +756,8 @@ fn test_completions_bash() {
 
 #[test]
 fn test_completions_zsh() {
-    Command::cargo_bin("dima").unwrap()
+    Command::cargo_bin("dima")
+        .unwrap()
         .args(["completions", "zsh"])
         .assert()
         .success()
@@ -652,7 +766,8 @@ fn test_completions_zsh() {
 
 #[test]
 fn test_completions_fish() {
-    Command::cargo_bin("dima").unwrap()
+    Command::cargo_bin("dima")
+        .unwrap()
         .args(["completions", "fish"])
         .assert()
         .success()
@@ -669,7 +784,8 @@ fn test_oversized_header_rejected() {
         ("normal", "ACDEFGHIKLMNPQRSTVWY"),
     ]);
 
-    Command::cargo_bin("dima").unwrap()
+    Command::cargo_bin("dima")
+        .unwrap()
         .args(["analyze", "-i", fasta.path().to_str().unwrap(), "-k", "9"])
         .assert()
         .failure()
@@ -679,8 +795,16 @@ fn test_oversized_header_rejected() {
 #[test]
 fn test_quiet_suppresses_summary() {
     let fasta = aligned_protein_fasta();
-    let output = Command::cargo_bin("dima").unwrap()
-        .args(["analyze", "-i", fasta.path().to_str().unwrap(), "-k", "9", "--quiet"])
+    let output = Command::cargo_bin("dima")
+        .unwrap()
+        .args([
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "-k",
+            "9",
+            "--quiet",
+        ])
         .assert()
         .success();
 
@@ -695,15 +819,25 @@ fn test_dima_extension_auto_binary() {
     let output_path = dir.path().join("results.dima");
 
     // .dima extension auto-triggers binary format without --binary flag
-    Command::cargo_bin("dima").unwrap()
+    Command::cargo_bin("dima")
+        .unwrap()
         .args([
-            "analyze", "-i", fasta.path().to_str().unwrap(),
-            "-k", "9", "-o", output_path.to_str().unwrap(),
+            "analyze",
+            "-i",
+            fasta.path().to_str().unwrap(),
+            "-k",
+            "9",
+            "-o",
+            output_path.to_str().unwrap(),
         ])
         .assert()
         .success();
 
     // Verify the file was written and starts with DIMA magic bytes
     let content = std::fs::read(&output_path).unwrap();
-    assert_eq!(&content[..4], b"DIMA", "file should start with DIMA magic bytes");
+    assert_eq!(
+        &content[..4],
+        b"DIMA",
+        "file should start with DIMA magic bytes"
+    );
 }

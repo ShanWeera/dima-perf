@@ -40,37 +40,34 @@ pub async fn fetch_pdb(
     // Validate PDB ID format:
     //   Legacy: exactly 4 alphanumeric chars (e.g. "6VXX")
     //   Extended: "PDB_" prefix + 8 alphanumeric chars (e.g. "PDB_00001ABC")
-    let is_legacy = pdb_id.len() == 4
-        && pdb_id.chars().all(|c| c.is_ascii_alphanumeric());
+    let is_legacy = pdb_id.len() == 4 && pdb_id.chars().all(|c| c.is_ascii_alphanumeric());
     let is_extended = pdb_id.len() == 12
         && pdb_id.starts_with("PDB_")
         && pdb_id[4..].chars().all(|c| c.is_ascii_alphanumeric());
 
     if !is_legacy && !is_extended {
         return Err(AppError::ValidationError(
-            "PDB ID must be a 4-character code (e.g. 6VXX) or extended format (e.g. pdb_00001abc)".to_string()
+            "PDB ID must be a 4-character code (e.g. 6VXX) or extended format (e.g. pdb_00001abc)"
+                .to_string(),
         ));
     }
 
     // RCSB download endpoint accepts both formats directly
-    let url = format!(
-        "https://files.rcsb.org/download/{}.pdb",
-        pdb_id
-    );
-    
+    let url = format!("https://files.rcsb.org/download/{}.pdb", pdb_id);
+
     let retry_config = super::http_retry::RetryConfig::default();
-    let response = super::http_retry::send_with_retry(
-        &state.http_client,
-        &retry_config,
-        |client| client.get(&url),
-    ).await?;
-    
+    let response =
+        super::http_retry::send_with_retry(&state.http_client, &retry_config, |client| {
+            client.get(&url)
+        })
+        .await?;
+
     if !response.status().is_success() {
         let status = response.status();
         return Err(match status.as_u16() {
             404 => AppError::NotFound(format!("PDB ID '{}' not found", pdb_id)),
             429 => AppError::NetworkError(
-                "Rate limited by RCSB (HTTP 429). Please wait a moment and try again.".to_string()
+                "Rate limited by RCSB (HTTP 429). Please wait a moment and try again.".to_string(),
             ),
             500..=599 => AppError::NetworkError(format!(
                 "RCSB server error (HTTP {}). The service may be temporarily unavailable.",
@@ -82,7 +79,7 @@ pub async fn fetch_pdb(
             )),
         });
     }
-    
+
     // Guard against oversized responses regardless of Content-Length presence.
     // Chunked transfer-encoding may omit Content-Length. (Fix 4.39)
     const MAX_PDB_SIZE: u64 = 100 * 1024 * 1024;
@@ -99,8 +96,11 @@ pub async fn fetch_pdb(
     // chunked-transfer responses that lack Content-Length. (Fix 4.39)
     let mut body_bytes = Vec::new();
     let mut stream = response;
-    while let Some(chunk) = stream.chunk().await
-        .map_err(|e| AppError::NetworkError(format!("Failed to read PDB content: {}", e)))? {
+    while let Some(chunk) = stream
+        .chunk()
+        .await
+        .map_err(|e| AppError::NetworkError(format!("Failed to read PDB content: {}", e)))?
+    {
         body_bytes.extend_from_slice(&chunk);
         if body_bytes.len() as u64 > MAX_PDB_SIZE {
             return Err(AppError::ValidationError(format!(
@@ -140,8 +140,11 @@ fn parse_pdb_sequence_inner(pdb_content: &str) -> Result<Vec<ChainInfo>, AppErro
     // Detect mmCIF format early — common mistake when uploading .cif as .pdb
     let first_line = pdb_content.lines().next().unwrap_or("");
     if first_line.starts_with("data_") || pdb_content.contains("_atom_site.") {
-        return Err(AppError::ValidationError("This file appears to be in mmCIF/PDBx format, not legacy PDB format. \
-                    Please convert to PDB format or download the .pdb version from RCSB.".to_string()));
+        return Err(AppError::ValidationError(
+            "This file appears to be in mmCIF/PDBx format, not legacy PDB format. \
+                    Please convert to PDB format or download the .pdb version from RCSB."
+                .to_string(),
+        ));
     }
 
     let mut chains: HashMap<String, (Vec<char>, Vec<i32>)> = HashMap::new();
@@ -163,58 +166,60 @@ fn parse_pdb_sequence_inner(pdb_content: &str) -> Result<Vec<ChainInfo>, AppErro
             }
             continue;
         }
-        
+
         // Parse ATOM records for protein residues
         if line.starts_with("ATOM  ") || line.starts_with("HETATM") {
             if line.len() < 54 {
                 continue;
             }
-            
+
             // PDB format: column 17 is altLoc (alternate conformation indicator)
             // Only accept blank or 'A' (first alternate) to avoid duplicates
             let alt_loc = line.as_bytes().get(16).copied().unwrap_or(b' ');
             if alt_loc != b' ' && alt_loc != b'A' {
                 continue;
             }
-            
+
             // Extract chain ID (column 22, 0-indexed: 21)
             let chain_id = line.as_bytes().get(21).copied().unwrap_or(b' ');
             if chain_id == b' ' {
                 continue;
             }
             let chain_id = String::from(chain_id as char);
-            
+
             // Extract residue number (columns 23-26, 0-indexed: 22-25)
             let resi_str = &line[22..26];
             let resi: i32 = match resi_str.trim().parse() {
                 Ok(n) => n,
                 Err(_) => continue,
             };
-            
+
             // Extract insertion code (column 27, 0-indexed: 26)
             // Used to uniquely identify residues with same sequence number
             let icode = line.as_bytes().get(26).copied().unwrap_or(b' ');
-            
+
             // Extract residue name (columns 18-20, 0-indexed: 17-19)
             let resn = &line[17..20];
             let resn = resn.trim();
-            
+
             // Convert 3-letter code to 1-letter code
             let one_letter = three_to_one(resn);
             if one_letter == 'X' && line.starts_with("HETATM") {
                 continue;
             }
-            
+
             // Deduplicate: same chain + residue number + insertion code = same residue
-            let chain_entry = chains.entry(chain_id.clone()).or_insert((Vec::new(), Vec::new()));
+            let chain_entry = chains
+                .entry(chain_id.clone())
+                .or_insert((Vec::new(), Vec::new()));
             let last = last_residue.get(&chain_id);
-            
+
             // A new residue if either resSeq or iCode differs from the last seen
             let is_new = match last {
                 Some((last_resi, last_icode)) => *last_resi != resi || *last_icode != icode as char,
                 None => true,
             };
-            
+
             if is_new {
                 chain_entry.0.push(one_letter);
                 chain_entry.1.push(resi);
@@ -222,7 +227,7 @@ fn parse_pdb_sequence_inner(pdb_content: &str) -> Result<Vec<ChainInfo>, AppErro
             }
         }
     }
-    
+
     // Convert to ChainInfo structs
     let mut result: Vec<ChainInfo> = chains
         .into_iter()
@@ -232,14 +237,16 @@ fn parse_pdb_sequence_inner(pdb_content: &str) -> Result<Vec<ChainInfo>, AppErro
             residue_numbers: residues,
         })
         .collect();
-    
+
     // Sort by chain ID
     result.sort_by(|a, b| a.chain_id.cmp(&b.chain_id));
-    
+
     if result.is_empty() {
-        return Err(AppError::NotFound("No protein chains found in PDB file".to_string()));
+        return Err(AppError::NotFound(
+            "No protein chains found in PDB file".to_string(),
+        ));
     }
-    
+
     Ok(result)
 }
 
@@ -251,9 +258,11 @@ pub async fn align_sequences(
     pdb_sequence: String,
     pdb_residue_numbers: Vec<i32>,
 ) -> Result<PositionMapping, AppError> {
-    tokio::task::spawn_blocking(move || align_sequences_inner(msa_sequence, pdb_sequence, pdb_residue_numbers))
-        .await
-        .map_err(|e| AppError::AnalysisError(format!("Alignment task panicked: {}", e)))?
+    tokio::task::spawn_blocking(move || {
+        align_sequences_inner(msa_sequence, pdb_sequence, pdb_residue_numbers)
+    })
+    .await
+    .map_err(|e| AppError::AnalysisError(format!("Alignment task panicked: {}", e)))?
 }
 
 fn align_sequences_inner(
@@ -262,11 +271,15 @@ fn align_sequences_inner(
     pdb_residue_numbers: Vec<i32>,
 ) -> Result<PositionMapping, AppError> {
     if msa_sequence.is_empty() || pdb_sequence.is_empty() {
-        return Err(AppError::ValidationError("Sequences cannot be empty".to_string()));
+        return Err(AppError::ValidationError(
+            "Sequences cannot be empty".to_string(),
+        ));
     }
-    
+
     if pdb_sequence.len() != pdb_residue_numbers.len() {
-        return Err(AppError::ValidationError("PDB sequence length must match residue numbers length".to_string()));
+        return Err(AppError::ValidationError(
+            "PDB sequence length must match residue numbers length".to_string(),
+        ));
     }
 
     // Guard against pathological inputs: Needleman-Wunsch builds an O(n*m)
@@ -276,7 +289,9 @@ fn align_sequences_inner(
     if msa_sequence.len() > MAX_ALIGNMENT_LENGTH || pdb_sequence.len() > MAX_ALIGNMENT_LENGTH {
         return Err(AppError::ValidationError(format!(
             "Sequence too long for alignment (max {} residues). MSA: {}, PDB: {}",
-            MAX_ALIGNMENT_LENGTH, msa_sequence.len(), pdb_sequence.len()
+            MAX_ALIGNMENT_LENGTH,
+            msa_sequence.len(),
+            pdb_sequence.len()
         )));
     }
     // Product cap prevents OOM from the O(n*m) DP matrix even when individual
@@ -286,10 +301,13 @@ fn align_sequences_inner(
     if product > MAX_ALIGNMENT_PRODUCT {
         return Err(AppError::ValidationError(format!(
             "Alignment matrix too large ({} × {} = {} cells, max {}). Use shorter sequences.",
-            msa_sequence.len(), pdb_sequence.len(), product, MAX_ALIGNMENT_PRODUCT
+            msa_sequence.len(),
+            pdb_sequence.len(),
+            product,
+            MAX_ALIGNMENT_PRODUCT
         )));
     }
-    
+
     // Needleman-Wunsch global alignment scoring parameters. (Fix 5.6)
     // These values are standard for simple protein/nucleotide alignment:
     //   - Match reward (+2): positive reinforcement for identical residues
@@ -302,7 +320,7 @@ fn align_sequences_inner(
     const GAP_EXTEND: i32 = -1;
 
     let score_fn = |a: u8, b: u8| if a == b { MATCH_SCORE } else { MISMATCH_SCORE };
-    
+
     let mut aligner = Aligner::with_capacity(
         msa_sequence.len(),
         pdb_sequence.len(),
@@ -310,19 +328,16 @@ fn align_sequences_inner(
         GAP_EXTEND,
         score_fn,
     );
-    
-    let alignment = aligner.global(
-        msa_sequence.as_bytes(),
-        pdb_sequence.as_bytes(),
-    );
-    
+
+    let alignment = aligner.global(msa_sequence.as_bytes(), pdb_sequence.as_bytes());
+
     // Build position mapping from alignment.
     // Keys are 1-based MSA positions (matching analysis output `position.position`).
     let mut msa_to_pdb: HashMap<usize, i32> = HashMap::new();
     let mut msa_pos = 0usize; // 0-based index into MSA sequence
     let mut pdb_pos = 0usize; // 0-based index into PDB sequence
     let mut matches = 0usize;
-    
+
     for op in &alignment.operations {
         match op {
             AlignmentOperation::Match => {
@@ -359,19 +374,19 @@ fn align_sequences_inner(
             }
         }
     }
-    
+
     let coverage = if msa_sequence.is_empty() {
         0.0
     } else {
         (msa_to_pdb.len() as f64 / msa_sequence.len() as f64) * 100.0
     };
-    
+
     let alignment_score = if msa_sequence.is_empty() {
         0.0
     } else {
         (matches as f64 / msa_sequence.len() as f64) * 100.0
     };
-    
+
     Ok(PositionMapping {
         msa_to_pdb,
         alignment_score,
@@ -390,32 +405,36 @@ pub fn create_direct_mapping(
 ) -> Result<PositionMapping, AppError> {
     const MAX_POSITIONS: usize = 1_000_000;
     if msa_positions.len() > MAX_POSITIONS {
-        return Err(AppError::ValidationError(format!("MSA positions count ({}) exceeds limit ({})", msa_positions.len(), MAX_POSITIONS)));
+        return Err(AppError::ValidationError(format!(
+            "MSA positions count ({}) exceeds limit ({})",
+            msa_positions.len(),
+            MAX_POSITIONS
+        )));
     }
     let mut msa_to_pdb: HashMap<usize, i32> = HashMap::new();
     let pdb_set: std::collections::HashSet<i32> = pdb_residue_numbers.iter().copied().collect();
-    
+
     let mut mapped_count = 0usize;
-    
+
     for msa_pos in &msa_positions {
         // Safe arithmetic to prevent i32 overflow for large MSA positions (Fix 4.41)
         let pdb_resi = match (*msa_pos as i64).checked_add(offset as i64) {
             Some(v) if v >= i32::MIN as i64 && v <= i32::MAX as i64 => v as i32,
             _ => continue, // Skip positions that would overflow i32
         };
-        
+
         if pdb_set.contains(&pdb_resi) {
             msa_to_pdb.insert(*msa_pos, pdb_resi);
             mapped_count += 1;
         }
     }
-    
+
     let coverage = if !msa_positions.is_empty() {
         (mapped_count as f64 / msa_positions.len() as f64) * 100.0
     } else {
         0.0
     };
-    
+
     Ok(PositionMapping {
         msa_to_pdb,
         // For direct (non-alignment) mapping, there's no alignment score — use 0.0

@@ -1,17 +1,17 @@
-use needletail::parse_fastx_reader;
 use hashbrown::HashMap;
-use std::fs::{File, metadata};
-use std::io::{self, Write, Cursor, Read as IoRead};
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use memmap2::Mmap;
+use needletail::parse_fastx_reader;
+use std::fs::{metadata, File};
+use std::io::{self, Cursor, Read as IoRead, Write};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 
-use crate::alphabet::{CharacterValidator, ValidationMode, AlphabetType, ValidationStats};
-use crate::kmer::{sliding_window_validated_with_stats, sliding_window_string_validated};
-use crate::zero_copy::parse_header_zero_copy;
+use crate::alphabet::{AlphabetType, CharacterValidator, ValidationMode, ValidationStats};
 use crate::columnar::ColumnarMetadataAdapter;
+use crate::kmer::{sliding_window_string_validated, sliding_window_validated_with_stats};
+use crate::zero_copy::parse_header_zero_copy;
 
 // ─── InputSource Enum ────────────────────────────────────────────────────────
 //
@@ -63,32 +63,53 @@ impl InputSource {
 /// Returns true if the file uses a supported compression format (gz/bz2/xz/zst).
 /// needletail handles transparent decompression for all of these.
 pub fn is_compressed(path: &Path) -> bool {
-    let Ok(mut file) = File::open(path) else { return false };
+    let Ok(mut file) = File::open(path) else {
+        return false;
+    };
     let mut magic = [0u8; 4];
-    let Ok(n) = file.read(&mut magic) else { return false };
-    if n < 2 { return false; }
+    let Ok(n) = file.read(&mut magic) else {
+        return false;
+    };
+    if n < 2 {
+        return false;
+    }
     matches!(
         &magic[..2],
         [0x1f, 0x8b]  // gzip
         | [0x42, 0x5a] // bzip2
-    ) || (n >= 4 && matches!(
-        &magic[..4],
-        [0xfd, 0x37, 0x7a, 0x58] // xz
+    ) || (n >= 4
+        && matches!(
+            &magic[..4],
+            [0xfd, 0x37, 0x7a, 0x58] // xz
         | [0x28, 0xb5, 0x2f, 0xfd] // zstd
-    ))
+        ))
 }
 
 /// Metadata vector: per-sequence parsed header metadata (None if headers couldn't be parsed).
 pub type SequenceMetadata = Vec<Option<HashMap<String, String>>>;
 
 /// Result of k-mer extraction: (encoded_kmers, optional_metadata, sequence_count, is_protein, validation_stats, diagnostics).
-pub type KmerExtractionResult = (Vec<Vec<u64>>, Option<SequenceMetadata>, usize, bool, Option<ValidationStats>, ParseDiagnostics);
+pub type KmerExtractionResult = (
+    Vec<Vec<u64>>,
+    Option<SequenceMetadata>,
+    usize,
+    bool,
+    Option<ValidationStats>,
+    ParseDiagnostics,
+);
 
 /// Result of legacy extraction: (encoded_kmers, metadata, sequence_count).
 pub type LegacyExtractionResult = (Vec<Vec<u64>>, SequenceMetadata, usize);
 
 /// Result of columnar extraction: (encoded_kmers, columnar_adapter, sequence_count, is_protein, validation_stats, diagnostics).
-pub type ColumnarExtractionResult = (Vec<Vec<u64>>, Option<ColumnarMetadataAdapter>, usize, bool, Option<ValidationStats>, ParseDiagnostics);
+pub type ColumnarExtractionResult = (
+    Vec<Vec<u64>>,
+    Option<ColumnarMetadataAdapter>,
+    usize,
+    bool,
+    Option<ValidationStats>,
+    ParseDiagnostics,
+);
 
 /// Result of string k-mer extraction: (string_kmers, optional_metadata, sequence_count).
 pub type StringKmerResult = (Vec<Vec<String>>, Option<SequenceMetadata>, usize);
@@ -126,7 +147,6 @@ fn strip_bom(data: &[u8]) -> &[u8] {
     }
 }
 
-
 /// Write content to a file, propagating the real OS error on failure.
 ///
 /// Uses atomic write semantics: writes to a temporary file and renames
@@ -158,7 +178,8 @@ pub fn atomic_write(
     write_fn(&mut writer)?;
 
     writer.flush()?;
-    writer.into_inner()
+    writer
+        .into_inner()
         .map_err(|e| io::Error::other(e.to_string()))?
         .sync_all()?;
     tmp.persist(path).map_err(|e| e.error)?;
@@ -223,7 +244,7 @@ fn parse_header_internal(
 }
 
 /// Configuration for k-mer extraction with validation options
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct KmerExtractionConfig {
     /// Validation mode (strict, permissive, report-only)
     pub validation_mode: ValidationMode,
@@ -238,33 +259,21 @@ pub struct KmerExtractionConfig {
     pub expected_sequence_count: Option<usize>,
 }
 
-impl Default for KmerExtractionConfig {
-    fn default() -> Self {
-        Self {
-            validation_mode: ValidationMode::default(),
-            allow_lowercase: false,
-            report_invalid: false,
-            cancel_token: None,
-            expected_sequence_count: None,
-        }
-    }
-}
-
 impl KmerExtractionConfig {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     pub fn with_validation_mode(mut self, mode: ValidationMode) -> Self {
         self.validation_mode = mode;
         self
     }
-    
+
     pub fn with_allow_lowercase(mut self, allow: bool) -> Self {
         self.allow_lowercase = allow;
         self
     }
-    
+
     pub fn with_report_invalid(mut self, report: bool) -> Self {
         self.report_invalid = report;
         self
@@ -284,10 +293,10 @@ impl KmerExtractionConfig {
 }
 
 /// Extract k-mers and headers from a FASTA file with whitelist-based validation
-/// 
-/// This function uses a whitelist-based character validation approach that rejects 
+///
+/// This function uses a whitelist-based character validation approach that rejects
 /// any character not in the valid biological alphabet (20 amino acids or 5 nucleotides).
-/// 
+///
 /// # Arguments
 /// * `path` - Path to the FASTA file
 /// * `kmer_length` - Length of k-mers to generate
@@ -296,7 +305,7 @@ impl KmerExtractionConfig {
 /// * `alphabet` - "protein" or "nucleotide" (defaults to "protein")
 /// * `config` - Optional KmerExtractionConfig for validation options
 /// * `expected_count` - Optional expected sequence count for progress bar
-/// 
+///
 /// # Returns
 /// * `Vec<Vec<u64>>` - Transposed encoded k-mers (position-oriented)
 /// * `Option<Vec<Option<HashMap<String, String>>>>` - Headers (if format provided)
@@ -317,7 +326,7 @@ pub fn get_kmers_and_headers_validated(
     if config.expected_sequence_count.is_none() {
         config.expected_sequence_count = expected_count;
     }
-    
+
     let alphabet_type = AlphabetType::from_optional_str(alphabet.map(|s| s.as_str()));
     let is_protein = alphabet_type == AlphabetType::Protein;
 
@@ -330,17 +339,19 @@ pub fn get_kmers_and_headers_validated(
             io::ErrorKind::InvalidInput,
             format!(
                 "k-mer length {} is invalid for {} alphabet (valid range: 1..={})",
-                kmer_length, if is_protein { "protein" } else { "nucleotide" }, max_k
+                kmer_length,
+                if is_protein { "protein" } else { "nucleotide" },
+                max_k
             ),
         ));
     }
-    
+
     let validator = CharacterValidator::with_options(
         alphabet_type,
         config.validation_mode,
         config.allow_lowercase,
     );
-    
+
     let stats = if config.report_invalid {
         Some(ValidationStats::new())
     } else {
@@ -367,7 +378,10 @@ pub fn get_kmers_and_headers_validated(
             Err(e) if is_retriable_io_error(&e) => {
                 // Only fallback for actual mmap/open failures, NOT validation errors.
                 // Validation errors (InvalidData) would just re-fail after re-reading.
-                tracing::warn!("Memory mapping failed ({}), falling back to buffered I/O", e);
+                tracing::warn!(
+                    "Memory mapping failed ({}), falling back to buffered I/O",
+                    e
+                );
                 process_with_buffered_io(
                     path,
                     kmer_length,
@@ -397,30 +411,33 @@ pub fn get_kmers_and_headers_validated(
     // Validate header format match rate: if a header format was specified but
     // >5% of headers produced empty metadata, the format likely doesn't match
     // the actual header structure — fail with an actionable error message.
-    if header_format.is_some() && sequence_count > 0 {
-        let empty_count = headers_vec.iter()
-            .filter(|h| h.as_ref().map_or(true, |m| m.is_empty()))
-            .count();
-        let mismatch_rate = empty_count as f64 / sequence_count as f64;
-        if mismatch_rate > 0.05 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "Header format mismatch: {}/{} sequences ({:.1}%) produced no metadata. \
-                     The declared header format likely doesn't match the FASTA headers. \
-                     Expected pipe-delimited fields matching: {:?}",
-                    empty_count,
-                    sequence_count,
-                    mismatch_rate * 100.0,
-                    header_format.unwrap(),
-                ),
-            ));
-        } else if empty_count > 0 {
-            tracing::warn!(
-                mismatched = empty_count,
-                total = sequence_count,
-                "some headers did not match declared format (below 5% threshold, proceeding)"
-            );
+    if let Some(fmt) = header_format {
+        if sequence_count > 0 {
+            let empty_count = headers_vec
+                .iter()
+                .filter(|h| h.as_ref().map_or(true, |m| m.is_empty()))
+                .count();
+            let mismatch_rate = empty_count as f64 / sequence_count as f64;
+            if mismatch_rate > 0.05 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "Header format mismatch: {}/{} sequences ({:.1}%) produced no metadata. \
+                         The declared header format likely doesn't match the FASTA headers. \
+                         Expected pipe-delimited fields matching: {:?}",
+                        empty_count,
+                        sequence_count,
+                        mismatch_rate * 100.0,
+                        fmt,
+                    ),
+                ));
+            } else if empty_count > 0 {
+                tracing::warn!(
+                    mismatched = empty_count,
+                    total = sequence_count,
+                    "some headers did not match declared format (below 5% threshold, proceeding)"
+                );
+            }
         }
     }
 
@@ -430,7 +447,14 @@ pub fn get_kmers_and_headers_validated(
         Some(headers_vec)
     };
 
-    Ok((transposed_kmers, headers, sequence_count, is_protein, stats, diagnostics))
+    Ok((
+        transposed_kmers,
+        headers,
+        sequence_count,
+        is_protein,
+        stats,
+        diagnostics,
+    ))
 }
 
 /// Core record-processing loop shared by all I/O paths (mmap, buffered, stdin).
@@ -490,7 +514,9 @@ pub fn process_fasta_records(
                 format!(
                     "Sequence {} has a header of {} bytes — exceeds maximum ({} KB). \
                      This is likely malformed or adversarial input.",
-                    sequence_count, raw_id.len(), MAX_HEADER_LENGTH / 1024,
+                    sequence_count,
+                    raw_id.len(),
+                    MAX_HEADER_LENGTH / 1024,
                 ),
             ));
         }
@@ -505,12 +531,8 @@ pub fn process_fasta_records(
                 ),
             ));
         }
-        let encoded_kmers = sliding_window_validated_with_stats(
-            sequence_bytes,
-            kmer_length,
-            validator,
-            stats,
-        );
+        let encoded_kmers =
+            sliding_window_validated_with_stats(sequence_bytes, kmer_length, validator, stats);
 
         match expected_kmer_count {
             None => {
@@ -526,7 +548,10 @@ pub fn process_fasta_records(
                          but expected {} (defined by sequence 1). All sequences in a Multiple \
                          Sequence Alignment must have equal length. Ensure your input file is \
                          a properly aligned MSA.",
-                        sequence_count, record_id, encoded_kmers.len(), expected,
+                        sequence_count,
+                        record_id,
+                        encoded_kmers.len(),
+                        expected,
                     ),
                 ));
             }
@@ -540,7 +565,12 @@ pub fn process_fasta_records(
         if let Some(headers_components) = header_format {
             let fixed_header = String::from_utf8_lossy(raw_id).to_string();
             let fill = header_fillna.map(|s| s.as_str()).unwrap_or("Unknown");
-            headers_vec.push(Some(parse_header_internal(&fixed_header, headers_components, fill, diagnostics)));
+            headers_vec.push(Some(parse_header_internal(
+                &fixed_header,
+                headers_components,
+                fill,
+                diagnostics,
+            )));
         }
     }
 
@@ -565,12 +595,22 @@ fn try_mmap_processing(
 
     let data = strip_bom(&mmap[..]);
     let cursor = Cursor::new(data);
-    let mut reader = parse_fastx_reader(cursor)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("FASTA parse error: {}", e)))?;
+    let mut reader = parse_fastx_reader(cursor).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("FASTA parse error: {}", e),
+        )
+    })?;
 
     process_fasta_records(
-        reader.as_mut(), *kmer_length, validator, header_format, header_fillna,
-        stats, config, diagnostics,
+        reader.as_mut(),
+        *kmer_length,
+        validator,
+        header_format,
+        header_fillna,
+        stats,
+        config,
+        diagnostics,
     )
 }
 
@@ -588,7 +628,10 @@ fn process_with_buffered_io(
     diagnostics: &mut ParseDiagnostics,
 ) -> Result<LegacyExtractionResult, std::io::Error> {
     let mut file = File::open(path).map_err(|e| {
-        std::io::Error::new(e.kind(), format!("Failed to open FASTA file '{}': {}", path, e))
+        std::io::Error::new(
+            e.kind(),
+            format!("Failed to open FASTA file '{}': {}", path, e),
+        )
     })?;
     // Handle UTF-8 BOM: read first 3 bytes, skip if BOM, else seek back
     let mut bom_buf = [0u8; 3];
@@ -599,17 +642,27 @@ fn process_with_buffered_io(
     }
 
     let buf_reader = std::io::BufReader::with_capacity(64 * 1024, file);
-    let mut reader = parse_fastx_reader(buf_reader)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("FASTA parse error: {}", e)))?;
+    let mut reader = parse_fastx_reader(buf_reader).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("FASTA parse error: {}", e),
+        )
+    })?;
 
     process_fasta_records(
-        reader.as_mut(), *kmer_length, validator, header_format, header_fillna,
-        stats, config, diagnostics,
+        reader.as_mut(),
+        *kmer_length,
+        validator,
+        header_format,
+        header_fillna,
+        stats,
+        config,
+        diagnostics,
     )
 }
 
 /// Extract k-mers and headers with columnar metadata storage
-/// 
+///
 /// Same as `get_kmers_and_headers_validated` but returns metadata in columnar format
 /// for improved cache locality and performance.
 pub fn get_kmers_and_headers_encoded_columnar(
@@ -621,10 +674,17 @@ pub fn get_kmers_and_headers_encoded_columnar(
     config: Option<KmerExtractionConfig>,
     expected_count: Option<usize>,
 ) -> Result<ColumnarExtractionResult, std::io::Error> {
-    let (kmers, row_headers, sequence_count, is_protein, stats, diagnostics) = get_kmers_and_headers_validated(
-        path, kmer_length, header_format, header_fillna, alphabet, config, expected_count
-    )?;
-    
+    let (kmers, row_headers, sequence_count, is_protein, stats, diagnostics) =
+        get_kmers_and_headers_validated(
+            path,
+            kmer_length,
+            header_format,
+            header_fillna,
+            alphabet,
+            config,
+            expected_count,
+        )?;
+
     let columnar_headers = if let (Some(headers), Some(format)) = (row_headers, header_format) {
         // Use non-indexing variant: the CLI analysis path never queries indices.
         // Indices remain available via from_row_metadata_with_indexing for Tauri/API consumers.
@@ -633,8 +693,15 @@ pub fn get_kmers_and_headers_encoded_columnar(
     } else {
         None
     };
-    
-    Ok((kmers, columnar_headers, sequence_count, is_protein, stats, diagnostics))
+
+    Ok((
+        kmers,
+        columnar_headers,
+        sequence_count,
+        is_protein,
+        stats,
+        diagnostics,
+    ))
 }
 
 /// Determine if an I/O error is a transient mmap-related failure that
@@ -679,7 +746,7 @@ fn should_use_memory_mapping(path: &String) -> bool {
 }
 
 /// String-based k-mer extraction with CharacterValidator.
-/// 
+///
 /// Returns k-mers as strings instead of encoded values.
 /// Currently unused by the main pipeline (which uses encoded k-mers for performance),
 /// but retained as a public API for library consumers who need string-level access.
@@ -694,9 +761,9 @@ pub fn get_kmers_and_headers_string_validated(
     expected_count: Option<usize>,
 ) -> Result<StringKmerResult, std::io::Error> {
     let config = config.unwrap_or_default();
-    
+
     let alphabet_type = AlphabetType::from_optional_str(alphabet.map(|s| s.as_str()));
-    
+
     let validator = CharacterValidator::with_options(
         alphabet_type,
         config.validation_mode,
@@ -709,7 +776,10 @@ pub fn get_kmers_and_headers_string_validated(
     let mut diagnostics = ParseDiagnostics::new();
 
     let mut file = File::open(path).map_err(|e| {
-        std::io::Error::new(e.kind(), format!("Failed to open FASTA file '{}': {}", path, e))
+        std::io::Error::new(
+            e.kind(),
+            format!("Failed to open FASTA file '{}': {}", path, e),
+        )
     })?;
     // Strip UTF-8 BOM if present (common from Windows editors)
     let mut bom_buf = [0u8; 3];
@@ -719,8 +789,12 @@ pub fn get_kmers_and_headers_string_validated(
         let _ = file.seek(std::io::SeekFrom::Start(0));
     }
     let buf_reader = std::io::BufReader::with_capacity(64 * 1024, file);
-    let mut reader = parse_fastx_reader(buf_reader)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("FASTA parse error: {}", e)))?;
+    let mut reader = parse_fastx_reader(buf_reader).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("FASTA parse error: {}", e),
+        )
+    })?;
 
     while let Some(record_result) = reader.next() {
         let record = match record_result {
@@ -741,7 +815,9 @@ pub fn get_kmers_and_headers_string_validated(
                 format!(
                     "Sequence {} has a header of {} bytes — exceeds maximum ({} KB). \
                      This is likely malformed or adversarial input.",
-                    sequence_count, raw_id.len(), MAX_HEADER_LENGTH / 1024,
+                    sequence_count,
+                    raw_id.len(),
+                    MAX_HEADER_LENGTH / 1024,
                 ),
             ));
         }
@@ -760,14 +836,18 @@ pub fn get_kmers_and_headers_string_validated(
             Ok(s) => s.to_owned(),
             Err(_) => {
                 diagnostics.skipped_records += 1;
-                tracing::warn!(sequence = sequence_count, "skipping record with invalid UTF-8 sequence");
+                tracing::warn!(
+                    sequence = sequence_count,
+                    "skipping record with invalid UTF-8 sequence"
+                );
                 continue;
             }
         };
         let kmers = sliding_window_string_validated(&sequence, *kmer_length, &validator);
 
         if transposed_kmers.is_empty() {
-            transposed_kmers = vec![Vec::with_capacity(expected_count.unwrap_or(1024)); kmers.len()];
+            transposed_kmers =
+                vec![Vec::with_capacity(expected_count.unwrap_or(1024)); kmers.len()];
         }
 
         for (i, k) in kmers.into_iter().enumerate() {
@@ -777,7 +857,12 @@ pub fn get_kmers_and_headers_string_validated(
         if let Some(headers_components) = header_format {
             let fixed_header = String::from_utf8_lossy(raw_id).to_string();
             let fill = header_fillna.map(|s| s.as_str()).unwrap_or("Unknown");
-            headers_vec.push(Some(parse_header_internal(&fixed_header, headers_components, fill, &mut diagnostics)));
+            headers_vec.push(Some(parse_header_internal(
+                &fixed_header,
+                headers_components,
+                fill,
+                &mut diagnostics,
+            )));
         }
     }
 
@@ -821,7 +906,13 @@ mod tests {
         let kmer_len = 3usize;
 
         let result = get_kmers_and_headers_validated(
-            &path, &kmer_len, None, None, None, Some(default_config()), None,
+            &path,
+            &kmer_len,
+            None,
+            None,
+            None,
+            Some(default_config()),
+            None,
         );
         assert!(result.is_ok());
         let (encoded, _meta, seq_count, is_protein, _stats, _diag) = result.unwrap();
@@ -842,7 +933,13 @@ mod tests {
         let alphabet = "nucleotide".to_string();
 
         let result = get_kmers_and_headers_validated(
-            &path, &kmer_len, None, None, Some(&alphabet), Some(default_config()), None,
+            &path,
+            &kmer_len,
+            None,
+            None,
+            Some(&alphabet),
+            Some(default_config()),
+            None,
         );
         assert!(result.is_ok());
         let (encoded, _, seq_count, is_protein, _, _) = result.unwrap();
@@ -861,7 +958,13 @@ mod tests {
         let kmer_len = 0usize;
 
         let result = get_kmers_and_headers_validated(
-            &path, &kmer_len, None, None, None, Some(default_config()), None,
+            &path,
+            &kmer_len,
+            None,
+            None,
+            None,
+            Some(default_config()),
+            None,
         );
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("invalid"));
@@ -874,7 +977,13 @@ mod tests {
         let kmer_len = 15usize; // max for protein is 14
 
         let result = get_kmers_and_headers_validated(
-            &path, &kmer_len, None, None, None, Some(default_config()), None,
+            &path,
+            &kmer_len,
+            None,
+            None,
+            None,
+            Some(default_config()),
+            None,
         );
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("invalid"));
@@ -888,7 +997,13 @@ mod tests {
         let alphabet = "nucleotide".to_string();
 
         let result = get_kmers_and_headers_validated(
-            &path, &kmer_len, None, None, Some(&alphabet), Some(default_config()), None,
+            &path,
+            &kmer_len,
+            None,
+            None,
+            Some(&alphabet),
+            Some(default_config()),
+            None,
         );
         assert!(result.is_err());
     }
@@ -902,13 +1017,20 @@ mod tests {
         let kmer_len = 3usize;
 
         let result = get_kmers_and_headers_validated(
-            &path, &kmer_len, None, None, None, Some(default_config()), None,
+            &path,
+            &kmer_len,
+            None,
+            None,
+            None,
+            Some(default_config()),
+            None,
         );
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("equal length") || err_msg.contains("length"),
-            "Expected MSA length error, got: {}", err_msg
+            "Expected MSA length error, got: {}",
+            err_msg
         );
     }
 
@@ -919,7 +1041,13 @@ mod tests {
         let kmer_len = 3usize;
 
         let result = get_kmers_and_headers_validated(
-            &path, &kmer_len, None, None, None, Some(default_config()), None,
+            &path,
+            &kmer_len,
+            None,
+            None,
+            None,
+            Some(default_config()),
+            None,
         );
         assert!(result.is_ok());
         let (_, _, seq_count, _, _, _) = result.unwrap();
@@ -936,7 +1064,13 @@ mod tests {
         let kmer_len = 3usize;
 
         let result = get_kmers_and_headers_validated(
-            &path, &kmer_len, None, None, None, Some(default_config()), None,
+            &path,
+            &kmer_len,
+            None,
+            None,
+            None,
+            Some(default_config()),
+            None,
         );
         assert!(result.is_ok());
         let (encoded, _, _, _, _, _) = result.unwrap();
@@ -954,12 +1088,14 @@ mod tests {
         let kmer_len = 3usize;
         let config = KmerExtractionConfig::new().with_report_invalid(true);
 
-        let result = get_kmers_and_headers_validated(
-            &path, &kmer_len, None, None, None, Some(config), None,
-        );
+        let result =
+            get_kmers_and_headers_validated(&path, &kmer_len, None, None, None, Some(config), None);
         assert!(result.is_ok());
         let (_, _, _, _, stats, _) = result.unwrap();
-        assert!(stats.is_some(), "Validation stats should be present when reporting enabled");
+        assert!(
+            stats.is_some(),
+            "Validation stats should be present when reporting enabled"
+        );
     }
 
     // ─── BOM Handling ────────────────────────────────────────────────────────
@@ -968,13 +1104,20 @@ mod tests {
     fn test_utf8_bom_stripped_correctly() {
         let mut f = NamedTempFile::new().unwrap();
         // Write UTF-8 BOM followed by FASTA content
-        f.write_all(b"\xEF\xBB\xBF>seq1\nACDEFGHIKL\n>seq2\nACDEFGHIKL\n").unwrap();
+        f.write_all(b"\xEF\xBB\xBF>seq1\nACDEFGHIKL\n>seq2\nACDEFGHIKL\n")
+            .unwrap();
         f.flush().unwrap();
         let path = f.path().to_str().unwrap().to_string();
         let kmer_len = 3usize;
 
         let result = get_kmers_and_headers_validated(
-            &path, &kmer_len, None, None, None, Some(default_config()), None,
+            &path,
+            &kmer_len,
+            None,
+            None,
+            None,
+            Some(default_config()),
+            None,
         );
         assert!(result.is_ok(), "BOM should be transparently handled");
         let (_, _, seq_count, _, _, _) = result.unwrap();
@@ -998,9 +1141,8 @@ mod tests {
         let path = fasta.path().to_str().unwrap().to_string();
         let kmer_len = 3usize;
 
-        let result = get_kmers_and_headers_validated(
-            &path, &kmer_len, None, None, None, Some(config), None,
-        );
+        let result =
+            get_kmers_and_headers_validated(&path, &kmer_len, None, None, None, Some(config), None);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().kind(), io::ErrorKind::Interrupted);
     }
@@ -1009,14 +1151,25 @@ mod tests {
 
     #[test]
     fn test_header_metadata_extraction() {
-        let fasta = write_fasta(">sample1|treated|rep1\nACDEFGHIKL\n>sample2|control|rep2\nACDEFGHIKL\n");
+        let fasta =
+            write_fasta(">sample1|treated|rep1\nACDEFGHIKL\n>sample2|control|rep2\nACDEFGHIKL\n");
         let path = fasta.path().to_str().unwrap().to_string();
         let kmer_len = 3usize;
-        let format = vec!["id".to_string(), "condition".to_string(), "replicate".to_string()];
+        let format = vec![
+            "id".to_string(),
+            "condition".to_string(),
+            "replicate".to_string(),
+        ];
         let fillna = "NA".to_string();
 
         let result = get_kmers_and_headers_validated(
-            &path, &kmer_len, Some(&format), Some(&fillna), None, Some(default_config()), None,
+            &path,
+            &kmer_len,
+            Some(&format),
+            Some(&fillna),
+            None,
+            Some(default_config()),
+            None,
         );
         assert!(result.is_ok());
         let (_, meta, _, _, _, _) = result.unwrap();
@@ -1035,9 +1188,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("output.json");
 
-        let result = atomic_write(&path, |writer| {
-            writer.write_all(b"hello world")
-        });
+        let result = atomic_write(&path, |writer| writer.write_all(b"hello world"));
         assert!(result.is_ok());
         assert!(path.exists());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "hello world");
@@ -1048,10 +1199,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("should_not_exist.json");
 
-        let result = atomic_write(&path, |_writer| {
-            Err(io::Error::other("simulated failure"))
-        });
+        let result = atomic_write(&path, |_writer| Err(io::Error::other("simulated failure")));
         assert!(result.is_err());
-        assert!(!path.exists(), "Failed atomic_write should not leave a file");
+        assert!(
+            !path.exists(),
+            "Failed atomic_write should not leave a file"
+        );
     }
 }

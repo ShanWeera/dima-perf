@@ -1,7 +1,7 @@
+use hashbrown::{HashMap, HashSet};
+use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
-use rand::rngs::StdRng;
-use hashbrown::{HashMap, HashSet};
 
 // SIMD imports for vectorized entropy calculations
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
@@ -11,9 +11,13 @@ use wide::*;
 /// This provides excellent precision while maintaining good performance
 #[inline(always)]
 fn log2_f64(x: f64) -> f64 {
-    if x <= 0.0 { return f64::NEG_INFINITY; }
-    if x == 1.0 { return 0.0; }
-    
+    if x <= 0.0 {
+        return f64::NEG_INFINITY;
+    }
+    if x == 1.0 {
+        return 0.0;
+    }
+
     // Use libm for high precision
     libm::log2(x)
 }
@@ -37,13 +41,13 @@ fn vectorized_log2_f64x4(values: f64x4) -> f64x4 {
 }
 
 /// Vectorized Shannon's entropy calculation using SIMD operations
-/// 
+///
 /// This function provides significant performance improvements by:
 /// - Processing counts in SIMD vectors (4 f64 values at once)
 /// - Vectorizing probability calculations (division)
 /// - Vectorizing logarithm operations
 /// - Reducing scalar operations and improving cache locality
-/// 
+///
 /// Performance characteristics:
 /// - 20-40% faster than scalar implementation for large count arrays on x86_64 and ARM64
 /// - Automatic fallback to scalar code for small arrays or unsupported architectures
@@ -51,15 +55,17 @@ fn vectorized_log2_f64x4(values: f64x4) -> f64x4 {
 /// - Uses SSE/AVX on x86_64 and NEON on ARM64 (Apple Silicon)
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 pub fn shannons_entropy_vectorized(counts: &[(u64, usize)], total_count: usize) -> f64 {
-    if counts.is_empty() || total_count == 0 { return 0.0; }
-    
+    if counts.is_empty() || total_count == 0 {
+        return 0.0;
+    }
+
     let total_f64 = total_count as f64;
     let mut entropy_sum = 0.0f64;
-    
+
     // Process counts in chunks of 4 for SIMD operations
     let chunks = counts.chunks_exact(4);
     let remainder = chunks.remainder();
-    
+
     // SIMD processing for chunks of 4
     for chunk in chunks {
         // Load counts into SIMD vector
@@ -70,29 +76,33 @@ pub fn shannons_entropy_vectorized(counts: &[(u64, usize)], total_count: usize) 
             chunk[3].1 as f64,
         ];
         let counts_vec = f64x4::new(counts_array);
-        
+
         // Vectorized probability calculation: p = count / total
         let total_vec = f64x4::splat(total_f64);
         let probabilities = counts_vec / total_vec;
-        
+
         // Vectorized logarithm calculation
         let log_probs = vectorized_log2_f64x4(probabilities);
-        
+
         // Vectorized multiplication: p * log2(p)
         let p_log_p = probabilities * log_probs;
-        
+
         // Sum the results (convert to array and sum manually)
         let p_log_p_array = p_log_p.to_array();
         entropy_sum += p_log_p_array[0] + p_log_p_array[1] + p_log_p_array[2] + p_log_p_array[3];
     }
-    
+
     // Handle remainder with scalar operations
     for &(_, count) in remainder {
         let p = count as f64 / total_f64;
         entropy_sum += p * log2_f64(p);
     }
-    
-    if entropy_sum == 0.0 { 0.0 } else { -entropy_sum }
+
+    if entropy_sum == 0.0 {
+        0.0
+    } else {
+        -entropy_sum
+    }
 }
 
 /// Fallback vectorized entropy for architectures without SIMD support
@@ -104,39 +114,47 @@ pub fn shannons_entropy_vectorized(counts: &[(u64, usize)], total_count: usize) 
 /// Scalar optimized version with manual loop unrolling and fast math
 #[inline(always)]
 pub fn shannons_entropy_scalar_optimized(counts: &[(u64, usize)], total_count: usize) -> f64 {
-    if counts.is_empty() || total_count == 0 { return 0.0; }
-    
+    if counts.is_empty() || total_count == 0 {
+        return 0.0;
+    }
+
     let total_f64 = total_count as f64;
     let mut entropy_sum = 0.0f64;
-    
+
     // Manual loop unrolling for better performance
     let chunks = counts.chunks_exact(4);
     let remainder = chunks.remainder();
-    
+
     for chunk in chunks {
         let p1 = chunk[0].1 as f64 / total_f64;
         let p2 = chunk[1].1 as f64 / total_f64;
         let p3 = chunk[2].1 as f64 / total_f64;
         let p4 = chunk[3].1 as f64 / total_f64;
-        
-        entropy_sum += p1 * log2_f64(p1) +
-                      p2 * log2_f64(p2) +
-                      p3 * log2_f64(p3) +
-                      p4 * log2_f64(p4);
+
+        entropy_sum +=
+            p1 * log2_f64(p1) + p2 * log2_f64(p2) + p3 * log2_f64(p3) + p4 * log2_f64(p4);
     }
-    
+
     for &(_, count) in remainder {
         let p = count as f64 / total_f64;
         entropy_sum += p * log2_f64(p);
     }
-    
-    if entropy_sum == 0.0 { 0.0 } else { -entropy_sum }
+
+    if entropy_sum == 0.0 {
+        0.0
+    } else {
+        -entropy_sum
+    }
 }
 
 pub fn shannons_entropy(kmers: &[Box<str>]) -> f64 {
     let kmer_count = kmers.len();
     let counts = count_only(kmers);
-    let count_pairs: Vec<(u64, usize)> = counts.into_iter().enumerate().map(|(i, (_, count))| (i as u64, count)).collect();
+    let count_pairs: Vec<(u64, usize)> = counts
+        .into_iter()
+        .enumerate()
+        .map(|(i, (_, count))| (i as u64, count))
+        .collect();
     shannons_entropy_vectorized(&count_pairs, kmer_count)
 }
 
@@ -215,7 +233,8 @@ fn ols_linear_regression(data: &[(f64, f64)]) -> Result<(f64, f64), &'static str
 /// Compute the rarefaction sample grid: hybrid of fixed small-m anchors
 /// and percentage-based points. Returns deduplicated, sorted sample sizes.
 fn rarefaction_sample_grid(kmer_count: usize, support_threshold: usize) -> Vec<usize> {
-    let percentage_cutoff = ((support_threshold as f64 / kmer_count as f64) * 100_f64).ceil() as usize;
+    let percentage_cutoff =
+        ((support_threshold as f64 / kmer_count as f64) * 100_f64).ceil() as usize;
     let step_size = if percentage_cutoff > 80 { 2 } else { 5 };
     let starting_point = {
         let floor = percentage_cutoff.max(10);
@@ -226,7 +245,11 @@ fn rarefaction_sample_grid(kmer_count: usize, support_threshold: usize) -> Vec<u
         .step_by(step_size)
         .filter_map(|percentage| {
             let samples = (percentage * kmer_count) / 100;
-            if samples == 0 || samples >= kmer_count { None } else { Some(samples) }
+            if samples == 0 || samples >= kmer_count {
+                None
+            } else {
+                Some(samples)
+            }
         });
 
     let mut all_sample_sizes: Vec<usize> = SMALL_M_ANCHORS
@@ -254,8 +277,14 @@ fn validate_regression_result(
         return all_kmers_entropy;
     }
 
-    let x_min = entropy_values.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
-    let x_max = entropy_values.iter().map(|p| p.0).fold(f64::NEG_INFINITY, f64::max);
+    let x_min = entropy_values
+        .iter()
+        .map(|p| p.0)
+        .fold(f64::INFINITY, f64::min);
+    let x_max = entropy_values
+        .iter()
+        .map(|p| p.0)
+        .fold(f64::NEG_INFINITY, f64::max);
     if (x_max - x_min) < 0.01 {
         return all_kmers_entropy;
     }
@@ -314,13 +343,20 @@ pub fn calculate_entropy_at_position(
     position_index: usize,
 ) -> f64 {
     let kmer_count = kmers.len();
-    if kmer_count <= 1 { return 0.0_f64; }
+    if kmer_count <= 1 {
+        return 0.0_f64;
+    }
 
     let all_kmers_entropy = shannons_entropy(kmers);
-    if kmer_count <= *support_threshold { return all_kmers_entropy; }
+    if kmer_count <= *support_threshold {
+        return all_kmers_entropy;
+    }
 
-    let percentage_cutoff = ((*support_threshold as f64 / kmer_count as f64) * 100_f64).ceil() as usize;
-    if percentage_cutoff == 100 { return all_kmers_entropy; }
+    let percentage_cutoff =
+        ((*support_threshold as f64 / kmer_count as f64) * 100_f64).ceil() as usize;
+    if percentage_cutoff == 100 {
+        return all_kmers_entropy;
+    }
 
     let all_sample_sizes = rarefaction_sample_grid(kmer_count, *support_threshold);
 
@@ -330,7 +366,8 @@ pub fn calculate_entropy_at_position(
     for &samples in &all_sample_sizes {
         let seed = rarefaction_seed(position_index, samples);
         let mut rng = StdRng::seed_from_u64(seed);
-        let entropy = shannons_entropy_sampled_seeded_inplace(kmers, &mut indices, samples, &mut rng);
+        let entropy =
+            shannons_entropy_sampled_seeded_inplace(kmers, &mut indices, samples, &mut rng);
         entropy_values.push((1.0 / samples as f64, entropy));
     }
     entropy_values.push((1.0 / kmer_count as f64, all_kmers_entropy));
@@ -348,7 +385,9 @@ fn shannons_entropy_sampled_seeded_inplace(
     rng: &mut StdRng,
 ) -> f64 {
     let kmer_count = indices.len();
-    if sample_size == 0 || kmer_count == 0 { return 0.0; }
+    if sample_size == 0 || kmer_count == 0 {
+        return 0.0;
+    }
 
     let actual_sample = sample_size.min(kmer_count);
     let (sampled, _) = indices.partial_shuffle(rng, actual_sample);
@@ -358,7 +397,11 @@ fn shannons_entropy_sampled_seeded_inplace(
         *counts.entry(&kmers[idx]).or_insert(0) += 1;
     }
 
-    let mut count_pairs: Vec<(u64, usize)> = counts.into_iter().enumerate().map(|(i, (_, count))| (i as u64, count)).collect();
+    let mut count_pairs: Vec<(u64, usize)> = counts
+        .into_iter()
+        .enumerate()
+        .map(|(i, (_, count))| (i as u64, count))
+        .collect();
     // Sort for deterministic entropy computation — HashMap iteration order is
     // non-deterministic, and the encoded path already sorts (line ~540).
     count_pairs.sort_unstable_by_key(|&(id, _)| id);
@@ -367,7 +410,11 @@ fn shannons_entropy_sampled_seeded_inplace(
 
 /// Without-replacement sampling (legacy allocating interface for tests).
 #[allow(dead_code)]
-fn shannons_entropy_sampled_seeded(kmers: &[Box<str>], sample_size: usize, rng: &mut StdRng) -> f64 {
+fn shannons_entropy_sampled_seeded(
+    kmers: &[Box<str>],
+    sample_size: usize,
+    rng: &mut StdRng,
+) -> f64 {
     let mut indices: Vec<usize> = (0..kmers.len()).collect();
     shannons_entropy_sampled_seeded_inplace(kmers, &mut indices, sample_size, rng)
 }
@@ -385,8 +432,13 @@ fn count_distinct_str(kmers: &[Box<str>]) -> usize {
 /// floating-point accumulation order.
 fn count_only<'a>(kmers: &'a [Box<str>]) -> Vec<(String, usize)> {
     let mut counts: HashMap<&'a str, usize> = HashMap::new();
-    kmers.iter().for_each(|k| { *counts.entry(k).or_insert(0) += 1; });
-    let mut pairs: Vec<(String, usize)> = counts.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+    kmers.iter().for_each(|k| {
+        *counts.entry(k).or_insert(0) += 1;
+    });
+    let mut pairs: Vec<(String, usize)> = counts
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
     pairs.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
     pairs
 }
@@ -395,7 +447,9 @@ fn count_only<'a>(kmers: &'a [Box<str>]) -> Vec<(String, usize)> {
 pub fn shannons_entropy_encoded(kmers: &[u64]) -> f64 {
     // Valid k-mer count excludes u64::MAX sentinel values
     let kmer_count = kmers.iter().filter(|&&k| k != u64::MAX).count();
-    if kmer_count == 0 { return 0.0; }
+    if kmer_count == 0 {
+        return 0.0;
+    }
     let counts = count_only_encoded(kmers);
     shannons_entropy_vectorized(&counts, kmer_count)
 }
@@ -415,19 +469,27 @@ pub fn calculate_entropy_encoded_at_position(
     position_index: usize,
 ) -> f64 {
     let kmer_count = kmers.iter().filter(|&&k| k != u64::MAX).count();
-    if kmer_count <= 1 { return 0.0_f64; }
+    if kmer_count <= 1 {
+        return 0.0_f64;
+    }
 
     let all_kmers_entropy = shannons_entropy_encoded(kmers);
-    if kmer_count <= *support_threshold { return all_kmers_entropy; }
+    if kmer_count <= *support_threshold {
+        return all_kmers_entropy;
+    }
 
-    let percentage_cutoff = ((*support_threshold as f64 / kmer_count as f64) * 100_f64).ceil() as usize;
-    if percentage_cutoff == 100 { return all_kmers_entropy; }
+    let percentage_cutoff =
+        ((*support_threshold as f64 / kmer_count as f64) * 100_f64).ceil() as usize;
+    if percentage_cutoff == 100 {
+        return all_kmers_entropy;
+    }
 
     let all_sample_sizes = rarefaction_sample_grid(kmer_count, *support_threshold);
 
     // Pre-compute valid indices (excluding sentinel u64::MAX). Buffer is reused
     // across all subsamples via partial_shuffle — no per-subsample allocation.
-    let mut valid_indices: Vec<usize> = kmers.iter()
+    let mut valid_indices: Vec<usize> = kmers
+        .iter()
         .enumerate()
         .filter(|(_, &k)| k != u64::MAX)
         .map(|(i, _)| i)
@@ -437,9 +499,8 @@ pub fn calculate_entropy_encoded_at_position(
     for &samples in &all_sample_sizes {
         let seed = rarefaction_seed(position_index, samples);
         let mut rng = StdRng::seed_from_u64(seed);
-        let entropy = shannons_entropy_sampled_encoded_inplace(
-            kmers, &mut valid_indices, samples, &mut rng
-        );
+        let entropy =
+            shannons_entropy_sampled_encoded_inplace(kmers, &mut valid_indices, samples, &mut rng);
         entropy_values.push((1.0 / samples as f64, entropy));
     }
     entropy_values.push((1.0 / kmer_count as f64, all_kmers_entropy));
@@ -462,7 +523,9 @@ fn shannons_entropy_sampled_encoded_inplace(
     rng: &mut StdRng,
 ) -> f64 {
     let valid_count = valid_indices.len();
-    if sample_size == 0 || valid_count == 0 { return 0.0; }
+    if sample_size == 0 || valid_count == 0 {
+        return 0.0;
+    }
 
     let actual_sample = sample_size.min(valid_count);
     let (sampled, _) = valid_indices.partial_shuffle(rng, actual_sample);
@@ -510,14 +573,13 @@ fn count_distinct_encoded(kmers: &[u64]) -> usize {
 /// summation orders can produce different least-significant bits).
 fn count_only_encoded(kmers: &[u64]) -> Vec<(u64, usize)> {
     let mut counts: HashMap<u64, usize> = HashMap::new();
-    kmers.iter()
-        .filter(|&&k| k != u64::MAX)
-        .for_each(|&k| { *counts.entry(k).or_insert(0) += 1; });
+    kmers.iter().filter(|&&k| k != u64::MAX).for_each(|&k| {
+        *counts.entry(k).or_insert(0) += 1;
+    });
     let mut pairs: Vec<(u64, usize)> = counts.into_iter().collect();
     pairs.sort_unstable_by_key(|(k, _)| *k);
     pairs
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -527,26 +589,35 @@ mod tests {
     fn test_vectorized_vs_scalar_consistency() {
         let counts = vec![(1u64, 10), (2u64, 20), (3u64, 30), (4u64, 40)];
         let total = 100;
-        
+
         let vectorized_result = shannons_entropy_vectorized(&counts, total);
         let scalar_result = shannons_entropy_scalar_optimized(&counts, total);
-        
+
         // Allow small floating point differences
-        assert!((vectorized_result - scalar_result).abs() < 1e-10, 
-                "Vectorized: {}, Scalar: {}", vectorized_result, scalar_result);
+        assert!(
+            (vectorized_result - scalar_result).abs() < 1e-10,
+            "Vectorized: {}, Scalar: {}",
+            vectorized_result,
+            scalar_result
+        );
     }
 
     #[test]
     fn test_fast_log2_accuracy() {
         let test_values = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0];
-        
+
         for &val in &test_values {
             let fast_result = log2_f64(val);
             let std_result = val.log2();
-            
+
             // Allow small precision differences for performance gains
-            assert!((fast_result - std_result).abs() < 1e-10,
-                    "Value: {}, Fast: {}, Std: {}", val, fast_result, std_result);
+            assert!(
+                (fast_result - std_result).abs() < 1e-10,
+                "Value: {}, Fast: {}, Std: {}",
+                val,
+                fast_result,
+                std_result
+            );
         }
     }
 
@@ -554,28 +625,32 @@ mod tests {
     fn test_entropy_calculation_correctness() {
         let kmers = vec![1u64, 1, 2, 2, 3, 3, 3];
         let result = shannons_entropy_encoded(&kmers);
-        
+
         // Manually calculated expected entropy for this distribution
         // P(1) = 2/7, P(2) = 2/7, P(3) = 3/7
         let p1: f64 = 2.0 / 7.0;
         let p2: f64 = 2.0 / 7.0;
         let p3: f64 = 3.0 / 7.0;
         let expected = -(p1 * p1.log2() + p2 * p2.log2() + p3 * p3.log2());
-        
-        assert!((result - expected).abs() < 1e-10,
-                "Result: {}, Expected: {}", result, expected);
+
+        assert!(
+            (result - expected).abs() < 1e-10,
+            "Result: {}, Expected: {}",
+            result,
+            expected
+        );
     }
 
     #[test]
     fn test_empty_and_edge_cases() {
         // Empty counts
         assert_eq!(shannons_entropy_vectorized(&[], 0), 0.0);
-        
+
         // Single element
         let single = vec![(1u64, 5)];
         let result = shannons_entropy_vectorized(&single, 5);
         assert_eq!(result, 0.0); // Single element has no entropy
-        
+
         // Zero total count
         let counts = vec![(1u64, 0), (2u64, 0)];
         assert_eq!(shannons_entropy_vectorized(&counts, 0), 0.0);
@@ -588,10 +663,10 @@ mod tests {
             counts.push((i as u64, (i % 100) + 1));
         }
         let total = counts.iter().map(|(_, c)| c).sum();
-        
+
         let vectorized_result = shannons_entropy_vectorized(&counts, total);
         let scalar_result = shannons_entropy_scalar_optimized(&counts, total);
-        
+
         assert!((vectorized_result - scalar_result).abs() < 1e-10);
     }
 
@@ -600,12 +675,12 @@ mod tests {
     fn test_simd_log2_vectorization() {
         let values = f64x4::new([1.0, 2.0, 4.0, 8.0]);
         let result = vectorized_log2_f64x4(values);
-        
+
         let expected = f64x4::new([0.0, 1.0, 2.0, 3.0]);
-        
+
         let result_array = result.to_array();
         let expected_array = expected.to_array();
-        
+
         for i in 0..4 {
             assert!((result_array[i] - expected_array[i]).abs() < 1e-10);
         }
@@ -652,7 +727,8 @@ mod tests {
         assert!(
             corrected >= raw_entropy,
             "Corrected entropy ({}) must be >= raw Shannon entropy ({})",
-            corrected, raw_entropy
+            corrected,
+            raw_entropy
         );
     }
 
@@ -687,7 +763,8 @@ mod tests {
         assert!(
             result <= max_theoretical + 1e-10,
             "Corrected entropy ({}) should not exceed log2(3) = {}",
-            result, max_theoretical
+            result,
+            max_theoretical
         );
     }
 }

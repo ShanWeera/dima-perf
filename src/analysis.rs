@@ -2,20 +2,17 @@ use hashbrown::HashMap;
 use indicatif::ProgressStyle;
 use rayon::prelude::*;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 
 use crate::alphabet::{ValidationMode, ValidationStats};
-use crate::io::{
-    InputSource,
-    get_kmers_and_headers_encoded_columnar,
-    KmerExtractionConfig,
-    ParseDiagnostics,
-};
 use crate::entropy::calculate_entropy_encoded_at_position;
+use crate::io::{
+    get_kmers_and_headers_encoded_columnar, InputSource, KmerExtractionConfig, ParseDiagnostics,
+};
 use crate::kmer::{count_kmers_encoded, decode_kmer};
-use crate::models::{Results, Position, Variant, HighestEntropy};
+use crate::models::{HighestEntropy, Position, Results, Variant};
 
 /// Errors that can occur during the analysis pipeline.
 ///
@@ -55,9 +52,8 @@ impl From<std::io::Error> for AnalysisError {
     }
 }
 
-
 /// Configuration for analysis with validation options
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AnalysisConfig {
     /// Validation mode for character checking
     pub validation_mode: ValidationMode,
@@ -71,32 +67,21 @@ pub struct AnalysisConfig {
     pub cancel_token: Option<Arc<AtomicBool>>,
 }
 
-impl Default for AnalysisConfig {
-    fn default() -> Self {
-        Self {
-            validation_mode: ValidationMode::default(),
-            allow_lowercase: false,
-            report_invalid: false,
-            cancel_token: None,
-        }
-    }
-}
-
 impl AnalysisConfig {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     pub fn with_validation_mode(mut self, mode: ValidationMode) -> Self {
         self.validation_mode = mode;
         self
     }
-    
+
     pub fn with_allow_lowercase(mut self, allow: bool) -> Self {
         self.allow_lowercase = allow;
         self
     }
-    
+
     pub fn with_report_invalid(mut self, report: bool) -> Self {
         self.report_invalid = report;
         self
@@ -113,7 +98,7 @@ impl AnalysisConfig {
             .as_ref()
             .is_some_and(|t| t.load(Ordering::Relaxed))
     }
-    
+
     fn to_kmer_extraction_config(&self) -> KmerExtractionConfig {
         KmerExtractionConfig {
             validation_mode: self.validation_mode,
@@ -156,7 +141,9 @@ impl MetadataAggregator for ColumnarAggregator<'_> {
         indices: &[usize],
         fields: &[String],
     ) -> HashMap<String, HashMap<String, usize>> {
-        self.adapter.get_columnar().aggregate_metadata_for_indices_parallel(indices, fields)
+        self.adapter
+            .get_columnar()
+            .aggregate_metadata_for_indices_parallel(indices, fields)
     }
 }
 
@@ -214,9 +201,8 @@ fn compute_entropies(
             if config.is_cancelled() {
                 return Err(AnalysisError::Cancelled);
             }
-            let entropy = calculate_entropy_encoded_at_position(
-                position_kmers, &support_threshold, idx,
-            );
+            let entropy =
+                calculate_entropy_encoded_at_position(position_kmers, &support_threshold, idx);
             tracing::Span::current().pb_inc(1);
             Ok(entropy)
         })
@@ -251,8 +237,14 @@ fn build_positions(
             }
             tracing::Span::current().pb_inc(1);
             let pos = build_single_position(
-                idx, &position_count, position_entropies,
-                kmer_length, support_threshold, is_protein, aggregator, fields,
+                idx,
+                &position_count,
+                position_entropies,
+                kmer_length,
+                support_threshold,
+                is_protein,
+                aggregator,
+                fields,
             );
             Ok(pos)
         })
@@ -276,32 +268,36 @@ fn build_single_position(
     let support: usize = position_count.values().map(|(count, _)| count).sum();
 
     let mut variants: Vec<Variant> = Vec::with_capacity(position_count.len());
-    variants.extend(position_count.iter().map(|(&encoded_sequence, count_data)| {
-            let sequence = decode_kmer(encoded_sequence, kmer_length, is_protein);
-            let mut variant = Variant {
-                sequence,
-                count: count_data.0,
-                incidence: if support > 0 {
-                    (count_data.0 as f64 / support as f64) * 100.0
-                } else {
-                    0.0
-                },
-                metadata: None,
-                motif_short: None,
-                motif_long: None,
-            };
+    variants.extend(
+        position_count
+            .iter()
+            .map(|(&encoded_sequence, count_data)| {
+                let sequence = decode_kmer(encoded_sequence, kmer_length, is_protein);
+                let mut variant = Variant {
+                    sequence,
+                    count: count_data.0,
+                    incidence: if support > 0 {
+                        (count_data.0 as f64 / support as f64) * 100.0
+                    } else {
+                        0.0
+                    },
+                    metadata: None,
+                    motif_short: None,
+                    motif_long: None,
+                };
 
-            if let Some(agg) = aggregator {
-                if !fields.is_empty() {
-                    let metadata = agg.aggregate(&count_data.1, fields);
-                    // Always set Some(metadata) when fields configured — unifies
-                    // semantics across both paths (Some({}) vs None distinction).
-                    variant.metadata = Some(metadata);
+                if let Some(agg) = aggregator {
+                    if !fields.is_empty() {
+                        let metadata = agg.aggregate(&count_data.1, fields);
+                        // Always set Some(metadata) when fields configured — unifies
+                        // semantics across both paths (Some({}) vs None distinction).
+                        variant.metadata = Some(metadata);
+                    }
                 }
-            }
 
-            variant
-        }));
+                variant
+            }),
+    );
 
     // Low-support classification per DiMA publication (Tharanga et al. 2025,
     // PMC11596295, Table 1):
@@ -323,7 +319,11 @@ fn build_single_position(
         idx + 1,
         position_entropies[idx],
         support,
-        if variants.is_empty() { None } else { Some(&mut variants) },
+        if variants.is_empty() {
+            None
+        } else {
+            Some(&mut variants)
+        },
         low_support_label,
     )
 }
@@ -340,7 +340,12 @@ fn compute_summary_stats(positions: &[Position]) -> (f64, HighestEntropy, usize)
     // distinguishes it from LS (N<T) but it's still counted as low-support.
     let low_support_count = positions
         .iter()
-        .filter(|p| matches!(p.low_support.as_deref(), Some("NS") | Some("LS") | Some("ELS")))
+        .filter(|p| {
+            matches!(
+                p.low_support.as_deref(),
+                Some("NS") | Some("LS") | Some("ELS")
+            )
+        })
         .count();
 
     // ELS positions (support == threshold) are included because they received
@@ -360,13 +365,23 @@ fn compute_summary_stats(positions: &[Position]) -> (f64, HighestEntropy, usize)
     };
 
     let highest = if reliable_positions.is_empty() {
-        HighestEntropy { position: 0, entropy: 0.0 }
+        HighestEntropy {
+            position: 0,
+            entropy: 0.0,
+        }
     } else {
         let best = reliable_positions
             .iter()
-            .max_by(|a, b| a.entropy.partial_cmp(&b.entropy).unwrap_or(std::cmp::Ordering::Equal))
+            .max_by(|a, b| {
+                a.entropy
+                    .partial_cmp(&b.entropy)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .unwrap();
-        HighestEntropy { position: best.position, entropy: best.entropy }
+        HighestEntropy {
+            position: best.position,
+            entropy: best.entropy,
+        }
     };
 
     (average_entropy, highest, low_support_count)
@@ -397,7 +412,8 @@ fn finish_analysis(
     if sequence_count == 0 {
         return Err(AnalysisError::Validation {
             reason: "Input file contains no valid sequences. Ensure the file is a non-empty FASTA \
-                     with at least one sequence.".to_string(),
+                     with at least one sequence."
+                .to_string(),
         });
     }
 
@@ -448,7 +464,11 @@ fn finish_analysis(
     }
 
     let fields: Vec<String> = match (header_format, metadata_fields) {
-        (Some(hdr_fmt), Some(only)) => hdr_fmt.iter().filter(|f| only.contains(f)).cloned().collect(),
+        (Some(hdr_fmt), Some(only)) => hdr_fmt
+            .iter()
+            .filter(|f| only.contains(f))
+            .cloned()
+            .collect(),
         (Some(hdr_fmt), None) => hdr_fmt.clone(),
         _ => Vec::new(),
     };
@@ -465,8 +485,14 @@ fn finish_analysis(
     building_span.pb_set_length(encoded_kmers.len() as u64);
     let _building_entered = building_span.entered();
     let positions = build_positions(
-        &encoded_kmers, &position_entropies, kmer_length, support_threshold,
-        is_protein, config, aggregator, &fields,
+        &encoded_kmers,
+        &position_entropies,
+        kmer_length,
+        support_threshold,
+        is_protein,
+        config,
+        aggregator,
+        &fields,
     )?;
     drop(_building_entered);
     let building_duration = building_start.elapsed();
@@ -542,8 +568,14 @@ pub fn analyze(
         InputSource::File(p) => p.to_string_lossy().to_string(),
         InputSource::Stdin => {
             return analyze_stdin(
-                kmer_length, support_threshold, query_name, header_format,
-                alphabet, header_fillna, metadata_fields, config,
+                kmer_length,
+                support_threshold,
+                query_name,
+                header_format,
+                alphabet,
+                header_fillna,
+                metadata_fields,
+                config,
             );
         }
     };
@@ -556,36 +588,52 @@ pub fn analyze(
         path = %path,
         indicatif.pb_show = tracing::field::Empty,
     );
-    io_span.pb_set_style(&ProgressStyle::with_template(
-        "{spinner:.green} {msg}: {human_pos} seqs [{elapsed}]"
-    ).unwrap());
+    io_span.pb_set_style(
+        &ProgressStyle::with_template("{spinner:.green} {msg}: {human_pos} seqs [{elapsed}]")
+            .unwrap(),
+    );
     io_span.pb_set_message("Reading FASTA");
     let _io_span = io_span.entered();
 
-    let (encoded_kmers, columnar_headers, sequence_count, is_protein, validation_stats, diagnostics) =
-        get_kmers_and_headers_encoded_columnar(
-            &path,
-            &kmer_length,
-            header_format.as_ref(),
-            header_fillna.as_ref(),
-            alphabet.as_ref(),
-            Some(kmer_config),
-            None,
-        )?;
+    let (
+        encoded_kmers,
+        columnar_headers,
+        sequence_count,
+        is_protein,
+        validation_stats,
+        diagnostics,
+    ) = get_kmers_and_headers_encoded_columnar(
+        &path,
+        &kmer_length,
+        header_format.as_ref(),
+        header_fillna.as_ref(),
+        alphabet.as_ref(),
+        Some(kmer_config),
+        None,
+    )?;
 
     drop(_io_span);
     let io_duration = io_start.elapsed();
 
-    let aggregator: Option<ColumnarAggregator> = columnar_headers.as_ref().map(|adapter| {
-        ColumnarAggregator { adapter }
-    });
+    let aggregator: Option<ColumnarAggregator> = columnar_headers
+        .as_ref()
+        .map(|adapter| ColumnarAggregator { adapter });
 
     finish_analysis(
-        encoded_kmers, sequence_count, kmer_length, support_threshold,
-        is_protein, query_name, &config, &header_format, &metadata_fields,
+        encoded_kmers,
+        sequence_count,
+        kmer_length,
+        support_threshold,
+        is_protein,
+        query_name,
+        &config,
+        &header_format,
+        &metadata_fields,
         aggregator.as_ref().map(|a| a as &dyn MetadataAggregator),
-        validation_stats, &diagnostics,
-        io_duration, input_size_bytes,
+        validation_stats,
+        &diagnostics,
+        io_duration,
+        input_size_bytes,
     )
 }
 
@@ -605,9 +653,7 @@ fn analyze_stdin(
     let kmer_config = config.to_kmer_extraction_config();
     let io_start = std::time::Instant::now();
 
-    let alphabet_type = crate::alphabet::AlphabetType::from_optional_str(
-        alphabet.as_ref().map(|s| s.as_str())
-    );
+    let alphabet_type = crate::alphabet::AlphabetType::from_optional_str(alphabet.as_deref());
     let is_protein = alphabet_type == crate::alphabet::AlphabetType::Protein;
 
     let max_k = crate::kmer::max_kmer_length(is_protein);
@@ -615,7 +661,9 @@ fn analyze_stdin(
         return Err(AnalysisError::Validation {
             reason: format!(
                 "k-mer length {} is invalid for {} alphabet (valid range: 1..={})",
-                kmer_length, if is_protein { "protein" } else { "nucleotide" }, max_k
+                kmer_length,
+                if is_protein { "protein" } else { "nucleotide" },
+                max_k
             ),
         });
     }
@@ -637,9 +685,12 @@ fn analyze_stdin(
         path = "stdin",
         indicatif.pb_show = tracing::field::Empty,
     );
-    io_span.pb_set_style(&ProgressStyle::with_template(
-        "{spinner:.green} Reading stdin: {human_pos} seqs [{elapsed}]"
-    ).unwrap());
+    io_span.pb_set_style(
+        &ProgressStyle::with_template(
+            "{spinner:.green} Reading stdin: {human_pos} seqs [{elapsed}]",
+        )
+        .unwrap(),
+    );
     io_span.pb_set_message("Reading stdin");
     let _io_entered = io_span.entered();
 
@@ -647,23 +698,36 @@ fn analyze_stdin(
     // so we buffer it into a Cursor which satisfies needletail's Send requirement.
     use std::io::Read;
     let mut stdin_data = Vec::new();
-    std::io::stdin().lock().read_to_end(&mut stdin_data)
+    std::io::stdin()
+        .lock()
+        .read_to_end(&mut stdin_data)
         .map_err(|e| std::io::Error::new(e.kind(), format!("failed to read stdin: {}", e)))?;
 
     if stdin_data.is_empty() {
         return Err(AnalysisError::Validation {
-            reason: "No data received from stdin. Pipe a FASTA file or use --input <file>.".to_string(),
+            reason: "No data received from stdin. Pipe a FASTA file or use --input <file>."
+                .to_string(),
         });
     }
 
     let cursor = std::io::Cursor::new(stdin_data);
-    let mut reader = needletail::parse_fastx_reader(cursor)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, format!("FASTA parse error: {}", e)))?;
+    let mut reader = needletail::parse_fastx_reader(cursor).map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("FASTA parse error: {}", e),
+        )
+    })?;
 
     let mut diagnostics = crate::io::ParseDiagnostics::new();
     let (transposed_kmers, headers_vec, sequence_count) = crate::io::process_fasta_records(
-        reader.as_mut(), kmer_length, &validator, header_format.as_ref(),
-        header_fillna.as_ref(), stats.as_ref(), &kmer_config, &mut diagnostics,
+        reader.as_mut(),
+        kmer_length,
+        &validator,
+        header_format.as_ref(),
+        header_fillna.as_ref(),
+        stats.as_ref(),
+        &kmer_config,
+        &mut diagnostics,
     )?;
 
     drop(_io_entered);
@@ -680,16 +744,25 @@ fn analyze_stdin(
         None
     };
 
-    let aggregator: Option<ColumnarAggregator> = columnar_headers.as_ref().map(|adapter| {
-        ColumnarAggregator { adapter }
-    });
+    let aggregator: Option<ColumnarAggregator> = columnar_headers
+        .as_ref()
+        .map(|adapter| ColumnarAggregator { adapter });
 
     finish_analysis(
-        transposed_kmers, sequence_count, kmer_length, support_threshold,
-        is_protein, query_name, &config, &header_format, &metadata_fields,
+        transposed_kmers,
+        sequence_count,
+        kmer_length,
+        support_threshold,
+        is_protein,
+        query_name,
+        &config,
+        &header_format,
+        &metadata_fields,
         aggregator.as_ref().map(|a| a as &dyn MetadataAggregator),
-        stats, &diagnostics,
-        io_duration, None, // stdin has no file size
+        stats,
+        &diagnostics,
+        io_duration,
+        None, // stdin has no file size
     )
 }
 
@@ -708,7 +781,17 @@ pub fn get_results_objs(
     metadata_fields: Option<Vec<String>>,
     config: Option<AnalysisConfig>,
 ) -> Result<(Results, Option<ValidationStats>), AnalysisError> {
-    let (results, stats, _perf) = analyze(InputSource::File(PathBuf::from(path)), kmer_length, support_threshold, query_name, header_format, alphabet, header_fillna, metadata_fields, config)?;
+    let (results, stats, _perf) = analyze(
+        InputSource::File(PathBuf::from(path)),
+        kmer_length,
+        support_threshold,
+        query_name,
+        header_format,
+        alphabet,
+        header_fillna,
+        metadata_fields,
+        config,
+    )?;
     Ok((results, stats))
 }
 
@@ -725,7 +808,17 @@ pub fn get_results_objs_columnar(
     metadata_fields: Option<Vec<String>>,
     config: Option<AnalysisConfig>,
 ) -> Result<(Results, Option<ValidationStats>), AnalysisError> {
-    let (results, stats, _perf) = analyze(InputSource::File(PathBuf::from(path)), kmer_length, support_threshold, query_name, header_format, alphabet, header_fillna, metadata_fields, config)?;
+    let (results, stats, _perf) = analyze(
+        InputSource::File(PathBuf::from(path)),
+        kmer_length,
+        support_threshold,
+        query_name,
+        header_format,
+        alphabet,
+        header_fillna,
+        metadata_fields,
+        config,
+    )?;
     Ok((results, stats))
 }
 
@@ -742,22 +835,30 @@ mod tests {
         f
     }
 
-    fn run_analysis(fasta_content: &str, kmer_length: usize, threshold: usize) -> Result<(Results, Option<ValidationStats>), AnalysisError> {
+    fn run_analysis(
+        fasta_content: &str,
+        kmer_length: usize,
+        threshold: usize,
+    ) -> Result<(Results, Option<ValidationStats>), AnalysisError> {
         let fasta = write_fasta(fasta_content);
         let path = fasta.path().to_str().unwrap().to_string();
         let config = AnalysisConfig::new();
         get_results_objs(
-            path, kmer_length, threshold, "test".to_string(),
-            None, None, None, None, Some(config),
+            path,
+            kmer_length,
+            threshold,
+            "test".to_string(),
+            None,
+            None,
+            None,
+            None,
+            Some(config),
         )
     }
 
     #[test]
     fn test_analysis_produces_correct_position_count() {
-        let result = run_analysis(
-            ">s1\nACDEFGHIKL\n>s2\nACDEFGHIKL\n>s3\nACDEFGHIKL\n",
-            3, 2,
-        );
+        let result = run_analysis(">s1\nACDEFGHIKL\n>s2\nACDEFGHIKL\n>s3\nACDEFGHIKL\n", 3, 2);
         assert!(result.is_ok());
         let (results, _) = result.unwrap();
         assert_eq!(results.results.len(), 8); // 10 - 3 + 1
@@ -767,35 +868,31 @@ mod tests {
 
     #[test]
     fn test_identical_sequences_zero_entropy_everywhere() {
-        let result = run_analysis(
-            ">s1\nACDEFGHIKL\n>s2\nACDEFGHIKL\n>s3\nACDEFGHIKL\n",
-            3, 2,
-        );
+        let result = run_analysis(">s1\nACDEFGHIKL\n>s2\nACDEFGHIKL\n>s3\nACDEFGHIKL\n", 3, 2);
         let (results, _) = result.unwrap();
         for pos in &results.results {
-            assert_eq!(pos.entropy, 0.0,
-                "Identical sequences must yield zero entropy at position {}", pos.position);
+            assert_eq!(
+                pos.entropy, 0.0,
+                "Identical sequences must yield zero entropy at position {}",
+                pos.position
+            );
         }
         assert_eq!(results.average_entropy, 0.0);
     }
 
     #[test]
     fn test_diverse_sequences_positive_entropy() {
-        let result = run_analysis(
-            ">s1\nACDEFGHIKL\n>s2\nMNPQRSTVWY\n>s3\nACDEFSTVWY\n",
-            3, 2,
-        );
+        let result = run_analysis(">s1\nACDEFGHIKL\n>s2\nMNPQRSTVWY\n>s3\nACDEFSTVWY\n", 3, 2);
         let (results, _) = result.unwrap();
-        assert!(results.average_entropy > 0.0,
-            "Diverse sequences should produce positive average entropy");
+        assert!(
+            results.average_entropy > 0.0,
+            "Diverse sequences should produce positive average entropy"
+        );
     }
 
     #[test]
     fn test_single_variant_classified_as_index() {
-        let result = run_analysis(
-            ">s1\nACDEFGHIKL\n>s2\nACDEFGHIKL\n",
-            3, 2,
-        );
+        let result = run_analysis(">s1\nACDEFGHIKL\n>s2\nACDEFGHIKL\n", 3, 2);
         let (results, _) = result.unwrap();
         for pos in &results.results {
             let motifs = pos.diversity_motifs.as_ref().unwrap();
@@ -807,14 +904,15 @@ mod tests {
 
     #[test]
     fn test_low_support_labeling() {
-        let result = run_analysis(
-            ">s1\nACDEFGHIKL\n>s2\nACDEFGHIKL\n>s3\nACDEFGHIKL\n",
-            3, 5,
-        );
+        let result = run_analysis(">s1\nACDEFGHIKL\n>s2\nACDEFGHIKL\n>s3\nACDEFGHIKL\n", 3, 5);
         let (results, _) = result.unwrap();
         for pos in &results.results {
-            assert_eq!(pos.low_support.as_deref(), Some("LS"),
-                "support={} < threshold=5 should be LS", pos.support);
+            assert_eq!(
+                pos.low_support.as_deref(),
+                Some("LS"),
+                "support={} < threshold=5 should be LS",
+                pos.support
+            );
         }
         assert!(results.low_support_count > 0);
     }
@@ -823,12 +921,16 @@ mod tests {
     fn test_els_labeling_when_support_equals_threshold() {
         let result = run_analysis(
             ">s1\nACDEFGHIKL\n>s2\nACDEFGHIKL\n>s3\nACDEFGHIKL\n>s4\nACDEFGHIKL\n",
-            3, 4,
+            3,
+            4,
         );
         let (results, _) = result.unwrap();
         for pos in &results.results {
-            assert_eq!(pos.low_support.as_deref(), Some("ELS"),
-                "support==threshold should be ELS");
+            assert_eq!(
+                pos.low_support.as_deref(),
+                Some("ELS"),
+                "support==threshold should be ELS"
+            );
         }
     }
 
@@ -841,8 +943,10 @@ mod tests {
         let result = run_analysis(&fasta, 3, 5);
         let (results, _) = result.unwrap();
         for pos in &results.results {
-            assert!(pos.low_support.is_none(),
-                "support=10 > threshold=5 should have no low_support label");
+            assert!(
+                pos.low_support.is_none(),
+                "support=10 > threshold=5 should have no low_support label"
+            );
         }
         assert_eq!(results.low_support_count, 0);
     }
@@ -850,15 +954,21 @@ mod tests {
     #[test]
     fn test_cancellation_during_entropy_computation() {
         let cancel = Arc::new(AtomicBool::new(true));
-        let config = AnalysisConfig::new()
-            .with_cancel_token(cancel);
+        let config = AnalysisConfig::new().with_cancel_token(cancel);
 
         let fasta = write_fasta(">s1\nACDEFGHIKL\n>s2\nACDEFGHIKL\n");
         let path = fasta.path().to_str().unwrap().to_string();
 
         let result = get_results_objs(
-            path, 3, 2, "test".to_string(),
-            None, None, None, None, Some(config),
+            path,
+            3,
+            2,
+            "test".to_string(),
+            None,
+            None,
+            None,
+            None,
+            Some(config),
         );
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -869,10 +979,7 @@ mod tests {
 
     #[test]
     fn test_highest_entropy_position_tracked() {
-        let result = run_analysis(
-            ">s1\nACDEFGHIKL\n>s2\nACDEFGHIKL\n>s3\nACDEFGHIKL\n",
-            3, 2,
-        );
+        let result = run_analysis(">s1\nACDEFGHIKL\n>s2\nACDEFGHIKL\n>s3\nACDEFGHIKL\n", 3, 2);
         let (results, _) = result.unwrap();
         assert_eq!(results.highest_entropy.entropy, 0.0);
     }
@@ -886,21 +993,26 @@ mod tests {
 
     #[test]
     fn test_gaps_reduce_support() {
-        let result = run_analysis(
-            ">s1\nACDEFGHIKL\n>s2\nACD-FGHIKL\n>s3\nACDEFGHIKL\n",
-            3, 2,
-        );
+        let result = run_analysis(">s1\nACDEFGHIKL\n>s2\nACD-FGHIKL\n>s3\nACDEFGHIKL\n", 3, 2);
         let (results, _) = result.unwrap();
         // k-mers spanning the gap at position index 3 are invalidated
         let pos2 = &results.results[1]; // position 2 = "CDE" for valid, "CD-" for invalid
-        assert!(pos2.support < 3, "Gap should reduce support, got {}", pos2.support);
+        assert!(
+            pos2.support < 3,
+            "Gap should reduce support, got {}",
+            pos2.support
+        );
     }
 
     #[test]
     fn test_summary_stats_consistency() {
         let mut fasta = String::new();
         for i in 0..20 {
-            let seq = if i % 3 == 0 { "ACDEFGHIKL" } else { "MNPQRSTVWY" };
+            let seq = if i % 3 == 0 {
+                "ACDEFGHIKL"
+            } else {
+                "MNPQRSTVWY"
+            };
             fasta.push_str(&format!(">s{}\n{}\n", i, seq));
         }
         let result = run_analysis(&fasta, 3, 5);
@@ -908,10 +1020,14 @@ mod tests {
 
         let sum: f64 = results.results.iter().map(|p| p.entropy).sum();
         let expected_avg = sum / results.results.len() as f64;
-        assert!((results.average_entropy - expected_avg).abs() < 1e-10,
-            "average_entropy should be mean of all position entropies");
+        assert!(
+            (results.average_entropy - expected_avg).abs() < 1e-10,
+            "average_entropy should be mean of all position entropies"
+        );
 
-        let max_entropy = results.results.iter()
+        let max_entropy = results
+            .results
+            .iter()
             .map(|p| p.entropy)
             .fold(0.0_f64, f64::max);
         assert_eq!(results.highest_entropy.entropy, max_entropy);

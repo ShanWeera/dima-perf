@@ -4,7 +4,7 @@
 
 use crate::error::AppError;
 use crate::project::{self, validate_path_confinement};
-use dima_lib::{Results, BinaryFormatConfig, CompressionType};
+use dima_lib::{BinaryFormatConfig, CompressionType, Results};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tokio::fs;
@@ -16,7 +16,9 @@ fn validate_export_output_path(path: &Path) -> Result<(), AppError> {
     // Reject paths containing `..` segments to prevent traversal
     for component in path.components() {
         if let std::path::Component::ParentDir = component {
-            return Err(AppError::PathSecurity("Export path must not contain '..' segments".to_string()));
+            return Err(AppError::PathSecurity(
+                "Export path must not contain '..' segments".to_string(),
+            ));
         }
     }
 
@@ -25,17 +27,24 @@ fn validate_export_output_path(path: &Path) -> Result<(), AppError> {
         let meta = std::fs::symlink_metadata(path)
             .map_err(|e| AppError::FileError(format!("Failed to check output path: {}", e)))?;
         if meta.file_type().is_symlink() {
-            return Err(AppError::PathSecurity("Export path must not be a symbolic link".to_string()));
+            return Err(AppError::PathSecurity(
+                "Export path must not be a symbolic link".to_string(),
+            ));
         }
         if !meta.is_file() {
-            return Err(AppError::PathSecurity("Export path must point to a regular file".to_string()));
+            return Err(AppError::PathSecurity(
+                "Export path must point to a regular file".to_string(),
+            ));
         }
     }
 
     // Ensure the parent directory exists
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() && !parent.exists() {
-            return Err(AppError::NotFound(format!("Parent directory does not exist: {}", parent.display())));
+            return Err(AppError::NotFound(format!(
+                "Parent directory does not exist: {}",
+                parent.display()
+            )));
         }
     }
 
@@ -75,8 +84,8 @@ pub async fn export_results(request: ExportRequest) -> Result<ExportResponse, Ap
     let project_path = PathBuf::from(&request.project_path);
 
     // Ensure the project path is within the allowed projects directory
-    let projects_base = project::get_projects_path()
-        .map_err(|e| AppError::ProjectError(e.to_string()))?;
+    let projects_base =
+        project::get_projects_path().map_err(|e| AppError::ProjectError(e.to_string()))?;
     validate_path_confinement(&project_path, &projects_base)
         .map_err(|e| AppError::PathSecurity(e.to_string()))?;
 
@@ -89,15 +98,15 @@ pub async fn export_results(request: ExportRequest) -> Result<ExportResponse, Ap
         .await
         .map_err(|e| AppError::FileError(format!("Failed to read results: {}", e)))?;
 
-    let results: Results =
-        serde_json::from_str(&results_content).map_err(|e| AppError::InternalError(format!("Failed to parse results: {}", e)))?;
+    let results: Results = serde_json::from_str(&results_content)
+        .map_err(|e| AppError::InternalError(format!("Failed to parse results: {}", e)))?;
 
     // Ensure parent directory exists (user may pick a path inside a new folder)
     if let Some(parent) = output_path.parent() {
         if !parent.exists() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| AppError::ExportError(format!("Failed to create output directory: {}", e)))?;
+            fs::create_dir_all(parent).await.map_err(|e| {
+                AppError::ExportError(format!("Failed to create output directory: {}", e))
+            })?;
         }
     }
 
@@ -126,12 +135,10 @@ pub async fn export_results(request: ExportRequest) -> Result<ExportResponse, Ap
             };
 
             let out_path_str = output_path.to_string_lossy().to_string();
-            tokio::task::spawn_blocking(move || {
-                results.to_binary(out_path_str, Some(config))
-            })
-            .await
-            .map_err(|e| AppError::InternalError(format!("Binary export task failed: {}", e)))?
-            .map_err(|e| AppError::ExportError(format!("Failed to write binary: {}", e)))?;
+            tokio::task::spawn_blocking(move || results.to_binary(out_path_str, Some(config)))
+                .await
+                .map_err(|e| AppError::InternalError(format!("Binary export task failed: {}", e)))?
+                .map_err(|e| AppError::ExportError(format!("Failed to write binary: {}", e)))?;
 
             // Re-read results for the file size check below (results moved into spawn_blocking)
             let metadata = fs::metadata(&output_path)
@@ -190,7 +197,7 @@ pub async fn export_chart(request: ChartExportRequest) -> Result<ExportResponse,
 
     // The data URL is a base64-encoded image from ECharts
     let data_prefix = "data:image/png;base64,";
-    
+
     let base64_data = if request.data_url.starts_with(data_prefix) {
         &request.data_url[data_prefix.len()..]
     } else if request.data_url.starts_with("data:image/svg+xml;base64,") {
@@ -209,9 +216,9 @@ pub async fn export_chart(request: ChartExportRequest) -> Result<ExportResponse,
     let output_path = PathBuf::from(&request.output_path);
     if let Some(parent) = output_path.parent() {
         if !parent.exists() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| AppError::ExportError(format!("Failed to create output directory: {}", e)))?;
+            fs::create_dir_all(parent).await.map_err(|e| {
+                AppError::ExportError(format!("Failed to create output directory: {}", e))
+            })?;
         }
     }
     fs::write(&output_path, &image_data)
@@ -241,12 +248,16 @@ pub async fn import_dima_file(request: ImportDimaRequest) -> Result<ExportRespon
     let project_path = PathBuf::from(&request.project_path);
 
     // Validate project_path is within our managed Projects directory (Fix 3.14)
-    let projects_base = crate::project::get_projects_path().map_err(|e| AppError::ProjectError(e.to_string()))?;
+    let projects_base =
+        crate::project::get_projects_path().map_err(|e| AppError::ProjectError(e.to_string()))?;
     crate::project::validate_path_confinement(&project_path, &projects_base)
         .map_err(|e| AppError::PathSecurity(format!("Project path validation failed: {}", e)))?;
 
     if !file_path.exists() {
-        return Err(AppError::NotFound(format!("File not found: {}", request.file_path)));
+        return Err(AppError::NotFound(format!(
+            "File not found: {}",
+            request.file_path
+        )));
     }
 
     // Ensure the source is a regular file (not a symlink to a device, etc.)
@@ -254,7 +265,9 @@ pub async fn import_dima_file(request: ImportDimaRequest) -> Result<ExportRespon
         .await
         .map_err(|e| AppError::ExportError(format!("Failed to read file metadata: {}", e)))?;
     if !src_meta.is_file() {
-        return Err(AppError::ValidationError("Import source must be a regular file".to_string()));
+        return Err(AppError::ValidationError(
+            "Import source must be a regular file".to_string(),
+        ));
     }
 
     // Run CPU-intensive binary deserialization + JSON serialization on a blocking thread
@@ -267,8 +280,7 @@ pub async fn import_dima_file(request: ImportDimaRequest) -> Result<ExportRespon
             .map_err(|e| AppError::ExportError(format!("Failed to serialize results: {}", e)))
     })
     .await
-    .map_err(|e| AppError::InternalError(format!("Import task panicked: {}", e)))?
-    ?;
+    .map_err(|e| AppError::InternalError(format!("Import task panicked: {}", e)))??;
 
     // Atomic write: write to tmp file first, then rename (Fix 3.7)
     let output_path = project_path.join("results.json");
@@ -276,12 +288,10 @@ pub async fn import_dima_file(request: ImportDimaRequest) -> Result<ExportRespon
     fs::write(&tmp_path, &json)
         .await
         .map_err(|e| AppError::ExportError(format!("Failed to write temporary file: {}", e)))?;
-    fs::rename(&tmp_path, &output_path)
-        .await
-        .map_err(|e| {
-            let _ = std::fs::remove_file(&tmp_path);
-            AppError::ExportError(format!("Failed to finalize results file: {}", e))
-        })?;
+    fs::rename(&tmp_path, &output_path).await.map_err(|e| {
+        let _ = std::fs::remove_file(&tmp_path);
+        AppError::ExportError(format!("Failed to finalize results file: {}", e))
+    })?;
 
     let metadata = fs::metadata(&output_path)
         .await

@@ -1,27 +1,21 @@
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::process::ExitCode;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::Arc;
 
 use anyhow::{ensure, Context};
-use clap::{CommandFactory, Parser, ValueEnum, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use tracing_indicatif::filter::{hide_indicatif_span_fields, IndicatifFilter};
 use tracing_indicatif::IndicatifLayer;
-use tracing_indicatif::filter::{IndicatifFilter, hide_indicatif_span_fields};
 use tracing_subscriber::fmt::format::DefaultFields;
 use tracing_subscriber::layer::Layer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 use dima_lib::{
-    ValidationMode,
-    InputSource,
-    OutputType,
-    analyze,
-    resolve_output_type,
-    write_results_to_output,
-    AnalysisConfig,
-    AnalysisError,
+    analyze, resolve_output_type, write_results_to_output, AnalysisConfig, AnalysisError,
+    InputSource, OutputType, ValidationMode,
 };
 
 mod help;
@@ -97,7 +91,7 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// Analyze FASTA file and generate diversity motif results
-    Analyze(AnalyzeArgs),
+    Analyze(Box<AnalyzeArgs>),
     /// View/convert binary .dima files to other formats
     View(ViewArgs),
     /// Generate shell completions for tab-completion support
@@ -211,18 +205,25 @@ struct AnalyzeArgs {
     report_invalid: bool,
 
     /// Force disk-backed mode for large datasets (auto-detected by default)
-    #[arg(long = "low-memory",
-          help = "Force disk-backed matrix storage (auto-detected by default)")]
+    #[arg(
+        long = "low-memory",
+        help = "Force disk-backed matrix storage (auto-detected by default)"
+    )]
     low_memory: bool,
 
     /// Force RAM-only mode even when matrix exceeds available memory
-    #[arg(long = "force-ram",
-          help = "Force RAM mode even for large datasets (may cause OOM)")]
+    #[arg(
+        long = "force-ram",
+        help = "Force RAM mode even for large datasets (may cause OOM)"
+    )]
     force_ram: bool,
 
     /// Directory for temporary matrix files in disk-backed mode
-    #[arg(long = "temp-dir", value_name = "DIR",
-          help = "Temp directory for disk-backed mode (default: $TMPDIR or input dir)")]
+    #[arg(
+        long = "temp-dir",
+        value_name = "DIR",
+        help = "Temp directory for disk-backed mode (default: $TMPDIR or input dir)"
+    )]
     temp_dir: Option<PathBuf>,
 
     #[command(flatten)]
@@ -249,8 +250,11 @@ struct ViewArgs {
     output: Option<PathBuf>,
 
     /// Compression type for -O dima output (0=none, 1=lz4, 2=zstd)
-    #[arg(long = "compression", default_value = "1",
-          help = "Compression for -O dima re-encoding (0=none, 1=lz4, 2=zstd)")]
+    #[arg(
+        long = "compression",
+        default_value = "1",
+        help = "Compression for -O dima re-encoding (0=none, 1=lz4, 2=zstd)"
+    )]
     compression: u8,
 
     #[command(flatten)]
@@ -274,14 +278,13 @@ fn init_tracing(
     verbosity: &clap_verbosity_flag::Verbosity<clap_verbosity_flag::WarnLevel>,
     show_progress: bool,
 ) {
-    let use_ansi = std::io::stderr().is_terminal()
-        && std::env::var("NO_COLOR").map_or(true, |v| v.is_empty());
+    let use_ansi =
+        std::io::stderr().is_terminal() && std::env::var("NO_COLOR").map_or(true, |v| v.is_empty());
 
-    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| {
-            let level = verbosity.tracing_level_filter();
-            tracing_subscriber::EnvFilter::new(level.to_string())
-        });
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        let level = verbosity.tracing_level_filter();
+        tracing_subscriber::EnvFilter::new(level.to_string())
+    });
 
     if show_progress {
         // Full progress bar support: IndicatifLayer manages a coordinated MultiProgress
@@ -318,7 +321,7 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
 
     let result = match cli.command {
-        Commands::Analyze(args) => run_analyze(args),
+        Commands::Analyze(args) => run_analyze(*args),
         Commands::View(args) => run_view(args),
         Commands::Completions(args) => {
             clap_complete::generate(
@@ -375,7 +378,10 @@ fn main() -> ExitCode {
 // time on invalid arguments. Per Fail-Fast principle (ArchMan, "Core Design
 // and Programming Principles"): detect invalid state at the boundary.
 
-fn validate_analyze_args(args: &AnalyzeArgs, resolved_output_type: OutputType) -> anyhow::Result<()> {
+fn validate_analyze_args(
+    args: &AnalyzeArgs,
+    resolved_output_type: OutputType,
+) -> anyhow::Result<()> {
     // Input file must exist and be a regular file (only checked for file paths, not stdin)
     if let Some(ref input) = args.input {
         if input.as_os_str() != "-" {
@@ -427,10 +433,7 @@ fn validate_analyze_args(args: &AnalyzeArgs, resolved_output_type: OutputType) -
     );
 
     // Support threshold must be at least 1
-    ensure!(
-        args.support_threshold > 0,
-        "--threshold must be >= 1"
-    );
+    ensure!(args.support_threshold > 0, "--threshold must be >= 1");
 
     // K-mer length validation (if explicitly provided)
     if let Some(k) = args.kmer_length {
@@ -512,10 +515,7 @@ fn run_analyze(cli: AnalyzeArgs) -> anyhow::Result<()> {
     init_tracing(&cli.verbosity, show_progress);
 
     // Resolve output format before validation (validation needs the resolved type)
-    let output_type = resolve_output_type(
-        cli.output_args.output_type,
-        cli.output.as_deref(),
-    );
+    let output_type = resolve_output_type(cli.output_args.output_type, cli.output.as_deref());
 
     // Fail-fast: all cheap validation before any I/O.
     validate_analyze_args(&cli, output_type)
@@ -532,23 +532,32 @@ fn run_analyze(cli: AnalyzeArgs) -> anyhow::Result<()> {
 
     // Alphabet-aware default query name
     let query_name = cli.query_name.unwrap_or_else(|| {
-        if is_protein { "Unknown Protein".to_string() } else { "Unknown Nucleotide".to_string() }
+        if is_protein {
+            "Unknown Protein".to_string()
+        } else {
+            "Unknown Nucleotide".to_string()
+        }
     });
 
     // Configure thread pool if explicitly requested
     if let Some(n_threads) = cli.threads {
-        if let Err(e) = rayon::ThreadPoolBuilder::new().num_threads(n_threads).build_global() {
+        if let Err(e) = rayon::ThreadPoolBuilder::new()
+            .num_threads(n_threads)
+            .build_global()
+        {
             tracing::warn!(threads = n_threads, error = %e, "failed to set thread count");
         }
     }
 
     // Parse header format if provided (None disables metadata processing)
-    let header_format: Option<Vec<String>> = cli.header_format
+    let header_format: Option<Vec<String>> = cli
+        .header_format
         .as_ref()
         .map(|s| s.split('|').map(|v| v.trim().to_string()).collect());
 
     // Parse metadata fields filter
-    let metadata_fields: Option<Vec<String>> = cli.metadata_fields
+    let metadata_fields: Option<Vec<String>> = cli
+        .metadata_fields
         .as_ref()
         .map(|s| s.split('|').map(|v| v.trim().to_string()).collect());
 
@@ -573,7 +582,8 @@ fn run_analyze(cli: AnalyzeArgs) -> anyhow::Result<()> {
                 eprintln!("\nForce quit.");
                 std::process::exit(exit_codes::CANCELLED as i32);
             }
-        }).unwrap_or_else(|e| eprintln!("Warning: could not set signal handler: {}", e));
+        })
+        .unwrap_or_else(|e| eprintln!("Warning: could not set signal handler: {}", e));
     }
 
     let analysis_config = AnalysisConfig::new()
@@ -603,7 +613,8 @@ fn run_analyze(cli: AnalyzeArgs) -> anyhow::Result<()> {
         Some(cli.header_fillna),
         metadata_fields,
         Some(analysis_config),
-    ).map_err(|e| -> anyhow::Error { e.into() })?;
+    )
+    .map_err(|e| -> anyhow::Error { e.into() })?;
 
     // Post-analysis UX warning: threshold exceeds actual sequence count means
     // all positions are Low Support/ELS and rarefaction was skipped (raw Shannon only).
@@ -620,11 +631,15 @@ fn run_analyze(cli: AnalyzeArgs) -> anyhow::Result<()> {
         if let Some(stats) = validation_stats {
             let summary = stats.summary();
             tracing::info!("{}", summary);
-            
+
             if summary.invalid_chars > 0 {
                 tracing::warn!(
                     invalid_chars = summary.invalid_chars,
-                    alphabet = if is_protein { "protein (20 amino acids)" } else { "nucleotide (ACGTU)" },
+                    alphabet = if is_protein {
+                        "protein (20 amino acids)"
+                    } else {
+                        "nucleotide (ACGTU)"
+                    },
                     "invalid characters found — k-mers containing them marked as NA"
                 );
             }
@@ -633,10 +648,12 @@ fn run_analyze(cli: AnalyzeArgs) -> anyhow::Result<()> {
 
     // Write HCS output if --hcs-output is specified
     if let Some(ref hcs_path) = cli.hcs_output {
-        results.get_hcs(
-            Some(hcs_path.to_string_lossy().to_string()),
-            cli.hcs_threshold,
-        ).with_context(|| format!("failed to write HCS to '{}'", hcs_path.display()))?;
+        results
+            .get_hcs(
+                Some(hcs_path.to_string_lossy().to_string()),
+                cli.hcs_threshold,
+            )
+            .with_context(|| format!("failed to write HCS to '{}'", hcs_path.display()))?;
         if !is_quiet {
             tracing::info!(path = %hcs_path.display(), "HCS results saved");
         }
@@ -659,7 +676,8 @@ fn run_analyze(cli: AnalyzeArgs) -> anyhow::Result<()> {
                 string_interning: true,
                 validate_checksums: true,
             };
-            results.to_binary(out.to_string_lossy().to_string(), Some(config))
+            results
+                .to_binary(out.to_string_lossy().to_string(), Some(config))
                 .with_context(|| format!("failed to write binary output to '{}'", out.display()))?;
             if !is_quiet {
                 tracing::info!(path = %out.display(), format = "dima", "results saved");
@@ -671,7 +689,8 @@ fn run_analyze(cli: AnalyzeArgs) -> anyhow::Result<()> {
                 cli.output.as_deref(),
                 other,
                 cli.output_args.no_header,
-            ).context("failed to write output")?;
+            )
+            .context("failed to write output")?;
         }
     }
     let output_duration = output_start.elapsed();
@@ -690,7 +709,8 @@ fn run_analyze(cli: AnalyzeArgs) -> anyhow::Result<()> {
     }
 
     // Verbose performance report: printed at -v level (Info or higher)
-    let is_verbose = cli.verbosity.tracing_level_filter() >= tracing::level_filters::LevelFilter::INFO;
+    let is_verbose =
+        cli.verbosity.tracing_level_filter() >= tracing::level_filters::LevelFilter::INFO;
     if is_verbose {
         perf_report.print();
     }
@@ -702,10 +722,7 @@ fn run_view(args: ViewArgs) -> anyhow::Result<()> {
     init_tracing(&args.verbosity, false);
 
     // Resolve output format before validation
-    let output_type = resolve_output_type(
-        args.output_args.output_type,
-        args.output.as_deref(),
-    );
+    let output_type = resolve_output_type(args.output_args.output_type, args.output.as_deref());
 
     validate_view_args(&args, output_type)
         .map_err(|e| anyhow::anyhow!(UsageError(format!("{:#}", e))))?;
@@ -729,10 +746,12 @@ fn run_view(args: ViewArgs) -> anyhow::Result<()> {
 
     // Read binary format
     let results = dima_lib::Results::from_binary(args.input.to_string_lossy().to_string())
-        .with_context(|| format!(
-            "failed to read binary file '{}'. Ensure it is a valid .dima format file",
-            args.input.display()
-        ))?;
+        .with_context(|| {
+            format!(
+                "failed to read binary file '{}'. Ensure it is a valid .dima format file",
+                args.input.display()
+            )
+        })?;
 
     // Dispatch to output format
     match output_type {
@@ -751,7 +770,8 @@ fn run_view(args: ViewArgs) -> anyhow::Result<()> {
                 validate_checksums: true,
             };
             let out = args.output.unwrap(); // validated: -O dima requires -o
-            results.to_binary(out.to_string_lossy().to_string(), Some(config))
+            results
+                .to_binary(out.to_string_lossy().to_string(), Some(config))
                 .with_context(|| format!("failed to write to '{}'", out.display()))?;
             tracing::info!(input = %args.input.display(), output = %out.display(), "re-encoded");
         }
@@ -761,7 +781,8 @@ fn run_view(args: ViewArgs) -> anyhow::Result<()> {
                 args.output.as_deref(),
                 other,
                 args.output_args.no_header,
-            ).context("failed to write output")?;
+            )
+            .context("failed to write output")?;
         }
     }
 

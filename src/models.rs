@@ -1,6 +1,6 @@
-use serde::{Serialize, Deserialize};
-use std::fmt;
 use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
+use std::fmt;
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -48,19 +48,24 @@ pub struct Variant {
 
 pub mod serde_hashmap_opt {
     use super::*;
-    use serde::{Serialize, Serializer, Deserialize, Deserializer};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     /// Serialize metadata with sorted keys for deterministic JSON output. (Fix 7.28)
-    pub fn serialize<S>(value: &Option<HashMap<String, HashMap<String, usize>>>, s: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    pub fn serialize<S>(
+        value: &Option<HashMap<String, HashMap<String, usize>>>,
+        s: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
         match value {
             Some(map) => {
-                let sorted: std::collections::BTreeMap<&String, std::collections::BTreeMap<&String, &usize>> = map
-                    .iter()
-                    .map(|(k, v)| (k, v.iter().collect()))
-                    .collect();
+                let sorted: std::collections::BTreeMap<
+                    &String,
+                    std::collections::BTreeMap<&String, &usize>,
+                > = map.iter().map(|(k, v)| (k, v.iter().collect())).collect();
                 sorted.serialize(s)
-            },
+            }
             None => s.serialize_none(),
         }
     }
@@ -68,8 +73,12 @@ pub mod serde_hashmap_opt {
     /// Properly handles both null JSON values and object values.
     /// Previously this always tried HashMap::deserialize which fails on null.
     #[allow(clippy::type_complexity)]
-    pub fn deserialize<'de, D>(d: D) -> Result<Option<HashMap<String, HashMap<String, usize>>>, D::Error>
-    where D: Deserializer<'de> {
+    pub fn deserialize<'de, D>(
+        d: D,
+    ) -> Result<Option<HashMap<String, HashMap<String, usize>>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
         Option::<HashMap<String, HashMap<String, usize>>>::deserialize(d)
     }
 }
@@ -85,24 +94,39 @@ impl fmt::Display for Variant {
 
 impl fmt::Debug for Variant {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Variant {{ seq: \"{}\", count: {}, incidence: {:.2}% }}",
-            self.sequence, self.count, self.incidence)
+        write!(
+            f,
+            "Variant {{ seq: \"{}\", count: {}, incidence: {:.2}% }}",
+            self.sequence, self.count, self.incidence
+        )
     }
 }
 
 impl fmt::Display for Results {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Results {{ query: \"{}\", positions: {}, sequences: {}, k: {}, avg_entropy: {:.4} }}",
-            self.query_name, self.results.len(), self.sequence_count,
-            self.kmer_length, self.average_entropy)
+        write!(
+            f,
+            "Results {{ query: \"{}\", positions: {}, sequences: {}, k: {}, avg_entropy: {:.4} }}",
+            self.query_name,
+            self.results.len(),
+            self.sequence_count,
+            self.kmer_length,
+            self.average_entropy
+        )
     }
 }
 
 impl fmt::Debug for Results {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Results {{ query: \"{}\", positions: {}, sequences: {}, k: {}, avg_entropy: {:.4} }}",
-            self.query_name, self.results.len(), self.sequence_count,
-            self.kmer_length, self.average_entropy)
+        write!(
+            f,
+            "Results {{ query: \"{}\", positions: {}, sequences: {}, k: {}, avg_entropy: {:.4} }}",
+            self.query_name,
+            self.results.len(),
+            self.sequence_count,
+            self.kmer_length,
+            self.average_entropy
+        )
     }
 }
 
@@ -142,7 +166,11 @@ impl Results {
     /// 3. Adjacent k-mers are stitched by their (k-1)-overlap: the non-overlapping
     ///    suffix is appended (may be >1 char if overlap < k-1).
     /// 4. Single-position Index k-mers ARE valid HCS regions (length = k).
-    pub fn get_hcs(&self, path: Option<String>, threshold: Option<f64>) -> Result<Vec<String>, std::io::Error> {
+    pub fn get_hcs(
+        &self,
+        path: Option<String>,
+        threshold: Option<f64>,
+    ) -> Result<Vec<String>, std::io::Error> {
         let mut hcs_out: Vec<String> = Vec::new();
         let mut acc = String::new();
         // Track which HCS positions have low support for the warning
@@ -191,15 +219,16 @@ impl Results {
                     // Positions must be consecutive (position N+1 == last + 1) for valid
                     // HCS stitching. Non-consecutive qualifying positions start a new region
                     // even if their sequences happen to share an overlap by coincidence.
-                    let is_consecutive = last_qualifying_position
-                        .map_or(true, |last| position.position == last + 1);
+                    let is_consecutive =
+                        last_qualifying_position.map_or(true, |last| position.position == last + 1);
 
                     if acc.is_empty() || !is_consecutive {
                         // Start a new region (either first qualifying position, or gap detected)
                         if !acc.is_empty() {
                             hcs_out.push(acc);
                             if !current_region_low_support.is_empty() {
-                                all_low_support_positions.push((hcs_out.len(), current_region_low_support.clone()));
+                                all_low_support_positions
+                                    .push((hcs_out.len(), current_region_low_support.clone()));
                                 current_region_low_support.clear();
                             }
                         }
@@ -215,7 +244,8 @@ impl Results {
                         } else {
                             hcs_out.push(acc);
                             if !current_region_low_support.is_empty() {
-                                all_low_support_positions.push((hcs_out.len(), current_region_low_support.clone()));
+                                all_low_support_positions
+                                    .push((hcs_out.len(), current_region_low_support.clone()));
                                 current_region_low_support.clear();
                             }
                             acc = sequence.to_string();
@@ -227,7 +257,8 @@ impl Results {
                     if !acc.is_empty() {
                         hcs_out.push(acc);
                         if !current_region_low_support.is_empty() {
-                            all_low_support_positions.push((hcs_out.len(), current_region_low_support.clone()));
+                            all_low_support_positions
+                                .push((hcs_out.len(), current_region_low_support.clone()));
                             current_region_low_support.clear();
                         }
                         acc = String::new();
@@ -361,17 +392,21 @@ impl Results {
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
         }
     }
-    
+
     /// Save results in binary format for improved performance
-    pub fn to_binary(&self, path: String, config: Option<crate::binary::BinaryFormatConfig>) -> Result<(), std::io::Error> {
+    pub fn to_binary(
+        &self,
+        path: String,
+        config: Option<crate::binary::BinaryFormatConfig>,
+    ) -> Result<(), std::io::Error> {
         crate::binary::BinaryFormat::write_to_file(self, &path, config)
     }
-    
+
     /// Load results from binary format
     pub fn from_binary(path: String) -> Result<Results, std::io::Error> {
         crate::binary::BinaryFormat::read_from_file(&path)
     }
-    
+
     /// Compare JSON vs binary format sizes
     pub fn compare_formats(&self) -> Result<(usize, usize, f64), std::io::Error> {
         crate::binary::BinaryFormat::compare_formats(self)
@@ -381,16 +416,22 @@ impl Results {
 impl fmt::Display for Position {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let variant_count = self.diversity_motifs.as_ref().map_or(0, |v| v.len());
-        write!(f, "Position {{ pos: {}, entropy: {:.4}, variants: {}, low_support: {:?} }}",
-            self.position, self.entropy, variant_count, self.low_support)
+        write!(
+            f,
+            "Position {{ pos: {}, entropy: {:.4}, variants: {}, low_support: {:?} }}",
+            self.position, self.entropy, variant_count, self.low_support
+        )
     }
 }
 
 impl fmt::Debug for Position {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let variant_count = self.diversity_motifs.as_ref().map_or(0, |v| v.len());
-        write!(f, "Position {{ pos: {}, entropy: {:.4}, variants: {}, low_support: {:?} }}",
-            self.position, self.entropy, variant_count, self.low_support)
+        write!(
+            f,
+            "Position {{ pos: {}, entropy: {:.4}, variants: {}, low_support: {:?} }}",
+            self.position, self.entropy, variant_count, self.low_support
+        )
     }
 }
 
@@ -404,12 +445,10 @@ impl Position {
             .cloned()
             .collect::<Vec<Variant>>();
 
-        variant_matches.sort_unstable_by(|a, b| {
-            match sort.as_deref() {
-                None | Some("asc") => a.count.cmp(&b.count),
-                Some("desc") => b.count.cmp(&a.count),
-                _ => a.count.cmp(&b.count),
-            }
+        variant_matches.sort_unstable_by(|a, b| match sort.as_deref() {
+            None | Some("asc") => a.count.cmp(&b.count),
+            Some("desc") => b.count.cmp(&a.count),
+            _ => a.count.cmp(&b.count),
         });
 
         Some(variant_matches)
@@ -466,9 +505,19 @@ fn set_pos_obj_data(position_obj: &mut Position, variants: &[Variant], support: 
     };
 
     position_obj.distinct_variants_count = distinct_variant_count;
-    position_obj.distinct_variants_incidence = if distinct_variants_incidence.is_nan() || distinct_variants_incidence.is_infinite() { 0.0 } else { distinct_variants_incidence };
+    position_obj.distinct_variants_incidence =
+        if distinct_variants_incidence.is_nan() || distinct_variants_incidence.is_infinite() {
+            0.0
+        } else {
+            distinct_variants_incidence
+        };
     position_obj.diversity_motifs = Some(variants.to_vec());
-    position_obj.total_variants_incidence = if total_variance.is_nan() || total_variance.is_infinite() { 0.0 } else { total_variance };
+    position_obj.total_variants_incidence =
+        if total_variance.is_nan() || total_variance.is_infinite() {
+            0.0
+        } else {
+            total_variance
+        };
 }
 
 impl Position {
@@ -551,7 +600,9 @@ impl Position {
 
         // Sort variants deterministically: count DESC, sequence ASC
         variants_unwrapped.sort_by(|a, b| {
-            b.count.cmp(&a.count).then_with(|| a.sequence.cmp(&b.sequence))
+            b.count
+                .cmp(&a.count)
+                .then_with(|| a.sequence.cmp(&b.sequence))
         });
 
         set_pos_obj_data(&mut position_obj, variants_unwrapped.as_slice(), &support);
@@ -566,7 +617,10 @@ impl Position {
 #[allow(dead_code)]
 pub fn highest_entropy(numbers: &[f64]) -> HighestEntropy {
     if numbers.is_empty() {
-        return HighestEntropy { position: 0, entropy: 0.0 };
+        return HighestEntropy {
+            position: 0,
+            entropy: 0.0,
+        };
     }
 
     let highest_position = numbers
@@ -576,7 +630,10 @@ pub fn highest_entropy(numbers: &[f64]) -> HighestEntropy {
         .unwrap(); // Safe: we checked non-empty above
 
     // Convert 0-based index to 1-based position (matches Position.position)
-    HighestEntropy { position: highest_position.0 + 1, entropy: *highest_position.1 }
+    HighestEntropy {
+        position: highest_position.0 + 1,
+        entropy: *highest_position.1,
+    }
 }
 
 #[cfg(test)]
@@ -628,7 +685,10 @@ mod tests {
         ];
         let pos = Position::new(1, 1.0, 23, Some(&mut variants), None);
         let motifs = pos.diversity_motifs.unwrap();
-        let index_count = motifs.iter().filter(|v| v.motif_short.as_deref() == Some("I")).count();
+        let index_count = motifs
+            .iter()
+            .filter(|v| v.motif_short.as_deref() == Some("I"))
+            .count();
         assert_eq!(index_count, 2, "Both tied-at-max variants should be Index");
         // CCC is the sole remaining non-Index variant → it's the max among pending → Major
         let remaining = motifs.iter().find(|v| v.sequence == "CCC").unwrap();
@@ -662,8 +722,14 @@ mod tests {
         ];
         let pos = Position::new(1, 1.2, 71, Some(&mut variants), None);
         let motifs = pos.diversity_motifs.unwrap();
-        let major_count = motifs.iter().filter(|v| v.motif_short.as_deref() == Some("Ma")).count();
-        assert_eq!(major_count, 2, "Both tied non-Index max variants should be Major");
+        let major_count = motifs
+            .iter()
+            .filter(|v| v.motif_short.as_deref() == Some("Ma"))
+            .count();
+        assert_eq!(
+            major_count, 2,
+            "Both tied non-Index max variants should be Major"
+        );
     }
 
     #[test]
@@ -752,7 +818,10 @@ mod tests {
             low_support_count: 0,
             query_name: "test".to_string(),
             kmer_length,
-            highest_entropy: HighestEntropy { position: 1, entropy: 0.0 },
+            highest_entropy: HighestEntropy {
+                position: 1,
+                entropy: 0.0,
+            },
             average_entropy: 0.0,
             results: positions,
         }
@@ -817,10 +886,14 @@ mod tests {
                 entropy: 1.5,
                 support: 100,
                 low_support: None,
-                diversity_motifs: Some(vec![
-                    Variant { sequence: "XYZ".to_string(), count: 50, incidence: 50.0,
-                              motif_short: Some("Ma".to_string()), motif_long: Some("Major".to_string()), metadata: None },
-                ]),
+                diversity_motifs: Some(vec![Variant {
+                    sequence: "XYZ".to_string(),
+                    count: 50,
+                    incidence: 50.0,
+                    motif_short: Some("Ma".to_string()),
+                    motif_long: Some("Major".to_string()),
+                    metadata: None,
+                }]),
                 distinct_variants_count: 2,
                 distinct_variants_incidence: 50.0,
                 total_variants_incidence: 50.0,
@@ -863,15 +936,36 @@ mod tests {
     fn test_hcs_kmer1_no_overlap_concatenation() {
         // k=1: single-char k-mers have zero overlap, adjacent ones still merge
         let positions = vec![
-            Position { position: 1, entropy: 0.0, support: 100, low_support: None,
+            Position {
+                position: 1,
+                entropy: 0.0,
+                support: 100,
+                low_support: None,
                 diversity_motifs: Some(vec![make_index_variant("A", 100, 100)]),
-                distinct_variants_count: 1, distinct_variants_incidence: 0.0, total_variants_incidence: 0.0 },
-            Position { position: 2, entropy: 0.0, support: 100, low_support: None,
+                distinct_variants_count: 1,
+                distinct_variants_incidence: 0.0,
+                total_variants_incidence: 0.0,
+            },
+            Position {
+                position: 2,
+                entropy: 0.0,
+                support: 100,
+                low_support: None,
                 diversity_motifs: Some(vec![make_index_variant("B", 100, 100)]),
-                distinct_variants_count: 1, distinct_variants_incidence: 0.0, total_variants_incidence: 0.0 },
-            Position { position: 3, entropy: 0.0, support: 100, low_support: None,
+                distinct_variants_count: 1,
+                distinct_variants_incidence: 0.0,
+                total_variants_incidence: 0.0,
+            },
+            Position {
+                position: 3,
+                entropy: 0.0,
+                support: 100,
+                low_support: None,
                 diversity_motifs: Some(vec![make_index_variant("C", 100, 100)]),
-                distinct_variants_count: 1, distinct_variants_incidence: 0.0, total_variants_incidence: 0.0 },
+                distinct_variants_count: 1,
+                distinct_variants_incidence: 0.0,
+                total_variants_incidence: 0.0,
+            },
         ];
         let results = make_results_for_hcs(positions, 1);
         let hcs = results.get_hcs(None, None).unwrap();
@@ -889,12 +983,26 @@ mod tests {
     fn test_hcs_threshold_filters_low_incidence() {
         // With threshold=90%, only position 1 (100%) qualifies, position 2 (50%) doesn't
         let positions = vec![
-            Position { position: 1, entropy: 0.0, support: 100, low_support: None,
+            Position {
+                position: 1,
+                entropy: 0.0,
+                support: 100,
+                low_support: None,
                 diversity_motifs: Some(vec![make_index_variant("ABC", 100, 100)]),
-                distinct_variants_count: 1, distinct_variants_incidence: 0.0, total_variants_incidence: 0.0 },
-            Position { position: 2, entropy: 0.5, support: 100, low_support: None,
+                distinct_variants_count: 1,
+                distinct_variants_incidence: 0.0,
+                total_variants_incidence: 0.0,
+            },
+            Position {
+                position: 2,
+                entropy: 0.5,
+                support: 100,
+                low_support: None,
                 diversity_motifs: Some(vec![make_index_variant("BCD", 50, 100)]),
-                distinct_variants_count: 2, distinct_variants_incidence: 50.0, total_variants_incidence: 50.0 },
+                distinct_variants_count: 2,
+                distinct_variants_incidence: 50.0,
+                total_variants_incidence: 50.0,
+            },
         ];
         let results = make_results_for_hcs(positions, 3);
         let hcs = results.get_hcs(None, Some(90.0)).unwrap();

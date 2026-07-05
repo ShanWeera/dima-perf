@@ -21,7 +21,9 @@ pub fn estimate_matrix_bytes(path: &Path, kmer_length: usize) -> Option<u64> {
     // Estimate avg record size: sequence + ~80 bytes header overhead
     let avg_record_bytes = alignment_length as u64 + 80;
     let estimated_seq_count = file_size / avg_record_bytes.max(1);
-    let position_count = alignment_length.saturating_sub(kmer_length).saturating_add(1);
+    let position_count = alignment_length
+        .saturating_sub(kmer_length)
+        .saturating_add(1);
 
     // 8 bytes per u64 k-mer encoding
     Some(estimated_seq_count * position_count as u64 * 8)
@@ -45,11 +47,23 @@ pub fn available_ram_bytes() -> Option<u64> {
     let mut cached = 0u64;
     for line in content.lines() {
         if line.starts_with("MemFree:") {
-            free = line.split_whitespace().nth(1).and_then(|v| v.parse().ok()).unwrap_or(0);
+            free = line
+                .split_whitespace()
+                .nth(1)
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0);
         } else if line.starts_with("Buffers:") {
-            buffers = line.split_whitespace().nth(1).and_then(|v| v.parse().ok()).unwrap_or(0);
+            buffers = line
+                .split_whitespace()
+                .nth(1)
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0);
         } else if line.starts_with("Cached:") && !line.starts_with("CachedSwap") {
-            cached = line.split_whitespace().nth(1).and_then(|v| v.parse().ok()).unwrap_or(0);
+            cached = line
+                .split_whitespace()
+                .nth(1)
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0);
         }
     }
     if free > 0 {
@@ -65,7 +79,7 @@ pub fn available_ram_bytes() -> Option<u64> {
 #[allow(deprecated)] // mach_host_self is deprecated in libc; mach2 crate not used here
 pub fn available_ram_bytes() -> Option<u64> {
     unsafe {
-        let mut count = libc::HOST_VM_INFO64_COUNT as u32;
+        let mut count = libc::HOST_VM_INFO64_COUNT;
         let mut stats: libc::vm_statistics64 = std::mem::zeroed();
         let kr = libc::host_statistics64(
             libc::mach_host_self(),
@@ -73,7 +87,9 @@ pub fn available_ram_bytes() -> Option<u64> {
             &mut stats as *mut _ as *mut i32,
             &mut count,
         );
-        if kr != libc::KERN_SUCCESS { return None; }
+        if kr != libc::KERN_SUCCESS {
+            return None;
+        }
         let page_size = libc::sysconf(libc::_SC_PAGESIZE) as u64;
         Some((stats.free_count as u64 + stats.inactive_count as u64) * page_size)
     }
@@ -87,16 +103,15 @@ pub fn available_ram_bytes() -> Option<u64> {
 /// Resolve the directory for temporary matrix files.
 /// Priority: --temp-dir flag > $TMPDIR env > input file's parent directory.
 /// Never falls back to system /tmp (may be on a small tmpfs with limited space).
-pub fn resolve_temp_dir(
-    flag: Option<&Path>,
-    input_path: Option<&Path>,
-) -> PathBuf {
+pub fn resolve_temp_dir(flag: Option<&Path>, input_path: Option<&Path>) -> PathBuf {
     if let Some(dir) = flag {
         return dir.to_path_buf();
     }
     if let Ok(dir) = std::env::var("TMPDIR") {
         let p = PathBuf::from(&dir);
-        if p.is_dir() { return p; }
+        if p.is_dir() {
+            return p;
+        }
         tracing::warn!(path = %dir, "$TMPDIR does not exist, falling back to input directory");
     }
     match input_path {
@@ -107,13 +122,13 @@ pub fn resolve_temp_dir(
 
 /// Determine whether disk-backed mode should be engaged.
 /// Threshold: matrix estimate > 75% of available RAM.
-pub fn should_use_disk_mode(
-    matrix_estimate_bytes: u64,
-    force_ram: bool,
-    force_disk: bool,
-) -> bool {
-    if force_ram { return false; }
-    if force_disk { return true; }
+pub fn should_use_disk_mode(matrix_estimate_bytes: u64, force_ram: bool, force_disk: bool) -> bool {
+    if force_ram {
+        return false;
+    }
+    if force_disk {
+        return true;
+    }
 
     match available_ram_bytes() {
         Some(available) => {
@@ -154,14 +169,18 @@ mod tests {
     fn test_resolve_temp_dir_input_parent_fallback() {
         // Temporarily unset TMPDIR so we can test the fallback to input parent
         let saved_tmpdir = std::env::var("TMPDIR").ok();
-        unsafe { std::env::remove_var("TMPDIR"); }
+        unsafe {
+            std::env::remove_var("TMPDIR");
+        }
 
         let result = resolve_temp_dir(None, Some(Path::new("/data/sequences/input.fasta")));
         assert_eq!(result, PathBuf::from("/data/sequences"));
 
         // Restore TMPDIR
         if let Some(val) = saved_tmpdir {
-            unsafe { std::env::set_var("TMPDIR", val); }
+            unsafe {
+                std::env::set_var("TMPDIR", val);
+            }
         }
     }
 
@@ -175,7 +194,10 @@ mod tests {
     #[test]
     fn test_available_ram_is_positive() {
         let ram = available_ram_bytes();
-        assert!(ram.is_some(), "RAM detection should succeed on this platform");
+        assert!(
+            ram.is_some(),
+            "RAM detection should succeed on this platform"
+        );
         assert!(ram.unwrap() > 0, "available RAM should be positive");
     }
 }

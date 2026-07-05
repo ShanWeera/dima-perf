@@ -121,7 +121,10 @@ fn main() {
                 if file_arg.to_lowercase().ends_with(".dima") {
                     let path = std::path::Path::new(&file_arg);
                     if let Ok(canonical) = path.canonicalize() {
-                        if std::fs::metadata(&canonical).map(|m| m.is_file()).unwrap_or(false) {
+                        if std::fs::metadata(&canonical)
+                            .map(|m| m.is_file())
+                            .unwrap_or(false)
+                        {
                             let state = app.state::<AppState>();
                             state.push_pending_open_path(canonical);
                         }

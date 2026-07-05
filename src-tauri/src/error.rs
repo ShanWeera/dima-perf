@@ -95,7 +95,9 @@ pub fn sanitize_error_message(msg: &str) -> String {
             let mut j = i + 1;
             let mut has_separator = false;
             while j < chars.len() && !chars[j].is_whitespace() && chars[j] != ':' {
-                if chars[j] == '/' { has_separator = true; }
+                if chars[j] == '/' {
+                    has_separator = true;
+                }
                 j += 1;
             }
             if has_separator {

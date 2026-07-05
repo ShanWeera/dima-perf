@@ -9,7 +9,7 @@ use std::path::Path;
 
 use clap::ValueEnum;
 
-use crate::models::{Results, Position, Variant};
+use crate::models::{Position, Results, Variant};
 
 /// Supported output formats, following BCFtools -O convention.
 #[derive(Copy, Clone, Debug, ValueEnum, PartialEq, Eq)]
@@ -36,10 +36,7 @@ pub struct OutputOptions {
 /// explicit -O flag > output file extension > json fallback.
 ///
 /// This is a pure function for easy unit testing.
-pub fn resolve_output_type(
-    explicit: Option<OutputType>,
-    output_path: Option<&Path>,
-) -> OutputType {
+pub fn resolve_output_type(explicit: Option<OutputType>, output_path: Option<&Path>) -> OutputType {
     if let Some(t) = explicit {
         return t;
     }
@@ -100,17 +97,19 @@ fn write_results(
         OutputType::Json => write_json(results, writer, options),
         OutputType::Tsv => write_tsv(results, writer, options),
         OutputType::Jsonl => write_jsonl(results, writer),
-        OutputType::Dima => {
-            Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "Binary .dima output must use Results::to_binary directly",
-            ))
-        }
+        OutputType::Dima => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Binary .dima output must use Results::to_binary directly",
+        )),
     }
 }
 
 /// Write results as JSON (pretty or compact).
-fn write_json(results: &Results, writer: &mut dyn Write, options: &OutputOptions) -> io::Result<()> {
+fn write_json(
+    results: &Results,
+    writer: &mut dyn Write,
+    options: &OutputOptions,
+) -> io::Result<()> {
     if options.pretty {
         serde_json::to_writer_pretty(writer, results).map_err(io::Error::other)
     } else {
@@ -159,17 +158,15 @@ fn write_tsv(results: &Results, writer: &mut dyn Write, options: &OutputOptions)
         .from_writer(writer);
 
     if options.include_header {
-        wtr.write_record(TSV_HEADER)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        wtr.write_record(TSV_HEADER).map_err(io::Error::other)?;
     }
 
     for position in &results.results {
         let row = build_tsv_row(position);
-        wtr.write_record(&row)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        wtr.write_record(&row).map_err(io::Error::other)?;
     }
 
-    wtr.flush().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    wtr.flush().map_err(io::Error::other)?;
     Ok(())
 }
 
@@ -211,7 +208,9 @@ fn build_tsv_row(position: &Position) -> Vec<String> {
 }
 
 /// Extract variants grouped by motif classification.
-fn extract_motif_groups(position: &Position) -> (Vec<&Variant>, Vec<&Variant>, Vec<&Variant>, Vec<&Variant>) {
+fn extract_motif_groups(
+    position: &Position,
+) -> (Vec<&Variant>, Vec<&Variant>, Vec<&Variant>, Vec<&Variant>) {
     let mut index = Vec::new();
     let mut major = Vec::new();
     let mut minor = Vec::new();
@@ -242,7 +241,10 @@ fn push_motif_sequence_fields(row: &mut Vec<String>, variants: &[&Variant]) {
     } else {
         let seqs: Vec<&str> = variants.iter().map(|v| v.sequence.as_str()).collect();
         let counts: Vec<String> = variants.iter().map(|v| v.count.to_string()).collect();
-        let incidences: Vec<String> = variants.iter().map(|v| format!("{:.2}", v.incidence)).collect();
+        let incidences: Vec<String> = variants
+            .iter()
+            .map(|v| format!("{:.2}", v.incidence))
+            .collect();
         row.push(seqs.join(","));
         row.push(counts.join(","));
         row.push(incidences.join(","));
@@ -282,18 +284,42 @@ mod tests {
 
     #[test]
     fn test_resolve_output_type_extension_inference() {
-        assert_eq!(resolve_output_type(None, Some(Path::new("out.tsv"))), OutputType::Tsv);
-        assert_eq!(resolve_output_type(None, Some(Path::new("out.tab"))), OutputType::Tsv);
-        assert_eq!(resolve_output_type(None, Some(Path::new("out.jsonl"))), OutputType::Jsonl);
-        assert_eq!(resolve_output_type(None, Some(Path::new("out.ndjson"))), OutputType::Jsonl);
-        assert_eq!(resolve_output_type(None, Some(Path::new("out.dima"))), OutputType::Dima);
+        assert_eq!(
+            resolve_output_type(None, Some(Path::new("out.tsv"))),
+            OutputType::Tsv
+        );
+        assert_eq!(
+            resolve_output_type(None, Some(Path::new("out.tab"))),
+            OutputType::Tsv
+        );
+        assert_eq!(
+            resolve_output_type(None, Some(Path::new("out.jsonl"))),
+            OutputType::Jsonl
+        );
+        assert_eq!(
+            resolve_output_type(None, Some(Path::new("out.ndjson"))),
+            OutputType::Jsonl
+        );
+        assert_eq!(
+            resolve_output_type(None, Some(Path::new("out.dima"))),
+            OutputType::Dima
+        );
     }
 
     #[test]
     fn test_resolve_output_type_unknown_extension_defaults_json() {
-        assert_eq!(resolve_output_type(None, Some(Path::new("out.json"))), OutputType::Json);
-        assert_eq!(resolve_output_type(None, Some(Path::new("out.txt"))), OutputType::Json);
-        assert_eq!(resolve_output_type(None, Some(Path::new("results"))), OutputType::Json);
+        assert_eq!(
+            resolve_output_type(None, Some(Path::new("out.json"))),
+            OutputType::Json
+        );
+        assert_eq!(
+            resolve_output_type(None, Some(Path::new("out.txt"))),
+            OutputType::Json
+        );
+        assert_eq!(
+            resolve_output_type(None, Some(Path::new("results"))),
+            OutputType::Json
+        );
     }
 
     #[test]

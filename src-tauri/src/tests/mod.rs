@@ -35,7 +35,7 @@ mod validation_tests {
     #[test]
     fn test_validate_sample_fasta() {
         let sample_path = get_sample_fasta_path();
-        
+
         // Skip if sample file doesn't exist
         if !sample_path.exists() {
             println!("Skipping test: sample file not found at {:?}", sample_path);
@@ -44,20 +44,29 @@ mod validation_tests {
 
         let result = validate_fasta_blocking_public(&sample_path.to_string_lossy());
         assert!(result.is_ok(), "validate_fasta should not error");
-        
+
         let validation = result.unwrap();
         assert!(validation.is_valid, "Sample FASTA should be valid");
         assert!(validation.sequence_count > 0, "Should have sequences");
-        assert!(validation.sequence_length.is_some(), "Should have sequence length");
-        assert!(!validation.sample_headers.is_empty(), "Should have sample headers");
+        assert!(
+            validation.sequence_length.is_some(),
+            "Should have sequence length"
+        );
+        assert!(
+            !validation.sample_headers.is_empty(),
+            "Should have sample headers"
+        );
         assert!(validation.file_size_bytes > 0, "Should have file size");
-        assert_eq!(validation.detected_alphabet, "protein", "Should detect protein alphabet");
+        assert_eq!(
+            validation.detected_alphabet, "protein",
+            "Should detect protein alphabet"
+        );
     }
 
     #[test]
     fn test_validate_with_alphabet_hint() {
         let sample_path = get_sample_fasta_path();
-        
+
         if !sample_path.exists() {
             return;
         }

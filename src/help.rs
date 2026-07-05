@@ -129,7 +129,8 @@ The name appears in the output as:
     // -------------------------------------------------------------------------
     // Header Format (--header-format)
     // -------------------------------------------------------------------------
-    pub const HEADER_FORMAT_HELP: &str = "Header format: pipe-separated field names (e.g., \"country|date|patient\")";
+    pub const HEADER_FORMAT_HELP: &str =
+        "Header format: pipe-separated field names (e.g., \"country|date|patient\")";
 
     pub const HEADER_FORMAT_LONG_HELP: &str = r#"Define the pipe-separated format of FASTA header metadata.
 
@@ -175,7 +176,8 @@ Important:
     // -------------------------------------------------------------------------
     // Metadata Fields (--metadata-fields)
     // -------------------------------------------------------------------------
-    pub const METADATA_FIELDS_HELP: &str = "Restrict aggregation to these fields only (subset of header-format)";
+    pub const METADATA_FIELDS_HELP: &str =
+        "Restrict aggregation to these fields only (subset of header-format)";
 
     pub const METADATA_FIELDS_LONG_HELP: &str = r#"Restrict metadata aggregation to specific fields only.
 
@@ -293,7 +295,8 @@ Note: Binary format requires -o/--output (cannot stream to stdout)."#;
     // -------------------------------------------------------------------------
     // HCS Output (--hcs-output)
     // -------------------------------------------------------------------------
-    pub const HCS_OUTPUT_HELP: &str = "Output file path for Highly Conserved Sequences (Index variants)";
+    pub const HCS_OUTPUT_HELP: &str =
+        "Output file path for Highly Conserved Sequences (Index variants)";
 
     pub const HCS_OUTPUT_LONG_HELP: &str = r#"Output file path for Highly Conserved Sequences (HCS).
 
@@ -466,7 +469,8 @@ Examples:
     // -------------------------------------------------------------------------
     // Allow Lowercase (--allow-lowercase)
     // -------------------------------------------------------------------------
-    pub const ALLOW_LOWERCASE_HELP: &str = "Convert lowercase letters to uppercase (default: treat as invalid)";
+    pub const ALLOW_LOWERCASE_HELP: &str =
+        "Convert lowercase letters to uppercase (default: treat as invalid)";
 
     pub const ALLOW_LOWERCASE_LONG_HELP: &str = r#"Allow and convert lowercase characters in sequences.
 

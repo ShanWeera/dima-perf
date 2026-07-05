@@ -1,6 +1,8 @@
 use hashbrown::HashMap;
 
-use crate::alphabet::{CharacterValidator, ValidationStats, VALID_PROTEIN_CHARS, VALID_NUCLEOTIDE_CHARS};
+use crate::alphabet::{
+    CharacterValidator, ValidationStats, VALID_NUCLEOTIDE_CHARS, VALID_PROTEIN_CHARS,
+};
 
 // Re-export for tests
 #[cfg(test)]
@@ -41,7 +43,11 @@ pub fn encode_kmer_validated(kmer: &[u8], validator: &CharacterValidator) -> Opt
 /// not affect encoding — it only controls reporting behavior.
 #[inline(always)]
 fn encoding_base(validator: &CharacterValidator) -> u64 {
-    if validator.is_protein() { 20u64 } else { 5u64 }
+    if validator.is_protein() {
+        20u64
+    } else {
+        5u64
+    }
 }
 
 /// Maximum k-mer length that can be encoded in a u64 for the given alphabet.
@@ -52,7 +58,11 @@ fn encoding_base(validator: &CharacterValidator) -> u64 {
 ///
 /// Values: protein = 14 (20^14 < 2^64 < 20^15), nucleotide = 27 (5^27 < 2^64 < 5^28)
 pub fn max_kmer_length(is_protein: bool) -> usize {
-    if is_protein { 14 } else { 27 }
+    if is_protein {
+        14
+    } else {
+        27
+    }
 }
 
 /// Encode a k-mer for the specified alphabet type
@@ -169,7 +179,11 @@ pub fn sliding_window_validated_with_stats(
 /// Returns `None` on first invalid character (early exit — no wasted work).
 /// Combines the logic of `window_has_invalid` + `encode_kmer_validated` into one pass.
 #[inline(always)]
-fn encode_kmer_single_pass(window: &[u8], base: u64, validator: &CharacterValidator) -> Option<u64> {
+fn encode_kmer_single_pass(
+    window: &[u8],
+    base: u64,
+    validator: &CharacterValidator,
+) -> Option<u64> {
     let mut encoded = 0u64;
     for &byte in window {
         match validator.encode(byte) {
@@ -183,9 +197,9 @@ fn encode_kmer_single_pass(window: &[u8], base: u64, validator: &CharacterValida
 }
 
 /// Convenience function for sliding window with default validation
-/// 
+///
 /// Creates a validator internally based on `is_protein` flag.
-/// For better performance when processing many sequences, create a 
+/// For better performance when processing many sequences, create a
 /// `CharacterValidator` once and use `sliding_window_validated` directly.
 pub fn sliding_window_encoded_safe(
     sequence: &[u8],
@@ -201,7 +215,7 @@ pub fn sliding_window_encoded_safe(
 }
 
 /// String-based sliding window with CharacterValidator
-/// 
+///
 /// Returns strings instead of encoded values. K-mers containing invalid
 /// characters are returned as "NA".
 pub fn sliding_window_string_validated(
@@ -216,7 +230,7 @@ pub fn sliding_window_string_validated(
     if bytes.len() < kmer_length {
         return Vec::new();
     }
-    
+
     bytes
         .windows(kmer_length)
         .map(|window| {
@@ -233,19 +247,16 @@ pub fn sliding_window_string_validated(
 /// Count k-mers and track their indices (string version)
 pub fn count_kmers<'a>(kmers: &'a [Box<str>]) -> HashMap<&'a str, (usize, Vec<usize>)> {
     let mut counts: HashMap<&'a str, (usize, Vec<usize>)> = HashMap::new();
-    kmers
-        .iter()
-        .enumerate()
-        .for_each(|(idx, kmer)| {
-            let entry = counts.entry(kmer).or_insert((0, vec![]));
-            entry.0 += 1;
-            entry.1.push(idx);
-        });
+    kmers.iter().enumerate().for_each(|(idx, kmer)| {
+        let entry = counts.entry(kmer).or_insert((0, vec![]));
+        entry.0 += 1;
+        entry.1.push(idx);
+    });
     counts
 }
 
 /// Optimized k-mer counting with better memory allocation patterns
-/// 
+///
 /// Returns a map from encoded k-mer to (count, indices).
 /// Count occurrences of each encoded k-mer in a position column.
 /// Skips u64::MAX sentinel values (invalid k-mers) while preserving their index slots
@@ -253,7 +264,7 @@ pub fn count_kmers<'a>(kmers: &'a [Box<str>]) -> HashMap<&'a str, (usize, Vec<us
 pub fn count_kmers_encoded(kmers: &[u64]) -> HashMap<u64, (usize, Vec<usize>)> {
     let estimated_unique = std::cmp::min(kmers.len(), kmers.len() / 4 + 100);
     let mut counts: HashMap<u64, (usize, Vec<usize>)> = HashMap::with_capacity(estimated_unique);
-    
+
     for (idx, &kmer) in kmers.iter().enumerate() {
         // u64::MAX is the sentinel for invalid/skipped k-mers — don't count them
         if kmer == u64::MAX {
@@ -271,7 +282,7 @@ pub fn count_kmers_encoded(kmers: &[u64]) -> HashMap<u64, (usize, Vec<usize>)> {
             }
         }
     }
-    
+
     counts
 }
 
@@ -282,15 +293,15 @@ mod tests {
     #[test]
     fn test_validator_based_encoding() {
         let validator = CharacterValidator::protein();
-        
+
         // Valid k-mer should encode successfully
         let kmer = b"ACDEF";
         assert!(encode_kmer_validated(kmer, &validator).is_some());
-        
+
         // K-mer with invalid character should fail
         let invalid_kmer = b"ACD#F";
         assert!(encode_kmer_validated(invalid_kmer, &validator).is_none());
-        
+
         // K-mer with ambiguous character should fail
         let ambiguous_kmer = b"ACDXF";
         assert!(encode_kmer_validated(ambiguous_kmer, &validator).is_none());
@@ -299,35 +310,39 @@ mod tests {
     #[test]
     fn test_sliding_window_validated() {
         let validator = CharacterValidator::protein();
-        
+
         // Valid sequence
         let sequence = b"ACDEFG";
         let result = sliding_window_validated(sequence, 3, &validator);
         assert_eq!(result.len(), 4);
         assert!(result.iter().all(|x| x.is_some()));
-        
+
         // Sequence with invalid character
         let sequence_invalid = b"ACD#FG";
         let result = sliding_window_validated(sequence_invalid, 3, &validator);
         assert_eq!(result.len(), 4);
         // K-mers containing # should be None
-        assert!(result[0].is_some());  // ACD - valid
-        assert!(result[1].is_none());  // CD# - invalid
-        assert!(result[2].is_none());  // D#F - invalid
-        assert!(result[3].is_none());  // #FG - invalid
+        assert!(result[0].is_some()); // ACD - valid
+        assert!(result[1].is_none()); // CD# - invalid
+        assert!(result[2].is_none()); // D#F - invalid
+        assert!(result[3].is_none()); // #FG - invalid
     }
 
     #[test]
     fn test_invalid_character_rejection() {
         let validator = CharacterValidator::protein();
-        
+
         // Test various invalid characters that should be rejected
         let invalid_chars = b"#*@!123456789()[]{}<>?/\\|`~";
-        
+
         for &ch in invalid_chars {
             let kmer = [b'A', ch, b'C', b'D', b'E'];
             let result = encode_kmer_validated(&kmer, &validator);
-            assert!(result.is_none(), "Character {} should be rejected", ch as char);
+            assert!(
+                result.is_none(),
+                "Character {} should be rejected",
+                ch as char
+            );
         }
     }
 
@@ -337,30 +352,27 @@ mod tests {
         let strict_validator = CharacterValidator::protein();
         let lowercase_kmer = b"acdef";
         assert!(encode_kmer_validated(lowercase_kmer, &strict_validator).is_none());
-        
+
         // With allow_lowercase: should be accepted
-        let permissive_validator = CharacterValidator::with_options(
-            AlphabetType::Protein,
-            ValidationMode::Strict,
-            true,
-        );
+        let permissive_validator =
+            CharacterValidator::with_options(AlphabetType::Protein, ValidationMode::Strict, true);
         assert!(encode_kmer_validated(lowercase_kmer, &permissive_validator).is_some());
     }
 
     #[test]
     fn test_nucleotide_validation() {
         let validator = CharacterValidator::nucleotide();
-        
+
         // Valid nucleotide k-mer
         let valid = b"ACGT";
         assert!(encode_kmer_validated(valid, &validator).is_some());
-        
+
         // Invalid character in nucleotide sequence (protein amino acid)
-        let invalid = b"ACEF";  // E is not a nucleotide
+        let invalid = b"ACEF"; // E is not a nucleotide
         assert!(encode_kmer_validated(invalid, &validator).is_none());
-        
+
         // Ambiguous nucleotide character
-        let ambiguous = b"ACGN";  // N is ambiguous
+        let ambiguous = b"ACGN"; // N is ambiguous
         assert!(encode_kmer_validated(ambiguous, &validator).is_none());
     }
 
@@ -369,7 +381,7 @@ mod tests {
         let validator = CharacterValidator::protein();
         let original = b"ACDEFG";
         let kmer_length = 6;
-        
+
         if let Some(encoded) = encode_kmer_validated(original, &validator) {
             let decoded = decode_kmer(encoded, kmer_length, true);
             assert_eq!(decoded.as_bytes(), original);
@@ -381,7 +393,7 @@ mod tests {
     #[test]
     fn test_string_validated_sliding_window() {
         let validator = CharacterValidator::protein();
-        
+
         let sequence = "ACDEFG";
         let result = sliding_window_string_validated(sequence, 3, &validator);
         assert_eq!(result.len(), 4);
@@ -389,14 +401,14 @@ mod tests {
         assert_eq!(result[1], "CDE");
         assert_eq!(result[2], "DEF");
         assert_eq!(result[3], "EFG");
-        
+
         // With invalid character
         let sequence_invalid = "ACD#FG";
         let result = sliding_window_string_validated(sequence_invalid, 3, &validator);
         assert_eq!(result[0], "ACD");
-        assert_eq!(result[1], "NA");  // CD# is invalid
-        assert_eq!(result[2], "NA");  // D#F is invalid
-        assert_eq!(result[3], "NA");  // #FG is invalid
+        assert_eq!(result[1], "NA"); // CD# is invalid
+        assert_eq!(result[2], "NA"); // D#F is invalid
+        assert_eq!(result[3], "NA"); // #FG is invalid
     }
 
     #[test]
@@ -406,11 +418,11 @@ mod tests {
         let result = sliding_window_encoded_safe(sequence, 3, true);
         assert_eq!(result.len(), 4);
         assert!(result.iter().all(|x| x.is_some()));
-        
+
         // Invalid characters should be rejected
         let sequence_invalid = b"ACD#FG";
         let result = sliding_window_encoded_safe(sequence_invalid, 3, true);
-        assert!(result[1].is_none());  // Contains #
+        assert!(result[1].is_none()); // Contains #
     }
 
     #[test]

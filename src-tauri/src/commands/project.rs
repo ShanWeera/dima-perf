@@ -4,9 +4,8 @@
 
 use crate::error::AppError;
 use crate::project::{
-    self, add_to_recent_projects, create_new_project, delete_project_folder,
-    load_project_metadata, load_recent_projects, validate_path_confinement,
-    RecentProject,
+    self, add_to_recent_projects, create_new_project, delete_project_folder, load_project_metadata,
+    load_recent_projects, validate_path_confinement, RecentProject,
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -16,8 +15,10 @@ use std::path::PathBuf;
 /// Returns the PathBuf on success, or an error message on failure.
 async fn validate_project_path(project_path: &str) -> Result<PathBuf, AppError> {
     let path = PathBuf::from(project_path);
-    let projects_base = project::get_projects_path().map_err(|e| AppError::ProjectError(e.to_string()))?;
-    validate_path_confinement(&path, &projects_base).map_err(|e| AppError::ProjectError(e.to_string()))?;
+    let projects_base =
+        project::get_projects_path().map_err(|e| AppError::ProjectError(e.to_string()))?;
+    validate_path_confinement(&path, &projects_base)
+        .map_err(|e| AppError::ProjectError(e.to_string()))?;
     Ok(path)
 }
 
@@ -79,7 +80,9 @@ pub async fn open_project(path: String) -> Result<ProjectInfo, AppError> {
     let project_path = validate_project_path(&path).await?;
 
     if !project_path.exists() {
-        return Err(AppError::NotFound("Project folder does not exist".to_string()));
+        return Err(AppError::NotFound(
+            "Project folder does not exist".to_string(),
+        ));
     }
     if !project_path.is_dir() {
         return Err(AppError::ValidationError(
@@ -127,7 +130,9 @@ pub async fn open_project(path: String) -> Result<ProjectInfo, AppError> {
 /// List recent projects
 #[tauri::command]
 pub async fn list_recent_projects() -> Result<Vec<RecentProject>, AppError> {
-    load_recent_projects().await.map_err(|e| AppError::ProjectError(e.to_string()))
+    load_recent_projects()
+        .await
+        .map_err(|e| AppError::ProjectError(e.to_string()))
 }
 
 /// Delete a project. Acquires the analysis mutex to prevent deletion while an
@@ -244,7 +249,10 @@ pub struct AnnotationsData {
 
 /// Save annotations to project using atomic writes (Fix 4.37)
 #[tauri::command]
-pub async fn save_annotations(project_path: String, annotations: Vec<Annotation>) -> Result<(), AppError> {
+pub async fn save_annotations(
+    project_path: String,
+    annotations: Vec<Annotation>,
+) -> Result<(), AppError> {
     let base = validate_project_path(&project_path).await?;
     let path = base.join("annotations.json");
     let data = AnnotationsData { annotations };
@@ -338,7 +346,8 @@ pub struct FilterPresetsData {
 /// Save global filter presets using atomic writes (Fix 4.37)
 #[tauri::command]
 pub async fn save_filter_presets(presets: Vec<FilterPreset>) -> Result<(), AppError> {
-    let base_path = project::get_app_base_path().map_err(|e| AppError::ProjectError(e.to_string()))?;
+    let base_path =
+        project::get_app_base_path().map_err(|e| AppError::ProjectError(e.to_string()))?;
     let path = base_path.join("filter-presets.json");
     let data = FilterPresetsData { presets };
     project::write_json_atomic(&path, &data)
@@ -350,7 +359,8 @@ pub async fn save_filter_presets(presets: Vec<FilterPreset>) -> Result<(), AppEr
 /// Load global filter presets
 #[tauri::command]
 pub async fn load_filter_presets() -> Result<Vec<FilterPreset>, AppError> {
-    let base_path = project::get_app_base_path().map_err(|e| AppError::ProjectError(e.to_string()))?;
+    let base_path =
+        project::get_app_base_path().map_err(|e| AppError::ProjectError(e.to_string()))?;
     let path = base_path.join("filter-presets.json");
     if !path.exists() {
         return Ok(Vec::new());
@@ -382,12 +392,15 @@ pub async fn load_results(project_path: String) -> Result<serde_json::Value, App
     let base = validate_project_path(&project_path).await?;
     let results_path = base.join("results.json");
     if !results_path.exists() {
-        return Err(AppError::NotFound("Results file not found. Has the analysis completed?".to_string()));
+        return Err(AppError::NotFound(
+            "Results file not found. Has the analysis completed?".to_string(),
+        ));
     }
     // Cap results file size before reading to prevent OOM from extremely large
     // analyses or corrupt files. 500 MB is generous for any practical analysis. (Fix 4.23)
     const MAX_RESULTS_SIZE: u64 = 500 * 1024 * 1024;
-    let metadata = tokio::fs::metadata(&results_path).await
+    let metadata = tokio::fs::metadata(&results_path)
+        .await
         .map_err(|e| AppError::FileError(format!("Failed to read results metadata: {}", e)))?;
     if metadata.len() > MAX_RESULTS_SIZE {
         return Err(AppError::FileError(format!(
@@ -399,7 +412,8 @@ pub async fn load_results(project_path: String) -> Result<serde_json::Value, App
     let content = tokio::fs::read_to_string(&results_path)
         .await
         .map_err(|e| AppError::FileError(format!("Failed to read results file: {}", e)))?;
-    let parsed: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| AppError::InternalError(format!("Results file is corrupted or invalid: {}", e)))?;
+    let parsed: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
+        AppError::InternalError(format!("Results file is corrupted or invalid: {}", e))
+    })?;
     Ok(parsed)
 }

@@ -52,25 +52,33 @@ impl PerfReport {
 
         // Avoid division by zero for extremely fast (sub-microsecond) runs
         let pct = |d: Duration| -> f64 {
-            if total_secs > 0.0 { d.as_secs_f64() / total_secs * 100.0 } else { 0.0 }
+            if total_secs > 0.0 {
+                d.as_secs_f64() / total_secs * 100.0
+            } else {
+                0.0
+            }
         };
 
         eprintln!("  Phase timing:");
         eprintln!(
             "    I/O + validation:     {:>7.2}s  ({:>5.1}%)",
-            self.io_duration.as_secs_f64(), pct(self.io_duration)
+            self.io_duration.as_secs_f64(),
+            pct(self.io_duration)
         );
         eprintln!(
             "    Entropy computation:  {:>7.2}s  ({:>5.1}%)",
-            self.entropy_duration.as_secs_f64(), pct(self.entropy_duration)
+            self.entropy_duration.as_secs_f64(),
+            pct(self.entropy_duration)
         );
         eprintln!(
             "    Position building:    {:>7.2}s  ({:>5.1}%)",
-            self.building_duration.as_secs_f64(), pct(self.building_duration)
+            self.building_duration.as_secs_f64(),
+            pct(self.building_duration)
         );
         eprintln!(
             "    Output serialization: {:>7.2}s  ({:>5.1}%)",
-            self.output_duration.as_secs_f64(), pct(self.output_duration)
+            self.output_duration.as_secs_f64(),
+            pct(self.output_duration)
         );
 
         eprintln!("  Resources:");
@@ -81,7 +89,9 @@ impl PerfReport {
         if let Some(size) = self.input_size_bytes {
             eprintln!(
                 "    Input size:   {} ({} sequences, {} positions)",
-                format_bytes(size), self.sequence_count, self.position_count
+                format_bytes(size),
+                self.sequence_count,
+                self.position_count
             );
         } else {
             eprintln!(
@@ -122,11 +132,17 @@ pub fn peak_memory_bytes() -> Option<u64> {
         if libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) == 0 {
             let maxrss = usage.assume_init().ru_maxrss;
             #[cfg(target_os = "linux")]
-            { Some(maxrss as u64 * 1024) } // Linux reports kilobytes
+            {
+                Some(maxrss as u64 * 1024)
+            } // Linux reports kilobytes
             #[cfg(target_os = "macos")]
-            { Some(maxrss as u64) }         // macOS reports bytes
+            {
+                Some(maxrss as u64)
+            } // macOS reports bytes
             #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-            { Some(maxrss as u64 * 1024) }  // BSD variants report kilobytes
+            {
+                Some(maxrss as u64 * 1024)
+            } // BSD variants report kilobytes
         } else {
             None
         }
@@ -171,7 +187,10 @@ mod tests {
     fn test_peak_memory_returns_some() {
         // On any Unix system, getrusage should succeed for the current process
         let peak = peak_memory_bytes();
-        assert!(peak.is_some(), "peak_memory_bytes should return Some on Unix");
+        assert!(
+            peak.is_some(),
+            "peak_memory_bytes should return Some on Unix"
+        );
         assert!(peak.unwrap() > 0, "peak memory should be positive");
     }
 }

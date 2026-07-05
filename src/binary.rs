@@ -11,16 +11,16 @@
 //! - Zero-copy deserialization where possible
 //! - Cross-platform compatibility with endianness handling
 
-use std::collections::BTreeMap;
-use std::io::{Read, Write, BufReader, BufWriter};
-use std::fs::File;
 use bincode::Options;
-use serde::{Serialize, Deserialize};
+use crc32fast::Hasher as Crc32Hasher;
 use hashbrown::HashMap as FastHashMap;
 use hashbrown::HashMap;
-use crc32fast::Hasher as Crc32Hasher;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::{BufReader, BufWriter, Read, Write};
 
-use crate::models::{Results, Position, Variant, HighestEntropy};
+use crate::models::{HighestEntropy, Position, Results, Variant};
 
 /// Structured error type for binary format operations.
 ///
@@ -75,7 +75,7 @@ impl CompressionType {
             _ => None,
         }
     }
-    
+
     pub fn to_u8(self) -> u8 {
         match self {
             CompressionType::None => 0,
@@ -125,7 +125,7 @@ impl StringTable {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Intern a string and return its ID.
     /// Panics if the table exceeds u32::MAX entries (>4 billion unique strings).
     /// This is effectively impossible for DiMA's domain but prevents silent data
@@ -146,17 +146,17 @@ impl StringTable {
             id
         }
     }
-    
+
     /// Get string by ID
     pub fn get_string(&self, id: u32) -> Option<&str> {
         self.id_to_string.get(id as usize).map(|s| s.as_str())
     }
-    
+
     /// Get all strings for serialization
     pub fn get_all_strings(&self) -> &[String] {
         &self.id_to_string
     }
-    
+
     /// Load strings from deserialization.
     /// Deduplicates on insert: if the file contains duplicate strings, the last
     /// occurrence wins in the reverse map, which matches the serialization order.
@@ -164,14 +164,14 @@ impl StringTable {
         self.id_to_string = strings;
         self.string_to_id.clear();
         self.string_to_id.reserve(self.id_to_string.len());
-        
+
         for (id, string) in self.id_to_string.iter().enumerate() {
             self.string_to_id.insert(string.clone(), id as u32);
         }
-        
+
         self.next_id = self.id_to_string.len() as u32;
     }
-    
+
     /// Get statistics
     pub fn stats(&self) -> (usize, usize) {
         let unique_strings = self.id_to_string.len();
@@ -201,7 +201,7 @@ impl BinaryMetadata {
             fields: BTreeMap::new(),
         }
     }
-    
+
     /// Convert from JSON metadata using string table
     /// Convert JSON metadata to binary representation.
     ///
@@ -218,7 +218,7 @@ impl BinaryMetadata {
             // Sort field names for deterministic string-table ID assignment
             let mut sorted_fields: Vec<(&String, &HashMap<String, usize>)> = meta.iter().collect();
             sorted_fields.sort_unstable_by_key(|(k, _)| k.as_str());
-            
+
             for (field_name, value_counts) in sorted_fields {
                 let field_id = string_table.intern(field_name);
                 let mut binary_values = BTreeMap::new();
@@ -226,41 +226,44 @@ impl BinaryMetadata {
                 // Sort values for deterministic interning order
                 let mut sorted_values: Vec<(&String, &usize)> = value_counts.iter().collect();
                 sorted_values.sort_unstable_by_key(|(k, _)| k.as_str());
-                
+
                 for (value, &count) in sorted_values {
                     let value_id = string_table.intern(value);
                     binary_values.insert(value_id, count);
                 }
-                
+
                 binary_meta.fields.insert(field_id, binary_values);
             }
-            
+
             binary_meta
         })
     }
-    
+
     /// Convert to JSON metadata using string table
-    pub fn to_json_metadata(&self, string_table: &StringTable) -> Option<HashMap<String, HashMap<String, usize>>> {
+    pub fn to_json_metadata(
+        &self,
+        string_table: &StringTable,
+    ) -> Option<HashMap<String, HashMap<String, usize>>> {
         if self.fields.is_empty() {
             return None;
         }
-        
+
         let mut json_meta = HashMap::new();
-        
+
         for (&field_id, value_counts) in &self.fields {
             if let Some(field_name) = string_table.get_string(field_id) {
                 let mut json_values = HashMap::new();
-                
+
                 for (&value_id, &count) in value_counts {
                     if let Some(value) = string_table.get_string(value_id) {
                         json_values.insert(value.to_string(), count);
                     }
                 }
-                
+
                 json_meta.insert(field_name.to_string(), json_values);
             }
         }
-        
+
         Some(json_meta)
     }
 }
@@ -288,16 +291,28 @@ impl BinaryVariant {
             metadata: BinaryMetadata::from_json_metadata(&variant.metadata, string_table),
         }
     }
-    
+
     /// Convert to JSON variant using string table
     pub fn to_json_variant(&self, string_table: &StringTable) -> Variant {
         Variant {
-            sequence: string_table.get_string(self.sequence_id).unwrap_or("").to_string(),
+            sequence: string_table
+                .get_string(self.sequence_id)
+                .unwrap_or("")
+                .to_string(),
             count: self.count,
             incidence: self.incidence,
-            motif_short: self.motif_short_id.and_then(|id| string_table.get_string(id)).map(|s| s.to_string()),
-            motif_long: self.motif_long_id.and_then(|id| string_table.get_string(id)).map(|s| s.to_string()),
-            metadata: self.metadata.as_ref().and_then(|m| m.to_json_metadata(string_table)),
+            motif_short: self
+                .motif_short_id
+                .and_then(|id| string_table.get_string(id))
+                .map(|s| s.to_string()),
+            motif_long: self
+                .motif_long_id
+                .and_then(|id| string_table.get_string(id))
+                .map(|s| s.to_string()),
+            metadata: self
+                .metadata
+                .as_ref()
+                .and_then(|m| m.to_json_metadata(string_table)),
         }
     }
 }
@@ -320,30 +335,42 @@ impl BinaryPosition {
     pub fn from_json_position(position: &Position, string_table: &mut StringTable) -> Self {
         Self {
             position: position.position,
-            low_support_id: position.low_support.as_ref().map(|s| string_table.intern(s)),
+            low_support_id: position
+                .low_support
+                .as_ref()
+                .map(|s| string_table.intern(s)),
             entropy: position.entropy,
             support: position.support,
             distinct_variants_count: position.distinct_variants_count,
             distinct_variants_incidence: position.distinct_variants_incidence,
             total_variants_incidence: position.total_variants_incidence,
             diversity_motifs: position.diversity_motifs.as_ref().map(|variants| {
-                variants.iter().map(|v| BinaryVariant::from_json_variant(v, string_table)).collect()
+                variants
+                    .iter()
+                    .map(|v| BinaryVariant::from_json_variant(v, string_table))
+                    .collect()
             }),
         }
     }
-    
+
     /// Convert to JSON position using string table
     pub fn to_json_position(&self, string_table: &StringTable) -> Position {
         Position {
             position: self.position,
-            low_support: self.low_support_id.and_then(|id| string_table.get_string(id)).map(|s| s.to_string()),
+            low_support: self
+                .low_support_id
+                .and_then(|id| string_table.get_string(id))
+                .map(|s| s.to_string()),
             entropy: self.entropy,
             support: self.support,
             distinct_variants_count: self.distinct_variants_count,
             distinct_variants_incidence: self.distinct_variants_incidence,
             total_variants_incidence: self.total_variants_incidence,
             diversity_motifs: self.diversity_motifs.as_ref().map(|variants| {
-                variants.iter().map(|v| v.to_json_variant(string_table)).collect()
+                variants
+                    .iter()
+                    .map(|v| v.to_json_variant(string_table))
+                    .collect()
             }),
         }
     }
@@ -375,10 +402,14 @@ impl BinaryResults {
             highest_entropy_position: results.highest_entropy.position,
             highest_entropy_value: results.highest_entropy.entropy,
             average_entropy: results.average_entropy,
-            results: results.results.iter().map(|p| BinaryPosition::from_json_position(p, string_table)).collect(),
+            results: results
+                .results
+                .iter()
+                .map(|p| BinaryPosition::from_json_position(p, string_table))
+                .collect(),
         }
     }
-    
+
     /// Validate that all string IDs reference valid entries in the string table.
     /// Returns an error if any ID is out of bounds, preventing silent data loss.
     /// Covers: query_name, low_support, variant sequences/motifs, AND metadata field/value IDs.
@@ -386,7 +417,10 @@ impl BinaryResults {
         let max_id = string_table.get_all_strings().len() as u32;
         let check = |id: u32, context: &str| -> Result<(), String> {
             if id >= max_id {
-                return Err(format!("Out-of-range string ID {} in {} (table has {} entries)", id, context, max_id));
+                return Err(format!(
+                    "Out-of-range string ID {} in {} (table has {} entries)",
+                    id, context, max_id
+                ));
             }
             Ok(())
         };
@@ -398,7 +432,10 @@ impl BinaryResults {
             }
             if let Some(ref motifs) = pos.diversity_motifs {
                 for (j, var) in motifs.iter().enumerate() {
-                    check(var.sequence_id, &format!("position[{}].variant[{}].sequence", i, j))?;
+                    check(
+                        var.sequence_id,
+                        &format!("position[{}].variant[{}].sequence", i, j),
+                    )?;
                     if let Some(id) = var.motif_short_id {
                         check(id, &format!("position[{}].variant[{}].motif_short", i, j))?;
                     }
@@ -408,9 +445,15 @@ impl BinaryResults {
                     // Validate metadata field and value string IDs
                     if let Some(ref meta) = var.metadata {
                         for (&field_id, value_counts) in &meta.fields {
-                            check(field_id, &format!("position[{}].variant[{}].metadata.field", i, j))?;
+                            check(
+                                field_id,
+                                &format!("position[{}].variant[{}].metadata.field", i, j),
+                            )?;
                             for &value_id in value_counts.keys() {
-                                check(value_id, &format!("position[{}].variant[{}].metadata.value", i, j))?;
+                                check(
+                                    value_id,
+                                    &format!("position[{}].variant[{}].metadata.value", i, j),
+                                )?;
                             }
                         }
                     }
@@ -426,14 +469,21 @@ impl BinaryResults {
             sequence_count: self.sequence_count,
             support_threshold: self.support_threshold,
             low_support_count: self.low_support_count,
-            query_name: string_table.get_string(self.query_name_id).unwrap_or("").to_string(),
+            query_name: string_table
+                .get_string(self.query_name_id)
+                .unwrap_or("")
+                .to_string(),
             kmer_length: self.kmer_length,
             highest_entropy: HighestEntropy {
                 position: self.highest_entropy_position,
                 entropy: self.highest_entropy_value,
             },
             average_entropy: self.average_entropy,
-            results: self.results.iter().map(|p| p.to_json_position(string_table)).collect(),
+            results: self
+                .results
+                .iter()
+                .map(|p| p.to_json_position(string_table))
+                .collect(),
         }
     }
 }
@@ -458,30 +508,30 @@ impl<W: Write> BinaryWriter<W> {
     pub fn into_inner(self) -> std::io::Result<W> {
         Ok(self.writer)
     }
-    
+
     /// Write results in binary format.
     /// Structure: [header + string_table + header_crc32] + [payload + payload_crc32]
     pub fn write_results(&mut self, results: &Results) -> std::io::Result<()> {
         let binary_results = BinaryResults::from_json_results(results, &mut self.string_table);
-        
+
         // Write header + string table into a buffer to compute CRC over both
         let mut preamble = Vec::new();
         self.write_header_to(&mut preamble)?;
         self.write_string_table_to(&mut preamble)?;
-        
+
         // Write preamble to output
         self.writer.write_all(&preamble)?;
-        
+
         // Write CRC32 of header + string table for full integrity coverage
         let header_crc = crc32fast::hash(&preamble);
         self.writer.write_all(&header_crc.to_le_bytes())?;
-        
+
         // Write payload (already has its own CRC)
         self.write_binary_data(&binary_results)?;
-        
+
         Ok(())
     }
-    
+
     fn write_header_to(&self, out: &mut Vec<u8>) -> std::io::Result<()> {
         use std::io::Write;
         out.write_all(MAGIC_BYTES)?;
@@ -490,16 +540,20 @@ impl<W: Write> BinaryWriter<W> {
         out.write_all(&[self.config.compression.to_u8()])?;
         out.write_all(&self.config.compression_level.to_le_bytes())?;
         let mut flags = 0u8;
-        if self.config.string_interning { flags |= 0x01; }
-        if self.config.validate_checksums { flags |= 0x02; }
+        if self.config.string_interning {
+            flags |= 0x01;
+        }
+        if self.config.validate_checksums {
+            flags |= 0x02;
+        }
         out.write_all(&[flags])?;
         Ok(())
     }
-    
+
     fn write_string_table_to(&self, out: &mut Vec<u8>) -> std::io::Result<()> {
         use std::io::Write;
         let strings = self.string_table.get_all_strings();
-        
+
         out.write_all(&(strings.len() as u32).to_le_bytes())?;
         for string in strings {
             let bytes = string.as_bytes();
@@ -508,24 +562,26 @@ impl<W: Write> BinaryWriter<W> {
         }
         Ok(())
     }
-    
+
     fn write_binary_data(&mut self, binary_results: &BinaryResults) -> std::io::Result<()> {
         // Serialize with explicit fixint encoding to match the read path.
         // This ensures the wire format is independent of bincode's default behavior,
         // which could change in a major version bump.
         let options = bincode::options().with_fixint_encoding();
-        let serialized = options.serialize(binary_results)
+        let serialized = options
+            .serialize(binary_results)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        
+
         // Apply compression if enabled
         let final_data = match self.config.compression {
             CompressionType::None => serialized,
             CompressionType::Lz4 => self.compress_lz4(&serialized)?,
             CompressionType::Zstd => self.compress_zstd(&serialized)?,
         };
-        
+
         // Write compressed size and data
-        self.writer.write_all(&(final_data.len() as u64).to_le_bytes())?;
+        self.writer
+            .write_all(&(final_data.len() as u64).to_le_bytes())?;
         self.writer.write_all(&final_data)?;
 
         // Write CRC32 checksum over the compressed payload when checksums are enabled.
@@ -538,14 +594,14 @@ impl<W: Write> BinaryWriter<W> {
             let checksum = hasher.finalize();
             self.writer.write_all(&checksum.to_le_bytes())?;
         }
-        
+
         Ok(())
     }
-    
+
     fn compress_lz4(&self, data: &[u8]) -> std::io::Result<Vec<u8>> {
         Ok(lz4_flex::compress_prepend_size(data))
     }
-    
+
     fn compress_zstd(&self, data: &[u8]) -> std::io::Result<Vec<u8>> {
         zstd::bulk::compress(data, self.config.compression_level)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
@@ -570,23 +626,25 @@ impl<R: Read> BinaryReader<R> {
             detected_writer_version: 0,
         }
     }
-    
+
     /// Read results from binary format.
     /// Verifies CRC32 integrity of header + string table (v2+ files).
     pub fn read_results(&mut self) -> std::io::Result<Results> {
         // Read header + string table while capturing raw bytes for CRC verification
         let mut preamble_bytes: Vec<u8> = Vec::new();
-        
-        self.read_header_capturing(&mut preamble_bytes).map_err(|e| {
-            std::io::Error::new(e.kind(), format!("Header validation failed: {}", e))
-        })?;
-        
+
+        self.read_header_capturing(&mut preamble_bytes)
+            .map_err(|e| {
+                std::io::Error::new(e.kind(), format!("Header validation failed: {}", e))
+            })?;
+
         let writer_version = self.detected_writer_version;
-        
-        self.read_string_table_capturing(&mut preamble_bytes).map_err(|e| {
-            std::io::Error::new(e.kind(), format!("String table reading failed: {}", e))
-        })?;
-        
+
+        self.read_string_table_capturing(&mut preamble_bytes)
+            .map_err(|e| {
+                std::io::Error::new(e.kind(), format!("String table reading failed: {}", e))
+            })?;
+
         // v2+ files have a header CRC32 after the string table
         if writer_version >= 2 {
             let mut crc_bytes = [0u8; 4];
@@ -603,7 +661,7 @@ impl<R: Read> BinaryReader<R> {
                 ));
             }
         }
-        
+
         // Read and decompress binary data
         let binary_results = self.read_binary_data().map_err(|e| {
             let compression_name = match self.config.compression {
@@ -611,17 +669,25 @@ impl<R: Read> BinaryReader<R> {
                 CompressionType::Lz4 => "LZ4",
                 CompressionType::Zstd => "Zstd",
             };
-            std::io::Error::new(e.kind(), format!("Failed to decompress {} data: {}", compression_name, e))
+            std::io::Error::new(
+                e.kind(),
+                format!("Failed to decompress {} data: {}", compression_name, e),
+            )
         })?;
-        
+
         // Validate all string IDs before conversion to catch corrupt/malicious files
-        binary_results.validate_string_ids(&self.string_table).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, format!("String ID validation failed: {}", e))
-        })?;
+        binary_results
+            .validate_string_ids(&self.string_table)
+            .map_err(|e| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("String ID validation failed: {}", e),
+                )
+            })?;
 
         Ok(binary_results.to_json_results(&self.string_table))
     }
-    
+
     /// Read and validate the binary header. Appends raw bytes to `capture`
     /// for subsequent CRC verification.
     fn read_header_capturing(&mut self, capture: &mut Vec<u8>) -> std::io::Result<()> {
@@ -631,86 +697,91 @@ impl<R: Read> BinaryReader<R> {
         if magic != *MAGIC_BYTES {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "Invalid magic bytes — not a .dima file"
+                "Invalid magic bytes — not a .dima file",
             ));
         }
-        
+
         let mut version_bytes = [0u8; 4];
         self.reader.read_exact(&mut version_bytes)?;
         capture.extend_from_slice(&version_bytes);
         let writer_version = u32::from_le_bytes(version_bytes);
         self.detected_writer_version = writer_version;
-        
+
         if writer_version < OLDEST_SUPPORTED_WRITER {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!(
                     "File was written by an obsolete version (v{}). This reader supports v{}+.",
                     writer_version, OLDEST_SUPPORTED_WRITER
-                )
+                ),
             ));
         }
-        
+
         // v2+ includes min_reader_version; v1 files don't have it
         if writer_version >= 2 {
             let mut min_reader_bytes = [0u8; 4];
             self.reader.read_exact(&mut min_reader_bytes)?;
             capture.extend_from_slice(&min_reader_bytes);
             let min_reader_version = u32::from_le_bytes(min_reader_bytes);
-            
+
             if min_reader_version > BINARY_FORMAT_VERSION {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     format!(
                         "File requires reader v{} or newer, but this is v{}. Please upgrade dima.",
                         min_reader_version, BINARY_FORMAT_VERSION
-                    )
+                    ),
                 ));
             }
         }
-        
+
         let mut compression_byte = [0u8; 1];
         self.reader.read_exact(&mut compression_byte)?;
         capture.extend_from_slice(&compression_byte);
-        self.config.compression = CompressionType::from_u8(compression_byte[0])
-            .ok_or_else(|| std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("Invalid compression type byte: {}", compression_byte[0])
-            ))?;
-        
+        self.config.compression =
+            CompressionType::from_u8(compression_byte[0]).ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("Invalid compression type byte: {}", compression_byte[0]),
+                )
+            })?;
+
         let mut level_bytes = [0u8; 4];
         self.reader.read_exact(&mut level_bytes)?;
         capture.extend_from_slice(&level_bytes);
         self.config.compression_level = i32::from_le_bytes(level_bytes);
-        
+
         let mut flags_byte = [0u8; 1];
         self.reader.read_exact(&mut flags_byte)?;
         capture.extend_from_slice(&flags_byte);
         let flags = flags_byte[0];
         self.config.string_interning = (flags & 0x01) != 0;
         self.config.validate_checksums = (flags & 0x02) != 0;
-        
+
         Ok(())
     }
-    
+
     /// Read the string table, appending raw bytes to `capture` for CRC verification.
     fn read_string_table_capturing(&mut self, capture: &mut Vec<u8>) -> std::io::Result<()> {
         const MAX_STRING_COUNT: u32 = 10_000_000;
         const MAX_STRING_LEN: u32 = 10 * 1024 * 1024;
         const MAX_STRING_TABLE_BYTES: u64 = 1_024 * 1_024 * 1_024;
-        
+
         let mut count_bytes = [0u8; 4];
         self.reader.read_exact(&mut count_bytes)?;
         capture.extend_from_slice(&count_bytes);
         let string_count = u32::from_le_bytes(count_bytes);
-        
+
         if string_count > MAX_STRING_COUNT {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("String table count ({}) exceeds limit ({})", string_count, MAX_STRING_COUNT),
+                format!(
+                    "String table count ({}) exceeds limit ({})",
+                    string_count, MAX_STRING_COUNT
+                ),
             ));
         }
-        
+
         let mut strings = Vec::with_capacity(string_count as usize);
         let mut total_bytes: u64 = 0;
 
@@ -719,11 +790,14 @@ impl<R: Read> BinaryReader<R> {
             self.reader.read_exact(&mut len_bytes)?;
             capture.extend_from_slice(&len_bytes);
             let string_len = u32::from_le_bytes(len_bytes);
-            
+
             if string_len > MAX_STRING_LEN {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    format!("String length ({}) exceeds limit ({})", string_len, MAX_STRING_LEN),
+                    format!(
+                        "String length ({}) exceeds limit ({})",
+                        string_len, MAX_STRING_LEN
+                    ),
                 ));
             }
 
@@ -731,32 +805,35 @@ impl<R: Read> BinaryReader<R> {
             if total_bytes > MAX_STRING_TABLE_BYTES {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    format!("Aggregate string table size exceeds {} byte limit", MAX_STRING_TABLE_BYTES),
+                    format!(
+                        "Aggregate string table size exceeds {} byte limit",
+                        MAX_STRING_TABLE_BYTES
+                    ),
                 ));
             }
-            
+
             let mut string_bytes = vec![0u8; string_len as usize];
             self.reader.read_exact(&mut string_bytes)?;
             capture.extend_from_slice(&string_bytes);
-            
+
             let string = String::from_utf8(string_bytes)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
             strings.push(string);
         }
-        
+
         self.string_table.load_strings(strings);
         Ok(())
     }
-    
+
     fn read_binary_data(&mut self) -> std::io::Result<BinaryResults> {
         // Hard cap on compressed input to prevent OOM from malicious files.
         // 2 GB is well beyond any legitimate DiMA result file.
         const MAX_COMPRESSED_SIZE: u64 = 2 * 1024 * 1024 * 1024;
-        
+
         let mut size_bytes = [0u8; 8];
         self.reader.read_exact(&mut size_bytes)?;
         let compressed_size = u64::from_le_bytes(size_bytes);
-        
+
         if compressed_size > MAX_COMPRESSED_SIZE {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -766,7 +843,7 @@ impl<R: Read> BinaryReader<R> {
                 ),
             ));
         }
-        
+
         let mut compressed_data = vec![0u8; compressed_size as usize];
         self.reader.read_exact(&mut compressed_data)?;
 
@@ -792,13 +869,13 @@ impl<R: Read> BinaryReader<R> {
                 ));
             }
         }
-        
+
         let decompressed_data = match self.config.compression {
             CompressionType::None => compressed_data,
             CompressionType::Lz4 => self.decompress_lz4(&compressed_data)?,
             CompressionType::Zstd => self.decompress_zstd(&compressed_data)?,
         };
-        
+
         // Use bincode with a byte limit matching the decompressed size to prevent
         // structural allocation bombs where embedded length fields describe enormous
         // nested structures beyond what the actual data contains.
@@ -806,10 +883,11 @@ impl<R: Read> BinaryReader<R> {
             .with_limit(decompressed_data.len() as u64)
             .with_fixint_encoding()
             .allow_trailing_bytes();
-        options.deserialize(&decompressed_data)
+        options
+            .deserialize(&decompressed_data)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
-    
+
     fn decompress_lz4(&self, data: &[u8]) -> std::io::Result<Vec<u8>> {
         // Validate the prepended uncompressed size before allocating.
         // LZ4 stores the original size as a little-endian u32 at the start of the buffer.
@@ -829,16 +907,16 @@ impl<R: Read> BinaryReader<R> {
         lz4_flex::decompress_size_prepended(data)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
-    
+
     fn decompress_zstd(&self, data: &[u8]) -> std::io::Result<Vec<u8>> {
         // Cap decompressed output at 4 GB to prevent decompression bombs.
         const MAX_DECOMPRESSED_SIZE: usize = 4 * 1024 * 1024 * 1024;
-        
-        let decompressed_size = zstd::bulk::Decompressor::upper_bound(data)
-            .unwrap_or(MAX_DECOMPRESSED_SIZE);
-        
+
+        let decompressed_size =
+            zstd::bulk::Decompressor::upper_bound(data).unwrap_or(MAX_DECOMPRESSED_SIZE);
+
         let capped_size = decompressed_size.min(MAX_DECOMPRESSED_SIZE);
-        
+
         match zstd::bulk::decompress(data, capped_size) {
             Ok(result) => Ok(result),
             Err(_) => {
@@ -849,10 +927,11 @@ impl<R: Read> BinaryReader<R> {
                 use std::io::Read;
                 let decoder = zstd::Decoder::new(data)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-                
+
                 let mut limited = decoder.take(MAX_DECOMPRESSED_SIZE as u64);
                 let mut result = Vec::new();
-                limited.read_to_end(&mut result)
+                limited
+                    .read_to_end(&mut result)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
                 if result.len() >= MAX_DECOMPRESSED_SIZE {
@@ -865,7 +944,7 @@ impl<R: Read> BinaryReader<R> {
                         ),
                     ));
                 }
-                
+
                 Ok(result)
             }
         }
@@ -892,15 +971,20 @@ impl BinaryFormat {
             binary_writer.write_results(results)?;
             // Flush the BufWriter and fsync the underlying file descriptor.
             // This guarantees the full payload is on-disk before the rename.
-            let inner_file = binary_writer.into_inner()?.into_inner()
+            let inner_file = binary_writer
+                .into_inner()?
+                .into_inner()
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
             inner_file.sync_all()?;
         }
         std::fs::rename(&tmp_path, path).map_err(|e| {
-            std::io::Error::new(e.kind(), format!("Failed to rename {} to {}: {}", tmp_path, path, e))
+            std::io::Error::new(
+                e.kind(),
+                format!("Failed to rename {} to {}: {}", tmp_path, path, e),
+            )
         })
     }
-    
+
     /// Read results from binary file
     pub fn read_from_file(path: &str) -> std::io::Result<Results> {
         let file = File::open(path)?;
@@ -908,24 +992,25 @@ impl BinaryFormat {
         let mut binary_reader = BinaryReader::new(reader);
         binary_reader.read_results()
     }
-    
+
     /// Get file size comparison between JSON and binary formats
     pub fn compare_formats(results: &Results) -> std::io::Result<(usize, usize, f64)> {
         // JSON size
         let json_data = serde_json::to_vec(results)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         let json_size = json_data.len();
-        
+
         // Binary size (in memory)
         let mut binary_data = Vec::new();
         {
-            let mut binary_writer = BinaryWriter::new(&mut binary_data, BinaryFormatConfig::default());
+            let mut binary_writer =
+                BinaryWriter::new(&mut binary_data, BinaryFormatConfig::default());
             binary_writer.write_results(results)?;
         }
         let binary_size = binary_data.len();
-        
+
         let compression_ratio = json_size as f64 / binary_size as f64;
-        
+
         Ok((json_size, binary_size, compression_ratio))
     }
 }
@@ -943,7 +1028,7 @@ pub struct BinaryFormatStats {
 impl BinaryFormatStats {
     pub fn from_writer<W: Write>(writer: &BinaryWriter<W>, file_size: usize) -> Self {
         let (unique_strings, total_chars) = writer.string_table.stats();
-        
+
         Self {
             string_table_size: unique_strings * 8 + total_chars, // Rough estimate
             unique_strings,
@@ -957,7 +1042,7 @@ impl BinaryFormatStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{Results, Position, Variant, HighestEntropy};
+    use crate::models::{HighestEntropy, Position, Results, Variant};
     use hashbrown::HashMap;
     extern crate tempfile;
 
@@ -969,7 +1054,7 @@ mod tests {
             country_map.insert("Canada".to_string(), 3);
             country_map
         });
-        
+
         let variant = Variant {
             sequence: "ATG".to_string(),
             count: 10,
@@ -978,7 +1063,7 @@ mod tests {
             motif_long: Some("Major".to_string()),
             metadata: Some(metadata),
         };
-        
+
         let position = Position {
             position: 1,
             low_support: None,
@@ -989,7 +1074,7 @@ mod tests {
             total_variants_incidence: 75.0,
             diversity_motifs: Some(vec![variant]),
         };
-        
+
         Results {
             sequence_count: 100,
             support_threshold: 5,
@@ -1008,14 +1093,14 @@ mod tests {
     #[test]
     fn test_string_table() {
         let mut table = StringTable::new();
-        
+
         let id1 = table.intern("hello");
         let id2 = table.intern("world");
         let id3 = table.intern("hello"); // Should reuse
-        
+
         assert_eq!(id1, id3);
         assert_ne!(id1, id2);
-        
+
         assert_eq!(table.get_string(id1), Some("hello"));
         assert_eq!(table.get_string(id2), Some("world"));
     }
@@ -1024,26 +1109,27 @@ mod tests {
     fn test_binary_conversion() {
         let results = create_test_results();
         let mut string_table = StringTable::new();
-        
+
         // Convert to binary and back
         let binary_results = BinaryResults::from_json_results(&results, &mut string_table);
         let converted_back = binary_results.to_json_results(&string_table);
-        
+
         // Check key fields
         assert_eq!(results.sequence_count, converted_back.sequence_count);
         assert_eq!(results.query_name, converted_back.query_name);
         assert_eq!(results.kmer_length, converted_back.kmer_length);
         assert_eq!(results.results.len(), converted_back.results.len());
-        
+
         // Check first position
         let orig_pos = &results.results[0];
         let conv_pos = &converted_back.results[0];
         assert_eq!(orig_pos.position, conv_pos.position);
         assert_eq!(orig_pos.entropy, conv_pos.entropy);
-        
+
         // Check first variant
-        if let (Some(orig_variants), Some(conv_variants)) = 
-            (&orig_pos.diversity_motifs, &conv_pos.diversity_motifs) {
+        if let (Some(orig_variants), Some(conv_variants)) =
+            (&orig_pos.diversity_motifs, &conv_pos.diversity_motifs)
+        {
             assert_eq!(orig_variants.len(), conv_variants.len());
             let orig_var = &orig_variants[0];
             let conv_var = &conv_variants[0];
@@ -1058,10 +1144,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let temp_path = dir.path().join("output.dima");
         let path_str = temp_path.to_str().unwrap();
-        
+
         BinaryFormat::write_to_file(&results, path_str, None).unwrap();
         let loaded_results = BinaryFormat::read_from_file(path_str).unwrap();
-        
+
         assert_eq!(results.sequence_count, loaded_results.sequence_count);
         assert_eq!(results.query_name, loaded_results.query_name);
         assert_eq!(results.results.len(), loaded_results.results.len());
@@ -1071,20 +1157,29 @@ mod tests {
     fn test_compression_types() {
         let results = create_test_results();
         let dir = tempfile::tempdir().unwrap();
-        
+
         let configs = [
-            BinaryFormatConfig { compression: CompressionType::None, ..Default::default() },
-            BinaryFormatConfig { compression: CompressionType::Lz4, ..Default::default() },
-            BinaryFormatConfig { compression: CompressionType::Zstd, ..Default::default() },
+            BinaryFormatConfig {
+                compression: CompressionType::None,
+                ..Default::default()
+            },
+            BinaryFormatConfig {
+                compression: CompressionType::Lz4,
+                ..Default::default()
+            },
+            BinaryFormatConfig {
+                compression: CompressionType::Zstd,
+                ..Default::default()
+            },
         ];
-        
+
         for (i, config) in configs.iter().enumerate() {
             let temp_path = dir.path().join(format!("compression_{}.dima", i));
             let path_str = temp_path.to_str().unwrap();
-            
+
             BinaryFormat::write_to_file(&results, path_str, Some(config.clone())).unwrap();
             let loaded_results = BinaryFormat::read_from_file(path_str).unwrap();
-            
+
             assert_eq!(results.sequence_count, loaded_results.sequence_count);
             assert_eq!(results.query_name, loaded_results.query_name);
         }
@@ -1093,14 +1188,14 @@ mod tests {
     #[test]
     fn test_format_comparison() {
         let results = create_test_results();
-        
-        let (json_size, binary_size, compression_ratio) = 
+
+        let (json_size, binary_size, compression_ratio) =
             BinaryFormat::compare_formats(&results).unwrap();
-        
+
         println!("JSON size: {} bytes", json_size);
         println!("Binary size: {} bytes", binary_size);
         println!("Compression ratio: {:.2}x", compression_ratio);
-        
+
         // Binary should be smaller or similar size
         assert!(binary_size <= json_size * 2); // Allow some overhead for small datasets
     }
@@ -1111,46 +1206,74 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let temp_path = dir.path().join("integrity.dima");
         let temp_path = temp_path.to_str().unwrap();
-        
+
         BinaryFormat::write_to_file(&original_results, temp_path, None).unwrap();
         let loaded_results = BinaryFormat::read_from_file(temp_path).unwrap();
-        
+
         // Verify complete data integrity
-        assert_eq!(original_results.sequence_count, loaded_results.sequence_count);
-        assert_eq!(original_results.support_threshold, loaded_results.support_threshold);
-        assert_eq!(original_results.low_support_count, loaded_results.low_support_count);
+        assert_eq!(
+            original_results.sequence_count,
+            loaded_results.sequence_count
+        );
+        assert_eq!(
+            original_results.support_threshold,
+            loaded_results.support_threshold
+        );
+        assert_eq!(
+            original_results.low_support_count,
+            loaded_results.low_support_count
+        );
         assert_eq!(original_results.query_name, loaded_results.query_name);
         assert_eq!(original_results.kmer_length, loaded_results.kmer_length);
-        assert_eq!(original_results.highest_entropy.position, loaded_results.highest_entropy.position);
-        assert_eq!(original_results.highest_entropy.entropy, loaded_results.highest_entropy.entropy);
-        assert_eq!(original_results.average_entropy, loaded_results.average_entropy);
+        assert_eq!(
+            original_results.highest_entropy.position,
+            loaded_results.highest_entropy.position
+        );
+        assert_eq!(
+            original_results.highest_entropy.entropy,
+            loaded_results.highest_entropy.entropy
+        );
+        assert_eq!(
+            original_results.average_entropy,
+            loaded_results.average_entropy
+        );
         assert_eq!(original_results.results.len(), loaded_results.results.len());
-        
+
         // Verify first position in detail
         let orig_pos = &original_results.results[0];
         let loaded_pos = &loaded_results.results[0];
-        
+
         assert_eq!(orig_pos.position, loaded_pos.position);
         assert_eq!(orig_pos.entropy, loaded_pos.entropy);
         assert_eq!(orig_pos.support, loaded_pos.support);
-        assert_eq!(orig_pos.distinct_variants_count, loaded_pos.distinct_variants_count);
-        assert_eq!(orig_pos.distinct_variants_incidence, loaded_pos.distinct_variants_incidence);
-        assert_eq!(orig_pos.total_variants_incidence, loaded_pos.total_variants_incidence);
-        
+        assert_eq!(
+            orig_pos.distinct_variants_count,
+            loaded_pos.distinct_variants_count
+        );
+        assert_eq!(
+            orig_pos.distinct_variants_incidence,
+            loaded_pos.distinct_variants_incidence
+        );
+        assert_eq!(
+            orig_pos.total_variants_incidence,
+            loaded_pos.total_variants_incidence
+        );
+
         // Verify variants
-        if let (Some(orig_variants), Some(loaded_variants)) = 
-            (&orig_pos.diversity_motifs, &loaded_pos.diversity_motifs) {
+        if let (Some(orig_variants), Some(loaded_variants)) =
+            (&orig_pos.diversity_motifs, &loaded_pos.diversity_motifs)
+        {
             assert_eq!(orig_variants.len(), loaded_variants.len());
-            
+
             let orig_var = &orig_variants[0];
             let loaded_var = &loaded_variants[0];
-            
+
             assert_eq!(orig_var.sequence, loaded_var.sequence);
             assert_eq!(orig_var.count, loaded_var.count);
             assert_eq!(orig_var.incidence, loaded_var.incidence);
             assert_eq!(orig_var.motif_short, loaded_var.motif_short);
             assert_eq!(orig_var.motif_long, loaded_var.motif_long);
-            
+
             // Verify metadata
             match (&orig_var.metadata, &loaded_var.metadata) {
                 (Some(orig_meta), Some(loaded_meta)) => {
@@ -1174,7 +1297,7 @@ mod tests {
                 _ => panic!("Metadata presence mismatch"),
             }
         }
-        
+
         // tempdir auto-cleans on drop
     }
 
@@ -1182,28 +1305,28 @@ mod tests {
     fn test_large_dataset_performance() {
         // Create a larger dataset for performance testing
         let mut large_results = create_test_results();
-        
+
         // Multiply the positions to create a larger dataset
         let original_position = large_results.results[0].clone();
         large_results.results.clear();
-        
+
         for i in 0..1000 {
             let mut pos = original_position.clone();
             pos.position = i + 1;
             large_results.results.push(pos);
         }
-        
+
         let start = std::time::Instant::now();
-        let (json_size, binary_size, compression_ratio) = 
+        let (json_size, binary_size, compression_ratio) =
             BinaryFormat::compare_formats(&large_results).unwrap();
         let comparison_time = start.elapsed();
-        
+
         println!("Large dataset performance:");
         println!("JSON size: {} bytes", json_size);
         println!("Binary size: {} bytes", binary_size);
         println!("Compression ratio: {:.2}x", compression_ratio);
         println!("Comparison time: {:?}", comparison_time);
-        
+
         // For larger datasets, binary should be significantly smaller
         assert!(compression_ratio > 1.0);
     }
@@ -1221,8 +1344,11 @@ mod tests {
         let result = reader.read_results();
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("magic") || err.contains("not a .dima"),
-            "Expected magic byte error, got: {}", err);
+        assert!(
+            err.contains("magic") || err.contains("not a .dima"),
+            "Expected magic byte error, got: {}",
+            err
+        );
     }
 
     #[test]
@@ -1240,12 +1366,12 @@ mod tests {
         // Valid v2 header (magic + version=2 + min_reader=1 + compression=0 + level=0 + flags=0)
         // Then claim 0xFFFFFFFF strings in the string table
         let mut data: Vec<u8> = Vec::new();
-        data.extend_from_slice(b"DIMA");            // magic
+        data.extend_from_slice(b"DIMA"); // magic
         data.extend_from_slice(&2u32.to_le_bytes()); // writer_version = 2
         data.extend_from_slice(&1u32.to_le_bytes()); // min_reader_version = 1
-        data.push(0);                                // compression = None
+        data.push(0); // compression = None
         data.extend_from_slice(&0i32.to_le_bytes()); // compression_level = 0
-        data.push(0x01);                             // flags: string_interning=true
+        data.push(0x01); // flags: string_interning=true
         data.extend_from_slice(&u32::MAX.to_le_bytes()); // string_count = MAX
 
         let cursor = std::io::Cursor::new(data);
@@ -1253,8 +1379,11 @@ mod tests {
         let result = reader.read_results();
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("exceeds limit") || err.contains("count"),
-            "Expected string count rejection, got: {}", err);
+        assert!(
+            err.contains("exceeds limit") || err.contains("count"),
+            "Expected string count rejection, got: {}",
+            err
+        );
     }
 
     #[test]
@@ -1267,16 +1396,19 @@ mod tests {
         data.push(0);
         data.extend_from_slice(&0i32.to_le_bytes());
         data.push(0x01);
-        data.extend_from_slice(&1u32.to_le_bytes());            // string_count = 1
-        data.extend_from_slice(&500_000_000u32.to_le_bytes());  // string_len = 500MB
+        data.extend_from_slice(&1u32.to_le_bytes()); // string_count = 1
+        data.extend_from_slice(&500_000_000u32.to_le_bytes()); // string_len = 500MB
 
         let cursor = std::io::Cursor::new(data);
         let mut reader = BinaryReader::new(cursor);
         let result = reader.read_results();
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("exceeds limit") || err.contains("length"),
-            "Expected string length rejection, got: {}", err);
+        assert!(
+            err.contains("exceeds limit") || err.contains("length"),
+            "Expected string length rejection, got: {}",
+            err
+        );
     }
 
     #[test]
@@ -1292,8 +1424,11 @@ mod tests {
         let result = reader.read_results();
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("compression") || err.contains("Invalid"),
-            "Expected compression type error, got: {}", err);
+        assert!(
+            err.contains("compression") || err.contains("Invalid"),
+            "Expected compression type error, got: {}",
+            err
+        );
     }
 
     #[test]
@@ -1301,7 +1436,7 @@ mod tests {
         // File claims it needs reader v999 — we're v2
         let mut data: Vec<u8> = Vec::new();
         data.extend_from_slice(b"DIMA");
-        data.extend_from_slice(&2u32.to_le_bytes());   // writer_version = 2
+        data.extend_from_slice(&2u32.to_le_bytes()); // writer_version = 2
         data.extend_from_slice(&999u32.to_le_bytes()); // min_reader_version = 999
 
         let cursor = std::io::Cursor::new(data);
@@ -1309,8 +1444,11 @@ mod tests {
         let result = reader.read_results();
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("upgrade") || err.contains("v999"),
-            "Expected version-too-new error, got: {}", err);
+        assert!(
+            err.contains("upgrade") || err.contains("v999"),
+            "Expected version-too-new error, got: {}",
+            err
+        );
     }
 
     #[test]
@@ -1320,10 +1458,8 @@ mod tests {
         let test_results = create_test_results();
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("crc_test.dima");
-        
-        BinaryFormat::write_to_file(
-            &test_results, path.to_str().unwrap(), None,
-        ).unwrap();
+
+        BinaryFormat::write_to_file(&test_results, path.to_str().unwrap(), None).unwrap();
 
         let mut bytes = std::fs::read(&path).unwrap();
         // Corrupt the flags byte (byte 17 in v2 header: 4 magic + 4 version +
@@ -1342,8 +1478,11 @@ mod tests {
         let result = reader.read_results();
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("CRC") || err.contains("corrupt"),
-            "Expected CRC mismatch error, got: {}", err);
+        assert!(
+            err.contains("CRC") || err.contains("corrupt"),
+            "Expected CRC mismatch error, got: {}",
+            err
+        );
     }
 
     #[test]

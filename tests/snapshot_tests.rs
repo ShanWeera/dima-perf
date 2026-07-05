@@ -29,9 +29,7 @@ fn run_dima(args: &[&str]) -> String {
 /// pinning exact floating-point values (uses redactions for entropy).
 #[test]
 fn test_analyze_json_structure() {
-    let output = run_dima(&[
-        "analyze", "-i", "samples/mers_spike_aa.fasta", "-k", "9",
-    ]);
+    let output = run_dima(&["analyze", "-i", "samples/mers_spike_aa.fasta", "-k", "9"]);
     let json: serde_json::Value = serde_json::from_str(&output).unwrap();
 
     // Snapshot the top-level structure (redact volatile values)
@@ -54,9 +52,7 @@ fn test_analyze_json_structure() {
 /// variant/motif structure.
 #[test]
 fn test_analyze_first_position_schema() {
-    let output = run_dima(&[
-        "analyze", "-i", "samples/mers_spike_aa.fasta", "-k", "9",
-    ]);
+    let output = run_dima(&["analyze", "-i", "samples/mers_spike_aa.fasta", "-k", "9"]);
     let json: serde_json::Value = serde_json::from_str(&output).unwrap();
 
     let first_position = &json["results"][0];
@@ -88,16 +84,14 @@ fn test_identical_sequences_output_schema() {
 
     let output = Command::cargo_bin("dima")
         .unwrap()
-        .args([
-            "analyze",
-            "-i",
-            input.to_str().unwrap(),
-            "-k",
-            "3",
-        ])
+        .args(["analyze", "-i", input.to_str().unwrap(), "-k", "3"])
         .output()
         .expect("failed to run");
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let json: serde_json::Value =
         serde_json::from_str(&String::from_utf8(output.stdout).unwrap()).unwrap();

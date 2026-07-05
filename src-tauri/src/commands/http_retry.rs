@@ -61,9 +61,13 @@ where
         match request.send().await {
             Ok(response) => {
                 let status = response.status().as_u16();
-                if config.retryable_statuses.contains(&status) && attempt + 1 < config.max_attempts {
+                if config.retryable_statuses.contains(&status) && attempt + 1 < config.max_attempts
+                {
                     last_error = Some(AppError::NetworkError(format!(
-                        "HTTP {} (attempt {}/{})", status, attempt + 1, config.max_attempts
+                        "HTTP {} (attempt {}/{})",
+                        status,
+                        attempt + 1,
+                        config.max_attempts
                     )));
                     continue;
                 }
@@ -72,25 +76,22 @@ where
             Err(e) => {
                 if e.is_timeout() {
                     // Don't retry timeouts — indicates server overload
-                    return Err(AppError::Timeout(format!(
-                        "Request timed out: {}", e
-                    )));
+                    return Err(AppError::Timeout(format!("Request timed out: {}", e)));
                 }
                 if attempt + 1 < config.max_attempts && e.is_connect() {
                     last_error = Some(AppError::NetworkError(format!(
                         "Connection failed (attempt {}/{}): {}",
-                        attempt + 1, config.max_attempts, e
+                        attempt + 1,
+                        config.max_attempts,
+                        e
                     )));
                     continue;
                 }
-                return Err(AppError::NetworkError(format!(
-                    "Request failed: {}", e
-                )));
+                return Err(AppError::NetworkError(format!("Request failed: {}", e)));
             }
         }
     }
 
-    Err(last_error.unwrap_or_else(|| AppError::NetworkError(
-        "All retry attempts exhausted".to_string()
-    )))
+    Err(last_error
+        .unwrap_or_else(|| AppError::NetworkError("All retry attempts exhausted".to_string())))
 }

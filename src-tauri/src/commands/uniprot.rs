@@ -139,15 +139,15 @@ pub async fn fetch_uniprot_accession(
 ) -> Result<String, AppError> {
     let pdb_id = pdb_id.trim().to_uppercase();
 
-    let is_legacy = pdb_id.len() == 4
-        && pdb_id.chars().all(|c| c.is_ascii_alphanumeric());
+    let is_legacy = pdb_id.len() == 4 && pdb_id.chars().all(|c| c.is_ascii_alphanumeric());
     let is_extended = pdb_id.len() == 12
         && pdb_id.starts_with("PDB_")
         && pdb_id[4..].chars().all(|c| c.is_ascii_alphanumeric());
 
     if !is_legacy && !is_extended {
         return Err(AppError::ValidationError(
-            "PDB ID must be a 4-character code (e.g. 6VXX) or extended format (e.g. pdb_00001abc)".to_string()
+            "PDB ID must be a 4-character code (e.g. 6VXX) or extended format (e.g. pdb_00001abc)"
+                .to_string(),
         ));
     }
 
@@ -157,20 +157,19 @@ pub async fn fetch_uniprot_accession(
     );
 
     let retry_config = super::http_retry::RetryConfig::default();
-    let response = super::http_retry::send_with_retry(
-        &state.http_client,
-        &retry_config,
-        |client| client.get(&url),
-    ).await?;
+    let response =
+        super::http_retry::send_with_retry(&state.http_client, &retry_config, |client| {
+            client.get(&url)
+        })
+        .await?;
 
     if !response.status().is_success() {
         let status = response.status();
         return Err(match status.as_u16() {
-            404 => AppError::NotFound(format!(
-                "RCSB entity {}/{} not found", pdb_id, entity_id
-            )),
+            404 => AppError::NotFound(format!("RCSB entity {}/{} not found", pdb_id, entity_id)),
             _ => AppError::NetworkError(format!(
-                "RCSB query failed for entity {}/{} (HTTP {})", pdb_id, entity_id, status
+                "RCSB query failed for entity {}/{} (HTTP {})",
+                pdb_id, entity_id, status
             )),
         });
     }
@@ -178,11 +177,16 @@ pub async fn fetch_uniprot_accession(
     const MAX_RCSB_SIZE: u64 = 10 * 1024 * 1024;
     let mut body_bytes = Vec::new();
     let mut stream = response;
-    while let Some(chunk) = stream.chunk().await
-        .map_err(|e| AppError::NetworkError(format!("Failed to read RCSB response: {}", e)))? {
+    while let Some(chunk) = stream
+        .chunk()
+        .await
+        .map_err(|e| AppError::NetworkError(format!("Failed to read RCSB response: {}", e)))?
+    {
         body_bytes.extend_from_slice(&chunk);
         if body_bytes.len() as u64 > MAX_RCSB_SIZE {
-            return Err(AppError::ValidationError("RCSB response exceeds 10 MB size limit".to_string()));
+            return Err(AppError::ValidationError(
+                "RCSB response exceeds 10 MB size limit".to_string(),
+            ));
         }
     }
     let entity: RcsbPolymerEntity = serde_json::from_slice(&body_bytes)
@@ -219,34 +223,41 @@ pub async fn fetch_uniprot_features(
 ) -> Result<UniProtInfo, AppError> {
     let accession = accession.trim().to_uppercase();
     if accession.is_empty() {
-        return Err(AppError::ValidationError("UniProt accession cannot be empty".to_string()));
+        return Err(AppError::ValidationError(
+            "UniProt accession cannot be empty".to_string(),
+        ));
     }
-    if !accession.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-        return Err(AppError::ValidationError("UniProt accession contains invalid characters".to_string()));
+    if !accession
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        return Err(AppError::ValidationError(
+            "UniProt accession contains invalid characters".to_string(),
+        ));
     }
     if accession.len() > 20 {
-        return Err(AppError::ValidationError("UniProt accession is too long".to_string()));
+        return Err(AppError::ValidationError(
+            "UniProt accession is too long".to_string(),
+        ));
     }
 
-    let url = format!(
-        "https://www.ebi.ac.uk/proteins/api/proteins/{}",
-        accession
-    );
+    let url = format!("https://www.ebi.ac.uk/proteins/api/proteins/{}", accession);
 
     let retry_config = super::http_retry::RetryConfig::default();
     let url_clone = url.clone();
-    let response = super::http_retry::send_with_retry(
-        &state.http_client,
-        &retry_config,
-        |client| client.get(&url_clone).header("Accept", "application/json"),
-    ).await?;
+    let response =
+        super::http_retry::send_with_retry(&state.http_client, &retry_config, |client| {
+            client.get(&url_clone).header("Accept", "application/json")
+        })
+        .await?;
 
     if !response.status().is_success() {
         let status = response.status();
         return Err(match status.as_u16() {
             404 => AppError::NotFound(format!("UniProt accession '{}' not found", accession)),
             _ => AppError::NetworkError(format!(
-                "UniProt query failed for '{}' (HTTP {})", accession, status
+                "UniProt query failed for '{}' (HTTP {})",
+                accession, status
             )),
         });
     }
@@ -263,8 +274,11 @@ pub async fn fetch_uniprot_features(
 
     let mut body_bytes = Vec::new();
     let mut stream = response;
-    while let Some(chunk) = stream.chunk().await
-        .map_err(|e| AppError::NetworkError(format!("Failed to read UniProt response: {}", e)))? {
+    while let Some(chunk) = stream
+        .chunk()
+        .await
+        .map_err(|e| AppError::NetworkError(format!("Failed to read UniProt response: {}", e)))?
+    {
         body_bytes.extend_from_slice(&chunk);
         if body_bytes.len() as u64 > MAX_UNIPROT_SIZE {
             return Err(AppError::ValidationError(format!(
@@ -287,9 +301,9 @@ pub async fn fetch_uniprot_features(
                 .and_then(|n| n.full_name.as_ref().and_then(|v| v.value.clone()))
                 .or_else(|| {
                     p.submitted_name.as_ref().and_then(|names| {
-                        names.first().and_then(|n| {
-                            n.full_name.as_ref().and_then(|v| v.value.clone())
-                        })
+                        names
+                            .first()
+                            .and_then(|n| n.full_name.as_ref().and_then(|v| v.value.clone()))
                     })
                 })
         })
@@ -325,8 +339,8 @@ pub async fn fetch_uniprot_features(
 
     // Parse features, filtering to the categories we care about
     let supported_types = [
-        "DOMAIN", "REGION", "BINDING", "NP_BIND", "ACT_SITE", "SIGNAL",
-        "TRANSMEM", "CARBOHYD", "DISULFID", "TOPO_DOM", "MOTIF",
+        "DOMAIN", "REGION", "BINDING", "NP_BIND", "ACT_SITE", "SIGNAL", "TRANSMEM", "CARBOHYD",
+        "DISULFID", "TOPO_DOM", "MOTIF",
     ];
 
     let features: Vec<ProteinFeature> = entry
@@ -344,7 +358,11 @@ pub async fn fetch_uniprot_features(
             let ft = ft_upper;
 
             let begin: u32 = f.begin.as_deref().and_then(|s| s.parse().ok()).unwrap_or(0);
-            let end: u32 = f.end.as_deref().and_then(|s| s.parse().ok()).unwrap_or(begin);
+            let end: u32 = f
+                .end
+                .as_deref()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(begin);
 
             // Skip features with invalid positions (0 means unparseable,
             // begin > end means the range is inverted/corrupt)

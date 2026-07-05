@@ -89,7 +89,10 @@ pub fn validate_fasta_blocking_public(path: &str) -> Result<FastaValidation, App
     validate_fasta_blocking(path, &no_cancel)
 }
 
-fn validate_fasta_blocking(path: &str, cancel_flag: &Arc<AtomicBool>) -> Result<FastaValidation, AppError> {
+fn validate_fasta_blocking(
+    path: &str,
+    cancel_flag: &Arc<AtomicBool>,
+) -> Result<FastaValidation, AppError> {
     let file_path = Path::new(path);
 
     if !file_path.exists() {
@@ -139,7 +142,10 @@ fn validate_fasta_blocking(path: &str, cancel_flag: &Arc<AtomicBool>) -> Result<
             detected_alphabet: "unknown".to_string(),
             errors: vec![ValidationError {
                 error_type: "file_too_large".to_string(),
-                message: format!("File exceeds maximum size ({} GB limit)", MAX_VALIDATE_FILE_SIZE / (1024 * 1024 * 1024)),
+                message: format!(
+                    "File exceeds maximum size ({} GB limit)",
+                    MAX_VALIDATE_FILE_SIZE / (1024 * 1024 * 1024)
+                ),
                 line_number: None,
             }],
             file_size_bytes,
@@ -246,7 +252,10 @@ fn validate_fasta_blocking(path: &str, cancel_flag: &Arc<AtomicBool>) -> Result<
         if line.len() > MAX_LINE_LENGTH {
             errors.push(ValidationError {
                 error_type: "line_too_long".to_string(),
-                message: format!("Line exceeds {} characters — file may be binary or corrupt", MAX_LINE_LENGTH),
+                message: format!(
+                    "Line exceeds {} characters — file may be binary or corrupt",
+                    MAX_LINE_LENGTH
+                ),
                 line_number: Some(line_number),
             });
             break;
@@ -318,7 +327,9 @@ fn validate_fasta_blocking(path: &str, cancel_flag: &Arc<AtomicBool>) -> Result<
             streaming_line_count += 1;
 
             // Cancellation check during the streaming tail pass (Fix 4.29)
-            if streaming_line_count % CANCEL_CHECK_INTERVAL == 0 && cancel_flag.load(Ordering::Relaxed) {
+            if streaming_line_count % CANCEL_CHECK_INTERVAL == 0
+                && cancel_flag.load(Ordering::Relaxed)
+            {
                 return Err(AppError::Cancelled("Validation cancelled".to_string()));
             }
 
@@ -336,7 +347,9 @@ fn validate_fasta_blocking(path: &str, cancel_flag: &Arc<AtomicBool>) -> Result<
                     if let Some(expected) = expected_length {
                         if tail_seq_len != expected && streaming_length_mismatches.len() < 5 {
                             streaming_length_mismatches.push((
-                                total_sequences_scanned, tail_seq_len, expected
+                                total_sequences_scanned,
+                                tail_seq_len,
+                                expected,
                             ));
                         }
                     }
@@ -353,7 +366,9 @@ fn validate_fasta_blocking(path: &str, cancel_flag: &Arc<AtomicBool>) -> Result<
             if let Some(expected) = expected_length {
                 if tail_seq_len != expected && streaming_length_mismatches.len() < 5 {
                     streaming_length_mismatches.push((
-                        total_sequences_scanned, tail_seq_len, expected
+                        total_sequences_scanned,
+                        tail_seq_len,
+                        expected,
                     ));
                 }
             }
@@ -445,7 +460,8 @@ fn validate_fasta_blocking(path: &str, cancel_flag: &Arc<AtomicBool>) -> Result<
     } else if sequences.len() >= MAX_SCAN_SEQUENCES {
         // Fallback: estimate from file size if streaming didn't run (shouldn't happen)
         let sample_count = sequences.len().min(headers.len());
-        let scanned_bytes: u64 = sequences.iter()
+        let scanned_bytes: u64 = sequences
+            .iter()
             .zip(headers.iter())
             .take(sample_count)
             .map(|(seq, hdr)| (seq.len() + hdr.len() + 3) as u64)
@@ -493,7 +509,9 @@ fn detect_alphabet(sequences: &[String]) -> String {
 
     for seq in sequences.iter().take(10) {
         for c in seq.to_uppercase().chars() {
-            if c == '-' || c == '.' || c == '*' { continue; }
+            if c == '-' || c == '.' || c == '*' {
+                continue;
+            }
             total_count += 1;
             if nucleotides.contains(&c) {
                 nucleotide_count += 1;
@@ -557,7 +575,9 @@ fn detect_header_format_blocking(path: &str) -> Result<HeaderFormatDetection, Ap
 
     let meta = fs::metadata(file_path)?;
     if !meta.is_file() {
-        return Err(AppError::ValidationError("Path does not point to a regular file".to_string()));
+        return Err(AppError::ValidationError(
+            "Path does not point to a regular file".to_string(),
+        ));
     }
 
     // Apply the same size cap as validate_fasta to prevent resource exhaustion

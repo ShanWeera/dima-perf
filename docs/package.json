@@ -14,5 +14,8 @@
     "@astrojs/starlight": "^0.39.3",
     "starlight-katex": "^0.0.4",
     "katex": "^0.16.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "sharp"]
   }
 }

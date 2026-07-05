@@ -7,30 +7,34 @@
 // Using pub(crate) prevents external crates from directly importing
 // implementation details, allowing internal refactoring without semver bumps.
 pub(crate) mod alphabet;
-pub(crate) mod models;
-pub mod kmer;
-pub(crate) mod entropy;
-pub mod io;
 pub(crate) mod analysis;
-pub(crate) mod simd_string;
-pub(crate) mod zero_copy;
-pub(crate) mod columnar;
-pub(crate) mod indexing;
 pub mod binary;
+pub(crate) mod columnar;
+pub(crate) mod entropy;
+pub(crate) mod indexing;
+pub mod io;
+pub mod kmer;
 pub mod matrix;
+pub(crate) mod models;
 pub mod output;
 pub mod perf;
+pub(crate) mod simd_string;
+pub(crate) mod zero_copy;
 
 // ─── Stable Public API ───────────────────────────────────────────────────────
 // Only these re-exports are semver-guaranteed. Internal module structure may
 // change between minor versions without breaking downstream consumers.
 
-pub use alphabet::{CharacterValidator, ValidationMode, AlphabetType, CharacterClass, ValidationStats};
-pub use analysis::{analyze, get_results_objs, get_results_objs_columnar, AnalysisConfig, AnalysisError};
-pub use entropy::calculate_entropy_encoded_at_position;
-pub use kmer::max_kmer_length;
-pub use models::{Results, Position, Variant, HighestEntropy};
+pub use alphabet::{
+    AlphabetType, CharacterClass, CharacterValidator, ValidationMode, ValidationStats,
+};
+pub use analysis::{
+    analyze, get_results_objs, get_results_objs_columnar, AnalysisConfig, AnalysisError,
+};
 pub use binary::{BinaryFormat, BinaryFormatConfig, BinaryFormatError, CompressionType};
-pub use io::{InputSource, ParseDiagnostics, atomic_write};
-pub use output::{OutputType, OutputOptions, resolve_output_type, write_results_to_output};
+pub use entropy::calculate_entropy_encoded_at_position;
+pub use io::{atomic_write, InputSource, ParseDiagnostics};
+pub use kmer::max_kmer_length;
+pub use models::{HighestEntropy, Position, Results, Variant};
+pub use output::{resolve_output_type, write_results_to_output, OutputOptions, OutputType};
 pub use perf::PerfReport;

@@ -53,7 +53,10 @@ pub struct TauriProgressReporter {
 impl TauriProgressReporter {
     /// Create a new progress reporter
     pub fn new(window: Window, cancel_flag: Arc<AtomicBool>) -> Self {
-        Self { window, cancel_flag }
+        Self {
+            window,
+            cancel_flag,
+        }
     }
 
     /// Report progress to the frontend. Logs emit failures (e.g. window

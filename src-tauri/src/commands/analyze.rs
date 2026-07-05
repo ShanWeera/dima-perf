@@ -9,7 +9,9 @@ use crate::project::{
     validate_path_confinement, InputFileInfo,
 };
 use crate::state::AppState;
-use dima_lib::{analyze, InputSource, max_kmer_length, AnalysisConfig as DimaConfig, ValidationMode};
+use dima_lib::{
+    analyze, max_kmer_length, AnalysisConfig as DimaConfig, InputSource, ValidationMode,
+};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tauri::{Emitter, State, Window};
@@ -25,7 +27,10 @@ struct AnalysisCleanupGuard<'a> {
 
 impl<'a> AnalysisCleanupGuard<'a> {
     fn new(state: &'a AppState) -> Self {
-        Self { state, disarmed: false }
+        Self {
+            state,
+            disarmed: false,
+        }
     }
 
     /// Called on the normal (non-panic) path after the async cleanup succeeds.
@@ -95,14 +100,15 @@ pub async fn run_analysis(
     state: State<'_, AppState>,
     request: AnalysisRequest,
 ) -> Result<AnalysisResponse, AppError> {
-    let _analysis_guard = state
-        .analysis_mutex
-        .try_lock()
-        .map_err(|_| AppError::AnalysisError("An analysis is already running. Please wait or cancel it first.".to_string()))?;
+    let _analysis_guard = state.analysis_mutex.try_lock().map_err(|_| {
+        AppError::AnalysisError(
+            "An analysis is already running. Please wait or cancel it first.".to_string(),
+        )
+    })?;
 
     // Validate project path is confined to the projects directory
-    let projects_base = project::get_projects_path()
-        .map_err(|e| AppError::ProjectError(e.to_string()))?;
+    let projects_base =
+        project::get_projects_path().map_err(|e| AppError::ProjectError(e.to_string()))?;
     let project_path = PathBuf::from(&request.project_path);
     validate_path_confinement(&project_path, &projects_base)
         .map_err(|e| AppError::ProjectError(e.to_string()))?;
@@ -167,7 +173,9 @@ async fn run_analysis_inner(
         )));
     }
     if request.support_threshold == 0 {
-        return Err(AppError::ValidationError("Support threshold must be at least 1".to_string()));
+        return Err(AppError::ValidationError(
+            "Support threshold must be at least 1".to_string(),
+        ));
     }
     if request.support_threshold > 10_000 {
         return Err(AppError::ValidationError(format!(
@@ -202,7 +210,8 @@ async fn run_analysis_inner(
             }
             Err(e) => {
                 return Err(AppError::FileError(format!(
-                    "Cannot access input file for fingerprint verification: {}", e
+                    "Cannot access input file for fingerprint verification: {}",
+                    e
                 )));
             }
         }
@@ -288,14 +297,16 @@ async fn run_analysis_inner(
     };
 
     // Parse header format (pipe-delimited field names)
-    let header_format_vec: Option<Vec<String>> = request.header_format.as_ref().map(|hf| {
-        hf.split('|').map(|s| s.to_string()).collect()
-    });
+    let header_format_vec: Option<Vec<String>> = request
+        .header_format
+        .as_ref()
+        .map(|hf| hf.split('|').map(|s| s.to_string()).collect());
 
     // Parse metadata fields (pipe-delimited to match header_format convention)
-    let metadata_fields_vec: Option<Vec<String>> = request.metadata_fields.as_ref().map(|mf| {
-        mf.split('|').map(|s| s.trim().to_string()).collect()
-    });
+    let metadata_fields_vec: Option<Vec<String>> = request
+        .metadata_fields
+        .as_ref()
+        .map(|mf| mf.split('|').map(|s| s.trim().to_string()).collect());
 
     let kmer_length = request.kmer_length;
     let support_threshold = request.support_threshold;
@@ -334,8 +345,11 @@ async fn run_analysis_inner(
             None,
             metadata_fields_vec,
             Some(config),
-        ).map_err(|e| match e {
-            dima_lib::AnalysisError::Cancelled => AppError::Cancelled("Analysis cancelled".to_string()),
+        )
+        .map_err(|e| match e {
+            dima_lib::AnalysisError::Cancelled => {
+                AppError::Cancelled("Analysis cancelled".to_string())
+            }
             other => AppError::AnalysisError(format!("Analysis failed: {}", other)),
         })?;
 

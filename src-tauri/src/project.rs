@@ -125,12 +125,12 @@ pub fn validate_path_confinement(path: &Path, expected_base: &Path) -> AppResult
         Err(_) => {
             // Path doesn't exist yet (e.g., creating a new project).
             // Canonicalize the parent directory and append the filename.
-            let parent = path.parent().ok_or_else(|| {
-                AppError::ProjectError("Path has no parent directory".into())
-            })?;
-            let file_name = path.file_name().ok_or_else(|| {
-                AppError::ProjectError("Path has no file name component".into())
-            })?;
+            let parent = path
+                .parent()
+                .ok_or_else(|| AppError::ProjectError("Path has no parent directory".into()))?;
+            let file_name = path
+                .file_name()
+                .ok_or_else(|| AppError::ProjectError("Path has no file name component".into()))?;
 
             // The parent must exist and be canonicalizable
             let canonical_parent = parent.canonicalize().map_err(|e| {
@@ -233,9 +233,8 @@ pub async fn create_new_project(name: &str) -> AppResult<PathBuf> {
 /// Windows reserved device names that cannot be used as folder names.
 /// Includes COM1-9, LPT1-9, CON, PRN, AUX, NUL (case-insensitive).
 const WINDOWS_RESERVED: &[&str] = &[
-    "CON", "PRN", "AUX", "NUL",
-    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
 
 /// Sanitize a project name for use as a folder name.
@@ -260,7 +259,12 @@ pub(crate) fn sanitize_project_name(name: &str) -> String {
 
     // Enforce maximum length using char boundaries
     let truncated = if sanitized.chars().count() > MAX_PROJECT_NAME_LENGTH {
-        sanitized.chars().take(MAX_PROJECT_NAME_LENGTH).collect::<String>().trim_end().to_string()
+        sanitized
+            .chars()
+            .take(MAX_PROJECT_NAME_LENGTH)
+            .collect::<String>()
+            .trim_end()
+            .to_string()
     } else {
         sanitized
     };
@@ -284,10 +288,19 @@ pub(crate) fn sanitize_project_name(name: &str) -> String {
 
 /// Check if a character is a BiDi control character
 fn is_bidi_control(c: char) -> bool {
-    matches!(c,
-        '\u{200E}' | '\u{200F}' | '\u{202A}' | '\u{202B}' |
-        '\u{202C}' | '\u{202D}' | '\u{202E}' | '\u{2066}' |
-        '\u{2067}' | '\u{2068}' | '\u{2069}'
+    matches!(
+        c,
+        '\u{200E}'
+            | '\u{200F}'
+            | '\u{202A}'
+            | '\u{202B}'
+            | '\u{202C}'
+            | '\u{202D}'
+            | '\u{202E}'
+            | '\u{2066}'
+            | '\u{2067}'
+            | '\u{2068}'
+            | '\u{2069}'
     )
 }
 
@@ -366,8 +379,9 @@ pub async fn load_recent_projects() -> AppResult<Vec<RecentProject>> {
 pub async fn save_recent_projects(projects: &[RecentProject]) -> AppResult<()> {
     let base_path = get_app_base_path()?;
     let recent_path = base_path.join("recent-projects.json");
-    let content = serde_json::to_string_pretty(projects)
-        .map_err(|e| AppError::ProjectError(format!("Failed to serialize recent projects: {}", e)))?;
+    let content = serde_json::to_string_pretty(projects).map_err(|e| {
+        AppError::ProjectError(format!("Failed to serialize recent projects: {}", e))
+    })?;
 
     let tmp_path = recent_path.with_extension("json.tmp");
     fs::write(&tmp_path, &content).await?;
@@ -407,8 +421,12 @@ pub async fn delete_project_folder(project_path: &PathBuf) -> AppResult<()> {
     validate_path_confinement(project_path, &projects_path)?;
 
     // Strict child check: refuse to delete the projects root itself (Fix 7.1c)
-    let canonical_target = project_path.canonicalize().unwrap_or_else(|_| project_path.clone());
-    let canonical_base = projects_path.canonicalize().unwrap_or_else(|_| projects_path.clone());
+    let canonical_target = project_path
+        .canonicalize()
+        .unwrap_or_else(|_| project_path.clone());
+    let canonical_base = projects_path
+        .canonicalize()
+        .unwrap_or_else(|_| projects_path.clone());
     if canonical_target == canonical_base {
         return Err(AppError::ProjectError(
             "Cannot delete the Projects root directory".into(),

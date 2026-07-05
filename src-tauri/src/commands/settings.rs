@@ -178,8 +178,8 @@ pub async fn get_documents_path() -> Result<String, AppError> {
 /// Avoids the frontend constructing paths with hardcoded forward slashes. (Fix 4.49)
 #[tauri::command]
 pub async fn get_projects_directory_path() -> Result<String, AppError> {
-    let projects_path = crate::project::get_projects_path()
-        .map_err(|e| AppError::SettingsError(e.to_string()))?;
+    let projects_path =
+        crate::project::get_projects_path().map_err(|e| AppError::SettingsError(e.to_string()))?;
     Ok(projects_path.to_string_lossy().to_string())
 }
 
@@ -189,7 +189,10 @@ pub async fn reveal_in_explorer(path: String) -> Result<(), AppError> {
     let target = PathBuf::from(&path);
 
     if !target.exists() {
-        return Err(AppError::NotFound(format!("Path does not exist: {}", target.display())));
+        return Err(AppError::NotFound(format!(
+            "Path does not exist: {}",
+            target.display()
+        )));
     }
 
     #[cfg(target_os = "macos")]
