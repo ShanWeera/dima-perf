@@ -28,3 +28,6 @@ docs/node_modules/
 docs/dist/
 docs/public/api/
 docs/.astro/
+
+# Cursor
+.cursor
