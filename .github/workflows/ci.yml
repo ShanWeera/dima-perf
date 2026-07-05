@@ -34,6 +34,10 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # Tauri's generate_context!() macro requires frontendDist to exist at compile time
+      - name: Create frontend dist stub
+        run: mkdir -p ui/dist
+
       - name: cargo test
         if: matrix.check == 'test'
         run: cargo test --workspace --locked
