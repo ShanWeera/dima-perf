@@ -1,0 +1,152 @@
+---
+title: FAQ & Troubleshooting
+description: Frequently asked questions and common troubleshooting solutions for DiMA.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## General Questions
+
+### What is DiMA?
+
+DiMA (Diversity Motif Analyser) is a high-performance tool for quantifying and dissecting sequence diversity dynamics in viral (and other) aligned sequences. It implements the methodology from Tharanga et al. (2025), published in *Briefings in Bioinformatics*.
+
+### What makes DiMA different from other entropy tools?
+
+While Shannon's entropy is offered by several tools (PVS, LANL Entropy), DiMA's distinguishing features include:
+
+- **Diversity motifs** — Classification of variants into Index/Major/Minor/Unique
+- **Entropy bias correction** — Rarefaction + OLS extrapolation to infinite sample size
+- **K-mer sliding window** — Captures local neighborhood effects vs single-position analysis
+- **Metadata aggregation** — Per-variant spatio-temporal metadata
+- **HCS extraction** — Automated identification of conserved regions
+- **Big data ready** — Processes millions of sequences with parallel computation
+
+### What input does DiMA require?
+
+A multiple sequence alignment (MSA) in FASTA format. All sequences must be aligned (same length). Supported for both protein and DNA/RNA sequences.
+
+### Can I use DiMA for non-viral sequences?
+
+Yes. While designed for viral diversity analysis, DiMA works on any aligned protein or nucleotide sequences — bacteria, fungi, or other organisms.
+
+---
+
+## Analysis Questions
+
+### What k-mer length should I use?
+
+- **Protein k=9** (default) — Standard for T-cell epitope analysis; HLA-I molecules bind 8–15 residue peptides, with 9 most common
+- **Nucleotide k=27** (default) — Corresponds to 9 codons (9 × 3 nt/codon)
+- **k=1** — Equivalent to per-position analysis (like other tools)
+- **k=3–6** — Short motif discovery
+- **k=12–14** — Maximum for protein (u64 encoding limit)
+
+### What does "Low Support" mean?
+
+Low support indicates insufficient valid k-mers at a position for reliable entropy correction. When support < threshold (default 100), raw entropy is used without rarefaction extrapolation. See [Support Threshold](/dima-perf/methodology/support-threshold/) for details.
+
+### Why are some positions showing entropy = 0 with "NS" label?
+
+"NS" (No Support) means all sequences at that position contain gaps or ambiguous characters — no valid k-mers exist. The entropy of 0 is a placeholder and should not be interpreted as "conserved."
+
+### How do I handle mixed-case input?
+
+Use `--allow-lowercase` to convert lowercase letters to uppercase. Without this flag, lowercase characters are treated as invalid and cause k-mers to be excluded.
+
+---
+
+## Performance Questions
+
+### How do I speed up analysis?
+
+1. **Omit metadata** — Don't use `--header-format` if you don't need per-variant metadata (saves ~39%)
+2. **Use all cores** — Default behavior; ensure `RAYON_NUM_THREADS` isn't limiting
+3. **Use binary output** — `-O dima` reduces I/O time for large outputs
+4. **Use SSD storage** — For disk-backed mode with `--low-memory`
+
+### My analysis is running out of memory. What do I do?
+
+Use `--low-memory` to enable disk-backed matrix storage:
+
+```bash
+dima analyze -i huge_dataset.fasta -o results.json --low-memory --temp-dir /scratch/tmp
+```
+
+### Can I resume a cancelled analysis?
+
+No. DiMA does not support checkpointing. If analysis is interrupted, it must be restarted from the beginning.
+
+---
+
+## Output Questions
+
+### What format should I use?
+
+| Use Case | Format | Command |
+|----------|--------|---------|
+| Human inspection | JSON | `-o results.json` |
+| Spreadsheet/R/pandas | TSV | `-O tsv -o results.tsv` |
+| Streaming pipeline | JSONL | `-O jsonl -o results.jsonl` |
+| Archival/transfer | Binary | `-O dima -o results.dima` |
+
+### Can I convert between output formats?
+
+Yes. Save as binary first, then convert to any format:
+
+```bash
+dima analyze -i input.fasta -O dima -o results.dima
+dima view -i results.dima -O json -o results.json
+dima view -i results.dima -O tsv -o results.tsv
+```
+
+### What are the TSV columns?
+
+See [Output Formats — TSV Column Definitions](/dima-perf/cli/io/output-formats/#column-definitions) for the complete 17-column specification.
+
+---
+
+## Installation Questions
+
+### What Rust version do I need to build from source?
+
+Rust 1.81 or newer (as specified in `Cargo.toml`).
+
+### Does DiMA work on ARM (Apple Silicon, Raspberry Pi)?
+
+Yes. Pre-built binaries are available for:
+- macOS ARM64 (Apple Silicon)
+- Linux ARM64 (aarch64)
+- Windows ARM64
+
+### How do I update DiMA?
+
+Download the latest release from [GitHub Releases](https://github.com/ShanWeera/dima-perf/releases) or rebuild from source:
+
+```bash
+cd dima-perf && git pull && cargo build --release
+```
+
+---
+
+## Error Messages
+
+### "input file does not exist"
+
+Check the file path. DiMA validates file existence before processing.
+
+### "input path is not a regular file"
+
+The path points to a directory or special file. Provide a regular file path.
+
+### "--output required for -O dima"
+
+Binary output cannot be streamed to stdout. Provide an output path with `-o`.
+
+### "threshold exceeds sequence count"
+
+Your `--threshold` value is larger than the number of sequences in the alignment. All positions will use uncorrected entropy. Either reduce the threshold or add more sequences.
+
+### "--header-format contains duplicate field names"
+
+Duplicate field names would cause data loss in columnar storage. Ensure all field names in `--header-format` are unique.

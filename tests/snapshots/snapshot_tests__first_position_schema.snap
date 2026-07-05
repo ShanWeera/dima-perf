@@ -1,0 +1,39 @@
+---
+source: tests/snapshot_tests.rs
+expression: first_position
+---
+{
+  "distinct_variants_count": "[count]",
+  "distinct_variants_incidence": "[incidence]",
+  "diversity_motifs": [
+    {
+      "count": "[count]",
+      "incidence": "[incidence_f64]",
+      "metadata": "[metadata]",
+      "motif_long": "Index",
+      "motif_short": "I",
+      "sequence": "[kmer_sequence]"
+    },
+    {
+      "count": "[count]",
+      "incidence": "[incidence_f64]",
+      "metadata": "[metadata]",
+      "motif_long": "Unique",
+      "motif_short": "U",
+      "sequence": "[kmer_sequence]"
+    },
+    {
+      "count": "[count]",
+      "incidence": "[incidence_f64]",
+      "metadata": "[metadata]",
+      "motif_long": "Unique",
+      "motif_short": "U",
+      "sequence": "[kmer_sequence]"
+    }
+  ],
+  "entropy": "[entropy_f64]",
+  "low_support": null,
+  "position": 1,
+  "support": "[support]",
+  "total_variants_incidence": "[incidence]"
+}

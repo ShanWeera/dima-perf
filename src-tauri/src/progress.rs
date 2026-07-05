@@ -56,9 +56,12 @@ impl TauriProgressReporter {
         Self { window, cancel_flag }
     }
 
-    /// Report progress to the frontend
+    /// Report progress to the frontend. Logs emit failures (e.g. window
+    /// closed mid-analysis) rather than silently swallowing them. (Fix 5.10)
     pub fn report(&self, update: ProgressUpdate) {
-        let _ = self.window.emit("analysis-progress", &update);
+        if let Err(e) = self.window.emit("analysis-progress", &update) {
+            eprintln!("Failed to emit progress event ({}): {}", update.stage, e);
+        }
     }
 
     /// Check if the analysis should be cancelled (reserved for future use)

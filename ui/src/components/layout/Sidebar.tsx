@@ -16,15 +16,15 @@ import {
   Dna,
   Clock,
   Trash2,
-  SquareSplitHorizontal,
+  ArrowLeft,
+  LayoutGrid,
 } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
 import { useProjectStore } from '@/stores/projectStore';
-import { createNewWindow } from '@/lib/tauri';
-import { cn } from '@/lib/utils';
+import { useShallow } from 'zustand/react/shallow';
+import { cn, validateProjectName, MAX_PROJECT_NAME_LENGTH, showErrorToast } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
 import {
   Dialog,
@@ -45,9 +45,22 @@ export function Sidebar() {
     currentView,
     setCurrentView,
     clearRecentProjects,
-  } = useAppStore();
+  } = useAppStore(useShallow((s) => ({
+    sidebarCollapsed: s.sidebarCollapsed,
+    toggleSidebar: s.toggleSidebar,
+    recentProjects: s.recentProjects,
+    currentView: s.currentView,
+    setCurrentView: s.setCurrentView,
+    clearRecentProjects: s.clearRecentProjects,
+  })));
   
-  const { createNewProject, openExistingProject, currentProject } = useProjectStore();
+  const { createNewProject, openExistingProject, currentProject, isAnalyzing, cancelCurrentAnalysis } = useProjectStore(useShallow((s) => ({
+    createNewProject: s.createNewProject,
+    openExistingProject: s.openExistingProject,
+    currentProject: s.currentProject,
+    isAnalyzing: s.isAnalyzing,
+    cancelCurrentAnalysis: s.cancelCurrentAnalysis,
+  })));
   const [isCreating, setIsCreating] = useState(false);
   const [showNameDialog, setShowNameDialog] = useState(false);
   const [projectName, setProjectName] = useState('');
@@ -65,8 +78,9 @@ export function Sidebar() {
 
   const handleCreateProject = async () => {
     const trimmedName = projectName.trim();
-    if (!trimmedName) {
-      setNameError('Project name is required');
+    const validation = validateProjectName(trimmedName);
+    if (!validation.valid) {
+      setNameError(validation.error!);
       return;
     }
 
@@ -76,7 +90,7 @@ export function Sidebar() {
       await createNewProject(trimmedName);
       setCurrentView('wizard');
     } catch (error) {
-      console.error('Failed to create project:', error);
+      showErrorToast('Failed to create project', error);
       setNameError(String(error));
       setShowNameDialog(true);
     } finally {
@@ -85,16 +99,19 @@ export function Sidebar() {
   };
 
   const handleOpenProject = async (path: string) => {
+    // Prevent switching projects during an active analysis
+    if (isAnalyzing) {
+      await cancelCurrentAnalysis();
+    }
     try {
       await openExistingProject(path);
       setCurrentView('wizard');
     } catch (error) {
-      console.error('Failed to open project:', error);
+      showErrorToast('Failed to open project', error);
     }
   };
 
   return (
-    <TooltipProvider delayDuration={100}>
       <div 
         className={cn(
           "flex flex-col border-r bg-card transition-all duration-300",
@@ -124,6 +141,7 @@ export function Sidebar() {
                   className="w-full"
                   onClick={handleOpenNameDialog}
                   disabled={isCreating}
+                  aria-label="New Analysis"
                 >
                   <Plus className="h-5 w-5" />
                 </Button>
@@ -144,8 +162,8 @@ export function Sidebar() {
 
         <Separator />
 
-        {/* Projects Section */}
-        <div className="flex-1 overflow-hidden">
+        {/* Projects Section — min-h-0 required for flex child to shrink below content size */}
+        <div className="flex-1 min-h-0 overflow-hidden">
           {!sidebarCollapsed && (
             <div className="flex items-center justify-between px-4 py-2">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -158,6 +176,7 @@ export function Sidebar() {
                     <button
                       onClick={clearRecentProjects}
                       className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      aria-label="Clear all recent projects"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -168,7 +187,7 @@ export function Sidebar() {
             </div>
           )}
           
-          <ScrollArea className="h-full">
+          <div className="h-full overflow-auto">
             <div className="space-y-1 p-2">
               {recentProjects.length === 0 ? (
                 !sidebarCollapsed && (
@@ -211,8 +230,23 @@ export function Sidebar() {
                 ))
               )}
             </div>
-          </ScrollArea>
+          </div>
         </div>
+
+        <Separator />
+
+        {/* Resume project banner — helps users navigate back to their open analysis */}
+        {currentProject && ['settings', 'about', 'projects'].includes(currentView) && (
+          <div className="px-2 pb-1">
+            <button
+              onClick={() => setCurrentView('wizard')}
+              className="flex w-full items-center gap-2 rounded-md bg-primary/10 px-3 py-2 text-sm text-primary hover:bg-primary/15 transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4 shrink-0" />
+              {!sidebarCollapsed && <span className="truncate">Back to {currentProject.name}</span>}
+            </button>
+          </div>
+        )}
 
         <Separator />
 
@@ -221,15 +255,19 @@ export function Sidebar() {
           <Tooltip>
             <TooltipTrigger asChild>
               <button
-                onClick={() => createNewWindow()}
-                className="flex w-full items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-accent"
+                onClick={() => setCurrentView('projects')}
+                aria-label="Projects"
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-accent",
+                  currentView === 'projects' && "bg-accent"
+                )}
               >
-                <SquareSplitHorizontal className="h-4 w-4 shrink-0" />
-                {!sidebarCollapsed && <span className="text-sm">New Window</span>}
+                <LayoutGrid className="h-4 w-4 shrink-0" />
+                {!sidebarCollapsed && <span className="text-sm">Projects</span>}
               </button>
             </TooltipTrigger>
             {sidebarCollapsed && (
-              <TooltipContent side="right">New Window</TooltipContent>
+              <TooltipContent side="right">Projects</TooltipContent>
             )}
           </Tooltip>
 
@@ -237,6 +275,7 @@ export function Sidebar() {
             <TooltipTrigger asChild>
               <button
                 onClick={() => setCurrentView('settings')}
+                aria-label="Settings"
                 className={cn(
                   "flex w-full items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-accent",
                   currentView === 'settings' && "bg-accent"
@@ -255,6 +294,7 @@ export function Sidebar() {
             <TooltipTrigger asChild>
               <button
                 onClick={() => setCurrentView('about')}
+                aria-label="About"
                 className={cn(
                   "flex w-full items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-accent",
                   currentView === 'about' && "bg-accent"
@@ -279,6 +319,7 @@ export function Sidebar() {
                 size="sm"
                 onClick={toggleSidebar}
                 className="w-full"
+                aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               >
                 {sidebarCollapsed ? (
                   <ChevronRight className="h-4 w-4" />
@@ -311,6 +352,7 @@ export function Sidebar() {
                 <Input
                   id="project-name"
                   value={projectName}
+                  maxLength={MAX_PROJECT_NAME_LENGTH}
                   onChange={(e) => {
                     setProjectName(e.target.value);
                     setNameError(null);
@@ -339,6 +381,5 @@ export function Sidebar() {
           </DialogContent>
         </Dialog>
       </div>
-    </TooltipProvider>
   );
 }

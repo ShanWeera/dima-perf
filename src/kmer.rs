@@ -1,37 +1,62 @@
 use hashbrown::HashMap;
 
-use crate::alphabet::CharacterValidator;
+use crate::alphabet::{CharacterValidator, ValidationStats, VALID_PROTEIN_CHARS, VALID_NUCLEOTIDE_CHARS};
 
 // Re-export for tests
 #[cfg(test)]
 use crate::alphabet::{AlphabetType, ValidationMode};
 
-// Decoding tables for converting back to strings
-const PROTEIN_CHARS: &[u8; 20] = b"ACDEFGHIKLMNPQRSTVWY";
-const NUCLEOTIDE_CHARS: &[u8; 5] = b"ACGTU";
-
-/// Encode a k-mer using the CharacterValidator for validation
-/// 
-/// This function validates each character using the whitelist approach
-/// and returns None if any invalid character is found.
+/// Encode a k-mer using the CharacterValidator for validation.
+///
+/// Returns `Some(encoded_value)` only if ALL characters in the k-mer are
+/// standard valid alphabet characters (no gaps, no ambiguous, no invalid).
+/// Per PMC11596295: support counts only sequences without gaps/ambiguous chars,
+/// so k-mers containing such characters are excluded from diversity analysis.
+///
+/// Returns `None` if:
+/// - Any character cannot be encoded (gap, ambiguous, or invalid)
+/// - Integer overflow would occur (k-mer too long for the alphabet's base)
 #[inline(always)]
 pub fn encode_kmer_validated(kmer: &[u8], validator: &CharacterValidator) -> Option<u64> {
-    let base = if validator.is_protein() { 20u64 } else { 5u64 };
-    
+    let base = encoding_base(validator);
+
     let mut encoded = 0u64;
     for &byte in kmer {
         match validator.encode(byte) {
             Some(code) => {
-                encoded = encoded * base + code as u64;
+                encoded = encoded.checked_mul(base)?.checked_add(code as u64)?;
             }
-            None => return None, // Invalid or ambiguous character
+            None => {
+                return None;
+            }
         }
     }
     Some(encoded)
 }
 
+/// Get the encoding base for the given validator.
+///
+/// Always uses the standard alphabet size (20 for protein, 5 for nucleotide)
+/// since only standard characters are ever encoded. The validation mode does
+/// not affect encoding — it only controls reporting behavior.
+#[inline(always)]
+fn encoding_base(validator: &CharacterValidator) -> u64 {
+    if validator.is_protein() { 20u64 } else { 5u64 }
+}
+
+/// Maximum k-mer length that can be encoded in a u64 for the given alphabet.
+///
+/// Beyond this length, `encode_kmer_validated` will overflow and return `None`
+/// for ALL k-mers, resulting in support=0 at every position (silent failure).
+/// Callers should validate k-mer length before starting analysis.
+///
+/// Values: protein = 14 (20^14 < 2^64 < 20^15), nucleotide = 27 (5^27 < 2^64 < 5^28)
+pub fn max_kmer_length(is_protein: bool) -> usize {
+    if is_protein { 14 } else { 27 }
+}
+
 /// Encode a k-mer for the specified alphabet type
-/// 
+///
 /// Creates a temporary validator internally. For better performance when
 /// processing many k-mers, use `encode_kmer_validated` with a pre-created validator.
 #[inline(always)]
@@ -44,41 +69,46 @@ pub fn encode_kmer(kmer: &[u8], is_protein: bool) -> Option<u64> {
     encode_kmer_validated(kmer, &validator)
 }
 
-/// Decode a k-mer back to a string
+/// Decode an encoded k-mer back to its string representation.
+///
+/// Uses base-20 for protein and base-5 for nucleotide, matching the encoding
+/// in `encode_kmer_validated`. Only standard alphabet characters are produced.
 pub fn decode_kmer(encoded: u64, kmer_length: usize, is_protein: bool) -> String {
-    let mut result = Vec::with_capacity(kmer_length);
+    // Build the string directly in correct order by filling from the end,
+    // avoiding an O(k) reverse pass on the result buffer.
+    let mut result = vec![0u8; kmer_length];
     let mut remaining = encoded;
-    
-    if is_protein {
-        let base = 20u64;
-        for _ in 0..kmer_length {
-            let char_idx = (remaining % base) as usize;
-            result.push(PROTEIN_CHARS[char_idx]);
-            remaining /= base;
-        }
+
+    let (base, chars): (u64, &[u8]) = if is_protein {
+        (20, VALID_PROTEIN_CHARS)
     } else {
-        let base = 5u64;
-        for _ in 0..kmer_length {
-            let char_idx = (remaining % base) as usize;
-            result.push(NUCLEOTIDE_CHARS[char_idx]);
-            remaining /= base;
-        }
+        (5, VALID_NUCLEOTIDE_CHARS)
+    };
+
+    for i in (0..kmer_length).rev() {
+        let char_idx = (remaining % base) as usize;
+        result[i] = if char_idx < chars.len() {
+            chars[char_idx]
+        } else {
+            b'?'
+        };
+        remaining /= base;
     }
-    
-    result.reverse();
-    String::from_utf8(result).unwrap()
+
+    // Safety: VALID_PROTEIN_CHARS and VALID_NUCLEOTIDE_CHARS are ASCII, and b'?' is ASCII.
+    unsafe { String::from_utf8_unchecked(result) }
 }
 
-/// Generate k-mers from a sequence using whitelist-based character validation
-/// 
-/// This function uses the robust whitelist-based character validation from 
+/// Generate k-mers from a sequence using whitelist-based character validation.
+///
+/// This function uses the robust whitelist-based character validation from
 /// the alphabet module to ensure only valid biological sequences are processed.
-/// 
+///
 /// # Arguments
 /// * `sequence` - The sequence bytes to process
-/// * `kmer_length` - Length of k-mers to generate
+/// * `kmer_length` - Length of k-mers to generate (must be > 0)
 /// * `validator` - CharacterValidator configured for the appropriate alphabet
-/// 
+///
 /// # Returns
 /// Vector of Option<u64> where None indicates an invalid k-mer (contains
 /// invalid or ambiguous characters depending on validation mode)
@@ -87,77 +117,69 @@ pub fn sliding_window_validated(
     kmer_length: usize,
     validator: &CharacterValidator,
 ) -> Vec<Option<u64>> {
-    if sequence.len() < kmer_length {
+    sliding_window_validated_with_stats(sequence, kmer_length, validator, None)
+}
+
+/// Generate k-mers with optional ValidationStats recording.
+///
+/// When `stats` is `Some`, every character classification and every invalidated
+/// k-mer is recorded — enabling the `--report-invalid` CLI flag to report
+/// accurate statistics.
+pub fn sliding_window_validated_with_stats(
+    sequence: &[u8],
+    kmer_length: usize,
+    validator: &CharacterValidator,
+    stats: Option<&ValidationStats>,
+) -> Vec<Option<u64>> {
+    // Guard against kmer_length == 0 which would panic in `windows(0)`
+    if kmer_length == 0 || sequence.len() < kmer_length {
         return Vec::new();
     }
 
     let result_capacity = sequence.len() - kmer_length + 1;
     let mut result = Vec::with_capacity(result_capacity);
 
-    // Process each k-mer window
+    // Record character classifications for all characters in the sequence
+    if let Some(stats) = stats {
+        for &ch in sequence {
+            stats.record(validator.classify(ch));
+        }
+    }
+
+    // Single-pass: validate AND encode in one iteration per window.
+    // Previously this was two passes: window_has_invalid() then encode_kmer_validated(),
+    // doubling character classifications (~108M redundant ops for typical runs).
+    let base = encoding_base(validator);
     for window in sequence.windows(kmer_length) {
-        if validator.window_has_invalid(window) {
-            result.push(None);
-        } else {
-            result.push(encode_kmer_validated(window, validator));
+        match encode_kmer_single_pass(window, base, validator) {
+            Some(encoded) => result.push(Some(encoded)),
+            None => {
+                if let Some(stats) = stats {
+                    stats.record_invalidated_kmer();
+                }
+                result.push(None);
+            }
         }
     }
 
     result
 }
 
-/// Batch processing version for very large sequences
-/// 
-/// This function processes sequences in chunks to optimize memory usage
-/// and cache locality for extremely large inputs.
-/// 
-/// # Arguments
-/// * `sequence` - The sequence bytes to process
-/// * `kmer_length` - Length of k-mers to generate
-/// * `validator` - CharacterValidator configured for the appropriate alphabet
-/// * `batch_size` - Size of each processing batch
-pub fn sliding_window_validated_batched(
-    sequence: &[u8],
-    kmer_length: usize,
-    validator: &CharacterValidator,
-    batch_size: usize,
-) -> Vec<Option<u64>> {
-    if sequence.len() < kmer_length {
-        return Vec::new();
-    }
-
-    let total_kmers = sequence.len() - kmer_length + 1;
-    let mut result = Vec::with_capacity(total_kmers);
-
-    // Process in overlapping batches to maintain k-mer continuity
-    let mut start = 0;
-    while start < sequence.len() {
-        let end = std::cmp::min(start + batch_size, sequence.len());
-        let batch = &sequence[start..end];
-        
-        // Ensure we don't go beyond valid k-mer positions
-        let batch_kmer_end = if end == sequence.len() {
-            batch.len()
-        } else {
-            batch.len().saturating_sub(kmer_length - 1)
-        };
-
-        for window in batch.windows(kmer_length).take(batch_kmer_end.saturating_sub(kmer_length - 1)) {
-            if validator.window_has_invalid(window) {
-                result.push(None);
-            } else {
-                result.push(encode_kmer_validated(window, validator));
+/// Single-pass k-mer validation and encoding.
+/// Returns `None` on first invalid character (early exit — no wasted work).
+/// Combines the logic of `window_has_invalid` + `encode_kmer_validated` into one pass.
+#[inline(always)]
+fn encode_kmer_single_pass(window: &[u8], base: u64, validator: &CharacterValidator) -> Option<u64> {
+    let mut encoded = 0u64;
+    for &byte in window {
+        match validator.encode(byte) {
+            Some(code) => {
+                encoded = encoded.checked_mul(base)?.checked_add(code as u64)?;
             }
-        }
-
-        // Move start position, accounting for k-mer overlap
-        start += batch_size.saturating_sub(kmer_length - 1);
-        if start >= sequence.len() {
-            break;
+            None => return None,
         }
     }
-
-    result
+    Some(encoded)
 }
 
 /// Convenience function for sliding window with default validation
@@ -178,17 +200,6 @@ pub fn sliding_window_encoded_safe(
     sliding_window_validated(sequence, kmer_length, &validator)
 }
 
-/// Check if a prefix string has an overlap with the start of another string
-pub fn has_overlap_end(prefix: &str, next: &str) -> bool {
-    let max_overlap = prefix.len().min(next.len());
-    for k in (1..=max_overlap).rev() {
-        if &prefix[prefix.len() - k..] == &next[..k] {
-            return true;
-        }
-    }
-    false
-}
-
 /// String-based sliding window with CharacterValidator
 /// 
 /// Returns strings instead of encoded values. K-mers containing invalid
@@ -198,6 +209,9 @@ pub fn sliding_window_string_validated(
     kmer_length: usize,
     validator: &CharacterValidator,
 ) -> Vec<String> {
+    if kmer_length == 0 {
+        return Vec::new();
+    }
     let bytes = sequence.as_bytes();
     if bytes.len() < kmer_length {
         return Vec::new();
@@ -233,19 +247,24 @@ pub fn count_kmers<'a>(kmers: &'a [Box<str>]) -> HashMap<&'a str, (usize, Vec<us
 /// Optimized k-mer counting with better memory allocation patterns
 /// 
 /// Returns a map from encoded k-mer to (count, indices).
+/// Count occurrences of each encoded k-mer in a position column.
+/// Skips u64::MAX sentinel values (invalid k-mers) while preserving their index slots
+/// so that returned indices correctly map back to sequence headers.
 pub fn count_kmers_encoded(kmers: &[u64]) -> HashMap<u64, (usize, Vec<usize>)> {
-    // Pre-allocate with better capacity estimation based on expected uniqueness
     let estimated_unique = std::cmp::min(kmers.len(), kmers.len() / 4 + 100);
     let mut counts: HashMap<u64, (usize, Vec<usize>)> = HashMap::with_capacity(estimated_unique);
     
     for (idx, &kmer) in kmers.iter().enumerate() {
+        // u64::MAX is the sentinel for invalid/skipped k-mers — don't count them
+        if kmer == u64::MAX {
+            continue;
+        }
         match counts.get_mut(&kmer) {
             Some(entry) => {
                 entry.0 += 1;
                 entry.1.push(idx);
             }
             None => {
-                // Pre-allocate index vector with reasonable initial capacity
                 let mut indices = Vec::with_capacity(4);
                 indices.push(idx);
                 counts.insert(kmer, (1, indices));
@@ -254,21 +273,6 @@ pub fn count_kmers_encoded(kmers: &[u64]) -> HashMap<u64, (usize, Vec<usize>)> {
     }
     
     counts
-}
-
-/// Transpose k-mers from sequence-oriented to position-oriented layout
-pub fn transpose_kmers(kmers: &Vec<&Vec<String>>) -> Vec<Vec<String>> {
-    assert!(!kmers.is_empty());
-    let len = kmers[0].len();
-    let mut iters: Vec<_> = kmers.into_iter().map(|n| n.into_iter()).collect();
-    (0..len)
-        .map(|_| {
-            iters
-                .iter_mut()
-                .map(|n| n.next().unwrap().to_owned())
-                .collect::<Vec<String>>()
-        })
-        .collect()
 }
 
 #[cfg(test)]
@@ -410,33 +414,37 @@ mod tests {
     }
 
     #[test]
-    fn test_permissive_mode() {
-        // In permissive mode, ambiguous characters should NOT invalidate k-mers
-        // but completely invalid characters should
+    fn test_permissive_mode_still_invalidates_ambiguous() {
+        // Per PMC11596295: support excludes gaps/ambiguous regardless of mode.
+        // Permissive mode only affects reporting behavior, not encoding.
         let validator = CharacterValidator::with_options(
             AlphabetType::Protein,
             ValidationMode::Permissive,
             false,
         );
-        
-        // Ambiguous character X should pass in permissive mode
-        assert!(!validator.should_invalidate_kmer(b'X'));
-        
-        // But # should still fail
+
+        // Ambiguous character X MUST invalidate k-mers (paper requirement)
+        assert!(validator.should_invalidate_kmer(b'X'));
+
+        // Invalid chars also invalidate
         assert!(validator.should_invalidate_kmer(b'#'));
+
+        // Valid chars never invalidate
+        assert!(!validator.should_invalidate_kmer(b'A'));
     }
 
     #[test]
-    fn test_report_mode() {
-        // In report mode, nothing should invalidate k-mers
+    fn test_report_mode_still_invalidates_ambiguous() {
+        // ReportOnly mode also invalidates ambiguous/invalid chars for encoding.
+        // The "report only" aspect is about error handling, not encoding.
         let validator = CharacterValidator::with_options(
             AlphabetType::Protein,
             ValidationMode::ReportOnly,
             false,
         );
-        
-        assert!(!validator.should_invalidate_kmer(b'X'));
-        assert!(!validator.should_invalidate_kmer(b'#'));
+
+        assert!(validator.should_invalidate_kmer(b'X'));
+        assert!(validator.should_invalidate_kmer(b'#'));
         assert!(!validator.should_invalidate_kmer(b'A'));
     }
 }

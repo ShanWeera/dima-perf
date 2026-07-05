@@ -1,26 +1,59 @@
-/// Binary Metadata Format Module
-/// 
-/// This module provides production-grade binary serialization for metadata to achieve
-/// 50-70% faster I/O compared to JSON. It implements efficient binary encoding with
-/// optional compression while maintaining full compatibility with existing APIs.
-/// 
-/// Performance characteristics:
-/// - 50-70% faster I/O through binary encoding
-/// - 30-50% smaller file sizes with compression
-/// - Streaming support for large datasets
-/// - Zero-copy deserialization where possible
-/// - Cross-platform compatibility with endianness handling
+//! Binary Metadata Format Module
+//!
+//! This module provides production-grade binary serialization for metadata to achieve
+//! 50-70% faster I/O compared to JSON. It implements efficient binary encoding with
+//! optional compression while maintaining full compatibility with existing APIs.
+//!
+//! Performance characteristics:
+//! - 50-70% faster I/O through binary encoding
+//! - 30-50% smaller file sizes with compression
+//! - Streaming support for large datasets
+//! - Zero-copy deserialization where possible
+//! - Cross-platform compatibility with endianness handling
 
+use std::collections::BTreeMap;
 use std::io::{Read, Write, BufReader, BufWriter};
 use std::fs::File;
+use bincode::Options;
 use serde::{Serialize, Deserialize};
 use hashbrown::HashMap as FastHashMap;
 use hashbrown::HashMap;
+use crc32fast::Hasher as Crc32Hasher;
 
 use crate::models::{Results, Position, Variant, HighestEntropy};
 
-/// Binary format version for compatibility checking
-const BINARY_FORMAT_VERSION: u32 = 1;
+/// Structured error type for binary format operations.
+///
+/// Distinguishes between I/O failures (transient, retryable) and format
+/// violations (permanent, indicative of corruption or version mismatch).
+/// Currently unused in practice (all binary I/O returns std::io::Error),
+/// retained for future structured error reporting.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum BinaryFormatError {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("binary format error: {reason}")]
+    Format { reason: String },
+}
+
+/// Binary format version for compatibility checking.
+/// Version 1: initial format with optional checksums (flag-gated).
+/// Writer version: the version this code writes.
+/// Incremented when new fields or semantics are added to the binary format.
+const BINARY_FORMAT_VERSION: u32 = 2;
+
+/// Minimum reader version required to read files written by this code.
+/// Old readers seeing this value know whether they can parse the file.
+/// Set to 1 because v2 only adds the min_reader_version field itself,
+/// and old readers that encounter the extra 4 bytes will fail gracefully
+/// on the version check (they require version == 1, but see 2).
+const MIN_READER_VERSION: u32 = 1;
+
+/// The oldest writer version this reader can handle.
+/// Files with writer_version < this are considered obsolete.
+const OLDEST_SUPPORTED_WRITER: u32 = 1;
 
 /// Magic bytes to identify binary format files
 const MAGIC_BYTES: &[u8] = b"DIMA";
@@ -59,11 +92,10 @@ pub struct BinaryFormatConfig {
     pub compression: CompressionType,
     /// Compression level (algorithm-specific)
     pub compression_level: i32,
-    /// Whether to use string interning for deduplication
+    /// Whether string interning is enabled (written as flag in binary header).
+    /// Always true in practice — retained for binary format wire compatibility.
     pub string_interning: bool,
-    /// Buffer size for streaming operations
-    pub buffer_size: usize,
-    /// Whether to validate checksums
+    /// Whether to validate checksums on read
     pub validate_checksums: bool,
 }
 
@@ -71,9 +103,8 @@ impl Default for BinaryFormatConfig {
     fn default() -> Self {
         Self {
             compression: CompressionType::Lz4,
-            compression_level: 1, // Fast compression
+            compression_level: 1,
             string_interning: true,
-            buffer_size: 64 * 1024, // 64KB buffer
             validate_checksums: true,
         }
     }
@@ -95,11 +126,19 @@ impl StringTable {
         Self::default()
     }
     
-    /// Intern a string and return its ID
+    /// Intern a string and return its ID.
+    /// Panics if the table exceeds u32::MAX entries (>4 billion unique strings).
+    /// This is effectively impossible for DiMA's domain but prevents silent data
+    /// corruption if somehow reached — a crash is preferable to writing colliding IDs.
     pub fn intern(&mut self, s: &str) -> u32 {
         if let Some(&id) = self.string_to_id.get(s) {
             id
         } else {
+            assert!(
+                self.next_id < u32::MAX,
+                "StringTable exhausted: cannot intern more than {} unique strings",
+                u32::MAX
+            );
             let id = self.next_id;
             self.string_to_id.insert(s.to_string(), id);
             self.id_to_string.push(s.to_string());
@@ -118,10 +157,13 @@ impl StringTable {
         &self.id_to_string
     }
     
-    /// Load strings from deserialization
+    /// Load strings from deserialization.
+    /// Deduplicates on insert: if the file contains duplicate strings, the last
+    /// occurrence wins in the reverse map, which matches the serialization order.
     pub fn load_strings(&mut self, strings: Vec<String>) {
         self.id_to_string = strings;
         self.string_to_id.clear();
+        self.string_to_id.reserve(self.id_to_string.len());
         
         for (id, string) in self.id_to_string.iter().enumerate() {
             self.string_to_id.insert(string.clone(), id as u32);
@@ -138,33 +180,54 @@ impl StringTable {
     }
 }
 
-/// Binary-optimized representation of metadata
+/// Binary-optimized representation of metadata.
+/// Uses BTreeMap for deterministic serialization order — identical logical
+/// content always produces identical bytes regardless of HashMap iteration order.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BinaryMetadata {
     /// Field name ID -> (value ID -> count) mapping
-    pub fields: FastHashMap<u32, FastHashMap<u32, usize>>,
+    pub fields: BTreeMap<u32, BTreeMap<u32, usize>>,
+}
+
+impl Default for BinaryMetadata {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BinaryMetadata {
     pub fn new() -> Self {
         Self {
-            fields: FastHashMap::new(),
+            fields: BTreeMap::new(),
         }
     }
     
     /// Convert from JSON metadata using string table
+    /// Convert JSON metadata to binary representation.
+    ///
+    /// Field names and values are sorted before interning to ensure deterministic
+    /// string-table ID assignment regardless of HashMap iteration order. This
+    /// guarantees byte-identical binary output for the same logical input.
     pub fn from_json_metadata(
         metadata: &Option<HashMap<String, HashMap<String, usize>>>,
         string_table: &mut StringTable,
     ) -> Option<Self> {
         metadata.as_ref().map(|meta| {
             let mut binary_meta = Self::new();
+
+            // Sort field names for deterministic string-table ID assignment
+            let mut sorted_fields: Vec<(&String, &HashMap<String, usize>)> = meta.iter().collect();
+            sorted_fields.sort_unstable_by_key(|(k, _)| k.as_str());
             
-            for (field_name, value_counts) in meta {
+            for (field_name, value_counts) in sorted_fields {
                 let field_id = string_table.intern(field_name);
-                let mut binary_values = FastHashMap::new();
+                let mut binary_values = BTreeMap::new();
+
+                // Sort values for deterministic interning order
+                let mut sorted_values: Vec<(&String, &usize)> = value_counts.iter().collect();
+                sorted_values.sort_unstable_by_key(|(k, _)| k.as_str());
                 
-                for (value, &count) in value_counts {
+                for (value, &count) in sorted_values {
                     let value_id = string_table.intern(value);
                     binary_values.insert(value_id, count);
                 }
@@ -207,7 +270,7 @@ impl BinaryMetadata {
 pub struct BinaryVariant {
     pub sequence_id: u32,
     pub count: usize,
-    pub incidence: f32,
+    pub incidence: f64,
     pub motif_short_id: Option<u32>,
     pub motif_long_id: Option<u32>,
     pub metadata: Option<BinaryMetadata>,
@@ -247,8 +310,8 @@ pub struct BinaryPosition {
     pub entropy: f64,
     pub support: usize,
     pub distinct_variants_count: usize,
-    pub distinct_variants_incidence: f32,
-    pub total_variants_incidence: f32,
+    pub distinct_variants_incidence: f64,
+    pub total_variants_incidence: f64,
     pub diversity_motifs: Option<Vec<BinaryVariant>>,
 }
 
@@ -316,6 +379,47 @@ impl BinaryResults {
         }
     }
     
+    /// Validate that all string IDs reference valid entries in the string table.
+    /// Returns an error if any ID is out of bounds, preventing silent data loss.
+    /// Covers: query_name, low_support, variant sequences/motifs, AND metadata field/value IDs.
+    pub fn validate_string_ids(&self, string_table: &StringTable) -> Result<(), String> {
+        let max_id = string_table.get_all_strings().len() as u32;
+        let check = |id: u32, context: &str| -> Result<(), String> {
+            if id >= max_id {
+                return Err(format!("Out-of-range string ID {} in {} (table has {} entries)", id, context, max_id));
+            }
+            Ok(())
+        };
+
+        check(self.query_name_id, "query_name")?;
+        for (i, pos) in self.results.iter().enumerate() {
+            if let Some(id) = pos.low_support_id {
+                check(id, &format!("position[{}].low_support", i))?;
+            }
+            if let Some(ref motifs) = pos.diversity_motifs {
+                for (j, var) in motifs.iter().enumerate() {
+                    check(var.sequence_id, &format!("position[{}].variant[{}].sequence", i, j))?;
+                    if let Some(id) = var.motif_short_id {
+                        check(id, &format!("position[{}].variant[{}].motif_short", i, j))?;
+                    }
+                    if let Some(id) = var.motif_long_id {
+                        check(id, &format!("position[{}].variant[{}].motif_long", i, j))?;
+                    }
+                    // Validate metadata field and value string IDs
+                    if let Some(ref meta) = var.metadata {
+                        for (&field_id, value_counts) in &meta.fields {
+                            check(field_id, &format!("position[{}].variant[{}].metadata.field", i, j))?;
+                            for &value_id in value_counts.keys() {
+                                check(value_id, &format!("position[{}].variant[{}].metadata.value", i, j))?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Convert to JSON results using string table
     pub fn to_json_results(&self, string_table: &StringTable) -> Results {
         Results {
@@ -349,65 +453,68 @@ impl<W: Write> BinaryWriter<W> {
             string_table: StringTable::new(),
         }
     }
+
+    /// Consume the writer and return the underlying writer for flushing/syncing.
+    pub fn into_inner(self) -> std::io::Result<W> {
+        Ok(self.writer)
+    }
     
-    /// Write results in binary format
+    /// Write results in binary format.
+    /// Structure: [header + string_table + header_crc32] + [payload + payload_crc32]
     pub fn write_results(&mut self, results: &Results) -> std::io::Result<()> {
-        // Convert to binary representation
         let binary_results = BinaryResults::from_json_results(results, &mut self.string_table);
         
-        // Write header
-        self.write_header()?;
+        // Write header + string table into a buffer to compute CRC over both
+        let mut preamble = Vec::new();
+        self.write_header_to(&mut preamble)?;
+        self.write_string_table_to(&mut preamble)?;
         
-        // Write string table
-        self.write_string_table()?;
+        // Write preamble to output
+        self.writer.write_all(&preamble)?;
         
-        // Write binary data
+        // Write CRC32 of header + string table for full integrity coverage
+        let header_crc = crc32fast::hash(&preamble);
+        self.writer.write_all(&header_crc.to_le_bytes())?;
+        
+        // Write payload (already has its own CRC)
         self.write_binary_data(&binary_results)?;
         
         Ok(())
     }
     
-    fn write_header(&mut self) -> std::io::Result<()> {
-        // Magic bytes
-        self.writer.write_all(MAGIC_BYTES)?;
-        
-        // Version
-        self.writer.write_all(&BINARY_FORMAT_VERSION.to_le_bytes())?;
-        
-        // Compression type
-        self.writer.write_all(&[self.config.compression.to_u8()])?;
-        
-        // Compression level
-        self.writer.write_all(&self.config.compression_level.to_le_bytes())?;
-        
-        // Flags
+    fn write_header_to(&self, out: &mut Vec<u8>) -> std::io::Result<()> {
+        use std::io::Write;
+        out.write_all(MAGIC_BYTES)?;
+        out.write_all(&BINARY_FORMAT_VERSION.to_le_bytes())?;
+        out.write_all(&MIN_READER_VERSION.to_le_bytes())?;
+        out.write_all(&[self.config.compression.to_u8()])?;
+        out.write_all(&self.config.compression_level.to_le_bytes())?;
         let mut flags = 0u8;
         if self.config.string_interning { flags |= 0x01; }
         if self.config.validate_checksums { flags |= 0x02; }
-        self.writer.write_all(&[flags])?;
-        
+        out.write_all(&[flags])?;
         Ok(())
     }
     
-    fn write_string_table(&mut self) -> std::io::Result<()> {
+    fn write_string_table_to(&self, out: &mut Vec<u8>) -> std::io::Result<()> {
+        use std::io::Write;
         let strings = self.string_table.get_all_strings();
         
-        // Write string count
-        self.writer.write_all(&(strings.len() as u32).to_le_bytes())?;
-        
-        // Write each string with length prefix
+        out.write_all(&(strings.len() as u32).to_le_bytes())?;
         for string in strings {
             let bytes = string.as_bytes();
-            self.writer.write_all(&(bytes.len() as u32).to_le_bytes())?;
-            self.writer.write_all(bytes)?;
+            out.write_all(&(bytes.len() as u32).to_le_bytes())?;
+            out.write_all(bytes)?;
         }
-        
         Ok(())
     }
     
     fn write_binary_data(&mut self, binary_results: &BinaryResults) -> std::io::Result<()> {
-        // Serialize to bytes
-        let serialized = bincode::serialize(binary_results)
+        // Serialize with explicit fixint encoding to match the read path.
+        // This ensures the wire format is independent of bincode's default behavior,
+        // which could change in a major version bump.
+        let options = bincode::options().with_fixint_encoding();
+        let serialized = options.serialize(binary_results)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         
         // Apply compression if enabled
@@ -420,6 +527,17 @@ impl<W: Write> BinaryWriter<W> {
         // Write compressed size and data
         self.writer.write_all(&(final_data.len() as u64).to_le_bytes())?;
         self.writer.write_all(&final_data)?;
+
+        // Write CRC32 checksum over the compressed payload when checksums are enabled.
+        // This catches file corruption (partial writes, bit-flips, truncation) early
+        // rather than relying on bincode deserialization failure which may produce
+        // partial/wrong results instead of a clean error.
+        if self.config.validate_checksums {
+            let mut hasher = Crc32Hasher::new();
+            hasher.update(&final_data);
+            let checksum = hasher.finalize();
+            self.writer.write_all(&checksum.to_le_bytes())?;
+        }
         
         Ok(())
     }
@@ -439,6 +557,8 @@ pub struct BinaryReader<R: Read> {
     reader: R,
     config: BinaryFormatConfig,
     string_table: StringTable,
+    /// Writer version detected from the file header (set during read_header)
+    detected_writer_version: u32,
 }
 
 impl<R: Read> BinaryReader<R> {
@@ -447,20 +567,42 @@ impl<R: Read> BinaryReader<R> {
             reader,
             config: BinaryFormatConfig::default(),
             string_table: StringTable::new(),
+            detected_writer_version: 0,
         }
     }
     
-    /// Read results from binary format
+    /// Read results from binary format.
+    /// Verifies CRC32 integrity of header + string table (v2+ files).
     pub fn read_results(&mut self) -> std::io::Result<Results> {
-        // Read and validate header
-        self.read_header().map_err(|e| {
+        // Read header + string table while capturing raw bytes for CRC verification
+        let mut preamble_bytes: Vec<u8> = Vec::new();
+        
+        self.read_header_capturing(&mut preamble_bytes).map_err(|e| {
             std::io::Error::new(e.kind(), format!("Header validation failed: {}", e))
         })?;
         
-        // Read string table
-        self.read_string_table().map_err(|e| {
+        let writer_version = self.detected_writer_version;
+        
+        self.read_string_table_capturing(&mut preamble_bytes).map_err(|e| {
             std::io::Error::new(e.kind(), format!("String table reading failed: {}", e))
         })?;
+        
+        // v2+ files have a header CRC32 after the string table
+        if writer_version >= 2 {
+            let mut crc_bytes = [0u8; 4];
+            self.reader.read_exact(&mut crc_bytes)?;
+            let stored_crc = u32::from_le_bytes(crc_bytes);
+            let computed_crc = crc32fast::hash(&preamble_bytes);
+            if stored_crc != computed_crc {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(
+                        "Header/string-table CRC mismatch (stored: {:#010x}, computed: {:#010x}). File may be corrupt.",
+                        stored_crc, computed_crc
+                    )
+                ));
+            }
+        }
         
         // Read and decompress binary data
         let binary_results = self.read_binary_data().map_err(|e| {
@@ -472,49 +614,78 @@ impl<R: Read> BinaryReader<R> {
             std::io::Error::new(e.kind(), format!("Failed to decompress {} data: {}", compression_name, e))
         })?;
         
-        // Convert to JSON representation
+        // Validate all string IDs before conversion to catch corrupt/malicious files
+        binary_results.validate_string_ids(&self.string_table).map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, format!("String ID validation failed: {}", e))
+        })?;
+
         Ok(binary_results.to_json_results(&self.string_table))
     }
     
-    fn read_header(&mut self) -> std::io::Result<()> {
-        // Check magic bytes
+    /// Read and validate the binary header. Appends raw bytes to `capture`
+    /// for subsequent CRC verification.
+    fn read_header_capturing(&mut self, capture: &mut Vec<u8>) -> std::io::Result<()> {
         let mut magic = [0u8; 4];
         self.reader.read_exact(&mut magic)?;
-        if &magic != MAGIC_BYTES {
+        capture.extend_from_slice(&magic);
+        if magic != *MAGIC_BYTES {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "Invalid magic bytes"
+                "Invalid magic bytes — not a .dima file"
             ));
         }
         
-        // Read version
         let mut version_bytes = [0u8; 4];
         self.reader.read_exact(&mut version_bytes)?;
-        let version = u32::from_le_bytes(version_bytes);
-        if version != BINARY_FORMAT_VERSION {
+        capture.extend_from_slice(&version_bytes);
+        let writer_version = u32::from_le_bytes(version_bytes);
+        self.detected_writer_version = writer_version;
+        
+        if writer_version < OLDEST_SUPPORTED_WRITER {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("Unsupported version: {}", version)
+                format!(
+                    "File was written by an obsolete version (v{}). This reader supports v{}+.",
+                    writer_version, OLDEST_SUPPORTED_WRITER
+                )
             ));
         }
         
-        // Read compression type
+        // v2+ includes min_reader_version; v1 files don't have it
+        if writer_version >= 2 {
+            let mut min_reader_bytes = [0u8; 4];
+            self.reader.read_exact(&mut min_reader_bytes)?;
+            capture.extend_from_slice(&min_reader_bytes);
+            let min_reader_version = u32::from_le_bytes(min_reader_bytes);
+            
+            if min_reader_version > BINARY_FORMAT_VERSION {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(
+                        "File requires reader v{} or newer, but this is v{}. Please upgrade dima.",
+                        min_reader_version, BINARY_FORMAT_VERSION
+                    )
+                ));
+            }
+        }
+        
         let mut compression_byte = [0u8; 1];
         self.reader.read_exact(&mut compression_byte)?;
+        capture.extend_from_slice(&compression_byte);
         self.config.compression = CompressionType::from_u8(compression_byte[0])
             .ok_or_else(|| std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "Invalid compression type"
+                format!("Invalid compression type byte: {}", compression_byte[0])
             ))?;
         
-        // Read compression level
         let mut level_bytes = [0u8; 4];
         self.reader.read_exact(&mut level_bytes)?;
+        capture.extend_from_slice(&level_bytes);
         self.config.compression_level = i32::from_le_bytes(level_bytes);
         
-        // Read flags
         let mut flags_byte = [0u8; 1];
         self.reader.read_exact(&mut flags_byte)?;
+        capture.extend_from_slice(&flags_byte);
         let flags = flags_byte[0];
         self.config.string_interning = (flags & 0x01) != 0;
         self.config.validate_checksums = (flags & 0x02) != 0;
@@ -522,23 +693,51 @@ impl<R: Read> BinaryReader<R> {
         Ok(())
     }
     
-    fn read_string_table(&mut self) -> std::io::Result<()> {
-        // Read string count
+    /// Read the string table, appending raw bytes to `capture` for CRC verification.
+    fn read_string_table_capturing(&mut self, capture: &mut Vec<u8>) -> std::io::Result<()> {
+        const MAX_STRING_COUNT: u32 = 10_000_000;
+        const MAX_STRING_LEN: u32 = 10 * 1024 * 1024;
+        const MAX_STRING_TABLE_BYTES: u64 = 1_024 * 1_024 * 1_024;
+        
         let mut count_bytes = [0u8; 4];
         self.reader.read_exact(&mut count_bytes)?;
+        capture.extend_from_slice(&count_bytes);
         let string_count = u32::from_le_bytes(count_bytes);
         
-        // Read strings
+        if string_count > MAX_STRING_COUNT {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("String table count ({}) exceeds limit ({})", string_count, MAX_STRING_COUNT),
+            ));
+        }
+        
         let mut strings = Vec::with_capacity(string_count as usize);
+        let mut total_bytes: u64 = 0;
+
         for _ in 0..string_count {
-            // Read string length
             let mut len_bytes = [0u8; 4];
             self.reader.read_exact(&mut len_bytes)?;
+            capture.extend_from_slice(&len_bytes);
             let string_len = u32::from_le_bytes(len_bytes);
             
-            // Read string data
+            if string_len > MAX_STRING_LEN {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("String length ({}) exceeds limit ({})", string_len, MAX_STRING_LEN),
+                ));
+            }
+
+            total_bytes += string_len as u64;
+            if total_bytes > MAX_STRING_TABLE_BYTES {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("Aggregate string table size exceeds {} byte limit", MAX_STRING_TABLE_BYTES),
+                ));
+            }
+            
             let mut string_bytes = vec![0u8; string_len as usize];
             self.reader.read_exact(&mut string_bytes)?;
+            capture.extend_from_slice(&string_bytes);
             
             let string = String::from_utf8(string_bytes)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
@@ -550,49 +749,122 @@ impl<R: Read> BinaryReader<R> {
     }
     
     fn read_binary_data(&mut self) -> std::io::Result<BinaryResults> {
-        // Read compressed data size
+        // Hard cap on compressed input to prevent OOM from malicious files.
+        // 2 GB is well beyond any legitimate DiMA result file.
+        const MAX_COMPRESSED_SIZE: u64 = 2 * 1024 * 1024 * 1024;
+        
         let mut size_bytes = [0u8; 8];
         self.reader.read_exact(&mut size_bytes)?;
         let compressed_size = u64::from_le_bytes(size_bytes);
         
-        // Read compressed data
+        if compressed_size > MAX_COMPRESSED_SIZE {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "Compressed data size ({} bytes) exceeds safety limit ({} bytes)",
+                    compressed_size, MAX_COMPRESSED_SIZE
+                ),
+            ));
+        }
+        
         let mut compressed_data = vec![0u8; compressed_size as usize];
         self.reader.read_exact(&mut compressed_data)?;
+
+        // Verify CRC32 checksum if the file was written with checksums enabled.
+        // This catches corruption (bit-flips, truncation, partial writes) before
+        // we attempt decompression or deserialization which could produce wrong results.
+        if self.config.validate_checksums {
+            let mut stored_checksum_bytes = [0u8; 4];
+            self.reader.read_exact(&mut stored_checksum_bytes)?;
+            let stored_checksum = u32::from_le_bytes(stored_checksum_bytes);
+
+            let mut hasher = Crc32Hasher::new();
+            hasher.update(&compressed_data);
+            let computed_checksum = hasher.finalize();
+
+            if stored_checksum != computed_checksum {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(
+                        "Checksum mismatch: file may be corrupt (stored: {:#010x}, computed: {:#010x})",
+                        stored_checksum, computed_checksum
+                    ),
+                ));
+            }
+        }
         
-        // Decompress data
         let decompressed_data = match self.config.compression {
             CompressionType::None => compressed_data,
             CompressionType::Lz4 => self.decompress_lz4(&compressed_data)?,
             CompressionType::Zstd => self.decompress_zstd(&compressed_data)?,
         };
         
-        // Deserialize binary results
-        bincode::deserialize(&decompressed_data)
+        // Use bincode with a byte limit matching the decompressed size to prevent
+        // structural allocation bombs where embedded length fields describe enormous
+        // nested structures beyond what the actual data contains.
+        let options = bincode::options()
+            .with_limit(decompressed_data.len() as u64)
+            .with_fixint_encoding()
+            .allow_trailing_bytes();
+        options.deserialize(&decompressed_data)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
     
     fn decompress_lz4(&self, data: &[u8]) -> std::io::Result<Vec<u8>> {
+        // Validate the prepended uncompressed size before allocating.
+        // LZ4 stores the original size as a little-endian u32 at the start of the buffer.
+        const MAX_DECOMPRESSED_SIZE: usize = 4 * 1024 * 1024 * 1024; // 4 GB, matching Zstd
+        if data.len() >= 4 {
+            let claimed_size = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
+            if claimed_size > MAX_DECOMPRESSED_SIZE {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(
+                        "LZ4 claimed decompressed size ({} bytes) exceeds safety limit ({} bytes)",
+                        claimed_size, MAX_DECOMPRESSED_SIZE
+                    ),
+                ));
+            }
+        }
         lz4_flex::decompress_size_prepended(data)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
     
     fn decompress_zstd(&self, data: &[u8]) -> std::io::Result<Vec<u8>> {
-        // Try to get the decompressed size from the frame header first
-        let decompressed_size = zstd::bulk::Decompressor::upper_bound(data)
-            .unwrap_or(500 * 1024 * 1024); // Default to 500MB if unknown
+        // Cap decompressed output at 4 GB to prevent decompression bombs.
+        const MAX_DECOMPRESSED_SIZE: usize = 4 * 1024 * 1024 * 1024;
         
-        // First try with the calculated/default size
-        match zstd::bulk::decompress(data, decompressed_size) {
+        let decompressed_size = zstd::bulk::Decompressor::upper_bound(data)
+            .unwrap_or(MAX_DECOMPRESSED_SIZE);
+        
+        let capped_size = decompressed_size.min(MAX_DECOMPRESSED_SIZE);
+        
+        match zstd::bulk::decompress(data, capped_size) {
             Ok(result) => Ok(result),
             Err(_) => {
-                // If that fails, try with streaming decompression (no size limit)
+                // Streaming fallback with a size-limited reader to prevent OOM.
+                // After reading, check if the limit was hit — if so, the data was
+                // truncated and we must error rather than pass partial data to bincode
+                // (which could partially deserialize and produce incorrect results).
                 use std::io::Read;
-                let mut decoder = zstd::Decoder::new(data)
+                let decoder = zstd::Decoder::new(data)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
                 
+                let mut limited = decoder.take(MAX_DECOMPRESSED_SIZE as u64);
                 let mut result = Vec::new();
-                decoder.read_to_end(&mut result)
+                limited.read_to_end(&mut result)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+                if result.len() >= MAX_DECOMPRESSED_SIZE {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!(
+                            "Decompressed payload exceeds maximum size ({} bytes). \
+                             File may be corrupt or from a newer DiMA version.",
+                            MAX_DECOMPRESSED_SIZE
+                        ),
+                    ));
+                }
                 
                 Ok(result)
             }
@@ -604,16 +876,29 @@ impl<R: Read> BinaryReader<R> {
 pub struct BinaryFormat;
 
 impl BinaryFormat {
-    /// Write results to binary file
+    /// Write results to binary file atomically (write to tmp, fsync, then rename).
+    /// The fsync ensures data is persisted to disk before the rename, preventing
+    /// a crash from leaving a zero-length or partial file at the final path.
     pub fn write_to_file(
         results: &Results,
         path: &str,
         config: Option<BinaryFormatConfig>,
     ) -> std::io::Result<()> {
-        let file = File::create(path)?;
-        let writer = BufWriter::new(file);
-        let mut binary_writer = BinaryWriter::new(writer, config.unwrap_or_default());
-        binary_writer.write_results(results)
+        let tmp_path = format!("{}.tmp", path);
+        {
+            let file = File::create(&tmp_path)?;
+            let writer = BufWriter::new(file);
+            let mut binary_writer = BinaryWriter::new(writer, config.unwrap_or_default());
+            binary_writer.write_results(results)?;
+            // Flush the BufWriter and fsync the underlying file descriptor.
+            // This guarantees the full payload is on-disk before the rename.
+            let inner_file = binary_writer.into_inner()?.into_inner()
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            inner_file.sync_all()?;
+        }
+        std::fs::rename(&tmp_path, path).map_err(|e| {
+            std::io::Error::new(e.kind(), format!("Failed to rename {} to {}: {}", tmp_path, path, e))
+        })
     }
     
     /// Read results from binary file
@@ -674,6 +959,7 @@ mod tests {
     use super::*;
     use crate::models::{Results, Position, Variant, HighestEntropy};
     use hashbrown::HashMap;
+    extern crate tempfile;
 
     fn create_test_results() -> Results {
         let mut metadata = HashMap::new();
@@ -769,49 +1055,38 @@ mod tests {
     #[test]
     fn test_binary_file_io() {
         let results = create_test_results();
-        let temp_path = "test_binary_output.dima";
+        let dir = tempfile::tempdir().unwrap();
+        let temp_path = dir.path().join("output.dima");
+        let path_str = temp_path.to_str().unwrap();
         
-        // Write to binary file
-        BinaryFormat::write_to_file(&results, temp_path, None).unwrap();
+        BinaryFormat::write_to_file(&results, path_str, None).unwrap();
+        let loaded_results = BinaryFormat::read_from_file(path_str).unwrap();
         
-        // Read back from binary file
-        let loaded_results = BinaryFormat::read_from_file(temp_path).unwrap();
-        
-        // Verify data integrity
         assert_eq!(results.sequence_count, loaded_results.sequence_count);
         assert_eq!(results.query_name, loaded_results.query_name);
         assert_eq!(results.results.len(), loaded_results.results.len());
-        
-        // Clean up
-        std::fs::remove_file(temp_path).ok();
     }
 
     #[test]
     fn test_compression_types() {
         let results = create_test_results();
+        let dir = tempfile::tempdir().unwrap();
         
-        // Test different compression types
-        let configs = vec![
+        let configs = [
             BinaryFormatConfig { compression: CompressionType::None, ..Default::default() },
             BinaryFormatConfig { compression: CompressionType::Lz4, ..Default::default() },
             BinaryFormatConfig { compression: CompressionType::Zstd, ..Default::default() },
         ];
         
         for (i, config) in configs.iter().enumerate() {
-            let temp_path = format!("test_compression_{}.dima", i);
+            let temp_path = dir.path().join(format!("compression_{}.dima", i));
+            let path_str = temp_path.to_str().unwrap();
             
-            // Write with specific compression
-            BinaryFormat::write_to_file(&results, &temp_path, Some(config.clone())).unwrap();
+            BinaryFormat::write_to_file(&results, path_str, Some(config.clone())).unwrap();
+            let loaded_results = BinaryFormat::read_from_file(path_str).unwrap();
             
-            // Read back
-            let loaded_results = BinaryFormat::read_from_file(&temp_path).unwrap();
-            
-            // Verify data integrity
             assert_eq!(results.sequence_count, loaded_results.sequence_count);
             assert_eq!(results.query_name, loaded_results.query_name);
-            
-            // Clean up
-            std::fs::remove_file(temp_path).ok();
         }
     }
 
@@ -833,12 +1108,11 @@ mod tests {
     #[test]
     fn test_data_integrity_roundtrip() {
         let original_results = create_test_results();
-        let temp_path = "test_integrity.dima";
+        let dir = tempfile::tempdir().unwrap();
+        let temp_path = dir.path().join("integrity.dima");
+        let temp_path = temp_path.to_str().unwrap();
         
-        // Write to binary format
         BinaryFormat::write_to_file(&original_results, temp_path, None).unwrap();
-        
-        // Read back from binary format
         let loaded_results = BinaryFormat::read_from_file(temp_path).unwrap();
         
         // Verify complete data integrity
@@ -901,10 +1175,7 @@ mod tests {
             }
         }
         
-        // Clean up
-        std::fs::remove_file(temp_path).ok();
-        
-        println!("✅ Binary format preserves 100% data integrity");
+        // tempdir auto-cleans on drop
     }
 
     #[test]
@@ -935,5 +1206,170 @@ mod tests {
         
         // For larger datasets, binary should be significantly smaller
         assert!(compression_ratio > 1.0);
+    }
+
+    // ─── Adversarial / Malformed Input Tests ─────────────────────────────────
+    // Verifies the binary parser gracefully rejects crafted malicious inputs
+    // without panicking or allocating unbounded memory.
+    // Ref: Böhme et al. (2017). "Directed Greybox Fuzzing." ACM CCS.
+
+    #[test]
+    fn test_invalid_magic_bytes_rejected() {
+        let data = b"NOTD\x02\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00";
+        let cursor = std::io::Cursor::new(data.as_slice());
+        let mut reader = BinaryReader::new(cursor);
+        let result = reader.read_results();
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("magic") || err.contains("not a .dima"),
+            "Expected magic byte error, got: {}", err);
+    }
+
+    #[test]
+    fn test_truncated_header_rejected() {
+        // Valid magic but file is truncated mid-header
+        let data = b"DIMA\x02";
+        let cursor = std::io::Cursor::new(data.as_slice());
+        let mut reader = BinaryReader::new(cursor);
+        let result = reader.read_results();
+        assert!(result.is_err(), "Truncated header should fail");
+    }
+
+    #[test]
+    fn test_huge_string_count_rejected() {
+        // Valid v2 header (magic + version=2 + min_reader=1 + compression=0 + level=0 + flags=0)
+        // Then claim 0xFFFFFFFF strings in the string table
+        let mut data: Vec<u8> = Vec::new();
+        data.extend_from_slice(b"DIMA");            // magic
+        data.extend_from_slice(&2u32.to_le_bytes()); // writer_version = 2
+        data.extend_from_slice(&1u32.to_le_bytes()); // min_reader_version = 1
+        data.push(0);                                // compression = None
+        data.extend_from_slice(&0i32.to_le_bytes()); // compression_level = 0
+        data.push(0x01);                             // flags: string_interning=true
+        data.extend_from_slice(&u32::MAX.to_le_bytes()); // string_count = MAX
+
+        let cursor = std::io::Cursor::new(data);
+        let mut reader = BinaryReader::new(cursor);
+        let result = reader.read_results();
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("exceeds limit") || err.contains("count"),
+            "Expected string count rejection, got: {}", err);
+    }
+
+    #[test]
+    fn test_huge_string_length_rejected() {
+        // Valid header, 1 string in table, but that string claims 500 MB
+        let mut data: Vec<u8> = Vec::new();
+        data.extend_from_slice(b"DIMA");
+        data.extend_from_slice(&2u32.to_le_bytes());
+        data.extend_from_slice(&1u32.to_le_bytes());
+        data.push(0);
+        data.extend_from_slice(&0i32.to_le_bytes());
+        data.push(0x01);
+        data.extend_from_slice(&1u32.to_le_bytes());            // string_count = 1
+        data.extend_from_slice(&500_000_000u32.to_le_bytes());  // string_len = 500MB
+
+        let cursor = std::io::Cursor::new(data);
+        let mut reader = BinaryReader::new(cursor);
+        let result = reader.read_results();
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("exceeds limit") || err.contains("length"),
+            "Expected string length rejection, got: {}", err);
+    }
+
+    #[test]
+    fn test_invalid_compression_byte_rejected() {
+        let mut data: Vec<u8> = Vec::new();
+        data.extend_from_slice(b"DIMA");
+        data.extend_from_slice(&2u32.to_le_bytes());
+        data.extend_from_slice(&1u32.to_le_bytes());
+        data.push(255); // invalid compression type
+
+        let cursor = std::io::Cursor::new(data);
+        let mut reader = BinaryReader::new(cursor);
+        let result = reader.read_results();
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("compression") || err.contains("Invalid"),
+            "Expected compression type error, got: {}", err);
+    }
+
+    #[test]
+    fn test_future_min_reader_version_rejected() {
+        // File claims it needs reader v999 — we're v2
+        let mut data: Vec<u8> = Vec::new();
+        data.extend_from_slice(b"DIMA");
+        data.extend_from_slice(&2u32.to_le_bytes());   // writer_version = 2
+        data.extend_from_slice(&999u32.to_le_bytes()); // min_reader_version = 999
+
+        let cursor = std::io::Cursor::new(data);
+        let mut reader = BinaryReader::new(cursor);
+        let result = reader.read_results();
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("upgrade") || err.contains("v999"),
+            "Expected version-too-new error, got: {}", err);
+    }
+
+    #[test]
+    fn test_crc_mismatch_detected() {
+        // Write a valid binary file then corrupt a byte in the preamble
+        // (header region) without altering structural lengths.
+        let test_results = create_test_results();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("crc_test.dima");
+        
+        BinaryFormat::write_to_file(
+            &test_results, path.to_str().unwrap(), None,
+        ).unwrap();
+
+        let mut bytes = std::fs::read(&path).unwrap();
+        // Corrupt the flags byte (byte 17 in v2 header: 4 magic + 4 version +
+        // 4 min_reader + 1 compression + 4 level = byte 17).
+        // This is structural enough to invalidate CRC but won't break parsing
+        // of the string table count (which is at offset 18).
+        // Actually safer: corrupt the compression_level (bytes 13..17) which
+        // doesn't affect parse flow but does invalidate the CRC.
+        if bytes.len() > 16 {
+            bytes[14] ^= 0xFF; // flip a byte in compression_level field
+        }
+        std::fs::write(&path, &bytes).unwrap();
+
+        let file = std::fs::File::open(&path).unwrap();
+        let mut reader = BinaryReader::new(file);
+        let result = reader.read_results();
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("CRC") || err.contains("corrupt"),
+            "Expected CRC mismatch error, got: {}", err);
+    }
+
+    #[test]
+    fn test_empty_file_rejected() {
+        let cursor = std::io::Cursor::new(Vec::<u8>::new());
+        let mut reader = BinaryReader::new(cursor);
+        let result = reader.read_results();
+        assert!(result.is_err(), "Empty file should fail to parse");
+    }
+
+    #[test]
+    fn test_invalid_utf8_in_string_table_rejected() {
+        let mut data: Vec<u8> = Vec::new();
+        data.extend_from_slice(b"DIMA");
+        data.extend_from_slice(&2u32.to_le_bytes());
+        data.extend_from_slice(&1u32.to_le_bytes());
+        data.push(0);
+        data.extend_from_slice(&0i32.to_le_bytes());
+        data.push(0x01);
+        data.extend_from_slice(&1u32.to_le_bytes()); // 1 string
+        data.extend_from_slice(&4u32.to_le_bytes()); // string len = 4
+        data.extend_from_slice(&[0xFF, 0xFE, 0xFD, 0xFC]); // invalid UTF-8
+
+        let cursor = std::io::Cursor::new(data);
+        let mut reader = BinaryReader::new(cursor);
+        let result = reader.read_results();
+        assert!(result.is_err());
     }
 }

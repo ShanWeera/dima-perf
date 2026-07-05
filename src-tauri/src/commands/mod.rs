@@ -4,7 +4,9 @@
 
 pub mod analyze;
 pub mod export;
+pub mod http_retry;
 pub mod pdb;
 pub mod project;
 pub mod settings;
+pub mod uniprot;
 pub mod validate;

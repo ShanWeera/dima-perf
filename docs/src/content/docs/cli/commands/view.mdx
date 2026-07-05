@@ -1,0 +1,58 @@
+---
+title: view
+description: Full reference for the dima view command — convert binary .dima files to other formats.
+---
+
+The `view` command reads a binary `.dima` file and outputs its contents in JSON, TSV, JSONL, or re-encodes it as binary with different compression.
+
+## Synopsis
+
+```bash
+dima view [OPTIONS] -i <DIMA_FILE> [-o <OUTPUT>]
+```
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-i, --input <DIMA_FILE>` | Path to the binary `.dima` file | Required |
+| `-o, --output <FILE>` | Output path (stdout if omitted) | stdout |
+| `-O, --output-type <FMT>` | Format: `json`, `tsv`, `jsonl`, `dima` | inferred |
+| `--no-header` | Omit TSV header row (only with `-O tsv`) | off |
+| `--compression <N>` | Re-encode compression: `0`=none, `1`=LZ4, `2`=Zstd | `1` |
+| `-q` | Quiet mode | off |
+| `-v` / `-vv` | Increase verbosity | warnings |
+
+## Examples
+
+**Convert to JSON (stdout):**
+```bash
+dima view -i results.dima
+```
+
+**Convert to TSV file:**
+```bash
+dima view -i results.dima -O tsv -o results.tsv
+```
+
+**Convert to JSONL (one position per line):**
+```bash
+dima view -i results.dima -O jsonl -o results.jsonl
+```
+
+**Re-encode with Zstd compression:**
+```bash
+dima view -i results.dima -O dima --compression 2 -o results_zstd.dima
+```
+
+**Pipe to downstream tool:**
+```bash
+dima view -i results.dima -O tsv | cut -f1,2,3 | head -20
+```
+
+## Use Cases
+
+- **Format conversion** — Convert compact binary archives into human-readable formats for inspection or downstream analysis
+- **Re-compression** — Change compression algorithm (e.g., LZ4 → Zstd for archival)
+- **Pipeline integration** — Stream TSV/JSONL output into R, Python, or shell pipelines
+- **Quick inspection** — View binary file contents without writing separate scripts

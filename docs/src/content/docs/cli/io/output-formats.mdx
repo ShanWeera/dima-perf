@@ -1,0 +1,127 @@
+---
+title: Output Formats
+description: DiMA output formats — JSON, TSV, JSONL, and compact binary .dima.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+DiMA supports four output formats, each suited to different workflows.
+
+## Format Selection
+
+Specify format explicitly with `-O` or let DiMA infer from the output file extension:
+
+| Extension | Inferred Format |
+|-----------|----------------|
+| `.dima` | Binary (compact, compressed) |
+| `.tsv`, `.tab` | TSV (17 columns) |
+| `.jsonl`, `.ndjson` | JSONL (one position per line) |
+| anything else | JSON (pretty-printed) |
+
+```bash
+# Explicit format selection (always wins)
+dima analyze -i input.fasta -O tsv -o output.txt
+
+# Extension-based inference
+dima analyze -i input.fasta -o results.tsv    # → TSV
+dima analyze -i input.fasta -o results.dima   # → Binary
+```
+
+## JSON
+
+The default format. Contains the full analysis results including metadata, HCS, and summary statistics.
+
+```bash
+dima analyze -i aligned.fasta -o results.json
+```
+
+- **Pretty-printed** when writing to a terminal or file
+- **Compact** when piped to another program (auto-detected)
+- Contains the complete `Results` structure with all positions, variants, and metadata
+
+## TSV (Tab-Separated Values)
+
+A flat 17-column format suitable for spreadsheet applications, R, pandas, and command-line tools.
+
+```bash
+dima analyze -i aligned.fasta -O tsv -o results.tsv
+```
+
+### Column Definitions
+
+| # | Column | Description |
+|---|--------|-------------|
+| 1 | `position` | K-mer alignment start position (0-indexed) |
+| 2 | `entropy` | Shannon's entropy (corrected for size bias) |
+| 3 | `support` | Number of valid k-mers at this position |
+| 4 | `low_support` | Support label: `""`, `"LS"`, `"ELS"`, or `"NS"` |
+| 5 | `distinct_variants_count` | Number of distinct variant sequences |
+| 6 | `distinct_variants_incidence` | Distinct variants / total variants (%) |
+| 7 | `total_variants_incidence` | Total variants / support (%) |
+| 8 | `index_sequence` | Most frequent k-mer sequence at this position |
+| 9 | `index_count` | Number of times index appears |
+| 10 | `index_incidence` | Index count / support (%) |
+| 11 | `major_sequence` | Second most frequent k-mer (may be empty) |
+| 12 | `major_count` | Major variant count |
+| 13 | `major_incidence` | Major count / support (%) |
+| 14 | `minor_count` | Total minor variant occurrences |
+| 15 | `minor_incidence` | Minor total / support (%) |
+| 16 | `unique_count` | Number of singleton (unique) variants |
+| 17 | `unique_incidence` | Unique count / support (%) |
+
+<Aside type="tip">
+Use `--no-header` to omit the header row when appending to existing files or piping to tools that don't expect headers.
+</Aside>
+
+## JSONL (Newline-Delimited JSON)
+
+Each line is a complete JSON object representing one k-mer position. Ideal for streaming and line-oriented processing.
+
+```bash
+dima analyze -i aligned.fasta -O jsonl -o results.jsonl
+```
+
+- One `Position` object per line (no enclosing array)
+- Compatible with `jq`, streaming parsers, and log aggregation tools
+- Does not include the top-level summary (`query_name`, `sequence_count`, etc.)
+
+```bash
+# Stream processing with jq
+dima view -i results.dima -O jsonl | jq 'select(.entropy > 2.0)'
+```
+
+## Binary `.dima`
+
+DiMA's compact binary format using bincode serialization with optional compression. Designed for large datasets where file size and I/O speed matter.
+
+```bash
+dima analyze -i aligned.fasta -O dima -o results.dima
+```
+
+### Compression Options
+
+| Level | Algorithm | Size vs JSON | Use Case |
+|-------|-----------|-------------|----------|
+| `0` | None | ~80% smaller | Fastest read/write |
+| `1` | LZ4 (default) | ~90% smaller | General purpose |
+| `2` | Zstd | ~93% smaller | Archival, transfer |
+
+### Features
+
+- **String interning** — Deduplicated sequences and metadata values
+- **CRC32 checksums** — Data integrity validation on read
+- **Round-trip safe** — No data loss when converting to/from other formats
+
+<Aside type="caution">
+Binary output requires an explicit output path (`-o`). It cannot be streamed to stdout.
+</Aside>
+
+### Converting Binary Files
+
+Use `dima view` to convert binary files to any other format:
+
+```bash
+dima view -i results.dima -O json -o results.json
+dima view -i results.dima -O tsv -o results.tsv
+dima view -i results.dima -O dima --compression 2 -o results_zstd.dima
+```

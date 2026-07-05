@@ -1,15 +1,15 @@
-/// Alphabet Module - Character Validation for K-mer Generation
-/// 
-/// This module provides robust character validation using a whitelist approach
-/// to ensure only valid biological sequences are processed. It distinguishes
-/// between valid characters, known ambiguous characters, and completely invalid
-/// characters for proper reporting and handling.
-/// 
-/// Performance characteristics:
-/// - O(1) per character validation via 256-byte lookup table
-/// - Compatible with SIMD optimizations
-/// - Thread-safe and zero-allocation validation
-/// - Supports both protein and nucleotide alphabets
+//! Alphabet Module - Character Validation for K-mer Generation
+//!
+//! This module provides robust character validation using a whitelist approach
+//! to ensure only valid biological sequences are processed. It distinguishes
+//! between valid characters, known ambiguous characters, and completely invalid
+//! characters for proper reporting and handling.
+//!
+//! Performance characteristics:
+//! - O(1) per character validation via 256-byte lookup table
+//! - Compatible with SIMD optimizations
+//! - Thread-safe and zero-allocation validation
+//! - Supports both protein and nucleotide alphabets
 
 use std::collections::HashSet;
 use std::fmt;
@@ -44,8 +44,10 @@ pub const AMBIGUOUS_PROTEIN_CHARS: &[u8] = b"XBJZOU";
 /// - N: Any nucleotide
 pub const AMBIGUOUS_NUCLEOTIDE_CHARS: &[u8] = b"RYKMSWBDHVN";
 
-/// Gap character commonly found in alignments
+/// Gap characters commonly found in alignments.
+/// Standard MSA tools (MAFFT, Clustal, MUSCLE) use both '-' and '.' for gaps.
 pub const GAP_CHAR: u8 = b'-';
+pub const GAP_CHAR_DOT: u8 = b'.';
 
 /// Special marker values in the lookup table
 pub const MARKER_AMBIGUOUS: u8 = 254;
@@ -76,6 +78,22 @@ impl fmt::Display for AlphabetType {
         match self {
             AlphabetType::Protein => write!(f, "protein"),
             AlphabetType::Nucleotide => write!(f, "nucleotide"),
+        }
+    }
+}
+
+impl AlphabetType {
+    /// Resolve an alphabet type from a string, accepting common synonyms.
+    /// Returns Protein for None (default). Logs a warning for unrecognized strings.
+    pub fn from_optional_str(s: Option<&str>) -> Self {
+        match s.map(|v| v.to_lowercase()) {
+            Some(ref v) if matches!(v.as_str(), "nucleotide" | "dna" | "rna") => AlphabetType::Nucleotide,
+            Some(ref v) if matches!(v.as_str(), "protein" | "amino_acid" | "aa") => AlphabetType::Protein,
+            None => AlphabetType::Protein,
+            Some(ref unknown) => {
+                tracing::warn!(alphabet = %unknown, "unrecognized alphabet, defaulting to protein");
+                AlphabetType::Protein
+            }
         }
     }
 }
@@ -258,8 +276,10 @@ impl CharacterValidator {
             }
         }
         
-        // Gap character is always marked specially (treated as ambiguous for k-mer purposes)
+        // Gap characters are always marked specially (treated as ambiguous for k-mer purposes)
+        // Both '-' and '.' are standard gap characters in MSA formats
         lookup[GAP_CHAR as usize] = MARKER_AMBIGUOUS;
+        lookup[GAP_CHAR_DOT as usize] = MARKER_AMBIGUOUS;
         
         Self {
             lookup,
@@ -279,22 +299,37 @@ impl CharacterValidator {
         Self::new(AlphabetType::Nucleotide)
     }
     
-    /// Create a validator from an alphabet string ("protein" or "nucleotide")
+    /// Create a validator from an alphabet string.
+    ///
+    /// Accepts common synonyms (case-insensitive):
+    ///   - Protein: "protein", "amino_acid", "aa"
+    ///   - Nucleotide: "nucleotide", "dna", "rna"
+    ///
+    /// Logs a warning for unrecognized values rather than silently defaulting.
     pub fn from_alphabet_string(alphabet: Option<&String>) -> Self {
-        match alphabet.map(|s| s.as_str()) {
-            Some("nucleotide") => Self::nucleotide(),
-            _ => Self::protein(), // Default to protein
+        match alphabet.map(|s| s.to_lowercase()) {
+            Some(ref s) if matches!(s.as_str(), "nucleotide" | "dna" | "rna") => Self::nucleotide(),
+            Some(ref s) if matches!(s.as_str(), "protein" | "amino_acid" | "aa") => Self::protein(),
+            None => Self::protein(),
+            Some(ref unknown) => {
+                tracing::warn!(
+                    alphabet = %unknown,
+                    "unrecognized alphabet, defaulting to protein (valid: protein, amino_acid, aa, nucleotide, dna, rna)"
+                );
+                Self::protein()
+            }
         }
     }
     
-    /// Create a validator with full configuration
+    /// Create a validator with full configuration.
+    /// Case-insensitive alphabet matching.
     pub fn from_config(
         alphabet: Option<&String>,
         mode: ValidationMode,
         allow_lowercase: bool,
     ) -> Self {
-        let alphabet_type = match alphabet.map(|s| s.as_str()) {
-            Some("nucleotide") => AlphabetType::Nucleotide,
+        let alphabet_type = match alphabet.map(|s| s.to_lowercase()) {
+            Some(ref s) if s == "nucleotide" => AlphabetType::Nucleotide,
             _ => AlphabetType::Protein,
         };
         Self::with_options(alphabet_type, mode, allow_lowercase)
@@ -322,7 +357,7 @@ impl CharacterValidator {
         match code {
             MARKER_INVALID => CharacterClass::Invalid,
             MARKER_AMBIGUOUS => {
-                if ch == GAP_CHAR {
+                if ch == GAP_CHAR || ch == GAP_CHAR_DOT {
                     CharacterClass::Gap
                 } else {
                     CharacterClass::Ambiguous
@@ -339,19 +374,16 @@ impl CharacterValidator {
         code != MARKER_INVALID && code != MARKER_AMBIGUOUS
     }
     
-    /// Check if a character should cause the k-mer to be marked as NA
-    /// 
-    /// In strict mode: ambiguous AND invalid characters cause NA
-    /// In permissive mode: only invalid characters cause NA
-    /// In report mode: nothing causes NA (but invalid chars are tracked)
+    /// Check if a character should cause the k-mer to be marked as NA.
+    ///
+    /// Per PMC11596295: "Support is the number of sequences that do not harbor
+    /// a gap and/or unknown/ambiguous." This is a scientific requirement that
+    /// applies regardless of validation mode. The mode controls *reporting*
+    /// behavior (abort vs warn vs log), not encoding correctness.
     #[inline(always)]
     pub fn should_invalidate_kmer(&self, ch: u8) -> bool {
         let code = self.lookup[ch as usize];
-        match self.mode {
-            ValidationMode::Strict => code == MARKER_INVALID || code == MARKER_AMBIGUOUS,
-            ValidationMode::Permissive => code == MARKER_INVALID,
-            ValidationMode::ReportOnly => false,
-        }
+        code == MARKER_INVALID || code == MARKER_AMBIGUOUS
     }
     
     /// Check if any character in a window should invalidate the k-mer
@@ -360,8 +392,15 @@ impl CharacterValidator {
         window.iter().any(|&ch| self.should_invalidate_kmer(ch))
     }
     
-    /// Get the encoding index for a valid character
-    /// Returns None if the character is not valid
+    /// Get the encoding index for a valid character.
+    ///
+    /// Returns `Some(index)` only for standard alphabet characters (0-19 for
+    /// protein, 0-4 for nucleotide). Returns `None` for ambiguous, gap, and
+    /// invalid characters — these must be excluded from k-mer encoding per
+    /// PMC11596295's definition of support.
+    ///
+    /// This function is mode-independent: scientific correctness requires
+    /// excluding non-standard characters regardless of the validation mode.
     #[inline(always)]
     pub fn encode(&self, ch: u8) -> Option<u8> {
         let code = self.lookup[ch as usize];
@@ -502,52 +541,63 @@ impl CharacterValidatorBuilder {
         self
     }
     
-    pub fn build(self) -> CharacterValidator {
+    /// Build the CharacterValidator from the configured options.
+    ///
+    /// Returns `Err` if the custom alphabet exceeds the maximum supported size
+    /// (253 valid characters), which would collide with internal sentinel values.
+    pub fn build(self) -> Result<CharacterValidator, String> {
         if self.custom_valid.is_some() || self.custom_ambiguous.is_some() {
-            // Build custom lookup table
             let mut lookup = [MARKER_INVALID; 256];
-            
-            // Add valid characters
-            let valid_chars = self.custom_valid.as_ref().map(|v| v.as_slice()).unwrap_or(
+
+            let valid_chars = self.custom_valid.as_deref().unwrap_or(
                 match self.alphabet_type {
                     AlphabetType::Protein => VALID_PROTEIN_CHARS,
                     AlphabetType::Nucleotide => VALID_NUCLEOTIDE_CHARS,
                 }
             );
-            
+
+            let valid_count = valid_chars.len();
+            if valid_count >= MARKER_AMBIGUOUS as usize {
+                return Err(format!(
+                    "Custom alphabet has {} valid characters which would collide with \
+                     marker sentinels (maximum supported: {})",
+                    valid_count,
+                    MARKER_AMBIGUOUS as usize - 1
+                ));
+            }
+
             for (idx, &ch) in valid_chars.iter().enumerate() {
                 lookup[ch as usize] = idx as u8;
                 if self.allow_lowercase {
                     lookup[ch.to_ascii_lowercase() as usize] = idx as u8;
                 }
             }
-            
-            // Add ambiguous characters
-            let ambiguous_chars = self.custom_ambiguous.as_ref().map(|v| v.as_slice()).unwrap_or(
+
+            let ambiguous_chars = self.custom_ambiguous.as_deref().unwrap_or(
                 match self.alphabet_type {
                     AlphabetType::Protein => AMBIGUOUS_PROTEIN_CHARS,
                     AlphabetType::Nucleotide => AMBIGUOUS_NUCLEOTIDE_CHARS,
                 }
             );
-            
+
             for &ch in ambiguous_chars {
                 lookup[ch as usize] = MARKER_AMBIGUOUS;
                 if self.allow_lowercase {
                     lookup[ch.to_ascii_lowercase() as usize] = MARKER_AMBIGUOUS;
                 }
             }
-            
-            // Gap character
+
             lookup[GAP_CHAR as usize] = MARKER_AMBIGUOUS;
-            
-            CharacterValidator {
+            lookup[GAP_CHAR_DOT as usize] = MARKER_AMBIGUOUS;
+
+            Ok(CharacterValidator {
                 lookup,
                 alphabet_type: self.alphabet_type,
                 mode: self.mode,
                 allow_lowercase: self.allow_lowercase,
-            }
+            })
         } else {
-            CharacterValidator::with_options(self.alphabet_type, self.mode, self.allow_lowercase)
+            Ok(CharacterValidator::with_options(self.alphabet_type, self.mode, self.allow_lowercase))
         }
     }
 }
@@ -644,24 +694,24 @@ mod tests {
     }
 
     #[test]
-    fn test_validation_modes() {
-        // Strict mode: ambiguous chars invalidate k-mers
+    fn test_invalidation_is_mode_independent() {
+        // Per PMC11596295: "Support is the number of sequences that do not harbor
+        // a gap and/or unknown/ambiguous." This applies regardless of mode.
+        // All modes must invalidate k-mers containing non-standard chars.
         let strict = CharacterValidator::with_options(AlphabetType::Protein, ValidationMode::Strict, false);
         assert!(strict.should_invalidate_kmer(b'X')); // ambiguous
         assert!(strict.should_invalidate_kmer(b'#')); // invalid
         assert!(!strict.should_invalidate_kmer(b'A')); // valid
         
-        // Permissive mode: only invalid chars invalidate k-mers
         let permissive = CharacterValidator::with_options(AlphabetType::Protein, ValidationMode::Permissive, false);
-        assert!(!permissive.should_invalidate_kmer(b'X')); // ambiguous - OK in permissive
+        assert!(permissive.should_invalidate_kmer(b'X')); // ambiguous — MUST invalidate
         assert!(permissive.should_invalidate_kmer(b'#')); // invalid
         assert!(!permissive.should_invalidate_kmer(b'A')); // valid
         
-        // Report mode: nothing invalidates k-mers
         let report = CharacterValidator::with_options(AlphabetType::Protein, ValidationMode::ReportOnly, false);
-        assert!(!report.should_invalidate_kmer(b'X'));
-        assert!(!report.should_invalidate_kmer(b'#'));
-        assert!(!report.should_invalidate_kmer(b'A'));
+        assert!(report.should_invalidate_kmer(b'X')); // ambiguous — MUST invalidate
+        assert!(report.should_invalidate_kmer(b'#')); // invalid
+        assert!(!report.should_invalidate_kmer(b'A')); // valid
     }
 
     #[test]
@@ -710,7 +760,8 @@ mod tests {
         let validator = CharacterValidatorBuilder::protein()
             .mode(ValidationMode::Permissive)
             .allow_lowercase(true)
-            .build();
+            .build()
+            .expect("standard alphabet should always succeed");
         
         assert_eq!(validator.mode(), ValidationMode::Permissive);
         assert!(validator.allows_lowercase());
@@ -719,17 +770,27 @@ mod tests {
 
     #[test]
     fn test_custom_alphabet() {
-        // Custom alphabet with only A, B, C as valid
         let validator = CharacterValidatorBuilder::protein()
             .custom_valid_chars(b"ABC".to_vec())
             .custom_ambiguous_chars(b"X".to_vec())
-            .build();
+            .build()
+            .expect("small custom alphabet should succeed");
         
         assert!(validator.is_valid(b'A'));
         assert!(validator.is_valid(b'B'));
         assert!(validator.is_valid(b'C'));
-        assert!(!validator.is_valid(b'D')); // Not in custom valid list
+        assert!(!validator.is_valid(b'D'));
         assert!(matches!(validator.classify(b'X'), CharacterClass::Ambiguous));
+    }
+
+    #[test]
+    fn test_builder_rejects_oversized_alphabet() {
+        // 254+ valid chars would collide with MARKER_AMBIGUOUS sentinel
+        let huge_alphabet: Vec<u8> = (0u8..=253).collect();
+        let result = CharacterValidatorBuilder::protein()
+            .custom_valid_chars(huge_alphabet)
+            .build();
+        assert!(result.is_err());
     }
 
     #[test]

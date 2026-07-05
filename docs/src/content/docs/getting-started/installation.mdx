@@ -1,0 +1,135 @@
+---
+title: Installation
+description: Install DiMA on Linux, macOS, or Windows from pre-built binaries or build from source.
+---
+
+import { Tabs, TabItem, Steps } from '@astrojs/starlight/components';
+
+## Pre-Built Binaries
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/ShanWeera/dima-perf/releases).
+
+<Tabs syncKey="os">
+  <TabItem label="macOS">
+    **Apple Silicon (M1/M2/M3/M4):**
+    ```bash
+    curl -LO https://github.com/ShanWeera/dima-perf/releases/latest/download/dima-aarch64-apple-darwin.tar.gz
+    tar xzf dima-aarch64-apple-darwin.tar.gz
+    sudo mv dima /usr/local/bin/
+    ```
+
+    **Intel (x86_64):**
+    ```bash
+    curl -LO https://github.com/ShanWeera/dima-perf/releases/latest/download/dima-x86_64-apple-darwin.tar.gz
+    tar xzf dima-x86_64-apple-darwin.tar.gz
+    sudo mv dima /usr/local/bin/
+    ```
+  </TabItem>
+  <TabItem label="Linux">
+    **x86_64 (glibc):**
+    ```bash
+    curl -LO https://github.com/ShanWeera/dima-perf/releases/latest/download/dima-x86_64-unknown-linux-gnu.tar.gz
+    tar xzf dima-x86_64-unknown-linux-gnu.tar.gz
+    sudo mv dima /usr/local/bin/
+    ```
+
+    **x86_64 (musl — static binary):**
+    ```bash
+    curl -LO https://github.com/ShanWeera/dima-perf/releases/latest/download/dima-x86_64-unknown-linux-musl.tar.gz
+    tar xzf dima-x86_64-unknown-linux-musl.tar.gz
+    sudo mv dima /usr/local/bin/
+    ```
+
+    **ARM64 (glibc):**
+    ```bash
+    curl -LO https://github.com/ShanWeera/dima-perf/releases/latest/download/dima-aarch64-unknown-linux-gnu.tar.gz
+    tar xzf dima-aarch64-unknown-linux-gnu.tar.gz
+    sudo mv dima /usr/local/bin/
+    ```
+
+    **ARM64 (musl — static binary):**
+    ```bash
+    curl -LO https://github.com/ShanWeera/dima-perf/releases/latest/download/dima-aarch64-unknown-linux-musl.tar.gz
+    tar xzf dima-aarch64-unknown-linux-musl.tar.gz
+    sudo mv dima /usr/local/bin/
+    ```
+  </TabItem>
+  <TabItem label="Windows">
+    **x86_64:**
+    ```powershell
+    Invoke-WebRequest -Uri "https://github.com/ShanWeera/dima-perf/releases/latest/download/dima-x86_64-pc-windows-msvc.zip" -OutFile dima.zip
+    Expand-Archive dima.zip -DestinationPath .
+    Move-Item dima.exe C:\Windows\System32\
+    ```
+
+    **ARM64:**
+    ```powershell
+    Invoke-WebRequest -Uri "https://github.com/ShanWeera/dima-perf/releases/latest/download/dima-aarch64-pc-windows-msvc.zip" -OutFile dima.zip
+    Expand-Archive dima.zip -DestinationPath .
+    Move-Item dima.exe C:\Windows\System32\
+    ```
+  </TabItem>
+</Tabs>
+
+## Build from Source
+
+Requires [Rust](https://www.rust-lang.org/tools/install) 1.81 or newer.
+
+<Steps>
+1. Install Rust via rustup:
+   ```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   ```
+
+2. Clone and build:
+   ```bash
+   git clone https://github.com/ShanWeera/dima-perf.git
+   cd dima-perf
+   cargo build --release
+   ```
+
+3. The binary is at `target/release/dima`. Optionally install system-wide:
+   ```bash
+   cargo install --path .
+   ```
+</Steps>
+
+## Verify Installation
+
+```bash
+dima --version
+```
+
+You should see output like:
+
+```
+dima 0.1.0
+```
+
+## Shell Completions
+
+Enable tab-completion for your shell. See [Shell Completions](/dima-perf/cli/commands/completions/) for details.
+
+<Tabs syncKey="shell">
+  <TabItem label="Bash">
+    ```bash
+    dima completions bash >> ~/.bashrc
+    source ~/.bashrc
+    ```
+  </TabItem>
+  <TabItem label="Zsh">
+    ```bash
+    dima completions zsh > ~/.zfunc/_dima
+    ```
+  </TabItem>
+  <TabItem label="Fish">
+    ```bash
+    dima completions fish > ~/.config/fish/completions/dima.fish
+    ```
+  </TabItem>
+  <TabItem label="PowerShell">
+    ```powershell
+    dima completions powershell >> $PROFILE
+    ```
+  </TabItem>
+</Tabs>

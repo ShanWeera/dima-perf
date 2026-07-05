@@ -1,0 +1,39 @@
+---
+title: API Reference
+description: Link to the auto-generated rustdoc HTML documentation for dima_lib.
+---
+
+import { Aside, LinkCard } from '@astrojs/starlight/components';
+
+## Generated Documentation
+
+The full Rust API documentation is auto-generated from source code using `cargo doc` and hosted alongside this site:
+
+<LinkCard title="dima_lib API Docs" href="/dima-perf/api/dima_lib/" description="Auto-generated rustdoc with all public types, traits, and functions" />
+
+<Aside type="note">
+The API docs are rebuilt on every push to `master` that modifies `src/lib.rs`, ensuring they always reflect the latest stable API surface.
+</Aside>
+
+## Key Entry Points
+
+Start with these types and functions when exploring the API:
+
+| Item | Purpose |
+|------|---------|
+| [`analyze()`](/dima-perf/api/dima_lib/fn.analyze.html) | Main analysis function |
+| [`Results`](/dima-perf/api/dima_lib/struct.Results.html) | Output data structure |
+| [`Position`](/dima-perf/api/dima_lib/struct.Position.html) | Per-position analysis result |
+| [`Variant`](/dima-perf/api/dima_lib/struct.Variant.html) | Individual diversity motif variant |
+| [`InputSource`](/dima-perf/api/dima_lib/enum.InputSource.html) | Input source enum (File or Stdin) |
+| [`AnalysisConfig`](/dima-perf/api/dima_lib/struct.AnalysisConfig.html) | Analysis configuration builder |
+
+## Generating Locally
+
+To build the API docs locally for development:
+
+```bash
+cargo doc --no-deps -p dima --open
+```
+
+This generates HTML at `target/doc/dima_lib/` and opens it in your browser.

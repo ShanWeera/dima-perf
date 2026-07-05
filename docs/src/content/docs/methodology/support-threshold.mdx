@@ -1,0 +1,109 @@
+---
+title: Support Threshold
+description: Low support handling, NS/LS/ELS classification, and the role of the support threshold in entropy correction.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The **support** at a k-mer position is the number of sequences that contribute valid (non-gap, non-ambiguous) k-mers. The support threshold determines whether entropy is corrected via rarefaction or computed directly.
+
+## Definition
+
+$$
+\text{support}(x) = \text{number of sequences with valid k-mers at position } x
+$$
+
+A k-mer is **invalid** (excluded from support) if it contains:
+- Gap characters (`-`)
+- Unknown/ambiguous characters (e.g., `X`, `N`, IUPAC codes)
+- Characters rejected by the active validation mode
+
+## Support Classification Labels
+
+| Label | Condition | Entropy Method |
+|-------|-----------|----------------|
+| (none) | support > threshold | Rarefaction + OLS extrapolation (corrected) |
+| **ELS** | support = threshold | Direct computation (no extrapolation) |
+| **LS** | 0 < support < threshold | Direct computation (no extrapolation) |
+| **NS** | support = 0 | Pseudo-entropy = 0 (no data) |
+
+<Aside type="note">
+**ELS** (Exceptional Low Support) distinguishes the edge case where support exactly equals the threshold. Extrapolation is not performed because the minimum number of resamples would be unreliable.
+</Aside>
+
+## Threshold's Role in Entropy Correction
+
+The threshold $T$ (default: 100) determines the boundary between corrected and uncorrected entropy:
+
+- **When support > T:** Entropy is corrected via rarefaction (sub-sampling at 5% intervals, OLS regression, extrapolation to infinite sample)
+- **When support ≤ T:** Raw Shannon entropy is used directly (insufficient data for reliable regression)
+
+### Why Correction Matters
+
+Without correction, entropy is systematically **underestimated** for finite samples — rare variants may not appear in small samples, making the position look more conserved than it truly is. The rarefaction approach estimates what the entropy would converge to with infinite sampling.
+
+## Choosing a Threshold
+
+| Dataset Size | Recommended Threshold | Rationale |
+|--------------|----------------------|-----------|
+| < 100 sequences | 10–30 | Insufficient data for default; use conservative cutoff |
+| 100–1,000 | 100 (default) | Per publication methodology |
+| 1,000–100,000 | 100 | Default works well |
+| > 100,000 | 100–200 | May increase if needing stricter confidence |
+
+<Aside type="tip">
+The default threshold of 100 is the recommended value from the DiMA publication (Tharanga et al. 2025, page 4), providing a robust baseline for the rarefaction algorithm.
+</Aside>
+
+## Impact on Output
+
+Support labels appear in the TSV `low_support` column and JSON `support_label` field:
+
+```json
+{
+  "position": 42,
+  "entropy": 0.0,
+  "support": 0,
+  "low_support": "NS",
+  ...
+}
+```
+
+### NS (No Support) Positions
+
+- Occur when all sequences at a position have gaps/ambiguous characters
+- Entropy is assigned a pseudo-value of 0
+- Position is retained in output to preserve alignment length
+- These should be interpreted carefully — zero entropy here means "no data," not "conserved"
+
+### LS/ELS Positions
+
+- Entropy is computed but **not corrected** for sample bias
+- May underestimate true diversity
+- Still valid for relative comparisons within the same analysis
+- Consider filtering or flagging in downstream analysis
+
+## Warning: Threshold Exceeds Sequence Count
+
+If `--threshold` exceeds the total sequence count in the alignment, **all positions** are classified as LS or ELS, and no rarefaction is performed. DiMA emits a warning:
+
+```
+WARN threshold exceeds sequence count — all positions marked Low Support
+```
+
+This means the output contains only raw (uncorrected) entropy values.
+
+## Partial Sequences and Variable Support
+
+Support can vary between positions when the alignment includes partial sequences:
+
+- Full-length sequences contribute valid k-mers at all positions
+- Partial sequences may have gaps at terminal positions
+- This creates a "support landscape" across the alignment
+
+For reliable comparative analysis, prefer positions with support well above the threshold.
+
+## References
+
+- Paninski L. "Estimation of entropy and mutual information." *Neural Computation*, 2003;15:1191–1253.
+- Tharanga S, Ünlü ES, Hu Y, et al. "DiMA: sequence diversity dynamics analyser for viruses." *Briefings in Bioinformatics*, 2025;26(1):bbae607.

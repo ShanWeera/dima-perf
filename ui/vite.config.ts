@@ -26,5 +26,15 @@ export default defineConfig({
     minify: !process.env.TAURI_DEBUG ? 'esbuild' : false,
     // Produce sourcemaps for debug builds
     sourcemap: !!process.env.TAURI_DEBUG,
+    rollupOptions: {
+      output: {
+        // Split large vendor libraries into separate chunks for better caching
+        manualChunks: {
+          'vendor-echarts': ['echarts', 'echarts-for-react'],
+          'vendor-3dmol': ['3dmol'],
+          'vendor-grid': ['react-grid-layout'],
+        },
+      },
+    },
   },
 });

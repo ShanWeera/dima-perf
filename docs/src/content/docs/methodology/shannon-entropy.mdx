@@ -1,0 +1,82 @@
+---
+title: Shannon Entropy
+description: Shannon's entropy formula, sample-size bias correction via rarefaction, and linear regression extrapolation.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Shannon's entropy quantifies the diversity (disorder) at each k-mer alignment position. DiMA applies a corrected version that accounts for finite sample size effects.
+
+## Shannon's Formula
+
+For each overlapping k-mer alignment position $x$, entropy $H(x)$ is computed as:
+
+$$
+H(x) = -\sum_{i=1}^{n(x)} p(i, x) \cdot \log_2 p(i, x)
+$$
+
+Where:
+- $p(i, x)$ is the relative incidence (probability) of a given k-mer sequence $i$ at position $x$
+- $n(x)$ is the number of **distinct** k-mer sequences at position $x$
+- The logarithm base 2 gives entropy in **bits**
+
+## Interpretation
+
+| Entropy Value | Meaning |
+|---------------|---------|
+| $H = 0$ | Complete conservation — only one distinct k-mer observed (100% identical) |
+| Low $H$ | Dominated by one sequence with few variants |
+| High $H$ | Many distinct sequences with similar frequencies |
+| Maximum $H$ | All possible k-mers observed with equal probability |
+
+**Theoretical maximum:** For a protein nonamer (k=9) with 20 amino acids, $H_{max} = \log_2(20^9) \approx 38.9$ bits. In practice, biological constraints keep observed values much lower — the highest reported nonamer entropy is ~9.2 bits for HIV-1 clade B envelope protein (Hu et al. 2013, *PLoS ONE*).
+
+## Sample Size Bias Correction
+
+Raw entropy is biased by sample size — small samples systematically underestimate true diversity. DiMA corrects this using **rarefaction with linear regression extrapolation** (Paninski 2003, *Neural Computation*; Khan et al. 2008, *PLoS Neglected Tropical Diseases*).
+
+### Algorithm
+
+1. At position $x$, let $N$ be the number of valid k-mers (support)
+2. If $N > T$ (support threshold), perform resampling:
+   - Create sub-alignments at sizes sampled at 5% intervals of $N$
+   - Compute raw Shannon entropy $H_s$ for each sub-sample size $s$
+   - Plot $H_s$ against $1/s$
+   - Apply **Ordinary Least Squares (OLS) linear regression**
+   - Extrapolate to $1/s \to 0$ (i.e., $s \to \infty$) to obtain corrected $H(x)$
+3. If $N \leq T$, use raw Shannon entropy directly (insufficient data for reliable extrapolation)
+
+$$
+H_{corrected}(x) = \lim_{N \to \infty} H(x) \approx \beta_0 \quad \text{(y-intercept of regression line)}
+$$
+
+<Aside type="note">
+The correction estimates what the entropy **would be** for an infinitely large sample with the same k-mer distribution. This eliminates the systematic underestimate caused by rare variants being missed in finite samples.
+</Aside>
+
+### Edge Cases
+
+| Condition | Behavior |
+|-----------|----------|
+| $N = 0$ (no valid k-mers) | $H = 0$, position tagged "NS" (No Support) |
+| $N = 1$ | $H = 0$ (single k-mer, zero diversity by definition) |
+| $N \leq T$ | Raw entropy (no extrapolation), tagged "LS" (Low Support) |
+| $N = T$ | Raw entropy, tagged "ELS" (Exceptional Low Support) |
+| $N$ slightly above $T$ | If regression yields negative entropy, uses raw $H$ |
+| $N > T$ | Full rarefaction + extrapolation (corrected entropy) |
+
+## Factors Affecting Entropy
+
+Two factors determine the entropy value:
+
+1. **Number of distinct sequences** $n(x)$ — more distinct k-mers → higher entropy
+2. **Probability distribution** — even distribution → higher entropy; skewed → lower
+
+A position can have many distinct k-mers but low entropy if one dominates (e.g., 99% index + many rare variants).
+
+## References
+
+- Shannon CE. "A mathematical theory of communication." *Bell System Technical Journal*, 1948;27:379–423.
+- Paninski L. "Estimation of entropy and mutual information." *Neural Computation*, 2003;15:1191–1253.
+- Khan AM, Miotto O, Nascimento EJM, et al. "Conservation and variability of dengue virus proteins: implications for vaccine design." *PLoS Neglected Tropical Diseases*, 2008;2:e272.
+- Schneider TD, Stormo GD, Gold L, et al. "Information content of binding sites on nucleotide sequences." *Journal of Molecular Biology*, 1986;188:415–431.

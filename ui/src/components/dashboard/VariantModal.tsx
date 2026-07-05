@@ -1,14 +1,24 @@
 /**
  * DiMA Desktop - Variant Detail Modal
  * 
- * Shows detailed information about a selected variant.
+ * Shows detailed information about a selected variant using shadcn Dialog
+ * for proper focus trapping, Escape key handling, and accessibility.
  */
 
-import { X, Copy, Check } from 'lucide-react';
-import { useState } from 'react';
+import { Copy, Check } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import type { Variant } from '@/lib/types';
 import { getCharacterColor, getMotifColor } from '@/lib/colors';
+import { showErrorToast } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 interface VariantModalProps {
   variant: Variant;
@@ -18,32 +28,38 @@ interface VariantModalProps {
 
 export function VariantModal({ variant, alphabet, onClose }: VariantModalProps) {
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => { clearTimeout(copyTimerRef.current); }, []);
 
   const handleCopy = async () => {
-    const fastaContent = `>variant_${variant.sequence}\n${variant.sequence}`;
-    await navigator.clipboard.writeText(fastaContent);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const seq = variant.sequence ?? '';
+    const fastaContent = `>variant_${seq}\n${seq}`;
+    try {
+      await navigator.clipboard.writeText(fastaContent);
+      setCopied(true);
+      clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      showErrorToast('Failed to copy to clipboard', err);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-lg bg-background shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <h2 className="text-lg font-semibold">Variant Details</h2>
-          <button onClick={onClose} className="rounded-md p-2 hover:bg-muted">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-hidden p-0">
+        <DialogHeader className="border-b px-6 py-4">
+          <DialogTitle>Variant Details</DialogTitle>
+          <DialogDescription className="sr-only">
+            Detailed information about the selected k-mer variant
+          </DialogDescription>
+        </DialogHeader>
 
-        {/* Content */}
-        <div className="overflow-auto p-6">
+        <div className="overflow-auto px-6 py-4">
           {/* Colored Sequence */}
           <div className="mb-6">
             <h3 className="mb-2 text-sm font-medium text-muted-foreground">Sequence</h3>
-            <div className="rounded-lg bg-muted p-4 font-mono text-lg leading-relaxed">
-              {variant.sequence.split('').map((char, i) => (
+            <div className="rounded-lg bg-muted p-4 font-mono text-lg leading-relaxed overflow-x-auto break-all">
+              {(variant.sequence ?? '').split('').map((char, i) => (
                 <span
                   key={i}
                   style={{ color: getCharacterColor(char, alphabet) }}
@@ -62,7 +78,7 @@ export function VariantModal({ variant, alphabet, onClose }: VariantModalProps) 
             </div>
             <div className="rounded-lg border p-4">
               <p className="text-sm text-muted-foreground">Incidence</p>
-              <p className="text-2xl font-bold">{(variant.incidence * 100).toFixed(1)}%</p>
+              <p className="text-2xl font-bold">{Number.isFinite(variant.incidence) ? variant.incidence.toFixed(1) : '0.0'}%</p>
             </div>
             <div className="rounded-lg border p-4">
               <p className="text-sm text-muted-foreground">Motif Type</p>
@@ -103,8 +119,7 @@ export function VariantModal({ variant, alphabet, onClose }: VariantModalProps) 
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex justify-end gap-2 border-t px-6 py-4">
+        <DialogFooter className="border-t px-6 py-4">
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>
@@ -112,8 +127,8 @@ export function VariantModal({ variant, alphabet, onClose }: VariantModalProps) 
             {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             {copied ? 'Copied!' : 'Copy Sequence'}
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

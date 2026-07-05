@@ -4,8 +4,9 @@
  * Wrapper component for dashboard panels with header and controls.
  */
 
-import { useState } from 'react';
-import { GripVertical, Maximize2, X } from 'lucide-react';
+import { useState, useEffect, useRef, memo } from 'react';
+import { createPortal } from 'react-dom';
+import { GripVertical, Maximize2, X, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface DashboardPanelProps {
@@ -14,31 +15,88 @@ interface DashboardPanelProps {
   panelId: string;
   children: React.ReactNode;
   className?: string;
+  onExportChart?: () => void;
 }
 
-export function DashboardPanel({
+export const DashboardPanel = memo(function DashboardPanel({
   title,
   subtitle,
   panelId: _panelId,
   children,
   className,
+  onExportChart,
 }: DashboardPanelProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const fullscreenRef = useRef<HTMLDivElement>(null);
 
+  // Close fullscreen on Escape, trap focus, and lock body scroll
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const container = fullscreenRef.current;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsFullscreen(false);
+        return;
+      }
+      // Focus trap: cycle Tab within the fullscreen overlay
+      if (e.key === 'Tab' && container) {
+        const focusable = container.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    // Lock body scroll while fullscreen is open
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    document.addEventListener('keydown', handleKeyDown);
+    container?.focus();
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isFullscreen]);
+
+  // Portal to document.body so the fullscreen overlay escapes react-grid-layout's
+  // CSS transform on grid items, which would otherwise trap position:fixed within the cell.
   if (isFullscreen) {
-    return (
-      <div className="fixed inset-0 z-50 flex flex-col bg-background">
+    return createPortal(
+      <>
+      {/* Dimmed backdrop */}
+      <div className="fixed inset-0 z-40 bg-black/50" aria-hidden="true" />
+      <div
+        ref={fullscreenRef}
+        className="fixed inset-0 z-50 flex flex-col bg-background"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${title} (fullscreen)`}
+        tabIndex={-1}
+      >
         {/* Fullscreen Header */}
         <div className="flex items-center justify-between border-b px-4 py-3">
-          <div>
-            <h3 className="font-semibold">{title}</h3>
+          <div className="min-w-0 flex-1 mr-2">
+            <h3 className="truncate font-semibold">{title}</h3>
             {subtitle && (
-              <p className="text-sm text-muted-foreground">{subtitle}</p>
+              <p className="truncate text-sm text-muted-foreground" title={subtitle}>{subtitle}</p>
             )}
           </div>
           <button
             onClick={() => setIsFullscreen(false)}
             className="rounded-md p-2 hover:bg-muted"
+            aria-label="Exit fullscreen"
           >
             <X className="h-5 w-5" />
           </button>
@@ -48,6 +106,8 @@ export function DashboardPanel({
           {children}
         </div>
       </div>
+      </>,
+      document.body
     );
   }
 
@@ -67,12 +127,27 @@ export function DashboardPanel({
             )}
           </div>
         </div>
-        <button
-          onClick={() => setIsFullscreen(true)}
-          className="rounded p-1 hover:bg-muted shrink-0"
-        >
-          <Maximize2 className="h-4 w-4 text-muted-foreground" />
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          {onExportChart && (
+            <button
+              onClick={onExportChart}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="rounded p-1 hover:bg-muted"
+              aria-label={`Export ${title} as image`}
+              title="Export chart"
+            >
+              <Download className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          )}
+          <button
+            onClick={() => setIsFullscreen(true)}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="rounded p-1 hover:bg-muted"
+            aria-label={`Fullscreen ${title}`}
+          >
+            <Maximize2 className="h-4 w-4 text-muted-foreground" />
+          </button>
+        </div>
       </div>
       {/* Panel Content */}
       <div className="flex-1 overflow-auto min-h-0 min-w-0">
@@ -80,4 +155,4 @@ export function DashboardPanel({
       </div>
     </div>
   );
-}
+});

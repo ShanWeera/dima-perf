@@ -1,0 +1,108 @@
+---
+title: Development Setup
+description: Build DiMA from source and set up a development environment.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+## Prerequisites
+
+- [Rust](https://www.rust-lang.org/tools/install) 1.81+ (see `rust-version` in Cargo.toml)
+- Git
+- For the desktop app: Node.js 18+ and system dependencies for [Tauri](https://tauri.app/start/prerequisites/)
+
+## Building from Source
+
+<Steps>
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/ShanWeera/dima-perf.git
+   cd dima-perf
+   ```
+
+2. **Build in release mode:**
+   ```bash
+   cargo build --release
+   ```
+   The binary is at `target/release/dima`.
+
+3. **Run tests:**
+   ```bash
+   cargo test
+   ```
+
+4. **Run benchmarks:**
+   ```bash
+   cargo bench
+   ```
+</Steps>
+
+## Development Workflow
+
+### Running During Development
+
+```bash
+# Debug build (faster compile, slower runtime)
+cargo run -- analyze -i test_data/aligned.fasta -o /dev/null
+
+# Release build (slower compile, production speed)
+cargo run --release -- analyze -i test_data/aligned.fasta -o results.json
+```
+
+### Code Formatting and Linting
+
+```bash
+cargo fmt --check     # Check formatting
+cargo fmt             # Auto-format
+cargo clippy          # Lint checks
+```
+
+### Building the Desktop App
+
+```bash
+cd src-tauri
+cargo tauri dev       # Development mode with hot reload
+cargo tauri build     # Production build
+```
+
+## Project Layout
+
+```
+dima-perf/
+├── src/              # CLI + library source
+│   ├── lib.rs        # Library crate root (public API)
+│   ├── main.rs       # CLI binary entry point
+│   ├── analysis.rs   # Core analysis pipeline
+│   ├── entropy.rs    # Shannon entropy + rarefaction
+│   ├── kmer.rs       # K-mer extraction and encoding
+│   ├── io.rs         # FASTA parsing, mmap, decompression
+│   ├── output.rs     # JSON/TSV/JSONL output formatting
+│   ├── binary.rs     # .dima binary format
+│   ├── models.rs     # Data structures (Results, Position, Variant)
+│   ├── columnar.rs   # Columnar metadata storage
+│   ├── alphabet.rs   # Character validation
+│   ├── matrix.rs     # Sequence matrix (RAM/disk-backed)
+│   ├── simd_string.rs # SIMD string operations
+│   └── help.rs       # CLI help text constants
+├── src-tauri/        # Tauri desktop app backend
+├── ui/               # Desktop app frontend
+├── benches/          # Criterion benchmarks
+├── tests/            # Integration tests
+├── docs/             # Documentation website (Starlight)
+└── Cargo.toml        # Workspace + library/binary definition
+```
+
+<Aside type="note">
+The workspace has two members: the root crate (CLI + library) and `src-tauri/` (desktop app backend). The default member is the root, so `cargo build` only builds the CLI unless you specify `--workspace`.
+</Aside>
+
+## Useful Commands
+
+| Command | Description |
+|---------|-------------|
+| `cargo test` | Run all unit and integration tests |
+| `cargo test --lib` | Run only library unit tests |
+| `cargo bench -- entropy` | Run entropy-specific benchmarks |
+| `cargo doc --no-deps --open` | Generate and view API docs |
+| `cargo build --release` | Optimized production build |
+| `cargo install --path .` | Install binary to `~/.cargo/bin/` |

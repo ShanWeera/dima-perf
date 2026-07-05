@@ -1,0 +1,49 @@
+---
+title: Desktop Installation
+description: Download and install DiMA Desktop on macOS, Linux, or Windows.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Download the latest DiMA Desktop release from [GitHub Releases](https://github.com/ShanWeera/dima-perf/releases).
+
+## Platform Downloads
+
+<Tabs syncKey="os">
+  <TabItem label="macOS">
+    **Apple Silicon (M1/M2/M3/M4):**
+    - `.dmg` — Disk image (drag to Applications)
+
+    **Intel (x86_64):**
+    - `.dmg` — Disk image (drag to Applications)
+
+    On first launch, macOS may show a Gatekeeper warning. Right-click → Open to bypass.
+  </TabItem>
+  <TabItem label="Linux">
+    **Formats available:**
+    - `.AppImage` — Portable, no installation required (chmod +x and run)
+    - `.deb` — Debian/Ubuntu package (`dpkg -i dima-desktop_*.deb`)
+
+    **AppImage usage:**
+    ```bash
+    chmod +x DiMA-Desktop_*.AppImage
+    ./DiMA-Desktop_*.AppImage
+    ```
+  </TabItem>
+  <TabItem label="Windows">
+    **Formats available:**
+    - `.msi` — Windows Installer (recommended)
+    - `.exe` — NSIS installer
+
+    Run the installer and follow the prompts. No admin rights required for per-user installation.
+  </TabItem>
+</Tabs>
+
+## System Requirements
+
+| Requirement | Minimum |
+|-------------|---------|
+| OS | macOS 11+, Windows 10+, Linux (glibc 2.31+) |
+| RAM | 4 GB (8 GB recommended for large datasets) |
+| Disk | ~50 MB for application |
+| Display | 1280×720 minimum |

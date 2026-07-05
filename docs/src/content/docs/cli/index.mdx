@@ -1,0 +1,49 @@
+---
+title: CLI Overview
+description: DiMA command-line interface architecture, commands, and conventions.
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+DiMA follows the subcommand pattern (like `git` or `cargo`) with two primary commands and one utility command.
+
+## Commands
+
+<CardGrid>
+  <Card title="analyze" icon="rocket">
+    Perform diversity analysis on aligned FASTA sequences. Computes Shannon's entropy, classifies diversity motifs, aggregates metadata, and extracts conserved sequences.
+  </Card>
+  <Card title="view" icon="magnifier">
+    View or convert binary `.dima` files to JSON, TSV, or JSONL. Re-encode with different compression settings.
+  </Card>
+  <Card title="completions" icon="setting">
+    Generate shell completion scripts for bash, zsh, fish, or PowerShell.
+  </Card>
+</CardGrid>
+
+## Conventions
+
+DiMA follows established bioinformatics CLI conventions:
+
+| Convention | Source | Example |
+|-----------|--------|---------|
+| `-i` / `-o` for input/output | samtools, bcftools | `dima analyze -i in.fasta -o out.json` |
+| `-O` for output format | BCFtools `-O` flag | `dima analyze -O dima -o results.dima` |
+| Format inferred from extension | samtools/bcftools | `-o results.tsv` → TSV auto-detected |
+| `-` for stdin | Unix convention | `cat file.fasta \| dima analyze -i -` |
+| `--no-header` for TSV | csvtk, tsv-utils | `dima view -O tsv --no-header` |
+
+## Output Format Resolution
+
+The output format is determined in this priority order:
+
+1. **Explicit `-O` flag** — always wins
+2. **Output file extension** — `.dima`, `.tsv`/`.tab`, `.jsonl`, else JSON
+3. **Fallback** — JSON (pretty-printed to terminal, compact to pipe/file)
+
+## Global Behavior
+
+- **Progress bars** — Displayed on stderr when output is a terminal (suppressed with `-q`)
+- **Color** — Disabled when `NO_COLOR=1` is set or output is not a terminal
+- **Ctrl+C** — First press triggers graceful cancellation; second press forces immediate exit
+- **Verbosity** — `-q` (quiet), default (warnings + progress), `-v` (info), `-vv` (debug), `-vvv` (trace)

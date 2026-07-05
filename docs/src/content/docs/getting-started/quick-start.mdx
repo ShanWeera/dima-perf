@@ -1,0 +1,106 @@
+---
+title: Quick Start
+description: Run your first DiMA analysis in under 2 minutes.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+This guide walks you through running your first diversity analysis with DiMA.
+
+## Prerequisites
+
+- DiMA installed ([Installation Guide](/dima-perf/getting-started/installation/))
+- An aligned FASTA file (protein or nucleotide sequences)
+
+## Your First Analysis
+
+<Steps>
+1. **Run a basic analysis**
+
+   Analyze an aligned FASTA file with default parameters (k=9 for protein, k=27 for nucleotide):
+
+   ```bash
+   dima analyze -i aligned.fasta -o results.json
+   ```
+
+   DiMA will display a progress bar and timing summary:
+
+   ```
+   analysis complete: 2293158 sequences × 1287 positions in 128.34s (avg entropy: 0.2834)
+   ```
+
+2. **Inspect the results**
+
+   The JSON output contains per-position entropy and diversity motif data:
+
+   ```bash
+   # Pretty-print a section of the results
+   cat results.json | python3 -m json.tool | head -50
+   ```
+
+3. **Try compact binary format**
+
+   For large datasets, use the binary `.dima` format (up to 93% smaller):
+
+   ```bash
+   dima analyze -i aligned.fasta -O dima -o results.dima
+   ```
+
+4. **Convert binary to other formats**
+
+   View or convert binary files to JSON, TSV, or JSONL:
+
+   ```bash
+   dima view -i results.dima -O tsv -o results.tsv
+   ```
+</Steps>
+
+## Analysis with Metadata
+
+If your FASTA headers contain pipe-separated metadata:
+
+```
+>2020-12|Philippines|Human
+ACDEFGHIKLMNPQRSTVWY...
+>2021-02|United Kingdom|Human
+ACDEFGHIKLMNPQRSTVWY...
+```
+
+Parse and aggregate it per-variant:
+
+```bash
+dima analyze -i aligned.fasta -o results.json \
+  --header-format "date|country|host"
+```
+
+<Aside type="tip">
+Columnar storage is used automatically when `--header-format` is specified, providing 14–17% faster processing through better CPU cache locality.
+</Aside>
+
+## Extract Conserved Sequences
+
+Identify Highly Conserved Sequences (HCS) — regions where the index variant appears at or above a given threshold:
+
+```bash
+dima analyze -i aligned.fasta -o results.json \
+  --hcs-output hcs.json --hcs-threshold 95
+```
+
+## Common Options
+
+| Option | Description |
+|--------|-------------|
+| `-k, --kmer <N>` | K-mer window size (default: 9 protein, 27 nucleotide) |
+| `-t, --threshold <N>` | Support threshold for entropy correction (default: 100) |
+| `--alphabet <TYPE>` | `protein` (default) or `nucleotide` |
+| `-O, --output-type` | Output format: `json`, `tsv`, `jsonl`, or `dima` |
+| `--header-format` | Pipe-separated header fields for metadata parsing |
+| `--threads <N>` | Number of parallel threads (default: all CPUs) |
+| `-v` / `-vv` / `-q` | Increase verbosity / quiet mode |
+
+## Next Steps
+
+- [CLI Reference](/dima-perf/cli/) — Full command and option documentation
+- [Input Formats](/dima-perf/cli/io/input-formats/) — Supported file types and compression
+- [Output Formats](/dima-perf/cli/io/output-formats/) — JSON, TSV, JSONL, and binary formats
+- [Performance Tuning](/dima-perf/cli/advanced/performance-tuning/) — Optimize for large datasets

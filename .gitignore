@@ -22,3 +22,9 @@
 
 # Optional: ignore Cargo.lock for libraries (uncomment if this is a library only)
 # Cargo.lock
+
+# Documentation build artifacts
+docs/node_modules/
+docs/dist/
+docs/public/api/
+docs/.astro/

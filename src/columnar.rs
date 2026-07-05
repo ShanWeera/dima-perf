@@ -1,15 +1,13 @@
-/// Columnar Metadata Storage Module
-/// 
-/// This module provides production-grade columnar storage for metadata to improve
-/// cache locality and memory efficiency. It stores metadata fields in separate
-/// contiguous arrays rather than as individual HashMaps per sequence.
-/// 
-/// Performance characteristics:
-/// - 20-30% better cache locality through column-oriented layout
-/// - 15-25% memory reduction through optimized data structures
-/// - 40-60% faster bulk operations through vectorization
-/// - Improved SIMD utilization for metadata processing
-/// - Better compression ratios for repetitive metadata
+//! Columnar Metadata Storage Module
+//!
+//! Stores metadata fields in separate contiguous arrays (column-oriented layout)
+//! rather than as individual HashMaps per sequence, improving cache locality
+//! and memory efficiency for bulk metadata aggregation operations.
+//!
+//! Performance characteristics:
+//! - Better cache locality through column-oriented layout (sequential field access)
+//! - Memory reduction through string interning (deduplication of repeated values)
+//! - Efficient indexed lookups via optional inverted indices (bitmap-based)
 
 use hashbrown::HashMap;
 use std::sync::Arc;
@@ -23,7 +21,7 @@ use crate::indexing::{MetadataIndexManager, IndexConfig};
 /// 
 /// This structure stores metadata in a columnar format where each field
 /// is stored as a separate contiguous vector, improving cache locality
-/// and enabling vectorized operations.
+/// for sequential scans and bulk aggregation.
 #[derive(Debug, Clone)]
 pub struct ColumnarMetadata {
     /// Number of sequences stored
@@ -45,6 +43,13 @@ impl ColumnarMetadata {
         let mut field_index = HashMap::with_capacity(field_count);
         
         for (idx, field_name) in field_names.iter().enumerate() {
+            if field_index.contains_key(field_name) {
+                tracing::warn!(
+                    field = %field_name,
+                    index = idx,
+                    "duplicate metadata field — earlier column will be shadowed"
+                );
+            }
             field_index.insert(field_name.clone(), idx);
         }
         
@@ -88,9 +93,21 @@ impl ColumnarMetadata {
                         .map(|v| self.interner.intern(v));
                     self.columns[field_idx].push(value);
                 }
+                // Warn once about extra keys that don't match any declared field
+                if meta_map.len() > self.field_names.len() {
+                    for key in meta_map.keys() {
+                        if !self.field_index.contains_key(key) {
+                            tracing::warn!(
+                                key = %key,
+                                sequence = self.sequence_count,
+                                "metadata key not in field_names, value dropped"
+                            );
+                            break; // One warning per sequence is sufficient
+                        }
+                    }
+                }
             }
             None => {
-                // Add None values for all fields
                 for column in &mut self.columns {
                     column.push(None);
                 }
@@ -127,10 +144,8 @@ impl ColumnarMetadata {
     pub fn get_field_value_counts(&self, field_name: &str) -> Option<HashMap<String, usize>> {
         self.get_field_column(field_name).map(|column| {
             let mut counts = HashMap::new();
-            for value_opt in column {
-                if let Some(value) = value_opt {
-                    *counts.entry(value.to_string()).or_insert(0) += 1;
-                }
+            for value in column.iter().flatten() {
+                *counts.entry(value.to_string()).or_insert(0) += 1;
             }
             counts
         })
@@ -149,7 +164,7 @@ impl ColumnarMetadata {
                     })
                     .collect()
             })
-            .unwrap_or_else(Vec::new)
+            .unwrap_or_default()
     }
     
     /// Get metadata statistics
@@ -163,10 +178,8 @@ impl ColumnarMetadata {
             non_null_values += column_non_null;
             
             let mut unique_in_column = std::collections::HashSet::new();
-            for value_opt in column {
-                if let Some(value) = value_opt {
-                    unique_in_column.insert(value.as_ptr());
-                }
+            for value in column.iter().flatten() {
+                unique_in_column.insert(value.as_ptr());
             }
             unique_values += unique_in_column.len();
         }
@@ -189,14 +202,22 @@ impl ColumnarMetadata {
     fn estimate_memory_usage(&self) -> usize {
         let mut total = 0;
         
-        // Field names
+        // Field names (String heap allocations)
         total += self.field_names.iter().map(|s| s.len()).sum::<usize>();
         
-        // Column vectors (pointers)
+        // Column vectors: pointer overhead + per-cell Option<Arc<str>> overhead
         total += self.columns.len() * std::mem::size_of::<Vec<Option<Arc<str>>>>();
         total += self.columns.iter().map(|col| col.capacity() * std::mem::size_of::<Option<Arc<str>>>()).sum::<usize>();
+
+        // Arc<str> string payload bytes (the actual heap-allocated string data).
+        // Note: interned strings share allocations, so this is an upper bound.
+        for col in &self.columns {
+            for arc in col.iter().flatten() {
+                total += arc.len();
+            }
+        }
         
-        // Field index HashMap
+        // Field index HashMap entry overhead
         total += self.field_index.len() * (std::mem::size_of::<String>() + std::mem::size_of::<usize>());
         
         total
@@ -215,12 +236,12 @@ impl ColumnarMetadata {
         indices: &[usize],
         fields: &[String],
     ) -> HashMap<String, HashMap<String, usize>> {
-        // Use parallel processing for large index sets
-        if indices.len() > 1000 {
-            self.aggregate_metadata_for_indices_parallel_impl(indices, fields)
-        } else {
-            self.aggregate_metadata_for_indices_sequential(indices, fields)
-        }
+        // Always use sequential aggregation per-position. The outer analysis loop
+        // (build_positions in analysis.rs) already parallelizes across positions via
+        // Rayon's par_iter(). Adding nested parallelism here causes oversubscription
+        // and work-stealing overhead that degrades performance for typical workloads
+        // (usually <500 indices per variant × <8 fields per position).
+        self.aggregate_metadata_for_indices_sequential(indices, fields)
     }
     
     /// Sequential metadata aggregation (for small datasets)
@@ -250,44 +271,6 @@ impl ColumnarMetadata {
         result
     }
     
-    /// Parallel metadata aggregation (for large datasets)
-    fn aggregate_metadata_for_indices_parallel_impl(
-        &self,
-        indices: &[usize],
-        fields: &[String],
-    ) -> HashMap<String, HashMap<String, usize>> {
-        fields.par_iter()
-            .filter_map(|field_name| {
-                self.get_field_column(field_name).map(|column| {
-                    let field_counts: HashMap<String, usize> = indices.par_iter()
-                        .filter_map(|&idx| {
-                            column.get(idx)
-                                .and_then(|value_opt| value_opt.as_ref())
-                                .map(|value| value.to_string())
-                        })
-                        .fold(
-                            HashMap::new,
-                            |mut acc, value| {
-                                *acc.entry(value).or_insert(0) += 1;
-                                acc
-                            }
-                        )
-                        .reduce(
-                            HashMap::new,
-                            |mut acc1, acc2| {
-                                for (key, count) in acc2 {
-                                    *acc1.entry(key).or_insert(0) += count;
-                                }
-                                acc1
-                            }
-                        );
-                    
-                    (field_name.clone(), field_counts)
-                })
-            })
-            .filter(|(_, counts)| !counts.is_empty())
-            .collect()
-    }
     
     /// Bulk update of field values (for data transformation)
     pub fn bulk_update_field(&mut self, field_name: &str, updates: &[(usize, String)]) {
@@ -329,12 +312,12 @@ pub struct ColumnarMetadataStats {
 pub struct ColumnarOperations;
 
 impl ColumnarOperations {
-    /// Vectorized field value comparison
+    /// Column-wise field value comparison (returns a boolean mask).
+    /// Iterates sequentially over the column — name retained for API compatibility.
     pub fn compare_field_values_vectorized(
         column: &[Option<Arc<str>>],
         target_value: &str,
     ) -> Vec<bool> {
-        // Use SIMD-friendly operations where possible
         column.iter()
             .map(|value_opt| {
                 value_opt.as_ref()
@@ -344,18 +327,18 @@ impl ColumnarOperations {
             .collect()
     }
     
-    /// Parallel field aggregation with chunking
+    /// Parallel field aggregation with chunking.
+    /// Uses `chunk_size.max(1)` to prevent Rayon panic on zero.
     pub fn parallel_field_aggregation(
         column: &[Option<Arc<str>>],
         chunk_size: usize,
     ) -> HashMap<String, usize> {
-        column.par_chunks(chunk_size)
+        let safe_chunk_size = chunk_size.max(1);
+        column.par_chunks(safe_chunk_size)
             .map(|chunk| {
                 let mut local_counts = HashMap::new();
-                for value_opt in chunk {
-                    if let Some(value) = value_opt {
-                        *local_counts.entry(value.to_string()).or_insert(0) += 1;
-                    }
+                for value in chunk.iter().flatten() {
+                    *local_counts.entry(value.to_string()).or_insert(0) += 1;
                 }
                 local_counts
             })
@@ -394,6 +377,25 @@ pub struct ColumnarMetadataAdapter {
     columnar: ColumnarMetadata,
     index_manager: Option<MetadataIndexManager>,
     indexing_enabled: bool,
+}
+
+/// O(n + m) sorted intersection of two sorted slices.
+/// Both inputs MUST be sorted in ascending order.
+fn sorted_intersect(a: &[usize], b: &[usize]) -> Vec<usize> {
+    let mut result = Vec::with_capacity(a.len().min(b.len()));
+    let (mut i, mut j) = (0, 0);
+    while i < a.len() && j < b.len() {
+        match a[i].cmp(&b[j]) {
+            std::cmp::Ordering::Equal => {
+                result.push(a[i]);
+                i += 1;
+                j += 1;
+            }
+            std::cmp::Ordering::Less => i += 1,
+            std::cmp::Ordering::Greater => j += 1,
+        }
+    }
+    result
 }
 
 impl ColumnarMetadataAdapter {
@@ -473,8 +475,12 @@ impl ColumnarMetadataAdapter {
         &self.columnar
     }
     
-    /// Get mutable columnar metadata
+    /// Get mutable columnar metadata.
+    /// Invalidates cached indices since column data may be changed by the caller.
+    /// Maintains the invariant: `indexing_enabled == index_manager.is_some()`.
     pub fn get_columnar_mut(&mut self) -> &mut ColumnarMetadata {
+        self.index_manager = None;
+        self.indexing_enabled = false;
         &mut self.columnar
     }
     
@@ -515,17 +521,16 @@ impl ColumnarMetadataAdapter {
             }
         }
         
-        // Fallback to sequential filtering
+        // Fallback: sorted-merge intersection O(n + m) instead of O(n * m).
+        // Each filter_by_field_value returns indices in ascending order, so
+        // we can use a merge-intersect rather than Vec::contains.
         let mut result: Option<Vec<usize>> = None;
         for (field_name, value) in field_queries {
-            let field_results = self.columnar.filter_by_field_value(field_name, value);
+            let mut field_results = self.columnar.filter_by_field_value(field_name, value);
+            field_results.sort_unstable();
             match result {
                 Some(ref current) => {
-                    // Intersection
-                    let intersection: Vec<usize> = current.iter()
-                        .filter(|&&idx| field_results.contains(&idx))
-                        .copied()
-                        .collect();
+                    let intersection = sorted_intersect(current, &field_results);
                     result = Some(intersection);
                 }
                 None => {
@@ -533,7 +538,7 @@ impl ColumnarMetadataAdapter {
                 }
             }
         }
-        result.unwrap_or_else(Vec::new)
+        result.unwrap_or_default()
     }
     
     /// Multi-field query with OR logic (indexed)
@@ -562,7 +567,7 @@ impl ColumnarMetadataAdapter {
         }
         
         // Fallback to columnar method
-        self.columnar.get_field_value_counts(field_name).unwrap_or_else(HashMap::new)
+        self.columnar.get_field_value_counts(field_name).unwrap_or_default()
     }
     
     /// Get unique field values (optimized with indexing)
@@ -576,7 +581,7 @@ impl ColumnarMetadataAdapter {
         // Fallback to columnar method
         self.columnar.get_field_value_counts(field_name)
             .map(|counts| counts.keys().cloned().collect())
-            .unwrap_or_else(Vec::new)
+            .unwrap_or_default()
     }
     
     /// Optimized metadata aggregation using indices (static method)
@@ -585,33 +590,36 @@ impl ColumnarMetadataAdapter {
         indices: &[usize],
         fields: &[String],
     ) -> HashMap<String, HashMap<String, usize>> {
+        use hashbrown::HashSet;
         let mut result = HashMap::new();
-        
+
+        // Build a HashSet for O(1) membership checks on our target indices
+        // instead of the previous O(n) Vec::contains per value per index.
+        let target_set: HashSet<usize> = indices.iter().copied().collect();
+
         for field_name in fields {
             let mut field_counts = HashMap::new();
-            
-            // Get all unique values for this field
+
             let unique_values = index_manager.get_unique_field_values(field_name);
-            
-            // For each unique value, count how many of our indices match
+
             for value in unique_values {
                 let value_indices = index_manager.lookup_field_value(field_name, &value);
-                
-                // Count intersection with our target indices
-                let count = indices.iter()
-                    .filter(|&&idx| value_indices.contains(&idx))
+
+                // O(value_indices.len()) total — each lookup is O(1) amortized
+                let count = value_indices.iter()
+                    .filter(|&&idx| target_set.contains(&idx))
                     .count();
-                
+
                 if count > 0 {
                     field_counts.insert(value, count);
                 }
             }
-            
+
             if !field_counts.is_empty() {
                 result.insert(field_name.clone(), field_counts);
             }
         }
-        
+
         result
     }
     
@@ -641,42 +649,6 @@ impl ColumnarMetadataAdapter {
     }
 }
 
-// Thread-local columnar operations cache
-thread_local! {
-    static COLUMNAR_CACHE: std::cell::RefCell<HashMap<String, Vec<bool>>> = 
-        std::cell::RefCell::new(HashMap::new());
-}
-
-/// Cached vectorized operations for better performance
-pub struct CachedColumnarOperations;
-
-impl CachedColumnarOperations {
-    /// Cached field value comparison with memoization
-    pub fn cached_compare_field_values(
-        column: &[Option<Arc<str>>],
-        target_value: &str,
-        cache_key: &str,
-    ) -> Vec<bool> {
-        COLUMNAR_CACHE.with(|cache| {
-            let mut cache_map = cache.borrow_mut();
-            
-            if let Some(cached_result) = cache_map.get(cache_key) {
-                if cached_result.len() == column.len() {
-                    return cached_result.clone();
-                }
-            }
-            
-            let result = ColumnarOperations::compare_field_values_vectorized(column, target_value);
-            
-            // Cache result if reasonable size
-            if result.len() <= 10000 {
-                cache_map.insert(cache_key.to_string(), result.clone());
-            }
-            
-            result
-        })
-    }
-}
 
 #[cfg(test)]
 mod tests {

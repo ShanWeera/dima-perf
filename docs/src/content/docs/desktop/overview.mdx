@@ -1,0 +1,36 @@
+---
+title: Desktop App Overview
+description: DiMA Desktop — a cross-platform GUI application built with Tauri for interactive diversity analysis.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+DiMA Desktop is a cross-platform graphical application that provides an interactive interface for sequence diversity analysis, built with [Tauri](https://tauri.app/) and a modern web frontend.
+
+## Architecture
+
+DiMA Desktop combines:
+
+- **Tauri runtime** — Lightweight native shell (~5 MB), no Electron/Chromium overhead
+- **Rust backend** — Same `dima_lib` library used by the CLI for computation
+- **Web frontend** — Modern UI built with standard web technologies
+
+This architecture ensures the desktop app produces **identical results** to the CLI — the same entropy calculations, motif classification, and HCS extraction.
+
+## Key Differences from CLI
+
+| Feature | CLI | Desktop |
+|---------|-----|---------|
+| Interface | Terminal commands | Graphical UI |
+| Interaction | Batch processing | Interactive exploration |
+| Input | File paths, stdin | File dialog |
+| Output | Files, stdout | Visual charts + export |
+| Automation | Scriptable | Manual workflow |
+
+<Aside type="note">
+The desktop app is ideal for exploring individual datasets interactively, while the CLI excels at batch processing, automation, and integration into pipelines.
+</Aside>
+
+## Status
+
+DiMA Desktop is currently in active development. Pre-built binaries are available for all major platforms in the [GitHub Releases](https://github.com/ShanWeera/dima-perf/releases).

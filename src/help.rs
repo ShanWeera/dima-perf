@@ -50,15 +50,19 @@ How it works:
   - K-mers are compared across all sequences at the same position
   - Entropy is calculated based on k-mer diversity at each position
 
+Defaults (per DiMA publication, Tharanga et al. 2025):
+  - Protein (--alphabet protein):     k=9 (nonamer, T-cell epitope window)
+  - Nucleotide (--alphabet nucleotide): k=27 (9 codons × 3 nt/codon)
+
 Recommended values:
-  - k=9 (default): Standard for T-cell epitope analysis (nonamers)
+  - k=9: Standard for T-cell epitope analysis (nonamers)
   - k=8-11: Common range for immune epitope studies
   - k=3-6: Short motif discovery
-  - k=15-20: High-specificity sequence matching
+  - k=12-14: Maximum for protein (limited by u64 encoding)
 
 Technical limits (due to u64 encoding):
-  - Protein sequences: maximum k ~ 13-14
-  - Nucleotide sequences: maximum k ~ 27-28
+  - Protein sequences: maximum k = 14 (20 amino acids, 20^14 < 2^64)
+  - Nucleotide sequences: maximum k = 27 (5 symbols, 5^27 < 2^64)
 
 Example: For k=9 on sequence "ACDEFGHIKLMNPQRS" (length 16):
   Position 0: ACDEFGHIK
@@ -79,22 +83,23 @@ sequences. This threshold affects both the entropy calculation method
 and the low-support classification labels in the output.
 
 How support affects entropy calculation:
-  - support = 0:         Entropy = 0.0 (no data)
-  - support = 1:         Entropy = 0.0 (single k-mer, no diversity)
-  - support < threshold: Standard Shannon entropy
-  - support >= threshold: Extrapolation method using linear regression
-                         (more statistically robust for large samples)
+  - support = 0:          Entropy = 0.0 (no data)
+  - support = 1:          Entropy = 0.0 (single k-mer, no diversity)
+  - support <= threshold: Standard Shannon entropy (direct calculation)
+  - support > threshold:  Rarefaction + OLS linear regression extrapolation
+                          (statistically robust for large samples, per publication)
 
 Low-support classification labels in output:
   - "NS" (No Support):      support = 0 (no valid k-mers at position)
   - "LS" (Low Support):     support < threshold
-  - "ELS" (Exactly Low):    support = threshold
+  - "ELS" (Exceptional Low Support): support = threshold
   - No label:               support > threshold (normal)
 
 Choosing a threshold:
-  - Default (30): Good balance for most datasets
-  - Lower (10-20): Use for smaller datasets (<100 sequences)
-  - Higher (50-100): Use for large datasets (>10,000 sequences)
+  - Default (100): Per PMC11596295 (page 4), the default support threshold
+    is 100 sequences, providing a robust baseline for rarefaction
+  - Lower (10-30): Use for smaller datasets (<100 sequences)
+  - Higher (200+): Use for very large datasets (>10,000 sequences)
 
 The extrapolation method samples entropy at 5% intervals and uses linear
 regression to estimate the true entropy, reducing bias from sample size."#;
@@ -160,8 +165,11 @@ This produces metadata aggregation per k-mer variant:
   }
 
 Important:
-  - If format field count != header field count, analysis will fail
-  - Empty fields are replaced with --header-fillna value (default: "Unknown")
+  - If a header has fewer fields than the format, missing fields are filled
+    with the --header-fillna value (default: "Unknown")
+  - If a header has more fields than the format, extra fields are ignored
+  - Duplicate field names are rejected at startup (they cause data loss)
+  - Empty fields (e.g. "USA||Patient") use the --header-fillna value
   - Use --metadata-fields to aggregate only specific fields"#;
 
     // -------------------------------------------------------------------------
@@ -242,7 +250,7 @@ PROTEIN (default):
 NUCLEOTIDE:
   Valid characters: A C G T U (DNA + RNA bases)
   Ambiguous codes:  R Y K M S W B D H V N (IUPAC ambiguity codes)
-  K-mer encoding:   Base-5 arithmetic (max k ~ 27-28)
+  K-mer encoding:   Base-5 arithmetic (max k = 27)
   Use for:          DNA/RNA sequence diversity analysis
 
 The alphabet choice affects:
@@ -265,7 +273,7 @@ If not provided, results are printed to stdout (JSON format only).
 
 Output formats:
   - JSON (default): Human-readable, larger file size
-  - Binary (--binary): Compact .dima format, faster I/O
+  - Binary (--binary): Compact .dima format, faster I/O, smaller files
 
 File extensions:
   - Without --binary: .json recommended (but any extension works)
@@ -303,10 +311,11 @@ How Index variants are classified:
   - Represents the "consensus" or most conserved sequence
 
 HCS extraction algorithm:
-  1. Find all Index variants at each position
-  2. Concatenate overlapping k-mers (suffix-prefix matching)
-  3. If no overlap, start a new conserved region
-  4. Output as JSON array of sequence strings
+  1. Find the Index (dominant) variant at each position
+  2. Filter positions where Index incidence >= threshold (default: 100%)
+  3. Stitch consecutive qualifying positions via suffix-prefix overlap
+  4. If positions are non-consecutive, start a new conserved region
+  5. Output as JSON array of stitched sequence strings
 
 Example output:
   ["ACDEFGHIKLMNPQRSTVWY", "FGHIKLMNPQRS"]
@@ -364,9 +373,8 @@ By default, DiMA uses all available CPU cores via Rayon's global thread pool.
 This option allows limiting parallelism for resource management.
 
 Parallelized operations:
-  - Entropy calculation (per position)
-  - K-mer counting and encoding (per position)
-  - Metadata aggregation (for datasets with >1000 indices)
+  - Entropy calculation (per position — main hot path)
+  - K-mer diversity motif classification (per position)
   - Index building (when --columnar is enabled)
 
 Guidelines:
@@ -382,114 +390,15 @@ Note: Thread pool is initialized once at startup. Overhead is minimal
 for large datasets but may dominate for very small files."#;
 
     // -------------------------------------------------------------------------
-    // Columnar Storage (--columnar)
-    // -------------------------------------------------------------------------
-    pub const COLUMNAR_HELP: &str = "Use columnar metadata storage for better performance";
-
-    pub const COLUMNAR_LONG_HELP: &str = r#"Enable columnar metadata storage for improved performance.
-
-Instead of storing metadata as row-oriented HashMaps (one per sequence),
-columnar storage organizes data by field (one vector per field).
-
-Memory layout comparison:
-  Row storage:    [Seq1{field1,field2,...}, Seq2{field1,field2,...}, ...]
-  Columnar:       [Field1:[val1,val2,...], Field2:[val1,val2,...], ...]
-
-Performance benefits:
-  - 20-30% better cache locality (sequential field access)
-  - 15-25% memory reduction (Arc<str> string interning)
-  - 40-60% faster bulk operations (SIMD-friendly layout)
-  - Automatic parallel aggregation for large index sets
-
-Best for:
-  - Large datasets (>1000 sequences)
-  - Many metadata fields
-  - Repeated metadata values (benefits from interning)
-  - Frequent metadata aggregation queries
-
-Not recommended for:
-  - Small datasets (<100 sequences) - overhead may exceed benefit
-  - Single-pass processing without aggregation
-
-Note: When enabled, --indexing is automatically activated for
-additional lookup performance (80-95% faster value lookups)."#;
-
-    // -------------------------------------------------------------------------
-    // Indexing (--indexing)
-    // -------------------------------------------------------------------------
-    pub const INDEXING_HELP: &str = "Enable metadata indexing for 80-95% faster lookups";
-
-    pub const INDEXING_LONG_HELP: &str = r#"Enable inverted index construction for metadata fields.
-
-Creates bitmap-based inverted indices mapping field values to sequence
-indices, enabling O(1) lookups instead of O(n) linear scans.
-
-Index structure:
-  field_value → bitmap(sequence_indices)
-  Example: "USA" → [1,0,1,1,0,0,1,...] (64-bit packed)
-
-Performance improvements:
-  - 80-95% faster value lookups
-  - Efficient set operations (AND/OR via bitmap intersection/union)
-  - Pre-computed value counts
-
-Memory overhead:
-  - ~64 bits per sequence per unique value
-  - Additional cache for composite queries
-
-Best for:
-  - Many metadata lookup operations
-  - Large datasets (>10,000 sequences)
-  - High-cardinality fields (many unique values)
-  - Complex multi-field filtering
-
-Note: Currently auto-enabled when --columnar is specified.
-This flag is for future independent control of indexing."#;
-
-    // -------------------------------------------------------------------------
-    // Binary Format (--binary)
-    // -------------------------------------------------------------------------
-    pub const BINARY_HELP: &str = "Use binary format (.dima) for 50-70% faster I/O";
-
-    pub const BINARY_LONG_HELP: &str = r#"Output results in binary format instead of JSON.
-
-The .dima binary format provides significant performance and size benefits
-over JSON for large analysis results.
-
-File structure:
-  - 17-byte header: magic "DIMA", version, compression type, flags
-  - String table: deduplicated strings with u32 references
-  - Compressed data: bincode-serialized results
-
-Benefits over JSON:
-  - 50-70% faster read/write operations
-  - 30-50% smaller file size (with compression)
-  - String interning eliminates duplicate storage
-  - Compact numeric encoding (no text conversion)
-
-Compression options (--compression):
-  - 0 (none): Fastest, largest files
-  - 1 (LZ4):  Default, fast compression, 20-40% reduction
-  - 2 (Zstd): Best compression, 30-50% reduction
-
-Reading binary files:
-  Use the 'deflate' subcommand to convert back to JSON:
-  dima deflate -i results.dima -o results.json
-
-Requirements:
-  - Must specify -o/--output (cannot stream binary to stdout)
-  - Output file extension is automatically changed to .dima"#;
-
-    // -------------------------------------------------------------------------
     // Compression Level (--compression)
     // -------------------------------------------------------------------------
-    pub const COMPRESSION_HELP: &str = "Binary compression: 0=none, 1=lz4, 2=zstd";
+    pub const COMPRESSION_HELP: &str = "Compression for -O dima output: 0=none, 1=lz4, 2=zstd";
 
-    pub const COMPRESSION_LONG_HELP: &str = r#"Compression level for binary output format.
+    pub const COMPRESSION_LONG_HELP: &str = r#"Compression type for binary .dima output format.
 
-Only effective when --binary is specified.
+Only effective when -O dima is specified (explicitly or via extension).
 
-Compression levels:
+Compression options:
 
   Level 0 - None:
     - No compression applied
@@ -512,49 +421,47 @@ Compression levels:
     - Use for: archival, network transfer, storage-constrained
 
 Examples:
-  --binary --compression 0  # No compression (fastest)
-  --binary --compression 1  # LZ4 compression (default)
-  --binary --compression 2  # Zstd compression (smallest)"#;
+  -O dima --compression 0  # No compression (fastest)
+  -O dima --compression 1  # LZ4 compression (default)
+  -O dima --compression 2  # Zstd compression (smallest)"#;
 
     // -------------------------------------------------------------------------
     // Validation Mode (--validation)
     // -------------------------------------------------------------------------
     pub const VALIDATION_HELP: &str = "Character validation mode: strict, permissive, or report";
 
-    pub const VALIDATION_LONG_HELP: &str = r#"Character validation mode for k-mer generation.
+    pub const VALIDATION_LONG_HELP: &str = r#"Character validation mode — controls how invalid characters are REPORTED.
 
-Controls how invalid and ambiguous characters in sequences are handled.
+CORE BEHAVIOR (ALL modes): K-mers containing gaps, ambiguous, or invalid
+characters are always excluded from entropy computation. Per DiMA methodology
+(Tharanga et al. 2025): "Only k-mer sequences that do NOT harbor a gap and/or
+unknown/ambiguous character are used for entropy computation."
 
-STRICT (default) - Recommended for scientific accuracy:
-  Valid characters only. Any other character invalidates the k-mer.
+The mode ONLY affects the character classification reported by --report-invalid.
+All three modes produce identical entropy, support, and motif results.
+
+STRICT (default) - Standard alphabet only in reports:
+  Only the 20 canonical amino acids (protein) or 5 nucleotides are classified
+  as "valid" in --report-invalid stats. Everything else is "invalid".
   
   Protein whitelist:    A C D E F G H I K L M N P Q R S T V W Y
-                        (20 canonical amino acids)
   Nucleotide whitelist: A C G T U
-                        (DNA + RNA bases)
-  
-  Ambiguous codes (X, B, N, etc.) → k-mer marked as NA
-  Invalid chars (#, *, @, numbers) → k-mer marked as NA
 
-PERMISSIVE - Accept ambiguous IUPAC codes:
-  Valid + ambiguous characters accepted. Only completely invalid
-  characters cause k-mer invalidation.
+PERMISSIVE - Distinguishes ambiguous from invalid in reports:
+  IUPAC ambiguity codes are classified separately from truly invalid chars.
+  Useful for understanding if non-standard characters are legitimate notation.
   
   Protein ambiguous:    X (any), B (D/N), J (L/I), Z (E/Q), O, U
   Nucleotide ambiguous: R Y K M S W B D H V N (IUPAC codes)
-  
-  Use when: sequences contain standard ambiguity notation
 
-REPORT - Data quality assessment:
-  All characters accepted (no k-mer invalidation).
-  Statistics are tracked for reporting with --report-invalid.
-  
-  Use when: exploring unknown data quality
+REPORT - Same as permissive:
+  Identical classification to permissive. Designed for use with --report-invalid
+  to collect detailed character statistics without warnings.
 
 Examples:
-  --validation strict      # Strictest, recommended (default)
-  --validation permissive  # Allow IUPAC ambiguity codes
-  --validation report      # Accept all, track statistics"#;
+  --validation strict      # Standard-only classification (default)
+  --validation permissive  # Distinguish ambiguous from invalid
+  --validation report      # Same as permissive, pair with --report-invalid"#;
 
     // -------------------------------------------------------------------------
     // Allow Lowercase (--allow-lowercase)
@@ -628,78 +535,42 @@ Use cases:
 }
 
 // =============================================================================
-// DEFLATE COMMAND
+// VIEW COMMAND
 // =============================================================================
 
-pub mod deflate {
-    // -------------------------------------------------------------------------
-    // Input File (-i, --input)
-    // -------------------------------------------------------------------------
-    pub const INPUT_HELP: &str = "Path to the binary (.dima) file to decompress";
+pub mod view {
+    pub const INPUT_HELP: &str = "Path to the binary (.dima) file to view/convert";
 
-    pub const INPUT_LONG_HELP: &str = r#"Path to the binary .dima file to convert back to JSON.
+    pub const INPUT_LONG_HELP: &str = r#"Path to the binary .dima file to view or convert.
 
-The .dima format is DiMA's compact binary format created with --binary.
-This command reads the binary file and outputs human-readable JSON.
+The .dima format is DiMA's compact binary format created with -O dima.
+The view command reads the binary file and outputs in any supported format.
 
 Requirements:
   - File must be a valid .dima binary format
   - File must exist and be readable
 
 The command will warn if the file extension is not .dima, but will
-still attempt to read it as binary format."#;
+still attempt to read it as binary format.
 
-    // -------------------------------------------------------------------------
-    // Output File (-o, --output)
-    // -------------------------------------------------------------------------
-    pub const OUTPUT_HELP: &str = "Output JSON file path (prints to stdout if not specified)";
+Supported output formats (via -O/--output-type):
+  - json (default): Pretty-printed JSON
+  - tsv: Tab-separated values (17 columns)
+  - jsonl: Newline-delimited JSON (one position per line)
+  - dima: Re-encode with different compression settings"#;
 
-    pub const OUTPUT_LONG_HELP: &str = r#"Output path for the converted JSON file.
+    pub const OUTPUT_HELP: &str = "Output file path (prints to stdout if not specified)";
 
-If not specified, JSON is printed to stdout.
+    pub const OUTPUT_LONG_HELP: &str = r#"Output path for the converted file.
 
-When an output file is specified, the command also displays:
-  - Source and destination file paths
-  - File size comparison (binary vs JSON)
-  - Expansion ratio
+If not specified, output is printed to stdout (not available for -O dima).
 
-Example output:
-  Binary file 'results.dima' successfully converted to JSON: 'results.json'
-  File size comparison:
-    Binary (.dima): 1,234,567 bytes
-    JSON:           3,456,789 bytes
-    Expansion ratio: 2.80x"#;
+The output format is determined by -O/--output-type, or auto-detected
+from the file extension (.tsv → tsv, .jsonl → jsonl, .dima → dima,
+else json).
 
-    // -------------------------------------------------------------------------
-    // No Pretty (--no-pretty)
-    // -------------------------------------------------------------------------
-    pub const NO_PRETTY_HELP: &str = "Output compact JSON without formatting";
-
-    pub const NO_PRETTY_LONG_HELP: &str = r#"Disable pretty-printing for JSON output.
-
-By default, JSON output is formatted with indentation and newlines
-for human readability. This option outputs compact JSON on a single
-line (or minimal lines).
-
-Pretty output (default):
-  {
-    "query_name": "Sample",
-    "sequence_count": 100,
-    "results": [
-      ...
-    ]
-  }
-
-Compact output (--no-pretty):
-  {"query_name":"Sample","sequence_count":100,"results":[...]}
-
-Benefits of compact output:
-  - Smaller file size (no whitespace)
-  - Faster parsing by some JSON libraries
-  - Better for machine-to-machine transfer
-
-Use when:
-  - Output will be processed by another program
-  - Minimizing file size is important
-  - Pretty formatting is not needed"#;
+Examples:
+  dima view -i results.dima -o results.json       # Default JSON
+  dima view -i results.dima -O tsv -o results.tsv # TSV output
+  dima view -i results.dima -O dima -o new.dima --compression 2  # Re-encode"#;
 }

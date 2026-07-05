@@ -1,16 +1,9 @@
-/// SIMD-Accelerated String Parsing Module
-/// 
-/// This module provides production-grade SIMD optimizations for string parsing operations
-/// commonly used in header decoding and metadata processing. It maintains full compatibility
-/// with existing APIs while providing significant performance improvements.
-/// 
-/// Performance characteristics:
-/// - 30-50% faster delimiter detection on x86_64 and ARM64
-/// - 20-40% faster string trimming operations
-/// - Vectorized character validation with automatic fallbacks
-/// - Zero-copy operations where possible
-
-use hashbrown::HashMap;
+//! SIMD-Accelerated String Parsing Module
+//!
+//! Provides portable 128-bit SIMD operations for pipe-delimiter detection
+//! and string trimming, using the `wide` crate for x86_64 and aarch64
+//! with automatic scalar fallback on other architectures.
+#![allow(dead_code)]
 
 // SIMD imports for vectorized string operations
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
@@ -18,41 +11,24 @@ use wide::*;
 
 /// SIMD-optimized delimiter detection and splitting
 /// 
-/// This structure provides efficient delimiter detection using SIMD instructions
-/// for common delimiters like '|', ':', '=', and whitespace characters.
+/// Pipe-delimiter detection using SIMD (128-bit) for header field splitting.
 #[allow(dead_code)]
 pub struct SimdDelimiterParser {
     #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
     pipe_mask: u8x16,
-    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-    colon_mask: u8x16,
-    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-    equals_mask: u8x16,
-    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-    space_mask: u8x16,
-    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-    tab_mask: u8x16,
-    
-    // Scalar fallback data
-    delimiters: Vec<u8>,
+}
+
+impl Default for SimdDelimiterParser {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SimdDelimiterParser {
-    /// Create a new SIMD delimiter parser for common header delimiters
     pub fn new() -> Self {
         Self {
             #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
             pipe_mask: u8x16::splat(b'|'),
-            #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-            colon_mask: u8x16::splat(b':'),
-            #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-            equals_mask: u8x16::splat(b'='),
-            #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-            space_mask: u8x16::splat(b' '),
-            #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-            tab_mask: u8x16::splat(b'\t'),
-            
-            delimiters: vec![b'|', b':', b'=', b' ', b'\t'],
         }
     }
     
@@ -137,6 +113,12 @@ pub struct SimdStringTrimmer {
     carriage_return_mask: u8x16,
 }
 
+impl Default for SimdStringTrimmer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SimdStringTrimmer {
     pub fn new() -> Self {
         Self {
@@ -159,63 +141,8 @@ impl SimdStringTrimmer {
         let newline_match = data.cmp_eq(self.newline_mask);
         let cr_match = data.cmp_eq(self.carriage_return_mask);
         
-        // Combine all whitespace matches using bitwise OR
-        let combined1 = u8x16::new([
-            space_match.to_array()[0] | tab_match.to_array()[0],
-            space_match.to_array()[1] | tab_match.to_array()[1],
-            space_match.to_array()[2] | tab_match.to_array()[2],
-            space_match.to_array()[3] | tab_match.to_array()[3],
-            space_match.to_array()[4] | tab_match.to_array()[4],
-            space_match.to_array()[5] | tab_match.to_array()[5],
-            space_match.to_array()[6] | tab_match.to_array()[6],
-            space_match.to_array()[7] | tab_match.to_array()[7],
-            space_match.to_array()[8] | tab_match.to_array()[8],
-            space_match.to_array()[9] | tab_match.to_array()[9],
-            space_match.to_array()[10] | tab_match.to_array()[10],
-            space_match.to_array()[11] | tab_match.to_array()[11],
-            space_match.to_array()[12] | tab_match.to_array()[12],
-            space_match.to_array()[13] | tab_match.to_array()[13],
-            space_match.to_array()[14] | tab_match.to_array()[14],
-            space_match.to_array()[15] | tab_match.to_array()[15],
-        ]);
-        
-        let combined2 = u8x16::new([
-            newline_match.to_array()[0] | cr_match.to_array()[0],
-            newline_match.to_array()[1] | cr_match.to_array()[1],
-            newline_match.to_array()[2] | cr_match.to_array()[2],
-            newline_match.to_array()[3] | cr_match.to_array()[3],
-            newline_match.to_array()[4] | cr_match.to_array()[4],
-            newline_match.to_array()[5] | cr_match.to_array()[5],
-            newline_match.to_array()[6] | cr_match.to_array()[6],
-            newline_match.to_array()[7] | cr_match.to_array()[7],
-            newline_match.to_array()[8] | cr_match.to_array()[8],
-            newline_match.to_array()[9] | cr_match.to_array()[9],
-            newline_match.to_array()[10] | cr_match.to_array()[10],
-            newline_match.to_array()[11] | cr_match.to_array()[11],
-            newline_match.to_array()[12] | cr_match.to_array()[12],
-            newline_match.to_array()[13] | cr_match.to_array()[13],
-            newline_match.to_array()[14] | cr_match.to_array()[14],
-            newline_match.to_array()[15] | cr_match.to_array()[15],
-        ]);
-        
-        u8x16::new([
-            combined1.to_array()[0] | combined2.to_array()[0],
-            combined1.to_array()[1] | combined2.to_array()[1],
-            combined1.to_array()[2] | combined2.to_array()[2],
-            combined1.to_array()[3] | combined2.to_array()[3],
-            combined1.to_array()[4] | combined2.to_array()[4],
-            combined1.to_array()[5] | combined2.to_array()[5],
-            combined1.to_array()[6] | combined2.to_array()[6],
-            combined1.to_array()[7] | combined2.to_array()[7],
-            combined1.to_array()[8] | combined2.to_array()[8],
-            combined1.to_array()[9] | combined2.to_array()[9],
-            combined1.to_array()[10] | combined2.to_array()[10],
-            combined1.to_array()[11] | combined2.to_array()[11],
-            combined1.to_array()[12] | combined2.to_array()[12],
-            combined1.to_array()[13] | combined2.to_array()[13],
-            combined1.to_array()[14] | combined2.to_array()[14],
-            combined1.to_array()[15] | combined2.to_array()[15],
-        ])
+        // Combine all whitespace matches — u8x16 implements BitOr directly
+        space_match | tab_match | newline_match | cr_match
     }
     
     /// Find the start of non-whitespace content using SIMD
@@ -335,136 +262,6 @@ impl SimdStringTrimmer {
     }
 }
 
-// Thread-local instances for optimal performance
-thread_local! {
-    static DELIMITER_PARSER: SimdDelimiterParser = SimdDelimiterParser::new();
-    static STRING_TRIMMER: SimdStringTrimmer = SimdStringTrimmer::new();
-}
-
-/// SIMD-accelerated header parsing function
-/// 
-/// This function provides a drop-in replacement for the original parse_header function
-/// with significant performance improvements while maintaining identical behavior and output.
-/// 
-/// Performance improvements:
-/// - 30-50% faster delimiter detection using SIMD
-/// - 20-40% faster string trimming operations
-/// - Reduced memory allocations through zero-copy operations
-/// - Automatic fallback to scalar code on unsupported architectures
-pub fn parse_header_simd(
-    header: &str,
-    format: &[String],
-    fill_na: &str,
-) -> HashMap<String, String> {
-    let header_bytes = header.as_bytes();
-    
-    // Create parser and trimmer instances (they're lightweight)
-    let parser = SimdDelimiterParser::new();
-    let trimmer = SimdStringTrimmer::new();
-    
-    // Use SIMD-accelerated delimiter detection
-    let delimiter_positions = parser.find_pipe_delimiters(header_bytes);
-    
-    // Extract components using delimiter positions
-    let mut components = Vec::with_capacity(delimiter_positions.len() + 1);
-    let mut start = 0;
-    
-    for &pos in &delimiter_positions {
-        let component_bytes = &header_bytes[start..pos];
-        
-        // Use SIMD-accelerated trimming
-        let trimmed_bytes = trimmer.trim_bytes(component_bytes);
-        
-        if trimmed_bytes.is_empty() {
-            if !fill_na.is_empty() {
-                components.push(fill_na);
-            } else {
-                components.push("");
-            }
-        } else {
-            // Convert back to string (zero-copy when possible)
-            let component_str = unsafe { std::str::from_utf8_unchecked(trimmed_bytes) };
-            components.push(component_str);
-        }
-        
-        start = pos + 1;
-    }
-    
-    // Handle the last component
-    if start < header_bytes.len() {
-        let component_bytes = &header_bytes[start..];
-        let trimmed_bytes = trimmer.trim_bytes(component_bytes);
-        
-        if trimmed_bytes.is_empty() {
-            if !fill_na.is_empty() {
-                components.push(fill_na);
-            } else {
-                components.push("");
-            }
-        } else {
-            let component_str = unsafe { std::str::from_utf8_unchecked(trimmed_bytes) };
-            components.push(component_str);
-        }
-    }
-    
-    // Validation (maintain original behavior)
-    assert_eq!(
-        components.iter().filter(|item| item.is_empty()).count(),
-        0,
-        "\n\nThe FASTA header looks invalid:\n\tFormat: {}\n\tHeader: {}\n\n",
-        format.join("|"),
-        header
-    );
-    
-    assert_eq!(
-        components.len(),
-        format.len(),
-        "\n\nThe header format provided does not match the header:\n\tFormat: {}\n\tHeader: {}\n\n",
-        format.join("|"),
-        header
-    );
-    
-    // Build result HashMap (same as original)
-    format
-        .iter()
-        .enumerate()
-        .map(|(idx, item)| (item.clone(), components[idx].to_string()))
-        .collect()
-}
-
-// Memory pool for reusing string vectors to reduce allocations
-thread_local! {
-    static STRING_POOL: std::cell::RefCell<Vec<Vec<String>>> = std::cell::RefCell::new(Vec::new());
-}
-
-/// Get a reusable string vector from the pool
-pub fn get_string_vector() -> Vec<String> {
-    STRING_POOL.with(|pool| {
-        pool.borrow_mut().pop().unwrap_or_else(|| Vec::with_capacity(16))
-    })
-}
-
-/// Return a string vector to the pool for reuse
-pub fn return_string_vector(mut vec: Vec<String>) {
-    vec.clear();
-    if vec.capacity() <= 64 { // Don't pool excessively large vectors
-        STRING_POOL.with(|pool| {
-            pool.borrow_mut().push(vec);
-        });
-    }
-}
-
-/// Batch header processing for improved cache locality
-pub fn parse_headers_batch_simd(
-    headers: &[String],
-    format: &[String],
-    fill_na: &str,
-) -> Vec<HashMap<String, String>> {
-    headers
-        .iter()
-        .map(|header| parse_header_simd(header, format, fill_na))
-        .collect()
-}
 
 #[cfg(test)]
 mod tests {
@@ -494,44 +291,6 @@ mod tests {
             let result = trimmer.trim_bytes(input);
             assert_eq!(result, expected);
         }
-    }
-
-    #[test]
-    fn test_simd_header_parsing_compatibility() {
-        let header = "sample1|condition_A|replicate_1|treatment_X";
-        let format = vec![
-            "sample_id".to_string(),
-            "condition".to_string(),
-            "replicate".to_string(),
-            "treatment".to_string(),
-        ];
-        let fill_na = "Unknown";
-        
-        let result = parse_header_simd(header, &format, fill_na);
-        
-        assert_eq!(result.get("sample_id"), Some(&"sample1".to_string()));
-        assert_eq!(result.get("condition"), Some(&"condition_A".to_string()));
-        assert_eq!(result.get("replicate"), Some(&"replicate_1".to_string()));
-        assert_eq!(result.get("treatment"), Some(&"treatment_X".to_string()));
-    }
-
-    #[test]
-    fn test_simd_header_parsing_with_whitespace() {
-        let header = " sample1 | condition_A |  replicate_1  | treatment_X ";
-        let format = vec![
-            "sample_id".to_string(),
-            "condition".to_string(),
-            "replicate".to_string(),
-            "treatment".to_string(),
-        ];
-        let fill_na = "Unknown";
-        
-        let result = parse_header_simd(header, &format, fill_na);
-        
-        assert_eq!(result.get("sample_id"), Some(&"sample1".to_string()));
-        assert_eq!(result.get("condition"), Some(&"condition_A".to_string()));
-        assert_eq!(result.get("replicate"), Some(&"replicate_1".to_string()));
-        assert_eq!(result.get("treatment"), Some(&"treatment_X".to_string()));
     }
 
     #[test]

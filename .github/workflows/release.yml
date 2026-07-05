@@ -12,9 +12,49 @@ permissions:
   contents: write
 
 jobs:
+  # Run tests before building release artifacts to prevent broken binaries
+  test-gate:
+    name: Test Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies (Tauri)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Rust tests
+        run: cargo test --workspace --locked
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: ui
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+        working-directory: ui
+
+      - name: Frontend tests
+        run: npx vitest run
+        working-directory: ui
+
   # Build CLI - builds CLI for all target platforms
   build-cli:
     name: Build ${{ matrix.target }}
+    needs: test-gate
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -159,6 +199,7 @@ jobs:
   # Build GUI - builds Tauri app for desktop platforms
   build-gui:
     name: Build GUI ${{ matrix.target }}
+    needs: test-gate
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

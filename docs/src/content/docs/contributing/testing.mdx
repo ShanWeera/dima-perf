@@ -1,0 +1,123 @@
+---
+title: Testing
+description: Test strategy, running tests, and testing tools used in DiMA.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Test Strategy
+
+DiMA uses a multi-layered testing approach:
+
+| Layer | Tool | Purpose |
+|-------|------|---------|
+| Unit tests | `#[test]` (built-in) | Test individual functions in isolation |
+| Integration tests | `assert_cmd` + `predicates` | Test CLI end-to-end behavior |
+| Snapshot tests | `insta` | Detect unintentional output changes |
+| Property tests | `proptest` | Randomized input testing for edge cases |
+| Benchmarks | `criterion` | Performance regression detection |
+
+## Running Tests
+
+```bash
+# Run all tests
+cargo test
+
+# Run only library unit tests
+cargo test --lib
+
+# Run only integration tests
+cargo test --test '*'
+
+# Run a specific test by name
+cargo test test_entropy_calculation
+
+# Run tests with output (see println! in tests)
+cargo test -- --nocapture
+
+# Run in release mode (for performance-sensitive tests)
+cargo test --release
+```
+
+## Test Categories
+
+### Unit Tests
+
+Located within source files using `#[cfg(test)]` modules. Test individual functions:
+
+- Entropy calculation correctness
+- K-mer encoding/decoding
+- Character validation
+- Output format generation
+- Binary format serialization round-trips
+
+### Integration Tests
+
+Located in `tests/` directory. Test the CLI binary as a black box:
+
+- Correct exit codes for various scenarios
+- Output format correctness
+- Error message content
+- Stdin/stdout piping behavior
+- Flag combination validation
+
+### Snapshot Tests
+
+Using `insta` for JSON output comparison:
+
+```bash
+# Update snapshots after intentional changes
+cargo insta review
+```
+
+### Property Tests
+
+Using `proptest` for randomized testing:
+
+- Random sequences produce valid outputs
+- K-mer extraction handles edge cases (all gaps, single sequence, etc.)
+- Entropy is always non-negative
+- Binary round-trip preserves all data
+
+## Benchmarks
+
+```bash
+# Run all benchmarks
+cargo bench
+
+# Run specific benchmark
+cargo bench -- entropy
+cargo bench -- kmer
+
+# Generate HTML reports (opens browser)
+cargo bench -- --output-format html
+```
+
+Benchmark suites:
+- `benches/entropy.rs` — Entropy calculation performance
+- `benches/kmer.rs` — K-mer extraction and encoding performance
+
+<Aside type="tip">
+Run benchmarks in release mode (default for `cargo bench`) and ensure no other CPU-intensive processes are running for consistent results.
+</Aside>
+
+## Continuous Integration
+
+The GitHub Actions CI workflow runs on every push and PR:
+
+1. `cargo fmt --check` — Formatting
+2. `cargo clippy` — Linting
+3. `cargo test` — All tests
+4. Build for release targets
+
+See `.github/workflows/ci.yml` for the full configuration.
+
+## Adding Tests
+
+When adding new functionality:
+
+1. Write unit tests in the same file as the implementation
+2. Add integration tests for new CLI flags or behaviors
+3. Update snapshots if output format changes
+4. Consider property tests for input-dependent logic
+5. Add benchmarks for performance-critical code paths

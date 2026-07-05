@@ -1,17 +1,27 @@
 /**
  * DiMA Desktop - Import .dima File Dialog
  * 
- * Dialog for importing a .dima binary file into a new or existing project.
+ * Dialog for importing a .dima binary file into a new project.
+ * Uses shadcn Dialog for focus trapping and accessibility.
  */
 
 import { useState } from 'react';
-import { X, FileInput, FolderPlus } from 'lucide-react';
+import { FileInput, FolderPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { importDimaFile, createProject } from '@/lib/tauri';
+import { validateProjectName, MAX_PROJECT_NAME_LENGTH } from '@/lib/utils';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { importDimaFile, createProject, deleteProject } from '@/lib/tauri';
 import { useAppStore } from '@/stores/appStore';
-import { useProjectStore } from '@/stores/projectStore';
+import { useProjectStore, flushPendingAnnotationSave } from '@/stores/projectStore';
 
 interface ImportDimaDialogProps {
   filePath: string;
@@ -20,7 +30,6 @@ interface ImportDimaDialogProps {
 
 export function ImportDimaDialog({ filePath, onClose }: ImportDimaDialogProps) {
   const [projectName, setProjectName] = useState(() => {
-    // Extract filename without extension as default project name
     const fileName = filePath.split(/[/\\]/).pop() || 'Imported Analysis';
     return fileName.replace(/\.dima$/, '');
   });
@@ -31,31 +40,39 @@ export function ImportDimaDialog({ filePath, onClose }: ImportDimaDialogProps) {
   const { openExistingProject } = useProjectStore();
 
   const handleImport = async () => {
-    if (!projectName.trim()) {
-      setError('Project name is required');
+    const validation = validateProjectName(projectName);
+    if (!validation.valid) {
+      setError(validation.error!);
       return;
     }
 
     setIsImporting(true);
     setError(null);
 
+    // Flush any unsaved annotations from the current project before importing,
+    // preventing data loss during the project transition. (Fix 5.83)
+    flushPendingAnnotationSave();
+
+    let createdProjectPath: string | null = null;
     try {
-      // Create a new project
       const project = await createProject(projectName.trim());
+      createdProjectPath = project.path;
       
-      // Import the .dima file into the project
       await importDimaFile({
         file_path: filePath,
         project_path: project.path,
       });
 
-      // Refresh recent projects and open the new project
       await refreshRecentProjects();
       await openExistingProject(project.path);
-      setCurrentView('results');
+      setCurrentView('wizard');
       
       onClose();
     } catch (e) {
+      if (createdProjectPath) {
+        deleteProject(createdProjectPath).catch(() => {});
+        refreshRecentProjects().catch(() => {});
+      }
       setError(String(e));
     } finally {
       setIsImporting(false);
@@ -63,20 +80,18 @@ export function ImportDimaDialog({ filePath, onClose }: ImportDimaDialogProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-lg bg-background shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b px-6 py-4">
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-md p-0">
+        <DialogHeader className="border-b px-6 py-4">
           <div className="flex items-center gap-2">
             <FileInput className="h-5 w-5" />
-            <h2 className="text-lg font-semibold">Import .dima File</h2>
+            <DialogTitle>Import .dima File</DialogTitle>
           </div>
-          <button onClick={onClose} className="rounded-md p-2 hover:bg-muted">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+          <DialogDescription className="sr-only">
+            Import a .dima binary analysis file into a new project
+          </DialogDescription>
+        </DialogHeader>
 
-        {/* Content */}
         <div className="p-6 space-y-4">
           <div className="rounded-lg bg-muted p-3 text-sm">
             <p className="font-medium">File to import:</p>
@@ -94,6 +109,8 @@ export function ImportDimaDialog({ filePath, onClose }: ImportDimaDialogProps) {
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
                 placeholder="Enter project name..."
+                maxLength={MAX_PROJECT_NAME_LENGTH}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !isImporting) handleImport(); }}
               />
             </div>
             <p className="text-xs text-muted-foreground">
@@ -108,8 +125,7 @@ export function ImportDimaDialog({ filePath, onClose }: ImportDimaDialogProps) {
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex justify-end gap-2 border-t px-6 py-4">
+        <DialogFooter className="border-t px-6 py-4">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
@@ -121,8 +137,8 @@ export function ImportDimaDialog({ filePath, onClose }: ImportDimaDialogProps) {
             )}
             Import
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

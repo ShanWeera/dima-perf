@@ -5,11 +5,22 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { HelpCircle, ChevronLeft, X } from 'lucide-react';
+import { HelpCircle, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProjectStore } from '@/stores/projectStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useShallow } from 'zustand/react/shallow';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 // Parameter help text from CLI (comprehensive)
 const PARAM_HELP = {
@@ -38,7 +49,7 @@ Technical limits (due to u64 encoding):
   },
   supportThreshold: {
     title: 'Support Threshold',
-    short: 'Minimum support for entropy calculation (default: 30)',
+    short: 'Minimum support for entropy calculation (default: 100, per PMC11596295)',
     long: `Minimum support threshold for reliable entropy calculation.
 
 "Support" is the number of valid k-mers at a given position across all sequences. This threshold affects both the entropy calculation method and the low-support classification labels in the output.
@@ -47,18 +58,18 @@ How support affects entropy calculation:
 • support = 0: Entropy = 0.0 (no data)
 • support = 1: Entropy = 0.0 (single k-mer, no diversity)
 • support < threshold: Standard Shannon entropy
-• support >= threshold: Extrapolation method using linear regression (more statistically robust for large samples)
+• support > threshold: Extrapolation method using linear regression (more statistically robust for large samples)
 
 Low-support classification labels in output:
 • "NS" (No Support): support = 0 (no valid k-mers at position)
 • "LS" (Low Support): support < threshold
-• "ELS" (Exactly Low): support = threshold
+• "ELS" (Exceptional Low Support): support = threshold
 • No label: support > threshold (normal)
 
 Choosing a threshold:
-• Default (30): Good balance for most datasets
-• Lower (10-20): Use for smaller datasets (<100 sequences)
-• Higher (50-100): Use for large datasets (>10,000 sequences)`,
+• Default (100): Per the DiMA paper (PMC11596295), 100 provides a robust baseline
+• Lower (10-50): Use for smaller datasets (<100 sequences)
+• Higher (200+): Use for very large datasets (>10,000 sequences)`,
   },
   alphabet: {
     title: 'Sequence Type',
@@ -192,29 +203,24 @@ interface ParamInputProps {
   children: React.ReactNode;
 }
 
-// Help dialog component
+// Help dialog component using shadcn Dialog for proper focus trapping and accessibility
 function HelpDialog({ helpKey, onClose }: { helpKey: ParamHelpKey; onClose: () => void }) {
   const help = PARAM_HELP[helpKey];
   
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div 
-        className="max-h-[80vh] w-full max-w-lg overflow-auto rounded-lg bg-background shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <h2 className="text-lg font-semibold">{help.title}</h2>
-          <button onClick={onClose} className="rounded-md p-2 hover:bg-muted">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="p-6">
-          <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
-            {help.long}
-          </pre>
-        </div>
-      </div>
-    </div>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-h-[80vh] max-w-lg overflow-auto">
+        <DialogHeader>
+          <DialogTitle>{help.title}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Help information for the {help.title} parameter
+          </DialogDescription>
+        </DialogHeader>
+        <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+          {help.long}
+        </pre>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -226,12 +232,12 @@ function ParamInput({ label, helpKey, children }: ParamInputProps) {
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <label className="font-medium">{label}</label>
-        <TooltipProvider>
-          <Tooltip>
+        <Tooltip>
             <TooltipTrigger asChild>
               <button 
                 onClick={() => setShowDialog(true)}
                 className="text-muted-foreground hover:text-primary"
+                aria-label="Help: Support threshold"
               >
                 <HelpCircle className="h-4 w-4" />
               </button>
@@ -241,7 +247,6 @@ function ParamInput({ label, helpKey, children }: ParamInputProps) {
               <p className="mt-1 text-xs text-muted-foreground">Click for more details</p>
             </TooltipContent>
           </Tooltip>
-        </TooltipProvider>
       </div>
       {children}
       {showDialog && <HelpDialog helpKey={helpKey} onClose={() => setShowDialog(false)} />}
@@ -257,30 +262,73 @@ export function ConfigureStep() {
     goBack, 
     goNext,
     headerFormatDetection,
-  } = useProjectStore();
+    isAnalyzing,
+  } = useProjectStore(useShallow((s) => ({
+    currentProject: s.currentProject,
+    config: s.config,
+    updateConfig: s.updateConfig,
+    goBack: s.goBack,
+    goNext: s.goNext,
+    headerFormatDetection: s.headerFormatDetection,
+    isAnalyzing: s.isAnalyzing,
+  })));
   
-  const { settings } = useSettingsStore();
-  const loadedLastConfigRef = useRef(false);
+  const { settings, isInitialized: settingsReady } = useSettingsStore();
+  const appliedConfigForProject = useRef<string | null>(null);
   const [showAllowLowercaseHelp, setShowAllowLowercaseHelp] = useState(false);
   const [showHcsHelp, setShowHcsHelp] = useState(false);
 
-  // Load last used config on mount (only once)
+  // Apply lastUsedConfig ONLY on first mount for a new project that hasn't been
+  // configured yet. Uses the project path as a key to ensure we never re-apply
+  // after navigation within the same project (Back → Configure).
+  // Only applies when the config is still at default values (kmerLength === 9,
+  // supportThreshold === 100) — if the project was opened with a saved config,
+  // the defaults would already have been overwritten by openExistingProject.
+  // Waits for headerFormatDetection to resolve so we don't clobber detected values.
   useEffect(() => {
-    if (loadedLastConfigRef.current) return;
-    loadedLastConfigRef.current = true;
-    
-    // Apply last used config if available
+    if (!settingsReady || !currentProject?.path) return;
+    if (appliedConfigForProject.current === currentProject.path) return;
+
+    // Defer until header format detection is available (or confirmed unavailable).
+    // This prevents the race where lastUsedConfig overwrites a detected format
+    // that hasn't arrived yet during project reopen auto-validation.
+    if (headerFormatDetection === null && config.headerFormat === null) {
+      // Detection still in-flight — skip for now, re-run when it arrives
+      return;
+    }
+
+    appliedConfigForProject.current = currentProject.path;
+
+    // Only apply lastUsedConfig when the project config is still at defaults,
+    // indicating it hasn't been configured by the user or restored from disk.
+    const isDefaultConfig = config.kmerLength === 9 && config.supportThreshold === 100;
+    if (!isDefaultConfig) return;
+
+    const detectedAlphabet = config.alphabet;
+    const detectedHeaderFormat = config.headerFormat;
+
     if (settings.lastUsedConfig) {
-      updateConfig(settings.lastUsedConfig);
-    } else {
-      // Apply defaults from settings
+      const maxKForDetected = detectedAlphabet === 'protein' ? 14 : 27;
       updateConfig({
-        kmerLength: settings.defaultKmerLength,
+        ...settings.lastUsedConfig,
+        // Preserve detected values from file validation rather than
+        // overwriting with stale lastUsedConfig values
+        alphabet: detectedAlphabet,
+        headerFormat: detectedHeaderFormat,
+        // Clamp kmerLength to the max for the detected alphabet (not the
+        // lastUsedConfig's alphabet) to prevent encoding overflow (Fix 5.41)
+        kmerLength: Math.min(settings.lastUsedConfig.kmerLength ?? 9, maxKForDetected),
+      });
+    } else {
+      const maxKForDetected = detectedAlphabet === 'protein' ? 14 : 27;
+      updateConfig({
+        kmerLength: Math.min(settings.defaultKmerLength, maxKForDetected),
         supportThreshold: settings.defaultSupportThreshold,
         validationMode: settings.defaultValidationMode,
       });
     }
-  }, [settings, updateConfig]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsReady, currentProject?.path, headerFormatDetection]);
 
   return (
     <div className="flex h-full flex-col">
@@ -288,7 +336,7 @@ export function ConfigureStep() {
       <div className="border-b px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold">{currentProject?.name}</h1>
+            <h1 className="text-xl font-semibold truncate min-w-0">{currentProject?.name}</h1>
             <p className="text-sm text-muted-foreground">Step 2 of 3: Configure Analysis</p>
           </div>
           <div className="flex gap-2">
@@ -296,8 +344,11 @@ export function ConfigureStep() {
               <ChevronLeft className="h-4 w-4" />
               Back
             </Button>
-            <Button onClick={goNext}>
-              Start Analysis
+            <Button 
+              onClick={goNext}
+              disabled={isAnalyzing || !Number.isFinite(config.kmerLength) || config.kmerLength < 3 || config.kmerLength > (config.alphabet === 'protein' ? 14 : 27) || !Number.isFinite(config.supportThreshold) || config.supportThreshold < 1}
+            >
+              {isAnalyzing ? 'Starting...' : 'Start Analysis'}
             </Button>
           </div>
         </div>
@@ -315,9 +366,15 @@ export function ConfigureStep() {
                 <input
                   type="number"
                   min={3}
-                  max={15}
+                  max={config.alphabet === 'nucleotide' ? 27 : 14}
                   value={config.kmerLength}
-                  onChange={(e) => updateConfig({ kmerLength: Number(e.target.value) })}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (!Number.isNaN(val) && val >= 3) {
+                      const maxK = config.alphabet === 'nucleotide' ? 27 : 14;
+                      updateConfig({ kmerLength: Math.min(val, maxK) });
+                    }
+                  }}
                   className="w-full rounded-md border bg-background px-3 py-2"
                 />
               </ParamInput>
@@ -326,47 +383,53 @@ export function ConfigureStep() {
                 <input
                   type="number"
                   min={1}
-                  max={100}
+                  max={10000}
                   value={config.supportThreshold}
-                  onChange={(e) => updateConfig({ supportThreshold: Number(e.target.value) })}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (!Number.isNaN(val) && val >= 1) {
+                      updateConfig({ supportThreshold: Math.min(val, 10000) });
+                    }
+                  }}
                   className="w-full rounded-md border bg-background px-3 py-2"
                 />
               </ParamInput>
             </div>
 
             <ParamInput label="Sequence Type" helpKey="alphabet">
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    checked={config.alphabet === 'protein'}
-                    onChange={() => updateConfig({ alphabet: 'protein' })}
-                    className="h-4 w-4"
-                  />
-                  Protein
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    checked={config.alphabet === 'nucleotide'}
-                    onChange={() => updateConfig({ alphabet: 'nucleotide' })}
-                    className="h-4 w-4"
-                  />
-                  Nucleotide
-                </label>
-              </div>
+              <RadioGroup
+                value={config.alphabet}
+                onValueChange={(value: string) => {
+                  const alphabet = value as 'protein' | 'nucleotide';
+                  const maxK = alphabet === 'protein' ? 14 : 27;
+                  const update: Partial<typeof config> = { alphabet };
+                  if (config.kmerLength > maxK) update.kmerLength = maxK;
+                  updateConfig(update);
+                }}
+                className="flex gap-4"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="protein" id="alphabet-protein" />
+                  <Label htmlFor="alphabet-protein" className="font-normal cursor-pointer">Protein</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="nucleotide" id="alphabet-nucleotide" />
+                  <Label htmlFor="alphabet-nucleotide" className="font-normal cursor-pointer">Nucleotide</Label>
+                </div>
+              </RadioGroup>
             </ParamInput>
 
             <ParamInput label="Validation Mode" helpKey="validationMode">
-              <select
-                value={config.validationMode}
-                onChange={(e) => updateConfig({ validationMode: e.target.value as 'strict' | 'permissive' | 'report' })}
-                className="w-full rounded-md border bg-background px-3 py-2"
-              >
-                <option value="strict">Strict</option>
-                <option value="permissive">Permissive</option>
-                <option value="report">Report</option>
-              </select>
+              <Select value={config.validationMode} onValueChange={(v) => updateConfig({ validationMode: v as 'strict' | 'permissive' | 'report' })}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="strict">Strict</SelectItem>
+                  <SelectItem value="permissive">Permissive</SelectItem>
+                  <SelectItem value="report">Report</SelectItem>
+                </SelectContent>
+              </Select>
             </ParamInput>
           </section>
 
@@ -376,18 +439,20 @@ export function ConfigureStep() {
             
             <ParamInput label="Header Format Pattern" helpKey="headerFormat">
               <div className="space-y-3">
-                {/* Current format tags */}
+                {/* Current format tags — always use '|' as internal delimiter (Fix 5.97).
+                   Backend normalizes all delimiters to '|' at analysis time, so the UI
+                   should consistently display/edit with '|' regardless of detection result. */}
                 <div className="min-h-[40px] rounded-md border bg-background p-2">
                   {config.headerFormat ? (
                     <div className="flex flex-wrap gap-1">
-                      {config.headerFormat.split(headerFormatDetection?.detected_delimiter || '|').map((field, i, arr) => (
+                      {config.headerFormat.split(/[|\t,;]/).map((field, i, arr) => (
                         <span key={i} className="flex items-center gap-1">
                           <button
                             type="button"
                             onClick={() => {
-                              const fields = config.headerFormat?.split(headerFormatDetection?.detected_delimiter || '|') || [];
+                              const fields = config.headerFormat?.split(/[|\t,;]/) || [];
                               fields.splice(i, 1);
-                              updateConfig({ headerFormat: fields.join(headerFormatDetection?.detected_delimiter || '|') || null });
+                              updateConfig({ headerFormat: fields.join('|') || null });
                             }}
                             className="inline-flex items-center gap-1 rounded bg-primary/20 px-2 py-1 text-sm hover:bg-primary/30"
                           >
@@ -395,7 +460,7 @@ export function ConfigureStep() {
                             <span className="text-muted-foreground hover:text-foreground">&times;</span>
                           </button>
                           {i < arr.length - 1 && (
-                            <span className="text-muted-foreground">{headerFormatDetection?.detected_delimiter || '|'}</span>
+                            <span className="text-muted-foreground">|</span>
                           )}
                         </span>
                       ))}
@@ -424,9 +489,8 @@ export function ConfigureStep() {
                           key={suggestion}
                           type="button"
                           onClick={() => {
-                            const delimiter = headerFormatDetection?.detected_delimiter || '|';
                             const current = config.headerFormat || '';
-                            const newFormat = current ? `${current}${delimiter}${suggestion}` : suggestion;
+                            const newFormat = current ? `${current}|${suggestion}` : suggestion;
                             updateConfig({ headerFormat: newFormat });
                           }}
                           className="rounded bg-muted px-2 py-1 text-xs hover:bg-accent"
@@ -472,62 +536,51 @@ export function ConfigureStep() {
             
             <div className="flex items-start gap-3">
               <input
+                id="config-allow-lowercase"
                 type="checkbox"
                 checked={config.allowLowercase}
                 onChange={(e) => updateConfig({ allowLowercase: e.target.checked })}
-                className="mt-1 h-4 w-4 rounded border-gray-300"
+                className="mt-1 h-4 w-4 rounded border-input"
               />
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <p className="font-medium">Allow lowercase sequences</p>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button 
-                          onClick={() => setShowAllowLowercaseHelp(true)}
-                          className="text-muted-foreground hover:text-primary"
-                        >
-                          <HelpCircle className="h-4 w-4" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-xs">
-                        <p>{PARAM_HELP.allowLowercase.short}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">Click for more details</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  <label htmlFor="config-allow-lowercase" className="font-medium cursor-pointer">Allow lowercase sequences</label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button 
+                        onClick={() => setShowAllowLowercaseHelp(true)}
+                        className="text-muted-foreground hover:text-primary"
+                        aria-label="Help: Allow lowercase"
+                      >
+                        <HelpCircle className="h-4 w-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs">
+                      <p>{PARAM_HELP.allowLowercase.short}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Click for more details</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                checked={config.hcsEnabled}
-                onChange={(e) => updateConfig({ hcsEnabled: e.target.checked })}
-                className="mt-1 h-4 w-4 rounded border-gray-300"
-              />
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium">Calculate Highly Conserved Sequences (HCS)</p>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button 
-                          onClick={() => setShowHcsHelp(true)}
-                          className="text-muted-foreground hover:text-primary"
-                        >
-                          <HelpCircle className="h-4 w-4" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-xs">
-                        <p>{PARAM_HELP.hcsEnabled.short}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">Click for more details</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-              </div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Highly Conserved Sequences (HCS) are always calculated from Index motifs.</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button 
+                    onClick={() => setShowHcsHelp(true)}
+                    className="text-muted-foreground hover:text-primary"
+                    aria-label="Help: HCS calculation"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-xs">
+                  <p>{PARAM_HELP.hcsEnabled.short}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Click for more details</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </section>
 

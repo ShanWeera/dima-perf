@@ -2,13 +2,9 @@
 linker = "x86_64-w64-mingw32-gcc"
 ar = "x86_64-w64-mingw32-ar"
 
-# Optimize for performance
-[profile.release-optimized]
-inherits = "release"
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true
+# Performance-optimized release settings used by Tauri build
+# (moved from unused release-optimized profile to active release profile)
+# See Cargo.toml [profile.release] section for the actual configuration
 
 # Platform-specific optimizations
 [target.x86_64-pc-windows-gnu.env]

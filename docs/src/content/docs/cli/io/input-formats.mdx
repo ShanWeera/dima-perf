@@ -1,0 +1,92 @@
+---
+title: Input Formats
+description: Supported input file formats, compression, and stdin piping for DiMA.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+DiMA accepts aligned FASTA files as input. The input must be a multiple sequence alignment (MSA) where all sequences have the same length.
+
+## FASTA Format
+
+Standard aligned FASTA format with header lines starting with `>`:
+
+```
+>sequence_1_header
+ACDEFGHIKLMNPQRSTVWY-ACDEFGHIKLMNPQRSTVWY
+>sequence_2_header
+ACDEFGHIKLMNPQRSTVWY-ACDEFGHIKLMNPQRSTVWY
+```
+
+**Requirements:**
+- All sequences must be the same length (aligned)
+- Multi-line sequences are automatically concatenated
+- Headers can optionally contain pipe-separated metadata
+- File extensions: `.fasta`, `.fa`, `.faa` (protein), `.fna` (nucleotide)
+
+## Transparent Decompression
+
+DiMA automatically detects and decompresses compressed input files based on the file's magic bytes (not extension), supporting:
+
+| Format | Extensions | Library |
+|--------|-----------|---------|
+| gzip | `.gz` | flate2 |
+| bzip2 | `.bz2` | bzip2 |
+| xz (LZMA) | `.xz` | liblzma |
+| Zstandard | `.zst` | zstd |
+
+```bash
+# All of these work identically — no manual decompression needed
+dima analyze -i aligned.fasta -o results.json
+dima analyze -i aligned.fasta.gz -o results.json
+dima analyze -i aligned.fasta.bz2 -o results.json
+dima analyze -i aligned.fasta.xz -o results.json
+dima analyze -i aligned.fasta.zst -o results.json
+```
+
+<Aside type="tip">
+Transparent decompression is handled by the `needletail` library and detects format from file magic bytes, so renaming extensions won't break anything.
+</Aside>
+
+## Standard Input (stdin)
+
+DiMA can read from stdin for pipeline integration:
+
+```bash
+# Explicit stdin marker
+cat aligned.fasta | dima analyze -i - -o results.json
+
+# Auto-detect piped stdin (omit -i entirely)
+cat aligned.fasta | dima analyze -o results.json
+
+# Pipe from decompression tools
+zcat large_file.fasta.gz | dima analyze -i - -o results.json
+
+# Pipe from preprocessing
+seqkit grep -r -p "Spike" sequences.fasta | dima analyze -i - -o results.json
+```
+
+<Aside type="caution">
+When reading from stdin, memory-mapped I/O is unavailable. For large files (>1 GB), using a file path enables mmap for better performance.
+</Aside>
+
+## Memory-Mapped I/O
+
+For file inputs, DiMA uses memory-mapped I/O when beneficial:
+
+- **Automatic** — DiMA decides based on file size and available memory
+- **Force mmap** — Set `DIMA_FORCE_MMAP=1`
+- **Force buffered** — Set `DIMA_FORCE_MMAP=0`
+
+Memory mapping avoids copying file contents into application memory, which can significantly reduce memory usage for large files.
+
+## Input Validation
+
+Before processing, DiMA validates:
+
+1. **File existence** — Fails fast if the path doesn't exist
+2. **Regular file** — Rejects directories and special files
+3. **Alignment consistency** — All sequences must be the same length
+4. **Character validity** — Controlled by `--validation` mode
+
+Invalid characters in k-mers cause those k-mers to be excluded from entropy computation (per DiMA methodology: "only k-mer sequences that do not harbor a gap and/or unknown/ambiguous character are used").

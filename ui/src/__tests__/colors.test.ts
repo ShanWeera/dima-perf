@@ -5,7 +5,6 @@
 import { describe, it, expect } from 'vitest';
 import { 
   getCharacterColor, 
-  getEntropyColor, 
   getMotifColor,
   RASMOL_COLORS,
   NUCLEOTIDE_COLORS,
@@ -35,29 +34,12 @@ describe('getCharacterColor', () => {
   });
 });
 
-describe('getEntropyColor', () => {
-  it('returns blue for low entropy', () => {
-    const color = getEntropyColor(0);
-    expect(color).toBe('#313695');
-  });
-
-  it('returns red for high entropy', () => {
-    const color = getEntropyColor(0.99);
-    expect(color).toBe('#a50026');
-  });
-
-  it('returns intermediate color for mid entropy', () => {
-    const color = getEntropyColor(0.5);
-    expect(color).toBeDefined();
-  });
-});
-
 describe('getMotifColor', () => {
   it('returns correct color for each motif type', () => {
-    expect(getMotifColor('I')).toBe('#4CAF50');
-    expect(getMotifColor('Ma')).toBe('#2196F3');
-    expect(getMotifColor('Mi')).toBe('#FF9800');
-    expect(getMotifColor('U')).toBe('#9E9E9E');
+    expect(getMotifColor('I')).toBe('#2E7D32');
+    expect(getMotifColor('Ma')).toBe('#1565C0');
+    expect(getMotifColor('Mi')).toBe('#E65100');
+    expect(getMotifColor('U')).toBe('#616161');
   });
 
   it('returns default for null', () => {

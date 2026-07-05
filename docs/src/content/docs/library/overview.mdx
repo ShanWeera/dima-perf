@@ -1,0 +1,112 @@
+---
+title: Rust Library Overview
+description: Using dima_lib as a Rust library for programmatic diversity analysis.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+DiMA is published as `dima_lib` — a Rust library crate that can be used programmatically in other Rust applications. The CLI and Desktop app are both consumers of this library.
+
+## Adding as a Dependency
+
+```toml
+[dependencies]
+dima_lib = { git = "https://github.com/ShanWeera/dima-perf.git" }
+```
+
+## Public API Surface
+
+The library exposes a carefully curated set of types through explicit re-exports. Only these are semver-stable:
+
+### Core Analysis
+
+| Export | Description |
+|--------|-------------|
+| `analyze()` | Main entry point — runs full diversity analysis pipeline |
+| `AnalysisConfig` | Configuration builder for validation, cancellation, etc. |
+| `AnalysisError` | Typed error enum for all analysis failure modes |
+
+### Data Models
+
+| Export | Description |
+|--------|-------------|
+| `Results` | Top-level output structure (positions, metadata, summary) |
+| `Position` | Per-position entropy, support, motifs, and variants |
+| `Variant` | Individual k-mer variant with count, incidence, metadata |
+| `HighestEntropy` | Summary of the most diverse position |
+
+### I/O
+
+| Export | Description |
+|--------|-------------|
+| `InputSource` | Enum: `File(PathBuf)` or `Stdin` |
+| `OutputType` | Enum: `Json`, `Tsv`, `Jsonl`, `Dima` |
+| `resolve_output_type()` | Format resolution (flag > extension > fallback) |
+| `write_results_to_output()` | Write results to any supported format |
+| `atomic_write()` | Atomic file write (write-to-temp then rename) |
+| `ParseDiagnostics` | Input parsing statistics |
+
+### Binary Format
+
+| Export | Description |
+|--------|-------------|
+| `BinaryFormat` | Read/write `.dima` binary files |
+| `BinaryFormatConfig` | Compression type, level, interning settings |
+| `CompressionType` | Enum: `None`, `Lz4`, `Zstd` |
+
+### Alphabet & Validation
+
+| Export | Description |
+|--------|-------------|
+| `CharacterValidator` | Validates characters against an alphabet |
+| `ValidationMode` | Enum: `Strict`, `Permissive`, `ReportOnly` |
+| `AlphabetType` | Enum: `Protein`, `Nucleotide` |
+| `ValidationStats` | Character classification statistics |
+
+### Utilities
+
+| Export | Description |
+|--------|-------------|
+| `max_kmer_length()` | Maximum k for a given alphabet (u64 encoding limit) |
+| `calculate_entropy_encoded_at_position()` | Low-level entropy calculation |
+| `PerfReport` | Performance timing breakdown |
+
+## Basic Usage
+
+```rust
+use dima_lib::{analyze, InputSource, AnalysisConfig};
+
+fn main() -> anyhow::Result<()> {
+    let config = AnalysisConfig::new();
+    
+    let (results, _validation_stats, _perf) = analyze(
+        InputSource::File("aligned.fasta".into()),
+        9,                                    // k-mer length
+        100,                                  // support threshold
+        "My Analysis".to_string(),            // query name
+        None,                                 // header_format (no metadata)
+        Some("protein".to_string()),          // alphabet
+        Some("Unknown".to_string()),          // header_fillna
+        None,                                 // metadata_fields filter
+        Some(config),                         // analysis config
+    )?;
+    
+    println!("Sequences: {}", results.sequence_count);
+    println!("Positions: {}", results.results.len());
+    println!("Average entropy: {:.4}", results.average_entropy);
+    
+    Ok(())
+}
+```
+
+<Aside type="note">
+Internal modules (`alphabet`, `models`, `entropy`, `simd_string`, `zero_copy`, `columnar`, `indexing`) are `pub(crate)` and not part of the public API. They may change between minor versions.
+</Aside>
+
+## API Reference
+
+Full rustdoc-generated API documentation is available at:
+
+**[API Reference →](/dima-perf/api/dima_lib/)**
+
+This is auto-generated from source code doc comments via `cargo doc` and deployed alongside this documentation site.

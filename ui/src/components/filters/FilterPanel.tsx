@@ -4,10 +4,11 @@
  * Advanced search and filter panel for positions and variants.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { Search, X, Save, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { SearchFilters, FilterPreset, Position, MotifType } from '@/lib/types';
+import { MOTIF_COLORS } from '@/lib/colors';
 import { 
   DEFAULT_FILTERS, 
   countActiveFilters, 
@@ -26,13 +27,13 @@ interface FilterPanelProps {
 }
 
 const MOTIF_OPTIONS: { value: MotifType; label: string; color: string }[] = [
-  { value: 'I', label: 'Index', color: '#4CAF50' },
-  { value: 'Ma', label: 'Major', color: '#2196F3' },
-  { value: 'Mi', label: 'Minor', color: '#FF9800' },
-  { value: 'U', label: 'Unique', color: '#9E9E9E' },
+  { value: 'I', label: 'Index', color: MOTIF_COLORS['I'] },
+  { value: 'Ma', label: 'Major', color: MOTIF_COLORS['Ma'] },
+  { value: 'Mi', label: 'Minor', color: MOTIF_COLORS['Mi'] },
+  { value: 'U', label: 'Unique', color: MOTIF_COLORS['U'] },
 ];
 
-export function FilterPanel({
+export const FilterPanel = memo(function FilterPanel({
   positions,
   filters,
   onFiltersChange,
@@ -63,23 +64,32 @@ export function FilterPanel({
   };
 
   const handlePositionRangeChange = (start: number | null, end: number | null) => {
-    if (start === null && end === null) {
+    // Only apply a range filter when at least one bound is explicitly set and finite.
+    // Treat null as "no bound" rather than coercing to min/max — prevents users from
+    // accidentally filtering when they only typed in one field. (Fix 5.24)
+    const validStart = start !== null && Number.isFinite(start) ? Math.max(start, minPos) : null;
+    const validEnd = end !== null && Number.isFinite(end) ? Math.min(end, maxPos) : null;
+
+    if (validStart === null && validEnd === null) {
       onFiltersChange({ ...filters, positionRange: null });
     } else {
       onFiltersChange({
         ...filters,
-        positionRange: [start ?? minPos, end ?? maxPos],
+        positionRange: [validStart ?? minPos, validEnd ?? maxPos],
       });
     }
   };
 
   const handleEntropyRangeChange = (min: number | null, max: number | null) => {
-    if (min === null && max === null) {
+    const validMin = min !== null && Number.isFinite(min) ? Math.max(min, 0) : null;
+    const validMax = max !== null && Number.isFinite(max) ? Math.min(max, maxEntropy) : null;
+
+    if (validMin === null && validMax === null) {
       onFiltersChange({ ...filters, entropyRange: null });
     } else {
       onFiltersChange({
         ...filters,
-        entropyRange: [min ?? 0, max ?? maxEntropy],
+        entropyRange: [validMin ?? 0, validMax ?? maxEntropy],
       });
     }
   };
@@ -133,6 +143,7 @@ export function FilterPanel({
             <button
               onClick={() => onFiltersChange({ ...filters, sequenceQuery: '' })}
               className="absolute right-2 top-1/2 -translate-y-1/2"
+              aria-label="Clear search"
             >
               <X className="h-4 w-4 text-muted-foreground" />
             </button>
@@ -150,10 +161,13 @@ export function FilterPanel({
             min={minPos}
             max={maxPos}
             value={filters.positionRange?.[0] ?? ''}
-            onChange={(e) => handlePositionRangeChange(
-              e.target.value ? Number(e.target.value) : null,
-              filters.positionRange?.[1] ?? null
-            )}
+            onChange={(e) => {
+              const parsed = e.target.value.trim() ? parseFloat(e.target.value) : NaN;
+              handlePositionRangeChange(
+                Number.isFinite(parsed) ? parsed : null,
+                filters.positionRange?.[1] ?? null
+              );
+            }}
             className="w-full rounded-md border bg-background px-3 py-2"
           />
           <span className="text-muted-foreground">to</span>
@@ -163,10 +177,13 @@ export function FilterPanel({
             min={minPos}
             max={maxPos}
             value={filters.positionRange?.[1] ?? ''}
-            onChange={(e) => handlePositionRangeChange(
-              filters.positionRange?.[0] ?? null,
-              e.target.value ? Number(e.target.value) : null
-            )}
+            onChange={(e) => {
+              const parsed = e.target.value.trim() ? parseFloat(e.target.value) : NaN;
+              handlePositionRangeChange(
+                filters.positionRange?.[0] ?? null,
+                Number.isFinite(parsed) ? parsed : null
+              );
+            }}
             className="w-full rounded-md border bg-background px-3 py-2"
           />
         </div>
@@ -182,10 +199,13 @@ export function FilterPanel({
             step={0.1}
             min={0}
             value={filters.entropyRange?.[0] ?? ''}
-            onChange={(e) => handleEntropyRangeChange(
-              e.target.value ? Number(e.target.value) : null,
-              filters.entropyRange?.[1] ?? null
-            )}
+            onChange={(e) => {
+              const parsed = e.target.value.trim() ? parseFloat(e.target.value) : NaN;
+              handleEntropyRangeChange(
+                Number.isFinite(parsed) ? parsed : null,
+                filters.entropyRange?.[1] ?? null
+              );
+            }}
             className="w-full rounded-md border bg-background px-3 py-2"
           />
           <span className="text-muted-foreground">to</span>
@@ -194,10 +214,13 @@ export function FilterPanel({
             placeholder="Max"
             step={0.1}
             value={filters.entropyRange?.[1] ?? ''}
-            onChange={(e) => handleEntropyRangeChange(
-              filters.entropyRange?.[0] ?? null,
-              e.target.value ? Number(e.target.value) : null
-            )}
+            onChange={(e) => {
+              const parsed = e.target.value.trim() ? parseFloat(e.target.value) : NaN;
+              handleEntropyRangeChange(
+                filters.entropyRange?.[0] ?? null,
+                Number.isFinite(parsed) ? parsed : null
+              );
+            }}
             className="w-full rounded-md border bg-background px-3 py-2"
           />
         </div>
@@ -211,6 +234,8 @@ export function FilterPanel({
             <button
               key={option.value}
               onClick={() => handleMotifToggle(option.value)}
+              aria-pressed={filters.motifTypes.includes(option.value)}
+              aria-label={`Filter by ${option.label} motif`}
               className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
                 filters.motifTypes.includes(option.value)
                   ? 'text-white'
@@ -234,7 +259,7 @@ export function FilterPanel({
           type="checkbox"
           checked={filters.includeLowSupport}
           onChange={(e) => onFiltersChange({ ...filters, includeLowSupport: e.target.checked })}
-          className="h-4 w-4 rounded border-gray-300"
+          className="h-4 w-4 rounded border-input"
         />
         <span className="text-sm">Include low support positions</span>
       </label>
@@ -270,6 +295,7 @@ export function FilterPanel({
                 <button
                   onClick={() => onDeletePreset(preset.id)}
                   className="text-muted-foreground hover:text-destructive"
+                  aria-label={`Delete preset ${preset.name}`}
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -306,4 +332,4 @@ export function FilterPanel({
       </div>
     </div>
   );
-}
+});

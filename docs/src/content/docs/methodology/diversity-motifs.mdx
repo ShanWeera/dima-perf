@@ -1,0 +1,96 @@
+---
+title: Diversity Motifs
+description: Classification of k-mer sequences into Index, Major, Minor, and Unique diversity motifs.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Diversity motifs are the core analytical feature that distinguishes DiMA from other diversity analysis tools. At each k-mer position, distinct sequences are classified into motifs based on their incidence (frequency), revealing the composition and dynamics of sequence diversity.
+
+## Motif Definitions
+
+| Motif | Definition | Significance |
+|-------|-----------|--------------|
+| **Index** | Most frequent k-mer at the position | Represents the prevalent wild-type/consensus sequence |
+| **Major Variant** | Second most frequent k-mer | Primary alternative; often an emerging variant |
+| **Minor Variants** | K-mers occurring more than once, below major | Intermediate diversity; background variation |
+| **Unique Variants** | K-mers occurring exactly once (singletons) | May be sequencing artifacts or rare mutations |
+
+## Classification Rules
+
+Given $N$ valid k-mers at a position with $n$ distinct sequences ranked by count:
+
+$$
+\text{rank}_1 \geq \text{rank}_2 \geq \text{rank}_3 \geq \ldots \geq \text{rank}_n
+$$
+
+- **Index:** The sequence with the highest count ($\text{rank}_1$), provided count > 1
+- **Major:** The sequence with the second-highest count ($\text{rank}_2$), provided count > 1
+- **Minor:** All sequences with count > 1 and rank below major
+- **Unique:** All sequences with count = 1
+
+### Special Cases
+
+- **Multiple indices** — If two or more sequences share the highest count, all are classified as index
+- **Multiple majors** — If two or more sequences share the second-highest count, all are classified as major
+- **No index** — If all sequences are unique (count = 1), there is no index or major
+- **No major** — If only one sequence occurs more than once, there is no major variant
+
+## Incidence Calculations
+
+DiMA reports incidence as a percentage for each motif:
+
+$$
+\text{index\_incidence} = \frac{\text{index\_count}}{N} \times 100\%
+$$
+
+$$
+\text{total\_variants\_incidence} = \frac{N - \text{index\_count}}{N} \times 100\%
+$$
+
+$$
+\text{distinct\_variants\_incidence} = \frac{n - 1}{\text{total\_variant\_count}} \times 100\%
+$$
+
+Where:
+- $N$ = total support (valid k-mers at position)
+- $n$ = number of distinct sequences
+- total_variant_count = sum of all non-index variant counts
+
+<Aside type="note">
+"Total variants" encompasses all variants that differ by at least one residue from the index. "Distinct variants" is the count of different sequences among the total variants.
+</Aside>
+
+## Example
+
+Consider a nonamer position with 20 sequences:
+
+| Sequence | Count | Motif |
+|----------|-------|-------|
+| ACDEFGHIK | 8 | **Index** (40%) |
+| ACDEFGHIL | 5 | **Major** (25%) |
+| ACDEFGHIV | 3 | Minor (15%) |
+| ACDEFGHIM | 2 | Minor (10%) |
+| ACDEFGHIW | 1 | Unique (5%) |
+| ACDEFGHIY | 1 | Unique (5%) |
+
+- Index incidence: 40%
+- Total variants incidence: 60%
+- Distinct variants: 5 (out of 12 total variant occurrences) = 41.7%
+
+## Biological Significance
+
+- **High index incidence** (&gt;80%) — Conserved region; potential vaccine/diagnostic target
+- **Low index incidence** (&lt;50%) — Highly variable region; potential immune escape site
+- **Dominant minor variants** — Suggests selective pressure with multiple competing lineages
+- **High unique count** — May indicate sequencing artifacts or extreme hypervariability
+
+## Motif Switching
+
+A key finding from DiMA studies: the same sequence can change motif classification across adjacent k-mer positions due to the sliding window. A sequence that is the index at position $x$ may become a minor variant at position $x+1$ if a single residue change alters its relative frequency. This phenomenon, termed "motif switching," reveals the dynamic nature of sequence diversity at the amino acid level (Hu et al. 2013, *PLoS ONE*; Abd Raman et al. 2020, *PeerJ*).
+
+## References
+
+- Hu Y, Tan PT, Tan TW, et al. "Dissecting the dynamics of HIV-1 protein sequence diversity." *PLoS ONE*, 2013;8:e59994.
+- Abd Raman HS, Tan S, August JT, et al. "Dynamics of influenza A (H5N1) virus protein sequence diversity." *PeerJ*, 2020;7:e7954.
+- Khan AM, Miotto O, Nascimento EJM, et al. "Conservation and variability of dengue virus proteins." *PLoS Neglected Tropical Diseases*, 2008;2:e272.

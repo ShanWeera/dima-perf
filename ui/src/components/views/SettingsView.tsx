@@ -4,22 +4,33 @@
  * Application settings panel with auto-saving.
  */
 
+import { useShallow } from 'zustand/react/shallow';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeStore } from '@/stores/themeStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { Button } from '@/components/ui/button';
-import { revealInExplorer, getDocumentsPath, saveLayout } from '@/lib/tauri';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { revealInExplorer, getProjectsDirectoryPath, saveLayout } from '@/lib/tauri';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
-import { DEFAULT_LAYOUT } from '@/components/dashboard/DashboardGrid';
+import { DEFAULT_LAYOUT } from '@/lib/dashboard-layout';
 import { useState, useEffect } from 'react';
 import { FolderOpen } from 'lucide-react';
+import { showErrorToast } from '@/lib/utils';
+import { useToastStore } from '@/stores/toastStore';
+import { ConfirmationDialog } from '@/components/dialogs/ConfirmationDialog';
 
 export function SettingsView() {
-  const { settings, updateSetting, resetToDefaults } = useSettingsStore();
-  const { mode, setMode } = useThemeStore();
-  const { currentProject } = useProjectStore();
-  const [documentsPath, setDocumentsPath] = useState<string>('');
+  const { settings, updateSetting, resetToDefaults, setThemeMode } = useSettingsStore(useShallow((s) => ({
+    settings: s.settings,
+    updateSetting: s.updateSetting,
+    resetToDefaults: s.resetToDefaults,
+    setThemeMode: s.setThemeMode,
+  })));
+  const currentProject = useProjectStore((s) => s.currentProject);
+  const bumpLayoutResetVersion = useProjectStore((s) => s.bumpLayoutResetVersion);
+  const [projectsPath, setProjectsPath] = useState<string>('');
   const [isResettingLayout, setIsResettingLayout] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const handleSelectOutputDirectory = async () => {
     try {
@@ -31,7 +42,7 @@ export function SettingsView() {
         await updateSetting('defaultOutputDirectory', selected as string);
       }
     } catch (error) {
-      console.error('Failed to select directory:', error);
+      showErrorToast('Failed to select directory', error);
     }
   };
 
@@ -56,16 +67,17 @@ export function SettingsView() {
         })),
         hidden_panels: [],
       });
-      // The layout will be reloaded when user returns to results view
+      bumpLayoutResetVersion();
+      useToastStore.getState().addToast('Dashboard layout reset', 'success');
     } catch (error) {
-      console.error('Failed to reset layout:', error);
+      showErrorToast('Failed to reset layout', error);
     } finally {
       setIsResettingLayout(false);
     }
   };
 
   useEffect(() => {
-    getDocumentsPath().then(setDocumentsPath).catch(console.error);
+    getProjectsDirectoryPath().then(setProjectsPath).catch((err) => showErrorToast('Failed to get projects path', err));
   }, []);
 
   return (
@@ -79,39 +91,41 @@ export function SettingsView() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <label className="font-medium">Theme</label>
+                <label htmlFor="settings-theme" className="font-medium">Theme</label>
                 <p className="text-sm text-muted-foreground">
                   Choose your preferred color scheme
                 </p>
               </div>
-              <select
-                value={mode}
-                onChange={(e) => setMode(e.target.value as 'light' | 'dark' | 'system')}
-                className="rounded-md border bg-background px-3 py-2"
-              >
-                <option value="system">System</option>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-              </select>
+              <Select value={settings.theme} onValueChange={(v) => setThemeMode(v as 'light' | 'dark' | 'system')}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="system">System</SelectItem>
+                  <SelectItem value="light">Light</SelectItem>
+                  <SelectItem value="dark">Dark</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="flex items-center justify-between">
               <div>
-                <label className="font-medium">Decimal Precision</label>
+                <label htmlFor="settings-precision" className="font-medium">Decimal Precision</label>
                 <p className="text-sm text-muted-foreground">
                   Number of decimal places for entropy values
                 </p>
               </div>
-              <select
-                value={settings.decimalPrecision}
-                onChange={(e) => updateSetting('decimalPrecision', Number(e.target.value))}
-                className="rounded-md border bg-background px-3 py-2"
-              >
-                <option value={2}>2</option>
-                <option value={3}>3</option>
-                <option value={4}>4</option>
-                <option value={5}>5</option>
-              </select>
+              <Select value={String(settings.decimalPrecision)} onValueChange={(v) => updateSetting('decimalPrecision', Number(v))}>
+                <SelectTrigger className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2">2</SelectItem>
+                  <SelectItem value="3">3</SelectItem>
+                  <SelectItem value="4">4</SelectItem>
+                  <SelectItem value="5">5</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </section>
@@ -122,35 +136,43 @@ export function SettingsView() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <label className="font-medium">K-mer Length</label>
+                <label htmlFor="settings-kmer" className="font-medium">K-mer Length</label>
                 <p className="text-sm text-muted-foreground">
-                  Default sliding window size
+                  Default sliding window size (protein max: 14)
                 </p>
               </div>
-              <input
+              <Input
+                id="settings-kmer"
                 type="number"
                 min={3}
-                max={15}
+                max={14}
                 value={settings.defaultKmerLength}
-                onChange={(e) => updateSetting('defaultKmerLength', Number(e.target.value))}
-                className="w-20 rounded-md border bg-background px-3 py-2"
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  if (Number.isFinite(val) && val >= 3 && val <= 14) updateSetting('defaultKmerLength', val);
+                }}
+                className="w-20"
               />
             </div>
 
             <div className="flex items-center justify-between">
               <div>
-                <label className="font-medium">Support Threshold</label>
+                <label htmlFor="settings-threshold" className="font-medium">Support Threshold</label>
                 <p className="text-sm text-muted-foreground">
                   Minimum support for entropy calculation
                 </p>
               </div>
-              <input
+              <Input
+                id="settings-threshold"
                 type="number"
                 min={1}
-                max={100}
+                max={10000}
                 value={settings.defaultSupportThreshold}
-                onChange={(e) => updateSetting('defaultSupportThreshold', Number(e.target.value))}
-                className="w-20 rounded-md border bg-background px-3 py-2"
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  if (Number.isFinite(val) && val >= 1 && val <= 10000) updateSetting('defaultSupportThreshold', val);
+                }}
+                className="w-20"
               />
             </div>
           </div>
@@ -163,15 +185,16 @@ export function SettingsView() {
             <div className="flex items-center justify-between">
               <div>
                 <label className="font-medium">Projects Location</label>
-                <p className="text-sm text-muted-foreground">
-                  {documentsPath}/DiMA Desktop/Projects
+                <p className="truncate text-sm text-muted-foreground" title={projectsPath}>
+                  {projectsPath || 'Loading...'}
                 </p>
               </div>
               <Button 
                 variant="outline" 
-                onClick={() => revealInExplorer(documentsPath)}
+                onClick={() => projectsPath && revealInExplorer(projectsPath)}
+                disabled={!projectsPath}
               >
-                Reveal in Explorer
+                Show in file manager
               </Button>
             </div>
           </div>
@@ -183,8 +206,8 @@ export function SettingsView() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <label className="font-medium">Default Output Directory</label>
-                <p className="text-sm text-muted-foreground">
+                <label htmlFor="settings-output-dir" className="font-medium">Default Output Directory</label>
+                <p className="truncate text-sm text-muted-foreground" title={settings.defaultOutputDirectory || 'Same as project folder'}>
                   {settings.defaultOutputDirectory || 'Same as project folder'}
                 </p>
               </div>
@@ -208,22 +231,6 @@ export function SettingsView() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <label className="font-medium">Default Chart Resolution</label>
-                <p className="text-sm text-muted-foreground">
-                  DPI for chart exports
-                </p>
-              </div>
-              <select
-                value={settings.defaultChartDpi}
-                onChange={(e) => updateSetting('defaultChartDpi', Number(e.target.value) as 72 | 300)}
-                className="rounded-md border bg-background px-3 py-2"
-              >
-                <option value={72}>Screen (72 DPI)</option>
-                <option value={300}>Print (300 DPI)</option>
-              </select>
-            </div>
           </div>
         </section>
 
@@ -238,7 +245,7 @@ export function SettingsView() {
             >
               {isResettingLayout ? 'Resetting...' : 'Reset Dashboard Layout'}
             </Button>
-            <Button variant="outline" onClick={resetToDefaults}>
+            <Button variant="outline" onClick={() => setShowResetConfirm(true)}>
               Reset All Settings
             </Button>
           </div>
@@ -252,6 +259,16 @@ export function SettingsView() {
           </p>
         </section>
       </div>
+
+      <ConfirmationDialog
+        open={showResetConfirm}
+        onOpenChange={setShowResetConfirm}
+        title="Reset All Settings"
+        description="All settings will be reverted to their default values. This cannot be undone."
+        confirmLabel="Reset All"
+        variant="warning"
+        onConfirm={() => { resetToDefaults().then(() => useToastStore.getState().addToast('Settings restored to defaults', 'success')).catch(() => {}); setShowResetConfirm(false); }}
+      />
     </div>
   );
 }

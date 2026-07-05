@@ -1,0 +1,111 @@
+---
+title: Metadata Aggregation
+description: Parse FASTA header metadata and aggregate per-variant counts using columnar storage.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+DiMA can parse structured metadata from FASTA headers and aggregate counts for each diversity motif variant. This enables spatio-temporal and phenotypic analysis of sequence diversity.
+
+## How It Works
+
+1. FASTA headers are split by the pipe `|` character
+2. Each field is mapped to a named column defined by `--header-format`
+3. At each k-mer position, variant metadata is aggregated as counts per field value
+4. Results include metadata distributions per variant in the output
+
+## Enabling Metadata
+
+Specify the header field names with `--header-format`:
+
+```bash
+dima analyze -i aligned.fasta -o results.json \
+  --header-format "date|country|host"
+```
+
+### Example Input
+
+```
+>2020-12|Philippines|Human
+ACDEFGHIKLMNPQRSTVWY...
+>2021-02|United Kingdom|Human
+ACDEFGHIKLMNPQRSTVWY...
+>2021-03||Cat
+ACDEFGHIKLMNPQRSTVWY...
+```
+
+### Example Output (per variant)
+
+```json
+{
+  "sequence": "ACDEFGHIK",
+  "count": 1500,
+  "metadata": {
+    "country": { "Philippines": 800, "United Kingdom": 700 },
+    "date": { "2020-12": 500, "2021-02": 700, "2021-03": 300 },
+    "host": { "Human": 1480, "Cat": 20 }
+  }
+}
+```
+
+## Options
+
+### `--header-format <FIELDS>`
+
+Pipe-separated list of field names corresponding to the header layout:
+
+```bash
+--header-format "accession|host|country|year"
+```
+
+**Rules:**
+- Field names must be unique (duplicates are rejected at startup)
+- Whitespace around field names is trimmed
+- The number of declared fields doesn't need to exactly match every header — missing fields use the fill value
+
+### `--metadata-fields <FIELDS>`
+
+Optionally restrict which fields are stored in the output. Useful for reducing memory and output size when only some fields are of interest:
+
+```bash
+--header-format "accession|host|country|year|lab|batch" \
+--metadata-fields "country|year"
+```
+
+Only `country` and `year` will appear in the output metadata. All fields are still parsed and validated.
+
+### `--header-fillna <VALUE>`
+
+Replacement for empty or missing fields (default: `"Unknown"`):
+
+```bash
+--header-fillna "N/A"
+```
+
+Applies to:
+- Empty fields between pipes: `>USA||Patient001` → country=USA, date=N/A, patient=Patient001
+- Trailing missing fields when header has fewer pipes than format declares
+
+## Columnar Storage
+
+<Aside type="note">
+Columnar storage is activated automatically when `--header-format` is specified. There is no separate flag — it is always used for metadata workloads.
+</Aside>
+
+When metadata is enabled, DiMA stores header values in column-oriented arrays (one array per field) instead of row-oriented hash maps. This provides:
+
+- **14–17% faster processing** (per benchmark with 2.3M sequences)
+- **Better CPU cache locality** for sequential field access during aggregation
+- **Efficient string interning** — deduplicated values reduce memory by 15–25%
+- **SIMD-friendly memory layout** for bulk counting operations
+
+## Performance Impact
+
+Metadata processing adds overhead compared to diversity-only analysis:
+
+| Configuration | Runtime (2.3M sequences) |
+|---------------|--------------------------|
+| No metadata | ~128s |
+| With metadata (columnar) | ~178s (+39%) |
+
+**Recommendation:** Omit `--header-format` when you don't need per-variant metadata aggregation for maximum throughput.

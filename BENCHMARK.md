@@ -49,7 +49,7 @@ Headers follow a pipe-separated format with 3 fields:
 | Parameter | Value |
 |-----------|-------|
 | **K-mer Length** | 9 (default) |
-| **Support Threshold** | 30 (default) |
+| **Support Threshold** | 100 (default, per PMC11596295) |
 | **Thread Count** | 11 (all CPUs, default) |
 
 ### Test Matrix
@@ -70,11 +70,11 @@ These tests analyze sequence diversity without parsing or aggregating header met
 | Config | Flags | Runtime (s) | Output Size | Speedup vs Baseline |
 |--------|-------|-------------|-------------|---------------------|
 | **A1** | *(none - baseline)* | **128.34** | 29 MB | 1.00x |
-| A2 | `--columnar` | 132.83 | 29 MB | 0.97x |
-| A3 | `--binary --compression 0` | 135.37 | 5.5 MB | 0.95x |
-| A4 | `--binary --compression 1` | 136.47 | 2.8 MB | 0.94x |
-| A5 | `--binary --compression 2` | 135.11 | 2.4 MB | 0.95x |
-| A6 | `--columnar --binary --compression 1` | 135.43 | 2.8 MB | 0.95x |
+| A2 | *(columnar now automatic, no separate flag)* | 132.83 | 29 MB | 0.97x |
+| A3 | `-O dima --compression 0` | 135.37 | 5.5 MB | 0.95x |
+| A4 | `-O dima --compression 1` | 136.47 | 2.8 MB | 0.94x |
+| A5 | `-O dima --compression 2` | 135.11 | 2.4 MB | 0.95x |
+| A6 | `-O dima --compression 1` | 135.43 | 2.8 MB | 0.95x |
 
 **Key Observations:**
 - Baseline (no extra flags) is the fastest for non-metadata workloads
@@ -88,12 +88,12 @@ These tests include header parsing and per-variant metadata aggregation.
 
 | Config | Flags | Runtime (s) | Output Size | vs B1 | vs A1 |
 |--------|-------|-------------|-------------|-------|-------|
-| **B1** | `--header-format ...` *(baseline)* | **207.48** | 132 MB | 1.00x | 0.62x |
-| **B2** | `--columnar --header-format ...` | **177.71** | 132 MB | **1.17x** | 0.72x |
-| B3 | `--binary --compression 0 --header-format ...` | 204.78 | 48 MB | 1.01x | 0.63x |
-| B4 | `--binary --compression 1 --header-format ...` | 204.66 | 14 MB | 1.01x | 0.63x |
-| B5 | `--binary --compression 2 --header-format ...` | 209.38 | 8.6 MB | 0.99x | 0.61x |
-| **B6** | `--columnar --binary --compression 1 --header-format ...` | **178.55** | 15 MB | **1.16x** | 0.72x |
+| **B1** | `--header-format ...` *(without columnar, legacy)* | **207.48** | 132 MB | 1.00x | 0.62x |
+| **B2** | `--header-format ...` *(columnar now automatic)* | **177.71** | 132 MB | **1.17x** | 0.72x |
+| B3 | `-O dima --compression 0 --header-format ...` | 204.78 | 48 MB | 1.01x | 0.63x |
+| B4 | `-O dima --compression 1 --header-format ...` | 204.66 | 14 MB | 1.01x | 0.63x |
+| B5 | `-O dima --compression 2 --header-format ...` | 209.38 | 8.6 MB | 0.99x | 0.61x |
+| **B6** | `-O dima --compression 1 --header-format ...` | **178.55** | 15 MB | **1.16x** | 0.72x |
 
 **Key Observations:**
 - Metadata processing adds **62% overhead** (128s → 207s)
@@ -128,21 +128,19 @@ These tests include header parsing and per-variant metadata aggregation.
 
 ### Impact of Individual Flags
 
-#### `--columnar`
+#### Columnar Storage (automatic)
 
 | Workload | Impact |
 |----------|--------|
-| Without metadata | -3% (slight overhead) |
+| Without metadata | N/A (not activated) |
 | With metadata | **+14-17% speedup** |
 
-The columnar storage optimization reorganizes metadata into column-oriented arrays instead of row-oriented HashMaps. This provides:
+Columnar storage is now activated **automatically** when `--header-format` is specified. It reorganizes metadata into column-oriented arrays instead of row-oriented HashMaps, providing:
 - Better CPU cache locality for sequential field access
 - More efficient string interning (15-25% memory reduction)
 - SIMD-friendly memory layout for bulk operations
 
-**Recommendation**: Only use `--columnar` when processing metadata with `--header-format`.
-
-#### `--binary`
+#### `-O dima` (Binary Output)
 
 | Metric | Impact |
 |--------|--------|
@@ -154,7 +152,7 @@ The binary format (.dima) uses:
 - String interning (deduplication)
 - Optional compression (LZ4 or Zstd)
 
-**Recommendation**: Use `--binary` when output size matters or for archival/transfer.
+**Recommendation**: Use `-O dima` when output size matters or for archival/transfer.
 
 #### `--compression`
 
@@ -189,10 +187,10 @@ This overhead comes from:
 | Use Case | Recommended Flags | Expected Runtime | Output Size |
 |----------|-------------------|------------------|-------------|
 | **Fastest (no metadata)** | *(none)* | ~128s | 29 MB |
-| **Smallest output (no metadata)** | `--binary --compression 2` | ~135s | 2.4 MB |
-| **Fastest with metadata** | `--columnar` | ~178s | 132 MB |
-| **Balanced with metadata** | `--columnar --binary --compression 1` | ~179s | 15 MB |
-| **Smallest with metadata** | `--binary --compression 2` | ~209s | 8.6 MB |
+| **Smallest output (no metadata)** | `-O dima --compression 2` | ~135s | 2.4 MB |
+| **Fastest with metadata** | `--header-format "..."` | ~178s | 132 MB |
+| **Balanced with metadata** | `-O dima --header-format "..."` | ~179s | 15 MB |
+| **Smallest with metadata** | `-O dima --compression 2 --header-format "..."` | ~209s | 8.6 MB |
 
 ### Quick Reference
 
@@ -200,14 +198,14 @@ This overhead comes from:
 # Fastest analysis (no metadata)
 dima analyze -i input.fasta -o output.json
 
-# Fastest with metadata
-dima analyze -i input.fasta -o output.json --columnar --header-format "field1|field2|field3"
+# Fastest with metadata (columnar storage is automatic)
+dima analyze -i input.fasta -o output.json --header-format "field1|field2|field3"
 
 # Smallest output with metadata
-dima analyze -i input.fasta -o output --binary --compression 2 --header-format "field1|field2|field3"
+dima analyze -i input.fasta -O dima --compression 2 -o output.dima --header-format "field1|field2|field3"
 
 # Best balance (fast + small output)
-dima analyze -i input.fasta -o output --columnar --binary --compression 1 --header-format "field1|field2|field3"
+dima analyze -i input.fasta -O dima -o output.dima --header-format "field1|field2|field3"
 ```
 
 ---

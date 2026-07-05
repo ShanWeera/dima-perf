@@ -1,0 +1,104 @@
+---
+title: Sequence Validation
+description: Character validation modes, lowercase handling, and invalid character reporting.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+DiMA validates input sequences to ensure data quality. The validation system controls how characters are classified and reported, but the core behavior is consistent across all modes.
+
+## Core Behavior (All Modes)
+
+Per the DiMA methodology (Tharanga et al. 2025): k-mers containing gaps, ambiguous characters, or invalid characters are **always excluded** from entropy computation regardless of validation mode.
+
+The validation mode only affects how characters are **classified and reported** — it does not change the computed entropy, support, or motif results.
+
+## Validation Modes
+
+### Strict (Default)
+
+Only canonical alphabet characters are classified as "valid":
+
+| Alphabet | Valid Characters |
+|----------|----------------|
+| Protein | A C D E F G H I K L M N P Q R S T V W Y |
+| Nucleotide | A C G T U |
+
+Everything else (ambiguous codes, unknown characters) is classified as "invalid" in reports.
+
+```bash
+dima analyze -i input.fasta --validation strict --report-invalid
+```
+
+### Permissive
+
+Distinguishes IUPAC ambiguity codes from truly invalid characters:
+
+| Alphabet | Ambiguous Characters |
+|----------|---------------------|
+| Protein | X (any), B (D/N), J (L/I), Z (E/Q), O (pyrrolysine), U (selenocysteine) |
+| Nucleotide | R Y K M S W B D H V N |
+
+```bash
+dima analyze -i input.fasta --validation permissive --report-invalid
+```
+
+### Report
+
+Identical classification to `permissive`. Named for clarity when paired with `--report-invalid`:
+
+```bash
+dima analyze -i input.fasta --validation report --report-invalid
+```
+
+## Lowercase Handling
+
+By default, lowercase letters (a–z) are treated as invalid. Use `--allow-lowercase` to convert them to uppercase:
+
+```bash
+dima analyze -i mixed_case.fasta --allow-lowercase -o results.json
+```
+
+| Without `--allow-lowercase` | With `--allow-lowercase` |
+|-----------------------------|--------------------------|
+| `a` → invalid, k-mer marked NA | `a` → `A`, valid |
+| `c` → invalid, k-mer marked NA | `c` → `C`, valid |
+
+<Aside type="tip">
+Many databases export sequences with mixed case (e.g., soft-masked regions in lowercase). Enable `--allow-lowercase` for such datasets.
+</Aside>
+
+## Validation Reporting
+
+Use `--report-invalid` to print character statistics after processing:
+
+```bash
+dima analyze -i input.fasta --validation permissive --report-invalid -o results.json
+```
+
+Output (to stderr):
+
+```
+Character Validation Summary:
+  Total characters:     1,234,567
+  Valid characters:     1,200,000 (97.2%)
+  Ambiguous characters:    30,000 (2.4%)
+  Gap characters:           4,000 (0.3%)
+  Invalid characters:         567 (0.05%)
+  Invalidated k-mers:       1,234
+```
+
+<Aside type="note">
+Validation statistics are always computed internally. The `--report-invalid` flag only controls whether they are printed to stderr.
+</Aside>
+
+## Impact on Results
+
+| Character Type | Effect on K-mer |
+|---------------|-----------------|
+| Valid (canonical) | K-mer included in entropy computation |
+| Gap (`-`) | K-mer excluded (marked NA) |
+| Ambiguous (IUPAC) | K-mer excluded (marked NA) |
+| Invalid (unknown) | K-mer excluded (marked NA) |
+
+This ensures entropy calculations are based only on unambiguous, fully resolved sequences — a core requirement of the DiMA methodology.

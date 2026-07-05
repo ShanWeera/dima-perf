@@ -1,0 +1,5 @@
+/* Fix KaTeX SVG rendering in Starlight (Starlight issue #2744).
+   Without this, inline math SVG elements collapse to 0px height. */
+.katex-html svg {
+  height: inherit;
+}

@@ -1,14 +1,24 @@
 /**
  * DiMA Desktop - Export Dialog
  * 
- * Modal for exporting results and charts.
+ * Modal for exporting results and charts using shadcn Dialog
+ * for focus trapping, Escape key handling, and accessibility.
  */
 
-import { useState } from 'react';
-import { X, Download, FileJson, FileImage, Check } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Download, FileJson, FileImage, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { save } from '@tauri-apps/plugin-dialog';
 import { exportResults, exportChart } from '@/lib/tauri';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 interface ExportDialogProps {
   projectPath: string;
@@ -20,7 +30,6 @@ interface ExportDialogProps {
 
 type ExportType = 'json' | 'dima' | 'chart';
 type ChartFormat = 'png' | 'svg';
-type ChartDpi = 72 | 300;
 
 export function ExportDialog({
   projectPath,
@@ -29,13 +38,20 @@ export function ExportDialog({
   chartType,
   onClose,
 }: ExportDialogProps) {
+  const settings = useSettingsStore((s) => s.settings);
   const [exportType, setExportType] = useState<ExportType>(chartDataUrl ? 'chart' : 'json');
   const [chartFormat, setChartFormat] = useState<ChartFormat>('png');
-  const [chartDpi, setChartDpi] = useState<ChartDpi>(72);
   const [chartTitle, setChartTitle] = useState<string>('');
   const [isExporting, setIsExporting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Clean up auto-close timer on unmount to prevent calling onClose
+  // after the component has been removed from the DOM. (Fix 10.5)
+  useEffect(() => () => { clearTimeout(closeTimerRef.current); }, []);
+
+  const defaultDir = settings.defaultOutputDirectory || undefined;
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -44,9 +60,12 @@ export function ExportDialog({
     try {
       let filePath: string | null = null;
 
+      const buildDefaultPath = (fileName: string) =>
+        defaultDir ? `${defaultDir}/${fileName}` : fileName;
+
       if (exportType === 'json') {
         filePath = await save({
-          defaultPath: `${projectName}.json`,
+          defaultPath: buildDefaultPath(`${projectName}.json`),
           filters: [{ name: 'JSON', extensions: ['json'] }],
         });
         if (filePath) {
@@ -58,7 +77,7 @@ export function ExportDialog({
         }
       } else if (exportType === 'dima') {
         filePath = await save({
-          defaultPath: `${projectName}.dima`,
+          defaultPath: buildDefaultPath(`${projectName}.dima`),
           filters: [{ name: 'DiMA Binary', extensions: ['dima'] }],
         });
         if (filePath) {
@@ -72,7 +91,7 @@ export function ExportDialog({
       } else if (exportType === 'chart' && chartDataUrl) {
         const ext = chartFormat;
         filePath = await save({
-          defaultPath: `${projectName}_${chartType || 'chart'}.${ext}`,
+          defaultPath: buildDefaultPath(`${projectName}_${chartType || 'chart'}.${ext}`),
           filters: [{ name: chartFormat.toUpperCase(), extensions: [ext] }],
         });
         if (filePath) {
@@ -87,7 +106,8 @@ export function ExportDialog({
 
       if (filePath) {
         setSuccess(true);
-        setTimeout(() => {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = setTimeout(() => {
           onClose();
         }, 1500);
       }
@@ -99,22 +119,20 @@ export function ExportDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-lg bg-background shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <h2 className="text-lg font-semibold">Export</h2>
-          <button onClick={onClose} className="rounded-md p-2 hover:bg-muted">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-md p-0">
+        <DialogHeader className="border-b px-6 py-4">
+          <DialogTitle>Export</DialogTitle>
+          <DialogDescription className="sr-only">
+            Export analysis results or charts to a file
+          </DialogDescription>
+        </DialogHeader>
 
-        {/* Content */}
         <div className="p-6">
           {success ? (
             <div className="flex flex-col items-center gap-4 py-8">
               <div className="rounded-full bg-green-500/10 p-4">
-                <Check className="h-12 w-12 text-green-600" />
+                <Check className="h-12 w-12 text-green-600 dark:text-green-400" />
               </div>
               <p className="text-lg font-medium">Export successful!</p>
             </div>
@@ -205,35 +223,9 @@ export function ExportDialog({
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Resolution</label>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setChartDpi(72)}
-                        className={`rounded-md px-4 py-2 text-sm ${
-                          chartDpi === 72
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted'
-                        }`}
-                      >
-                        Screen (72 DPI)
-                      </button>
-                      <button
-                        onClick={() => setChartDpi(300)}
-                        className={`rounded-md px-4 py-2 text-sm ${
-                          chartDpi === 300
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted'
-                        }`}
-                      >
-                        Print (300 DPI)
-                      </button>
-                    </div>
-                  </div>
                 </div>
               )}
 
-              {/* Error Message */}
               {error && (
                 <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
                   {error}
@@ -243,9 +235,8 @@ export function ExportDialog({
           )}
         </div>
 
-        {/* Footer */}
         {!success && (
-          <div className="flex justify-end gap-2 border-t px-6 py-4">
+          <DialogFooter className="border-t px-6 py-4">
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
@@ -257,9 +248,9 @@ export function ExportDialog({
               )}
               Export
             </Button>
-          </div>
+          </DialogFooter>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,0 +1,59 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches: [master]
+    paths: ['docs/**', 'src/lib.rs', 'CHANGELOG.md']
+  workflow_dispatch:
+  release:
+    types: [published]
+
+# Prevent concurrent deployments from racing (only latest wins)
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Generate Rust API docs
+        run: cargo doc --no-deps -p dima --locked
+
+      - name: Copy rustdoc to Starlight public/
+        run: |
+          mkdir -p docs/public/api
+          cp -r target/doc/* docs/public/api/
+
+      - name: Build and upload Starlight site
+        uses: withastro/action@v6
+        with:
+          path: docs/
+          node-version: 22
+          package-manager: pnpm@latest
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

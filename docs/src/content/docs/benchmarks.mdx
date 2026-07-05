@@ -1,0 +1,105 @@
+---
+title: Benchmarks
+description: Performance benchmark results for DiMA with various configurations on a large-scale dataset.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Test Environment
+
+| Component | Details |
+|-----------|---------|
+| **CPU** | Apple M3 Pro (11 cores) |
+| **OS** | macOS (Darwin) |
+| **Build** | Release profile (LTO, codegen-units=1, strip) |
+| **DiMA Version** | 0.1.0 |
+
+## Input Dataset
+
+| Property | Value |
+|----------|-------|
+| **File** | `allhosts_headerformatted.fasta` |
+| **File Size** | 2.9 GB |
+| **Sequence Count** | 2,293,158 |
+| **Sequence Length** | 1,295 amino acids |
+| **Sequence Type** | Protein (SARS-CoV-2 Spike protein) |
+| **K-mer Length** | 9 (default nonamer) |
+| **Support Threshold** | 100 (default) |
+| **Threads** | 11 (all CPUs) |
+
+---
+
+## Results: Without Metadata
+
+These tests analyze sequence diversity without parsing header metadata.
+
+| Config | Command | Runtime | Output Size |
+|--------|---------|---------|-------------|
+| **Baseline** | `dima analyze -i input.fasta -o out.json` | **128.34s** | 29 MB |
+| Binary (none) | `dima analyze -i input.fasta -O dima --compression 0 -o out.dima` | 135.37s | 5.5 MB |
+| Binary (LZ4) | `dima analyze -i input.fasta -O dima -o out.dima` | 136.47s | 2.8 MB |
+| Binary (Zstd) | `dima analyze -i input.fasta -O dima --compression 2 -o out.dima` | 135.11s | 2.4 MB |
+
+**Key findings:**
+- All configurations complete in ~128–136 seconds
+- Binary format reduces output size by 80–93% with negligible runtime impact
+- The performance bottleneck is computation, not I/O
+
+---
+
+## Results: With Metadata
+
+Tests include header parsing and per-variant metadata aggregation using `--header-format "date|country|host"`.
+
+| Config | Command | Runtime | Output Size |
+|--------|---------|---------|-------------|
+| **Baseline** | `dima analyze -i input.fasta -o out.json --header-format "..."` | 207.48s | 132 MB |
+| **Optimized** | Same (columnar storage automatic) | **177.71s** | 132 MB |
+| Binary (LZ4) | `dima analyze -i input.fasta -O dima -o out.dima --header-format "..."` | 178.55s | 15 MB |
+| Binary (Zstd) | `dima analyze -i input.fasta -O dima --compression 2 -o out.dima --header-format "..."` | 209.38s | 8.6 MB |
+
+**Key findings:**
+- Metadata processing adds ~39% overhead (128s → 178s with columnar optimization)
+- Columnar storage (automatic) provides 14–17% speedup for metadata workloads
+- Binary + LZ4 reduces metadata output from 132 MB to 15 MB (89% smaller)
+
+<Aside type="note">
+Columnar storage is now enabled automatically when `--header-format` is specified. No separate flag is needed.
+</Aside>
+
+---
+
+## Output Size Comparison
+
+| Format | Without Metadata | With Metadata |
+|--------|------------------|---------------|
+| **JSON** | 29 MB | 132 MB |
+| **Binary (no compression)** | 5.5 MB (81% smaller) | 48 MB (64% smaller) |
+| **Binary (LZ4)** | 2.8 MB (90% smaller) | 14 MB (89% smaller) |
+| **Binary (Zstd)** | 2.4 MB (92% smaller) | 8.6 MB (93% smaller) |
+
+---
+
+## Throughput
+
+| Configuration | Sequences/sec | K-mers/sec |
+|---------------|---------------|-------------|
+| No metadata | 17,866 | 22.98M |
+| With metadata (columnar) | 12,903 | 16.60M |
+
+Based on 2,293,158 sequences × 1,287 positions per sequence.
+
+---
+
+## Recommendations
+
+| Use Case | Recommended Command |
+|----------|---------------------|
+| **Fastest (no metadata)** | `dima analyze -i input.fasta -o out.json` |
+| **Smallest output** | `dima analyze -i input.fasta -O dima --compression 2 -o out.dima` |
+| **With metadata (fast)** | `dima analyze -i input.fasta -o out.json --header-format "..."` |
+| **With metadata (small)** | `dima analyze -i input.fasta -O dima -o out.dima --header-format "..."` |
+
+---
+
+*Benchmark conducted: January 2025 — DiMA v0.1.0*

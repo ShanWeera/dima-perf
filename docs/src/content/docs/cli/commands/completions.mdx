@@ -1,0 +1,77 @@
+---
+title: completions
+description: Generate shell completion scripts for DiMA tab-completion support.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The `completions` command generates shell-specific completion scripts that enable tab-completion for DiMA commands, options, and values.
+
+## Synopsis
+
+```bash
+dima completions <SHELL>
+```
+
+## Supported Shells
+
+| Shell | Value |
+|-------|-------|
+| Bash | `bash` |
+| Zsh | `zsh` |
+| Fish | `fish` |
+| PowerShell | `powershell` |
+| Elvish | `elvish` |
+
+## Installation
+
+<Tabs syncKey="shell">
+  <TabItem label="Bash">
+    Add to your `~/.bashrc`:
+    ```bash
+    eval "$(dima completions bash)"
+    ```
+
+    Or write to a file for faster shell startup:
+    ```bash
+    dima completions bash > /etc/bash_completion.d/dima
+    ```
+  </TabItem>
+  <TabItem label="Zsh">
+    Add to your `~/.zshrc` (ensure `~/.zfunc` is in `$fpath`):
+    ```bash
+    dima completions zsh > ~/.zfunc/_dima
+    autoload -Uz compinit && compinit
+    ```
+
+    Or source directly:
+    ```bash
+    eval "$(dima completions zsh)"
+    ```
+  </TabItem>
+  <TabItem label="Fish">
+    ```bash
+    dima completions fish > ~/.config/fish/completions/dima.fish
+    ```
+  </TabItem>
+  <TabItem label="PowerShell">
+    Add to your `$PROFILE`:
+    ```powershell
+    dima completions powershell | Out-String | Invoke-Expression
+    ```
+
+    Or append permanently:
+    ```powershell
+    dima completions powershell >> $PROFILE
+    ```
+  </TabItem>
+</Tabs>
+
+## What Gets Completed
+
+After installing completions, pressing Tab will autocomplete:
+
+- **Subcommands** — `dima a<Tab>` → `dima analyze`
+- **Options** — `dima analyze --<Tab>` → list of all flags
+- **Values** — `dima analyze --alphabet <Tab>` → `protein`, `nucleotide`
+- **Shell names** — `dima completions <Tab>` → available shells

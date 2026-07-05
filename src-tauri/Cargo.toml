@@ -11,11 +11,10 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 # Tauri core
-tauri = { version = "2", features = ["devtools"] }
-tauri-plugin-shell = "2"
+tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
-tauri-plugin-store = "2"
+tauri-plugin-single-instance = "2"
 
 # Workspace dependencies
 serde.workspace = true
@@ -26,18 +25,16 @@ tokio.workspace = true
 dima_lib = { path = "..", package = "dima" }
 
 # Async and utilities
-futures = "0.3"
-uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 directories = "5"
 thiserror = "1"
 base64 = "0.22"
-rand = "0.8"
 reqwest = { version = "0.12", features = ["json"] }
 
 # Bioinformatics
-bio = "1.4"
+bio.workspace = true
 
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+devtools = ["tauri/devtools"]

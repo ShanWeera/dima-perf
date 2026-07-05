@@ -1,13 +1,28 @@
 //! FASTA Validation Commands
 //!
 //! Commands for validating FASTA files and detecting header formats.
+//! Includes protection against symlinks, FIFOs, binary files, and excessively large files.
+//! Supports cooperative cancellation via an AtomicBool flag (Fix 4.29).
 
-use rand::seq::SliceRandom;
+use crate::error::AppError;
+use crate::state::AppState;
 use serde::Serialize;
 use std::collections::HashSet;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tauri::State;
+
+/// Maximum file size we'll validate (2 GB)
+const MAX_VALIDATE_FILE_SIZE: u64 = 2 * 1024 * 1024 * 1024;
+
+/// Maximum number of sequences to scan for validation
+const MAX_SCAN_SEQUENCES: usize = 1000;
+
+/// Maximum line length before we suspect binary content
+const MAX_LINE_LENGTH: usize = 1_000_000;
 
 /// Result of FASTA file validation
 #[derive(Debug, Serialize)]
@@ -30,13 +45,52 @@ pub struct ValidationError {
     pub line_number: Option<usize>,
 }
 
-/// Validate a FASTA file
+/// How often (in lines) to check the cancellation flag during validation.
+/// Balancing between responsiveness (lower = faster cancel) and overhead (higher = less
+/// atomic load cost). 10,000 lines keeps overhead negligible while giving sub-second
+/// cancellation on typical FASTA files.
+const CANCEL_CHECK_INTERVAL: usize = 10_000;
+
+/// Validate a FASTA file.
+/// Delegates all blocking std::fs I/O to a background thread via spawn_blocking
+/// to avoid stalling the Tokio async runtime. (Fix 4.13)
+/// Supports cooperative cancellation via the validation_cancel_flag in AppState. (Fix 4.29)
 #[tauri::command]
 pub async fn validate_fasta(
     path: String,
-    _alphabet: Option<String>, // Reserved for explicit alphabet validation
-) -> Result<FastaValidation, String> {
-    let file_path = Path::new(&path);
+    _alphabet: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<FastaValidation, AppError> {
+    // Reset the cancel flag at the start of each new validation so a stale `true`
+    // from a prior cancelled run doesn't immediately abort this one.
+    state.reset_validation_cancel();
+    let cancel_flag = state.validation_cancel_flag.clone();
+
+    tokio::task::spawn_blocking(move || validate_fasta_blocking(&path, &cancel_flag))
+        .await
+        .map_err(|e| AppError::InternalError(format!("Validation task failed: {}", e)))?
+}
+
+/// Cancel the current validation task (if running). (Fix 4.29)
+/// The frontend calls this when the user selects a different file or navigates away,
+/// preventing wasted CPU/IO on abandoned validation of large files.
+#[tauri::command]
+pub async fn cancel_validation(state: State<'_, AppState>) -> Result<(), AppError> {
+    state.request_validation_cancel();
+    Ok(())
+}
+
+/// Test-accessible wrapper that validates without a cancel flag (uses a no-op flag).
+/// Allows integration tests to exercise the full validation logic without needing
+/// a Tauri `State<AppState>` injection.
+#[cfg(test)]
+pub fn validate_fasta_blocking_public(path: &str) -> Result<FastaValidation, AppError> {
+    let no_cancel = Arc::new(AtomicBool::new(false));
+    validate_fasta_blocking(path, &no_cancel)
+}
+
+fn validate_fasta_blocking(path: &str, cancel_flag: &Arc<AtomicBool>) -> Result<FastaValidation, AppError> {
+    let file_path = Path::new(path);
 
     if !file_path.exists() {
         return Ok(FastaValidation {
@@ -47,7 +101,7 @@ pub async fn validate_fasta(
             detected_alphabet: "unknown".to_string(),
             errors: vec![ValidationError {
                 error_type: "file_not_found".to_string(),
-                message: format!("File not found: {}", path),
+                message: format!("File not found: {}", file_path.display()),
                 line_number: None,
             }],
             file_size_bytes: 0,
@@ -55,57 +109,273 @@ pub async fn validate_fasta(
         });
     }
 
-    // Get file size and modification time
-    let metadata = std::fs::metadata(file_path).map_err(|e| e.to_string())?;
-    let file_size_bytes = metadata.len();
-    let file_modified_at = metadata
-        .modified()
-        .ok()
-        .and_then(|t| {
-            use chrono::{DateTime, Utc};
-            let datetime: DateTime<Utc> = t.into();
-            Some(datetime.to_rfc3339())
+    // Security: check that target is a regular file (not symlink to device, FIFO, etc.)
+    let metadata = fs::metadata(file_path)?;
+    if !metadata.is_file() {
+        return Ok(FastaValidation {
+            is_valid: false,
+            sequence_count: 0,
+            sequence_length: None,
+            sample_headers: vec![],
+            detected_alphabet: "unknown".to_string(),
+            errors: vec![ValidationError {
+                error_type: "not_regular_file".to_string(),
+                message: "Path does not point to a regular file".to_string(),
+                line_number: None,
+            }],
+            file_size_bytes: 0,
+            file_modified_at: None,
         });
+    }
 
-    // Open file
-    let file = File::open(file_path).map_err(|e| e.to_string())?;
-    let reader = BufReader::new(file);
+    let file_size_bytes = metadata.len();
+
+    if file_size_bytes > MAX_VALIDATE_FILE_SIZE {
+        return Ok(FastaValidation {
+            is_valid: false,
+            sequence_count: 0,
+            sequence_length: None,
+            sample_headers: vec![],
+            detected_alphabet: "unknown".to_string(),
+            errors: vec![ValidationError {
+                error_type: "file_too_large".to_string(),
+                message: format!("File exceeds maximum size ({} GB limit)", MAX_VALIDATE_FILE_SIZE / (1024 * 1024 * 1024)),
+                line_number: None,
+            }],
+            file_size_bytes,
+            file_modified_at: None,
+        });
+    }
+
+    let file_modified_at = crate::project::file_mtime_fingerprint(&metadata);
+
+    // Open file and handle BOM
+    let file = File::open(file_path)?;
+    let mut reader = BufReader::new(file);
+
+    // Check for and skip UTF-8 BOM (EF BB BF)
+    let mut bom_buf = [0u8; 3];
+    let bom_read = reader.read(&mut bom_buf)?;
+    let has_bom = bom_read == 3 && bom_buf == [0xEF, 0xBB, 0xBF];
+    if !has_bom && bom_read > 0 {
+        // Not BOM — need to re-open to not lose these bytes
+        drop(reader);
+        let file = File::open(file_path)?;
+        reader = BufReader::new(file);
+    }
+
+    // Check first bytes for binary content (null bytes indicate non-text)
+    let first_check: Vec<u8> = if has_bom {
+        let mut buf = vec![0u8; 512];
+        let n = reader.read(&mut buf)?;
+        buf.truncate(n);
+        // Re-open after BOM skip
+        drop(reader);
+        let file = File::open(file_path)?;
+        reader = BufReader::new(file);
+        // Skip BOM again
+        let mut skip = [0u8; 3];
+        let _ = reader.read(&mut skip);
+        buf
+    } else {
+        // No BOM detected — read first 512 bytes from a temporary reader, then
+        // re-open from the start for full parsing (no BOM bytes to skip).
+        drop(reader);
+        let file = File::open(file_path)?;
+        let mut temp_reader = BufReader::new(file);
+        let mut buf = vec![0u8; 512];
+        let n = temp_reader.read(&mut buf)?;
+        buf.truncate(n);
+        drop(temp_reader);
+        let file = File::open(file_path)?;
+        reader = BufReader::new(file);
+        buf
+    };
+
+    if first_check.contains(&0) {
+        return Ok(FastaValidation {
+            is_valid: false,
+            sequence_count: 0,
+            sequence_length: None,
+            sample_headers: vec![],
+            detected_alphabet: "unknown".to_string(),
+            errors: vec![ValidationError {
+                error_type: "binary_file".to_string(),
+                message: "File appears to be binary (contains null bytes). FASTA files must be plain text.".to_string(),
+                line_number: None,
+            }],
+            file_size_bytes,
+            file_modified_at: file_modified_at.clone(),
+        });
+    }
 
     let mut headers: Vec<String> = Vec::new();
     let mut sequences: Vec<String> = Vec::new();
     let mut current_sequence = String::new();
-    let mut _line_number = 0; // Tracked for potential future error context
+    let mut line_number: usize = 0;
     let mut errors: Vec<ValidationError> = Vec::new();
+    let mut found_header = false;
 
-    for line_result in reader.lines() {
-        _line_number += 1;
-        let line = line_result.map_err(|e| e.to_string())?;
+    // Use an explicit iterator so we can resume reading from the same position
+    // after the sampling loop breaks (for the streaming length-check pass).
+    let mut lines = reader.lines();
+
+    for line_result in lines.by_ref() {
+        line_number += 1;
+
+        // Cooperative cancellation check every CANCEL_CHECK_INTERVAL lines (Fix 4.29).
+        // Avoids per-line atomic load overhead while keeping cancel latency under ~100ms
+        // for typical line lengths.
+        if line_number % CANCEL_CHECK_INTERVAL == 0 && cancel_flag.load(Ordering::Relaxed) {
+            return Err(AppError::Cancelled("Validation cancelled".to_string()));
+        }
+
+        let line = match line_result {
+            Ok(l) => l,
+            Err(e) => {
+                errors.push(ValidationError {
+                    error_type: "read_error".to_string(),
+                    message: format!("Failed to read line: {}", e),
+                    line_number: Some(line_number),
+                });
+                break;
+            }
+        };
+
+        // Guard against excessively long lines (likely binary)
+        if line.len() > MAX_LINE_LENGTH {
+            errors.push(ValidationError {
+                error_type: "line_too_long".to_string(),
+                message: format!("Line exceeds {} characters — file may be binary or corrupt", MAX_LINE_LENGTH),
+                line_number: Some(line_number),
+            });
+            break;
+        }
+
         let trimmed = line.trim();
 
         if trimmed.is_empty() {
             continue;
         }
 
-        if trimmed.starts_with('>') {
-            // Save previous sequence if exists
-            if !current_sequence.is_empty() {
-                sequences.push(current_sequence.clone());
-                current_sequence.clear();
-            }
-            headers.push(trimmed[1..].to_string());
-        } else {
-            current_sequence.push_str(trimmed);
+        // Skip comment lines (semicolons)
+        if trimmed.starts_with(';') {
+            continue;
         }
 
-        // Limit scanning for very large files
-        if sequences.len() >= 1000 {
+        if let Some(header_content) = trimmed.strip_prefix('>') {
+            found_header = true;
+            // Save previous sequence if exists (take avoids clone + clear overhead)
+            if !current_sequence.is_empty() {
+                sequences.push(std::mem::take(&mut current_sequence));
+            } else if !headers.is_empty() {
+                // Empty sequence between consecutive headers (previous header had no sequence data).
+                // Check !headers.is_empty() (not > 1) because the first push hasn't happened yet.
+                errors.push(ValidationError {
+                    error_type: "empty_sequence".to_string(),
+                    message: format!("Empty sequence for header at line {}", line_number - 1),
+                    line_number: Some(line_number - 1),
+                });
+            }
+            headers.push(header_content.to_string());
+        } else {
+            // Cap sequence accumulation at 100MB to prevent OOM from single-record
+            // FASTA files (entire file in one String). Only the first portion is needed
+            // for alphabet detection; the total length is tracked for MSA validation.
+            const MAX_SEQUENCE_ACCUMULATE: usize = 100 * 1024 * 1024;
+            if current_sequence.len() < MAX_SEQUENCE_ACCUMULATE {
+                current_sequence.push_str(trimmed);
+            }
+        }
+
+        // After collecting enough sequences for alphabet detection, switch to
+        // length-only streaming to check MSA alignment across ALL sequences.
+        // This eliminates the blind spot where sequences after MAX_SCAN_SEQUENCES
+        // could have different lengths without being caught.
+        if sequences.len() >= MAX_SCAN_SEQUENCES {
             break;
         }
     }
 
     // Don't forget the last sequence
     if !current_sequence.is_empty() {
-        sequences.push(current_sequence);
+        sequences.push(std::mem::take(&mut current_sequence));
+    }
+
+    // Continue reading the rest of the file in streaming mode (length-only)
+    // to catch MSA length mismatches beyond the sampling window. Only tracks
+    // sequence length without storing content — O(1) memory per sequence.
+    let expected_length = sequences.first().map(|s| s.len());
+    let mut total_sequences_scanned = sequences.len();
+    let mut streaming_length_mismatches: Vec<(usize, usize, usize)> = Vec::new();
+
+    if sequences.len() >= MAX_SCAN_SEQUENCES {
+        let mut tail_seq_len: usize = 0;
+        let mut in_sequence = !current_sequence.is_empty();
+        let mut streaming_line_count: usize = 0;
+
+        for line_result in lines {
+            streaming_line_count += 1;
+
+            // Cancellation check during the streaming tail pass (Fix 4.29)
+            if streaming_line_count % CANCEL_CHECK_INTERVAL == 0 && cancel_flag.load(Ordering::Relaxed) {
+                return Err(AppError::Cancelled("Validation cancelled".to_string()));
+            }
+
+            let line = match line_result {
+                Ok(l) => l,
+                Err(_) => break,
+            };
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with(';') {
+                continue;
+            }
+            if trimmed.starts_with('>') {
+                if in_sequence && tail_seq_len > 0 {
+                    total_sequences_scanned += 1;
+                    if let Some(expected) = expected_length {
+                        if tail_seq_len != expected && streaming_length_mismatches.len() < 5 {
+                            streaming_length_mismatches.push((
+                                total_sequences_scanned, tail_seq_len, expected
+                            ));
+                        }
+                    }
+                }
+                tail_seq_len = 0;
+                in_sequence = true;
+            } else {
+                tail_seq_len += trimmed.len();
+            }
+        }
+        // Final trailing sequence
+        if in_sequence && tail_seq_len > 0 {
+            total_sequences_scanned += 1;
+            if let Some(expected) = expected_length {
+                if tail_seq_len != expected && streaming_length_mismatches.len() < 5 {
+                    streaming_length_mismatches.push((
+                        total_sequences_scanned, tail_seq_len, expected
+                    ));
+                }
+            }
+        }
+    }
+
+    // Validate we have at least one header line (prevents accepting non-FASTA text)
+    if !found_header {
+        return Ok(FastaValidation {
+            is_valid: false,
+            sequence_count: 0,
+            sequence_length: None,
+            sample_headers: vec![],
+            detected_alphabet: "unknown".to_string(),
+            errors: vec![ValidationError {
+                error_type: "no_headers".to_string(),
+                message: "No FASTA header lines found (lines starting with '>'). This does not appear to be a FASTA file.".to_string(),
+                line_number: None,
+            }],
+            file_size_bytes,
+            file_modified_at: file_modified_at.clone(),
+        });
     }
 
     // Validate we have sequences
@@ -126,40 +396,38 @@ pub async fn validate_fasta(
         });
     }
 
-    // Sample sequences for validation (first 10 + 90 random)
-    let mut sample_indices: Vec<usize> = (0..sequences.len().min(10)).collect();
-    if sequences.len() > 10 {
-        let remaining: Vec<usize> = (10..sequences.len()).collect();
-        let mut rng = rand::thread_rng();
-        let additional: Vec<usize> = remaining
-            .choose_multiple(&mut rng, 90.min(remaining.len()))
-            .cloned()
-            .collect();
-        sample_indices.extend(additional);
-    }
-
-    // Check sequence lengths (MSA validation)
+    // Check sequence lengths (MSA validation — all must be equal)
     let first_length = sequences.first().map(|s| s.len());
     let mut length_mismatches: Vec<(usize, usize, usize)> = Vec::new();
 
-    for &idx in &sample_indices {
-        if let Some(seq) = sequences.get(idx) {
-            if let Some(expected) = first_length {
-                if seq.len() != expected {
-                    length_mismatches.push((idx + 1, seq.len(), expected));
-                }
+    for (idx, seq) in sequences.iter().enumerate() {
+        if let Some(expected) = first_length {
+            if seq.len() != expected {
+                length_mismatches.push((idx + 1, seq.len(), expected));
             }
         }
     }
 
-    // Add length mismatch errors
-    for (seq_num, actual, expected) in length_mismatches.iter().take(5) {
+    // Merge mismatches from both the sampled window and streaming tail
+    let all_mismatches: Vec<(usize, usize, usize)> = length_mismatches
+        .into_iter()
+        .chain(streaming_length_mismatches)
+        .collect();
+
+    for (seq_num, actual, expected) in all_mismatches.iter().take(5) {
         errors.push(ValidationError {
             error_type: "length_mismatch".to_string(),
             message: format!(
-                "Sequence {} has length {}, expected {}",
+                "Sequence {} has length {}, expected {} (all sequences in an MSA must be equal length)",
                 seq_num, actual, expected
             ),
+            line_number: None,
+        });
+    }
+    if all_mismatches.len() > 5 {
+        errors.push(ValidationError {
+            error_type: "length_mismatch".to_string(),
+            message: format!("...and {} more length mismatches", all_mismatches.len() - 5),
             line_number: None,
         });
     }
@@ -170,13 +438,24 @@ pub async fn validate_fasta(
     // Get sample headers (first 3)
     let sample_headers: Vec<String> = headers.iter().take(3).cloned().collect();
 
-    // Estimate total sequence count from file size
-    let avg_seq_length = first_length.unwrap_or(1000);
-    let avg_header_length = 50;
-    let estimated_total = if sequences.len() >= 1000 {
-        // Extrapolate from file size
-        let bytes_per_seq = avg_seq_length + avg_header_length + 2; // +2 for newlines
-        (file_size_bytes as usize / bytes_per_seq).max(sequences.len())
+    // If we streamed through the whole file, we have an exact count.
+    // Otherwise (file small enough to fully scan), use the sampled count.
+    let estimated_total = if total_sequences_scanned > sequences.len() {
+        total_sequences_scanned
+    } else if sequences.len() >= MAX_SCAN_SEQUENCES {
+        // Fallback: estimate from file size if streaming didn't run (shouldn't happen)
+        let sample_count = sequences.len().min(headers.len());
+        let scanned_bytes: u64 = sequences.iter()
+            .zip(headers.iter())
+            .take(sample_count)
+            .map(|(seq, hdr)| (seq.len() + hdr.len() + 3) as u64)
+            .sum();
+        let avg_bytes_per_seq = scanned_bytes / (sample_count as u64).max(1);
+        if avg_bytes_per_seq > 0 {
+            (file_size_bytes / avg_bytes_per_seq) as usize
+        } else {
+            sequences.len()
+        }
     } else {
         sequences.len()
     };
@@ -195,25 +474,44 @@ pub async fn validate_fasta(
     })
 }
 
-/// Detect whether sequences are protein or nucleotide
+/// Detect whether sequences are protein or nucleotide.
+///
+/// Strategy: if exclusive protein letters (those that NEVER appear in nucleotide
+/// sequences) are present at > 1% frequency, classify as protein regardless of
+/// nucleotide ratio. This prevents misclassifying protein MSAs rich in Ala/Gly/Thr/Cys
+/// which share letters with DNA (A, G, T, C). IUPAC ambiguity codes are included
+/// in the extended nucleotide set for accurate detection of ambiguous DNA/RNA MSAs.
 fn detect_alphabet(sequences: &[String]) -> String {
-    let nucleotides: HashSet<char> = "ACGTUN".chars().collect();
-    let mut nucleotide_count = 0;
-    let mut total_count = 0;
+    // Extended nucleotide character set (includes IUPAC ambiguity codes)
+    let nucleotides: HashSet<char> = "ACGTUNRYSWKMBDHV".chars().collect();
+    // Letters that appear ONLY in protein sequences — never in nucleotide
+    let exclusive_protein: HashSet<char> = "EFIJLPQXZ".chars().collect();
+
+    let mut nucleotide_count: usize = 0;
+    let mut exclusive_protein_count: usize = 0;
+    let mut total_count: usize = 0;
 
     for seq in sequences.iter().take(10) {
         for c in seq.to_uppercase().chars() {
-            if c != '-' && c != '*' {
-                total_count += 1;
-                if nucleotides.contains(&c) {
-                    nucleotide_count += 1;
-                }
+            if c == '-' || c == '.' || c == '*' { continue; }
+            total_count += 1;
+            if nucleotides.contains(&c) {
+                nucleotide_count += 1;
+            }
+            if exclusive_protein.contains(&c) {
+                exclusive_protein_count += 1;
             }
         }
     }
 
     if total_count == 0 {
         return "unknown".to_string();
+    }
+
+    // If exclusive protein letters are present at > 1%, it's definitely protein
+    let exclusive_protein_ratio = exclusive_protein_count as f64 / total_count as f64;
+    if exclusive_protein_ratio > 0.01 {
+        return "protein".to_string();
     }
 
     let nucleotide_ratio = nucleotide_count as f64 / total_count as f64;
@@ -241,19 +539,54 @@ pub struct ParsedHeader {
     pub fields: Vec<String>,
 }
 
-/// Detect header format from sample headers
+/// Detect header format from sample headers.
+/// Runs on a blocking thread and applies the same security checks as validate_fasta. (Fix 4.40)
 #[tauri::command]
-pub async fn detect_header_format(path: String) -> Result<HeaderFormatDetection, String> {
-    // Read first few headers
-    let file = File::open(&path).map_err(|e| e.to_string())?;
-    let reader = BufReader::new(file);
+pub async fn detect_header_format(path: String) -> Result<HeaderFormatDetection, AppError> {
+    tokio::task::spawn_blocking(move || detect_header_format_blocking(&path))
+        .await
+        .map_err(|e| AppError::InternalError(format!("Header detection task failed: {}", e)))?
+}
+
+fn detect_header_format_blocking(path: &str) -> Result<HeaderFormatDetection, AppError> {
+    let file_path = Path::new(path);
+
+    if !file_path.exists() {
+        return Err(AppError::NotFound("File not found".to_string()));
+    }
+
+    let meta = fs::metadata(file_path)?;
+    if !meta.is_file() {
+        return Err(AppError::ValidationError("Path does not point to a regular file".to_string()));
+    }
+
+    // Apply the same size cap as validate_fasta to prevent resource exhaustion
+    if meta.len() > MAX_VALIDATE_FILE_SIZE {
+        return Err(AppError::ValidationError(format!(
+            "File exceeds maximum size ({} GB limit)",
+            MAX_VALIDATE_FILE_SIZE / (1024 * 1024 * 1024)
+        )));
+    }
+
+    let file = File::open(file_path)?;
+    let mut reader = BufReader::new(file);
+
+    // Skip BOM if present
+    let mut bom_buf = [0u8; 3];
+    let bom_read = reader.read(&mut bom_buf).unwrap_or(0);
+    if !(bom_read == 3 && bom_buf == [0xEF, 0xBB, 0xBF]) {
+        // Not BOM — re-open
+        drop(reader);
+        let file = File::open(file_path)?;
+        reader = BufReader::new(file);
+    }
 
     let mut headers: Vec<String> = Vec::new();
     for line_result in reader.lines() {
-        let line = line_result.map_err(|e| e.to_string())?;
+        let line = line_result?;
         let trimmed = line.trim();
-        if trimmed.starts_with('>') {
-            headers.push(trimmed[1..].to_string());
+        if let Some(header_content) = trimmed.strip_prefix('>') {
+            headers.push(header_content.to_string());
             if headers.len() >= 5 {
                 break;
             }
@@ -277,11 +610,9 @@ pub async fn detect_header_format(path: String) -> Result<HeaderFormatDetection,
 
     for delimiter in delimiters {
         let counts: Vec<usize> = headers.iter().map(|h| h.split(delimiter).count()).collect();
-        if counts.iter().all(|&c| c == counts[0]) && counts[0] > 1 {
-            if counts[0] > best_field_count {
-                best_field_count = counts[0];
-                best_delimiter = Some(delimiter);
-            }
+        if counts.iter().all(|&c| c == counts[0]) && counts[0] > 1 && counts[0] > best_field_count {
+            best_field_count = counts[0];
+            best_delimiter = Some(delimiter);
         }
     }
 
@@ -314,7 +645,6 @@ pub async fn detect_header_format(path: String) -> Result<HeaderFormatDetection,
         (None, parsed)
     };
 
-    // Suggest common field names
     let suggested_fields = vec![
         "accession".to_string(),
         "country".to_string(),

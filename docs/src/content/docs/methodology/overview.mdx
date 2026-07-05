@@ -1,0 +1,58 @@
+---
+title: Methodology Overview
+description: Scientific methodology behind DiMA's diversity analysis — entropy, motifs, and support classification.
+---
+
+import { Aside, LinkCard } from '@astrojs/starlight/components';
+
+DiMA implements the sequence diversity dynamics analysis methodology described in:
+
+> Tharanga S, Ünlü ES, Hu Y, et al. "DiMA: sequence diversity dynamics analyser for viruses." *Briefings in Bioinformatics*, 2025;26(1):bbae607. DOI: [10.1093/bib/bbae607](https://doi.org/10.1093/bib/bbae607) (PMC11596295)
+
+## Conceptual Overview
+
+DiMA provides a quantitative framework for analyzing viral sequence diversity using three core components:
+
+1. **Shannon's Entropy** — A measure of disorder/diversity at each k-mer alignment position, corrected for sample size bias
+2. **Diversity Motifs** — Classification of distinct sequences into Index, Major, Minor, and Unique categories based on incidence
+3. **Highly Conserved Sequences** — Identification and concatenation of conserved regions based on index incidence thresholds
+
+## Workflow
+
+```
+Input (aligned FASTA)
+    ↓
+K-mer extraction (sliding window of size k)
+    ↓
+Per-position analysis:
+    ├── Shannon's entropy (corrected for size bias)
+    ├── Diversity motif classification
+    └── Metadata aggregation (optional)
+    ↓
+Output (JSON / TSV / JSONL / binary)
+    ↓
+HCS extraction (optional, threshold-based)
+```
+
+## Input Requirements
+
+- **Multiple Sequence Alignment (MSA)** in FASTA format
+- All sequences must be the same length (aligned)
+- Supports both protein (20 amino acids) and nucleotide (ACGTU) sequences
+- K-mers containing gaps (`-`) or ambiguous characters are excluded from computation
+
+## K-mer Sliding Window
+
+DiMA analyzes diversity using overlapping subsequences of length k (k-mers), extracted via a sliding window:
+
+- For a sequence of length L, this produces L − k + 1 overlapping k-mers
+- Each k-mer position is analyzed independently across all sequences
+- Default window sizes: k=9 for protein (nonamer), k=27 for nucleotide (9 codons)
+
+The k-mer approach captures local sequence neighborhood effects that single-position (1-mer) analysis would miss — critical for understanding functional motifs and epitope-level diversity.
+
+## Further Reading
+
+<LinkCard title="Shannon Entropy" href="/dima-perf/methodology/shannon-entropy/" description="Entropy formula, bias correction, and rarefaction algorithm" />
+<LinkCard title="Diversity Motifs" href="/dima-perf/methodology/diversity-motifs/" description="Index, Major, Minor, and Unique variant classification" />
+<LinkCard title="Support Threshold" href="/dima-perf/methodology/support-threshold/" description="Low support handling, NS/LS/ELS labels, and extrapolation" />

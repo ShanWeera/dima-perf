@@ -1,16 +1,16 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "DiMA-Desktop",
-  "version": "0.1.0",
   "identifier": "com.dima.desktop",
   "build": {
     "beforeDevCommand": { "script": "npm run dev", "cwd": "../ui" },
     "devUrl": "http://localhost:5173",
     "beforeBuildCommand": { "script": "npm run build", "cwd": "../ui" },
-    "frontendDist": "../ui/dist"
+    "frontendDist": "../ui/dist",
+    "features": []
   },
   "app": {
-    "withGlobalTauri": true,
+    "withGlobalTauri": false,
     "windows": [
       {
         "title": "DiMA Desktop",
@@ -25,7 +25,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://files.rcsb.org https://www.ebi.ac.uk; connect-src 'self' https://files.rcsb.org https://www.ebi.ac.uk https://rest.uniprot.org ipc: http://ipc.localhost; font-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none'"
     }
   },
   "bundle": {
@@ -36,7 +36,8 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
-      "icons/icon.ico"
+      "icons/icon.ico",
+      "icons/icon.png"
     ],
     "resources": [],
     "fileAssociations": [
@@ -63,9 +64,5 @@
       "timestampUrl": ""
     }
   },
-  "plugins": {
-    "shell": {
-      "open": true
-    }
-  }
+  "plugins": {}
 }

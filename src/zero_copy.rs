@@ -1,33 +1,60 @@
-/// Zero-Copy Header Processing Module
-/// 
-/// This module provides production-grade zero-copy optimizations for header parsing
-/// and metadata processing. It eliminates unnecessary string allocations while maintaining
-/// full compatibility with existing APIs and output structures.
-/// 
-/// Performance characteristics:
-/// - 20-40% memory reduction through zero-copy operations
-/// - 15-25% speed improvement from reduced allocations
-/// - String interning for common header field names (40-60% memory savings)
-/// - Cow<str> for conditional ownership and minimal cloning
-/// - Memory-mapped header parsing with direct buffer access
+//! # Header Parsing Module
+//!
+//! Provides SIMD-accelerated pipe-delimited header field extraction with
+//! string interning for repeated values. Uses `wide` crate for portable
+//! 128-bit SIMD on x86_64 and aarch64, with automatic scalar fallback.
+//!
+//! ## Production entry point
+//!
+//! `parse_header_zero_copy` (called from `io.rs::parse_header_internal`) is
+//! the sole production entry point. All other public functions are test utilities.
+#![allow(dead_code)]
 
 use hashbrown::HashMap;
 use std::collections::BTreeMap;
-use std::sync::Arc;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use crate::simd_string::{SimdDelimiterParser, SimdStringTrimmer};
 
-/// String interning system for common header field names and values
+/// Strip invisible Unicode characters (zero-width joiners, format chars, BOM, etc.)
+/// that would cause visually-identical metadata values to hash to different buckets.
+/// Keeps only printable content that users can actually see and distinguish.
+#[inline]
+fn strip_invisible_unicode(s: &str) -> String {
+    s.chars()
+        .filter(|c| {
+            // Keep ASCII printable, keep normal Unicode letters/digits/punctuation/whitespace
+            // Strip: Category Cf (format), Cc (control except newline/tab already handled),
+            //        zero-width spaces (U+200B..U+200F, U+2028..U+202F, U+2060..U+206F, U+FEFF)
+            !matches!(*c,
+                '\u{200B}'..='\u{200F}' |
+                '\u{2028}'..='\u{202F}' |
+                '\u{2060}'..='\u{206F}' |
+                '\u{FEFF}' |
+                '\u{00AD}' // soft hyphen
+            ) && !c.is_control()
+        })
+        .collect()
+}
+
+/// String interning system for common header field names and values.
 /// 
-/// This provides significant memory savings when processing many sequences
-/// with repetitive header field names and common metadata values.
+/// String interner for deduplicating metadata values.
+/// Provides memory savings when processing many sequences with repetitive
+/// header field names and common metadata values. Uses `RwLock` because
+/// `ColumnarMetadata` embeds an `Arc<StringInterner>` shared across Rayon
+/// worker threads (which requires `Sync`). During parallel entropy/analysis
+/// the interner is only read (all writes happen during the sequential I/O phase).
 #[derive(Debug)]
 pub struct StringInterner {
-    // Use Arc<str> for shared ownership of interned strings
     strings: RwLock<BTreeMap<String, Arc<str>>>,
-    // Cache for frequently used strings
     common_fields: HashMap<&'static str, Arc<str>>,
+}
+
+impl Default for StringInterner {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl StringInterner {
@@ -54,26 +81,37 @@ impl StringInterner {
         }
     }
     
-    /// Intern a string, returning an Arc<str> for shared ownership
+    /// Intern a string, returning an `Arc<str>` for shared ownership.
+    ///
+    /// Once the interner reaches MAX_INTERN_CAPACITY, new unique strings
+    /// are returned as fresh `Arc<str>` without caching — preventing unbounded
+    /// memory growth from diverse short values (e.g., k-mer-like tokens).
     pub fn intern(&self, s: &str) -> Arc<str> {
-        // Check common fields first (fastest path)
+        const MAX_INTERN_CAPACITY: usize = 10_000;
+
+        // Fast path: check pre-interned common fields (no lock needed)
         if let Some(arc_str) = self.common_fields.get(s) {
             return Arc::clone(arc_str);
         }
-        
-        // Check if already interned
+
+        // Check if already interned (read lock — uncontended on thread-local path)
         {
-            let strings = self.strings.read().unwrap();
+            let strings = self.strings.read().unwrap_or_else(|p| p.into_inner());
             if let Some(arc_str) = strings.get(s) {
                 return Arc::clone(arc_str);
             }
+            if strings.len() >= MAX_INTERN_CAPACITY {
+                return Arc::from(s);
+            }
         }
-        
-        // Intern new string
-        let mut strings = self.strings.write().unwrap();
-        // Double-check in case another thread added it
+
+        // Intern new string (write lock)
+        let mut strings = self.strings.write().unwrap_or_else(|p| p.into_inner());
+        // Double-check after acquiring write lock
         if let Some(arc_str) = strings.get(s) {
             Arc::clone(arc_str)
+        } else if strings.len() >= MAX_INTERN_CAPACITY {
+            Arc::from(s)
         } else {
             let arc_str: Arc<str> = Arc::from(s);
             strings.insert(s.to_string(), Arc::clone(&arc_str));
@@ -83,7 +121,7 @@ impl StringInterner {
     
     /// Get statistics about interned strings
     pub fn stats(&self) -> (usize, usize) {
-        let strings = self.strings.read().unwrap();
+        let strings = self.strings.read().unwrap_or_else(|p| p.into_inner());
         (self.common_fields.len(), strings.len())
     }
 }
@@ -104,6 +142,12 @@ pub enum HeaderComponent<'a> {
     Interned(Arc<str>),
 }
 
+impl<'a> std::fmt::Display for HeaderComponent<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 impl<'a> HeaderComponent<'a> {
     /// Get the string value, regardless of storage type
     pub fn as_str(&self) -> &str {
@@ -115,12 +159,8 @@ impl<'a> HeaderComponent<'a> {
     }
     
     /// Convert to owned String (for HashMap compatibility)
-    pub fn to_string(&self) -> String {
-        match self {
-            HeaderComponent::Borrowed(s) => s.to_string(),
-            HeaderComponent::Owned(s) => s.clone(),
-            HeaderComponent::Interned(s) => s.to_string(),
-        }
+    pub fn to_owned_string(&self) -> String {
+        self.as_str().to_owned()
     }
     
     /// Create from borrowed string slice
@@ -146,6 +186,12 @@ pub struct ZeroCopyHeaderParser {
     string_trimmer: SimdStringTrimmer,
 }
 
+impl Default for ZeroCopyHeaderParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ZeroCopyHeaderParser {
     pub fn new() -> Self {
         Self {
@@ -160,16 +206,33 @@ impl ZeroCopyHeaderParser {
     /// - Using string slices where possible (zero-copy)
     /// - Interning common field names and values
     /// - Only allocating when necessary (trimming, concatenation)
-    pub fn parse_zero_copy<'a>(
+    pub fn parse_zero_copy(
         &self,
-        header: &'a str,
+        header: &str,
         format: &[String],
         fill_na: &str,
     ) -> Result<HashMap<String, String>, String> {
+        const MAX_HEADER_LENGTH: usize = 1_000_000; // 1 MB
+        const MAX_DELIMITER_COUNT: usize = 1_000;
+
+        if header.len() > MAX_HEADER_LENGTH {
+            return Err(format!(
+                "Header exceeds maximum length ({} > {} bytes)",
+                header.len(), MAX_HEADER_LENGTH
+            ));
+        }
+
         let header_bytes = header.as_bytes();
         
         // Use SIMD-accelerated delimiter detection
         let delimiter_positions = self.delimiter_parser.find_pipe_delimiters(header_bytes);
+
+        if delimiter_positions.len() > MAX_DELIMITER_COUNT {
+            return Err(format!(
+                "Header has too many delimiters ({} > {} max)",
+                delimiter_positions.len(), MAX_DELIMITER_COUNT
+            ));
+        }
         
         // Pre-allocate components vector
         let mut components = Vec::with_capacity(delimiter_positions.len() + 1);
@@ -182,8 +245,8 @@ impl ZeroCopyHeaderParser {
             start = pos + 1;
         }
         
-        // Handle the last component
-        if start < header.len() {
+        // Handle the last component (use <= to match standard split behavior with trailing delimiters)
+        if start <= header.len() {
             let component = self.extract_component(header, start, header.len(), fill_na);
             components.push(component);
         }
@@ -205,17 +268,14 @@ impl ZeroCopyHeaderParser {
             ));
         }
         
-        // Build result HashMap with optimized allocations
+        // Build result HashMap with optimized allocations.
+        // Values are sanitized to strip invisible Unicode (zero-width spaces, format chars)
+        // that would create visually-identical-but-distinct metadata buckets in charts.
         let mut result = HashMap::with_capacity(format.len());
         for (idx, format_field) in format.iter().enumerate() {
-            // Intern common field names to reduce memory usage
-            let key = if self.is_common_field_name(format_field) {
-                format_field.clone() // Already interned in format
-            } else {
-                format_field.clone()
-            };
-            
-            let value = components[idx].to_string();
+            let key = format_field.clone();
+            let raw_value = components[idx].to_string();
+            let value = strip_invisible_unicode(&raw_value);
             result.insert(key, value);
         }
         
@@ -271,16 +331,6 @@ impl ZeroCopyHeaderParser {
         }
     }
     
-    /// Check if a field name is commonly used (for interning)
-    fn is_common_field_name(&self, field: &str) -> bool {
-        matches!(field, 
-            "sample_id" | "condition" | "replicate" | "treatment" | "timepoint" |
-            "batch" | "experiment" | "group" | "subject" | "tissue" | "cell_type" |
-            "protocol" | "platform" | "run_id" | "lane" | "barcode" | "index" |
-            "organism" | "strain" | "genotype" | "phenotype" | "age" | "sex"
-        )
-    }
-    
     /// Check if a value is commonly used (for interning)
     fn is_common_value(&self, value: &str) -> bool {
         matches!(value,
@@ -290,82 +340,32 @@ impl ZeroCopyHeaderParser {
     }
 }
 
-/// Memory-mapped zero-copy header processing
-/// 
-/// This processes headers directly from memory-mapped file buffers,
-/// eliminating intermediate string allocations where possible.
-pub struct MemoryMappedHeaderProcessor {
-    parser: ZeroCopyHeaderParser,
-}
-
-impl MemoryMappedHeaderProcessor {
-    pub fn new() -> Self {
-        Self {
-            parser: ZeroCopyHeaderParser::new(),
-        }
-    }
-    
-    /// Process header directly from memory-mapped buffer
-    pub fn process_from_buffer(
-        &self,
-        buffer: &[u8],
-        format: &[String],
-        fill_na: &str,
-    ) -> Result<HashMap<String, String>, String> {
-        // Convert buffer to string slice (zero-copy if valid UTF-8)
-        let header_str = std::str::from_utf8(buffer)
-            .map_err(|e| format!("Invalid UTF-8 in header: {}", e))?;
-        
-        self.parser.parse_zero_copy(header_str, format, fill_na)
-    }
-    
-    /// Batch process multiple headers from memory-mapped buffers
-    pub fn process_batch_from_buffers(
-        &self,
-        buffers: &[&[u8]],
-        format: &[String],
-        fill_na: &str,
-    ) -> Vec<Result<HashMap<String, String>, String>> {
-        buffers
-            .iter()
-            .map(|buffer| self.process_from_buffer(buffer, format, fill_na))
-            .collect()
-    }
-}
-
 // Thread-local zero-copy parser for optimal performance
 thread_local! {
     static ZERO_COPY_PARSER: ZeroCopyHeaderParser = ZeroCopyHeaderParser::new();
-    static MMAP_PROCESSOR: MemoryMappedHeaderProcessor = MemoryMappedHeaderProcessor::new();
 }
 
-/// Production-grade zero-copy header parsing function
-/// 
-/// This function provides a drop-in replacement for existing header parsing
-/// with significant memory optimizations while maintaining identical behavior.
-/// 
-/// Performance improvements:
-/// - 20-40% memory reduction through zero-copy operations
-/// - 15-25% speed improvement from reduced allocations
-/// - String interning for common values (40-60% memory savings)
-/// - SIMD-accelerated parsing with zero-copy optimizations
+/// Parse a single FASTA header into field-value pairs.
+///
+/// Uses SIMD-accelerated pipe delimiter detection and string interning for
+/// repeated values. Returns `Err` if the header cannot be split according
+/// to the provided format fields.
+///
+/// Callers should accumulate errors and decide on a threshold (e.g., fail if > 5%
+/// of headers are malformed). This prevents silently dropping metadata from large
+/// portions of the dataset while still allowing isolated bad headers.
 pub fn parse_header_zero_copy(
     header: &str,
     format: &[String],
     fill_na: &str,
-) -> HashMap<String, String> {
+) -> Result<HashMap<String, String>, String> {
     ZERO_COPY_PARSER.with(|parser| {
-        match parser.parse_zero_copy(header, format, fill_na) {
-            Ok(result) => result,
-            Err(error_msg) => {
-                // Maintain original panic behavior for compatibility
-                panic!("{}", error_msg);
-            }
-        }
+        parser.parse_zero_copy(header, format, fill_na)
     })
 }
 
-/// Batch zero-copy header processing for improved cache locality
+#[cfg(test)]
+/// Batch zero-copy header processing (test utility only).
 pub fn parse_headers_batch_zero_copy(
     headers: &[String],
     format: &[String],
@@ -373,11 +373,12 @@ pub fn parse_headers_batch_zero_copy(
 ) -> Vec<HashMap<String, String>> {
     headers
         .iter()
-        .map(|header| parse_header_zero_copy(header, format, fill_na))
+        .map(|header| parse_header_zero_copy(header, format, fill_na).unwrap_or_default())
         .collect()
 }
 
-/// Memory usage statistics for zero-copy operations
+#[cfg(test)]
+/// Memory usage statistics for zero-copy operations (test only)
 #[derive(Debug)]
 pub struct ZeroCopyStats {
     pub interned_common_fields: usize,
@@ -385,7 +386,8 @@ pub struct ZeroCopyStats {
     pub total_interned_memory: usize,
 }
 
-/// Get zero-copy memory usage statistics
+#[cfg(test)]
+/// Get zero-copy memory usage statistics (test only)
 pub fn get_zero_copy_stats() -> ZeroCopyStats {
     let (common_fields, dynamic_strings) = STRING_INTERNER.with(|interner| interner.stats());
     
@@ -411,7 +413,7 @@ mod tests {
         ];
         let fill_na = "Unknown";
         
-        let result = parse_header_zero_copy(header, &format, fill_na);
+        let result = parse_header_zero_copy(header, &format, fill_na).unwrap();
         
         assert_eq!(result.get("sample_id"), Some(&"sample1".to_string()));
         assert_eq!(result.get("condition"), Some(&"condition_A".to_string()));
@@ -430,7 +432,7 @@ mod tests {
         ];
         let fill_na = "Unknown";
         
-        let result = parse_header_zero_copy(header, &format, fill_na);
+        let result = parse_header_zero_copy(header, &format, fill_na).unwrap();
         
         assert_eq!(result.get("sample_id"), Some(&"sample1".to_string()));
         assert_eq!(result.get("condition"), Some(&"condition_A".to_string()));
@@ -472,9 +474,9 @@ mod tests {
     }
 
     #[test]
-    fn test_memory_mapped_processing() {
-        let processor = MemoryMappedHeaderProcessor::new();
+    fn test_buffer_to_header_parsing() {
         let header_bytes = b"sample1|condition_A|replicate_1";
+        let header_str = std::str::from_utf8(header_bytes).unwrap();
         let format = vec![
             "sample_id".to_string(),
             "condition".to_string(),
@@ -482,7 +484,7 @@ mod tests {
         ];
         let fill_na = "Unknown";
         
-        let result = processor.process_from_buffer(header_bytes, &format, fill_na).unwrap();
+        let result = parse_header_zero_copy(header_str, &format, fill_na).unwrap();
         
         assert_eq!(result.get("sample_id"), Some(&"sample1".to_string()));
         assert_eq!(result.get("condition"), Some(&"condition_A".to_string()));
@@ -538,9 +540,10 @@ mod tests {
         let parser = ZeroCopyHeaderParser::new();
         
         // Test mismatched format length
+        let fields = &["sample_id".to_string(), "condition".to_string(), "replicate".to_string()];
         let result = parser.parse_zero_copy(
             "sample1|condition_A",
-            &vec!["sample_id".to_string(), "condition".to_string(), "replicate".to_string()],
+            fields,
             "Unknown"
         );
         assert!(result.is_err());
@@ -548,7 +551,7 @@ mod tests {
         // Test empty component
         let result = parser.parse_zero_copy(
             "sample1||replicate_1",
-            &vec!["sample_id".to_string(), "condition".to_string(), "replicate".to_string()],
+            fields,
             "" // Empty fill_na
         );
         assert!(result.is_err());

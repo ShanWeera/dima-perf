@@ -1,6 +1,7 @@
 /**
  * Button component based on shadcn/ui
  */
+/* eslint-disable react-refresh/only-export-components -- shadcn/ui pattern: buttonVariants is co-exported intentionally */
 
 import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';

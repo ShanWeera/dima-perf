@@ -1,0 +1,63 @@
+---
+title: DiMA — Diversity Motif Analyser
+description: A high-performance command-line tool for analyzing protein and nucleotide sequence diversity using k-mer based entropy analysis.
+template: splash
+hero:
+  title: DiMA
+  tagline: High-performance sequence diversity analysis with k-mer based entropy and diversity motif classification.
+  actions:
+    - text: Get Started
+      link: /dima-perf/getting-started/installation/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/ShanWeera/dima-perf
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## What is DiMA?
+
+DiMA (Diversity Motif Analyser) is a tool designed to facilitate the quantification and dissection of sequence diversity dynamics for viruses. It provides a quantitative measure of sequence diversity using **Shannon's entropy**, corrected for sample size bias, applied via a user-defined k-mer sliding window to an input alignment file.
+
+Each k-mer position is classified into **diversity motifs** — Index, Major, Minor, and Unique — based on the incidence of distinct sequences, providing granular insight into diversity dynamics.
+
+DiMA implements the methodology described in [Tharanga et al. (2025)](https://doi.org/10.1093/bib/bbae607), published in *Briefings in Bioinformatics* (PMC11596295).
+
+---
+
+## Key Features
+
+<CardGrid>
+  <Card title="Shannon's Entropy" icon="star">
+    Quantify diversity with sample-size corrected entropy calculations using linear regression extrapolation to infinite sample size.
+  </Card>
+  <Card title="Diversity Motifs" icon="puzzle">
+    Automatically classify variants as Index, Major, Minor, or Unique at each k-mer position for granular diversity dynamics insight.
+  </Card>
+  <Card title="Multiple Formats" icon="document">
+    Output as JSON, TSV (17-column), JSONL, or compact binary `.dima` with LZ4/Zstd compression — up to 93% smaller than JSON.
+  </Card>
+  <Card title="Blazing Fast" icon="rocket">
+    Written in Rust with parallel processing (Rayon), memory-mapped I/O, and SIMD string operations. Processes 2.3M sequences in ~130 seconds.
+  </Card>
+  <Card title="Metadata Aggregation" icon="list-format">
+    Parse FASTA headers and aggregate metadata (country, date, host, etc.) per variant with columnar storage for optimal performance.
+  </Card>
+  <Card title="Compressed Input" icon="magnifier">
+    Transparent decompression of `.gz`, `.bz2`, `.xz`, and `.zst` files. Pipe data directly from other tools via stdin.
+  </Card>
+</CardGrid>
+
+---
+
+## Quick Links
+
+<CardGrid>
+  <LinkCard title="Installation" href="/dima-perf/getting-started/installation/" description="Download pre-built binaries or build from source" />
+  <LinkCard title="Quick Start" href="/dima-perf/getting-started/quick-start/" description="Run your first analysis in 2 minutes" />
+  <LinkCard title="CLI Reference" href="/dima-perf/cli/" description="Complete command and option reference" />
+  <LinkCard title="Methodology" href="/dima-perf/methodology/overview/" description="Scientific methodology and formulas" />
+</CardGrid>

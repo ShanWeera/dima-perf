@@ -33,9 +33,11 @@ export interface HighestEntropy {
 /**
  * Position-level analysis data
  */
+export type LowSupportTag = 'NS' | 'LS' | 'ELS';
+
 export interface Position {
   position: number;
-  low_support: string | null;
+  low_support: LowSupportTag | null;
   entropy: number;
   support: number;
   distinct_variants_count: number;
@@ -51,7 +53,7 @@ export interface Variant {
   sequence: string;
   count: number;
   incidence: number;
-  motif_short: string | null;
+  motif_short: MotifType | null;
   motif_long: string | null;
   metadata: Record<string, Record<string, number>> | null;
 }
@@ -113,7 +115,7 @@ export interface AnalysisConfig {
  */
 export const DEFAULT_ANALYSIS_CONFIG: AnalysisConfig = {
   kmerLength: 9,
-  supportThreshold: 30,
+  supportThreshold: 100,
   queryName: '',
   alphabet: 'protein',
   headerFormat: null,
@@ -136,7 +138,7 @@ export interface FastaValidation {
   sequence_count: number;
   sequence_length: number | null;
   sample_headers: string[];
-  detected_alphabet: string;
+  detected_alphabet: 'protein' | 'nucleotide' | 'unknown';
   errors: ValidationError[];
   file_size_bytes: number;
   file_modified_at: string | null;
@@ -261,16 +263,7 @@ export interface SearchFilters {
   includeLowSupport: boolean;
 }
 
-/**
- * Default search filters
- */
-export const DEFAULT_SEARCH_FILTERS: SearchFilters = {
-  positionRange: null,
-  sequenceQuery: '',
-  entropyRange: null,
-  motifTypes: ['I', 'Ma', 'Mi', 'U'],
-  includeLowSupport: true,
-};
+// Default search filters are defined in @/lib/filters.ts (single source of truth)
 
 /**
  * Filter preset
@@ -303,16 +296,60 @@ export interface PositionMapping {
   coverage: number;
 }
 
+
+// ============================================================================
+// UniProt / Protein Feature Types
+// ============================================================================
+
 /**
- * PDB viewer state
+ * A single protein feature annotation from UniProt
  */
-export interface PDBViewerState {
-  pdbData: string | null;
-  chains: ChainInfo[];
-  selectedChain: string;
-  mappingMode: 'direct' | 'auto';
-  offset: number;
-  positionMapping: PositionMapping | null;
+export interface ProteinFeature {
+  feature_type: string;
+  category: string;
+  description: string;
+  /** Start position in UniProt numbering (1-based) */
+  begin: number;
+  /** End position in UniProt numbering (1-based) */
+  end: number;
+  evidences: string[];
+}
+
+/**
+ * Resolved UniProt protein metadata together with its features
+ */
+export interface UniProtInfo {
+  accession: string;
+  protein_name: string;
+  organism: string;
+  sequence_length: number;
+  /** Full UniProt canonical sequence (for alignment to PDB) */
+  sequence: string;
+  features: ProteinFeature[];
+}
+
+/**
+ * Configuration for a feature category (color, label, SVG shape)
+ */
+export interface FeatureCategoryConfig {
+  color: string;
+  label: string;
+  /** rect for range features, circle for point features */
+  shape: 'rect' | 'circle';
+  /** Which UniProt feature_type values belong to this category */
+  uniprotTypes: string[];
+}
+
+/**
+ * A feature with positions mapped to the MSA coordinate space
+ */
+export interface MappedFeature extends ProteinFeature {
+  /** Start position in MSA coordinates (null if unmappable) */
+  msaBegin: number | null;
+  /** End position in MSA coordinates (null if unmappable) */
+  msaEnd: number | null;
+  /** Category key from FEATURE_CATEGORIES (e.g. "DOMAIN") */
+  categoryKey: string;
 }
 
 // ============================================================================
@@ -323,10 +360,12 @@ export interface PDBViewerState {
  * Application settings
  */
 export interface AppSettings {
+  schemaVersion: number;
   theme: 'light' | 'dark' | 'system';
   decimalPrecision: number;
   defaultOutputDirectory: string | null;
-  defaultChartDpi: 72 | 300;
+  /** Rust backend clamps to 36-600 */
+  defaultChartDpi: number;
   defaultKmerLength: number;
   defaultSupportThreshold: number;
   defaultValidationMode: 'strict' | 'permissive' | 'report';
@@ -337,12 +376,13 @@ export interface AppSettings {
  * Default application settings
  */
 export const DEFAULT_APP_SETTINGS: AppSettings = {
+  schemaVersion: 1,
   theme: 'system',
   decimalPrecision: 4,
   defaultOutputDirectory: null,
   defaultChartDpi: 72,
   defaultKmerLength: 9,
-  defaultSupportThreshold: 30,
+  defaultSupportThreshold: 100,
   defaultValidationMode: 'strict',
   lastUsedConfig: null,
 };

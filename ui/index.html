@@ -7,6 +7,18 @@
     <title>DiMA Desktop</title>
   </head>
   <body>
+    <script>
+      // Apply cached theme synchronously before React mounts to prevent FOUC.
+      // The settings store persists effectiveTheme to this same localStorage key.
+      (function() {
+        var t = localStorage.getItem('dima-effective-theme');
+        if (t === 'dark' || t === 'light') {
+          document.documentElement.classList.add(t);
+        } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -1,0 +1,170 @@
+---
+source: tests/snapshot_tests.rs
+expression: json
+---
+{
+  "average_entropy": 0.0,
+  "highest_entropy": {
+    "entropy": 0.0,
+    "position": 0
+  },
+  "kmer_length": 3,
+  "low_support_count": 8,
+  "query_name": "Unknown Protein",
+  "results": [
+    {
+      "distinct_variants_count": "[count]",
+      "distinct_variants_incidence": "[incidence]",
+      "diversity_motifs": [
+        {
+          "count": 3,
+          "incidence": 100.0,
+          "metadata": "[metadata]",
+          "motif_long": "Index",
+          "motif_short": "I",
+          "sequence": "[kmer_sequence]"
+        }
+      ],
+      "entropy": 0.0,
+      "low_support": "LS",
+      "position": 1,
+      "support": "[support]",
+      "total_variants_incidence": "[incidence]"
+    },
+    {
+      "distinct_variants_count": "[count]",
+      "distinct_variants_incidence": "[incidence]",
+      "diversity_motifs": [
+        {
+          "count": 3,
+          "incidence": 100.0,
+          "metadata": "[metadata]",
+          "motif_long": "Index",
+          "motif_short": "I",
+          "sequence": "[kmer_sequence]"
+        }
+      ],
+      "entropy": 0.0,
+      "low_support": "LS",
+      "position": 2,
+      "support": "[support]",
+      "total_variants_incidence": "[incidence]"
+    },
+    {
+      "distinct_variants_count": "[count]",
+      "distinct_variants_incidence": "[incidence]",
+      "diversity_motifs": [
+        {
+          "count": 3,
+          "incidence": 100.0,
+          "metadata": "[metadata]",
+          "motif_long": "Index",
+          "motif_short": "I",
+          "sequence": "[kmer_sequence]"
+        }
+      ],
+      "entropy": 0.0,
+      "low_support": "LS",
+      "position": 3,
+      "support": "[support]",
+      "total_variants_incidence": "[incidence]"
+    },
+    {
+      "distinct_variants_count": "[count]",
+      "distinct_variants_incidence": "[incidence]",
+      "diversity_motifs": [
+        {
+          "count": 3,
+          "incidence": 100.0,
+          "metadata": "[metadata]",
+          "motif_long": "Index",
+          "motif_short": "I",
+          "sequence": "[kmer_sequence]"
+        }
+      ],
+      "entropy": 0.0,
+      "low_support": "LS",
+      "position": 4,
+      "support": "[support]",
+      "total_variants_incidence": "[incidence]"
+    },
+    {
+      "distinct_variants_count": "[count]",
+      "distinct_variants_incidence": "[incidence]",
+      "diversity_motifs": [
+        {
+          "count": 3,
+          "incidence": 100.0,
+          "metadata": "[metadata]",
+          "motif_long": "Index",
+          "motif_short": "I",
+          "sequence": "[kmer_sequence]"
+        }
+      ],
+      "entropy": 0.0,
+      "low_support": "LS",
+      "position": 5,
+      "support": "[support]",
+      "total_variants_incidence": "[incidence]"
+    },
+    {
+      "distinct_variants_count": "[count]",
+      "distinct_variants_incidence": "[incidence]",
+      "diversity_motifs": [
+        {
+          "count": 3,
+          "incidence": 100.0,
+          "metadata": "[metadata]",
+          "motif_long": "Index",
+          "motif_short": "I",
+          "sequence": "[kmer_sequence]"
+        }
+      ],
+      "entropy": 0.0,
+      "low_support": "LS",
+      "position": 6,
+      "support": "[support]",
+      "total_variants_incidence": "[incidence]"
+    },
+    {
+      "distinct_variants_count": "[count]",
+      "distinct_variants_incidence": "[incidence]",
+      "diversity_motifs": [
+        {
+          "count": 3,
+          "incidence": 100.0,
+          "metadata": "[metadata]",
+          "motif_long": "Index",
+          "motif_short": "I",
+          "sequence": "[kmer_sequence]"
+        }
+      ],
+      "entropy": 0.0,
+      "low_support": "LS",
+      "position": 7,
+      "support": "[support]",
+      "total_variants_incidence": "[incidence]"
+    },
+    {
+      "distinct_variants_count": "[count]",
+      "distinct_variants_incidence": "[incidence]",
+      "diversity_motifs": [
+        {
+          "count": 3,
+          "incidence": 100.0,
+          "metadata": "[metadata]",
+          "motif_long": "Index",
+          "motif_short": "I",
+          "sequence": "[kmer_sequence]"
+        }
+      ],
+      "entropy": 0.0,
+      "low_support": "LS",
+      "position": 8,
+      "support": "[support]",
+      "total_variants_incidence": "[incidence]"
+    }
+  ],
+  "sequence_count": 3,
+  "support_threshold": 100
+}

@@ -1,0 +1,118 @@
+---
+title: Performance Tuning
+description: Optimize DiMA for large datasets with threading, memory modes, and output format selection.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+DiMA is designed for high performance out of the box, but large-scale analyses (millions of sequences) can benefit from tuning.
+
+## Threading
+
+DiMA parallelizes entropy computation across k-mer positions using [Rayon](https://github.com/rayon-rs/rayon):
+
+```bash
+# Default: use all available CPU cores
+dima analyze -i large_dataset.fasta -o results.json
+
+# Limit to 4 threads (shared systems, containers)
+dima analyze -i large_dataset.fasta -o results.json --threads 4
+
+# Single-threaded (debugging, profiling)
+dima analyze -i large_dataset.fasta -o results.json --threads 1
+```
+
+Alternatively, set the thread count via environment variable:
+
+```bash
+export RAYON_NUM_THREADS=4
+dima analyze -i large_dataset.fasta -o results.json
+```
+
+<Aside type="note">
+`--threads` takes precedence over `RAYON_NUM_THREADS`. The thread pool is initialized once at startup — there is no overhead for subsequent positions.
+</Aside>
+
+## Memory Modes
+
+DiMA supports two memory strategies for the sequence matrix:
+
+### RAM Mode (Default)
+
+All k-mer data is held in memory. Fastest for datasets that fit in available RAM.
+
+### Disk-Backed Mode
+
+For datasets exceeding available memory, DiMA spills the sequence matrix to temporary files on disk.
+
+```bash
+# Force disk-backed mode
+dima analyze -i huge_dataset.fasta -o results.json --low-memory
+
+# Specify temp directory for disk storage
+dima analyze -i huge_dataset.fasta -o results.json --low-memory --temp-dir /scratch/tmp
+
+# Force RAM even for large datasets (may cause OOM)
+dima analyze -i huge_dataset.fasta -o results.json --force-ram
+```
+
+| Flag | Behavior |
+|------|----------|
+| (default) | Auto-detect based on file size and available memory |
+| `--low-memory` | Force disk-backed storage |
+| `--force-ram` | Force in-memory storage (risk of OOM) |
+| `--temp-dir <DIR>` | Set temp directory for disk-backed files |
+
+<Aside type="caution">
+`--force-ram` on datasets larger than available memory will cause the process to be killed by the OS out-of-memory killer.
+</Aside>
+
+## Memory-Mapped I/O
+
+For file inputs (not stdin), DiMA can use memory-mapped I/O for the input FASTA file:
+
+| Environment Variable | Effect |
+|---------------------|--------|
+| `DIMA_FORCE_MMAP=1` | Always use mmap regardless of file size |
+| `DIMA_FORCE_MMAP=0` | Always use buffered I/O |
+| (unset) | Auto-detect based on file size heuristic |
+
+Memory mapping is particularly beneficial for compressed files where the OS can handle paging.
+
+## Output Format Performance
+
+Output format has minimal impact on runtime but significant impact on file size:
+
+| Format | Runtime Impact | File Size (2.3M seqs, no metadata) |
+|--------|---------------|-------------------------------------|
+| JSON | Baseline | 29 MB |
+| Binary (no compression) | Negligible | 5.5 MB |
+| Binary (LZ4) | Negligible | 2.8 MB |
+| Binary (Zstd) | Negligible | 2.4 MB |
+
+**Recommendation:** Use `-O dima` when output size matters. The binary format adds virtually no processing time.
+
+## Metadata Overhead
+
+Metadata processing (`--header-format`) adds ~39% runtime overhead due to:
+
+1. Header parsing and field extraction
+2. Per-variant metadata aggregation (counting per field value)
+3. Larger output serialization
+
+| Configuration | Runtime (2.3M sequences) |
+|---------------|--------------------------|
+| No metadata | ~128s |
+| With metadata | ~178s |
+
+**Recommendation:** Only enable `--header-format` when per-variant metadata aggregation is needed.
+
+## Recommended Configurations
+
+| Use Case | Command |
+|----------|---------|
+| Fastest (no metadata) | `dima analyze -i input.fasta -o out.json` |
+| Fastest + small output | `dima analyze -i input.fasta -O dima -o out.dima` |
+| With metadata (fast) | `dima analyze -i input.fasta -o out.json --header-format "..."` |
+| With metadata + small | `dima analyze -i input.fasta -O dima -o out.dima --header-format "..."` |
+| Memory-constrained | `dima analyze -i input.fasta -o out.json --low-memory --threads 4` |

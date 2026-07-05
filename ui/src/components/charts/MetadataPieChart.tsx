@@ -5,10 +5,21 @@
  * for the selected position's variants with a field selector dropdown.
  */
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, memo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
 import type { Variant } from '@/lib/types';
+import { useChartTheme } from '@/hooks/useChartTheme';
+
+/** Escape HTML special characters to prevent XSS in ECharts tooltips/labels */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
 
 interface MetadataPieChartProps {
   variants: Variant[] | null;
@@ -29,11 +40,12 @@ const PIE_COLORS = [
   '#f59e0b', // amber
 ];
 
-export function MetadataPieChart({
+export const MetadataPieChart = memo(function MetadataPieChart({
   variants,
   availableFields,
 }: MetadataPieChartProps) {
-  const [selectedField, setSelectedField] = useState<string>(availableFields[0] || '');
+  // Derive initial field from props directly to avoid flash
+  const [selectedField, setSelectedField] = useState<string>(() => availableFields[0] || '');
 
   // Update selected field when available fields change
   useEffect(() => {
@@ -42,6 +54,7 @@ export function MetadataPieChart({
     }
   }, [availableFields, selectedField]);
 
+  const chartTheme = useChartTheme();
   const option: EChartsOption = useMemo(() => {
     if (!variants || variants.length === 0 || !selectedField) {
       return {
@@ -50,7 +63,7 @@ export function MetadataPieChart({
           left: 'center',
           top: 'center',
           textStyle: {
-            color: '#9ca3af',
+            color: chartTheme.textMutedColor,
             fontSize: 14,
           },
         },
@@ -59,13 +72,11 @@ export function MetadataPieChart({
 
     // Aggregate metadata across variants
     const valueCounts: Record<string, number> = {};
-    let totalCount = 0;
     
     variants.forEach((v) => {
       if (v.metadata && v.metadata[selectedField]) {
         Object.entries(v.metadata[selectedField]).forEach(([value, count]) => {
           valueCounts[value] = (valueCounts[value] || 0) + count;
-          totalCount += count;
         });
       }
     });
@@ -77,7 +88,7 @@ export function MetadataPieChart({
           left: 'center',
           top: 'center',
           textStyle: {
-            color: '#9ca3af',
+            color: chartTheme.textMutedColor,
             fontSize: 14,
           },
         },
@@ -101,17 +112,23 @@ export function MetadataPieChart({
       data.push({
         value: otherCount,
         name: 'Others',
-        itemStyle: { color: '#9ca3af' },
+        itemStyle: { color: chartTheme.textMutedColor },
       });
     }
 
     return {
+      aria: { enabled: true, label: { description: `${selectedField} distribution pie chart` } },
       tooltip: {
         trigger: 'item',
         appendToBody: true,
+        backgroundColor: chartTheme.tooltipBg,
+        borderColor: chartTheme.tooltipBorder,
+        textStyle: { color: chartTheme.tooltipText },
+        renderMode: 'richText' as unknown as undefined,
         formatter: (params: unknown) => {
           const p = params as { name: string; value: number; percent: number };
-          return `${p.name}: ${p.percent.toFixed(1)}%`;
+          const safeName = escapeHtml(p.name);
+          return `${safeName}: ${p.percent.toFixed(1)}%`;
         },
       },
       legend: {
@@ -124,6 +141,7 @@ export function MetadataPieChart({
         itemHeight: 14,
         textStyle: {
           fontSize: 11,
+          color: chartTheme.textColor,
         },
       },
       series: [
@@ -140,6 +158,7 @@ export function MetadataPieChart({
               return `${p.name}: ${p.percent.toFixed(1)}%`;
             },
             fontSize: 11,
+            color: chartTheme.textColor,
           },
           labelLine: {
             show: true,
@@ -157,7 +176,7 @@ export function MetadataPieChart({
         },
       ],
     };
-  }, [variants, selectedField]);
+  }, [variants, selectedField, chartTheme]);
 
   // Format field name for display (convert snake_case to Title Case)
   const formatFieldName = (field: string) => {
@@ -172,8 +191,9 @@ export function MetadataPieChart({
       {/* Field Selector */}
       {availableFields.length > 0 && (
         <div className="mb-3">
-          <label className="mb-1 block text-xs text-primary font-medium">Metadata</label>
+          <label htmlFor="metadata-field-select" className="mb-1 block text-xs text-primary font-medium">Metadata</label>
           <select
+            id="metadata-field-select"
             value={selectedField}
             onChange={(e) => setSelectedField(e.target.value)}
             className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
@@ -188,14 +208,15 @@ export function MetadataPieChart({
       )}
 
       {/* Pie Chart */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0" role="img" aria-label={`Metadata distribution pie chart showing ${selectedField || 'metadata'} values for the selected position.`}>
         <ReactECharts
           option={option}
           style={{ height: '100%', width: '100%' }}
           opts={{ renderer: 'canvas' }}
-          notMerge={true}
+          notMerge={false}
+          lazyUpdate={true}
         />
       </div>
     </div>
   );
-}
+});

@@ -1,0 +1,126 @@
+---
+title: Environment Variables
+description: All environment variables recognized by DiMA for controlling runtime behavior.
+---
+
+DiMA recognizes several environment variables for controlling behavior without CLI flags.
+
+## Complete Reference
+
+### `DIMA_FORCE_MMAP`
+
+Controls memory-mapped I/O for input file reading.
+
+| Value | Behavior |
+|-------|----------|
+| `1` | Force memory-mapped I/O regardless of file size |
+| `0` | Force buffered (streaming) I/O regardless of file size |
+| (unset) | Auto-detect: use mmap for files above a size threshold |
+
+```bash
+export DIMA_FORCE_MMAP=1
+dima analyze -i large_file.fasta -o results.json
+```
+
+**When to use:**
+- Set to `1` for large files on systems with ample page cache (RAM ≫ file size)
+- Set to `0` on network filesystems where mmap can stall
+- Leave unset for automatic heuristic (recommended for most cases)
+
+---
+
+### `RAYON_NUM_THREADS`
+
+Sets the Rayon global thread pool size (number of parallel worker threads).
+
+| Value | Behavior |
+|-------|----------|
+| `N` (integer ≥ 1) | Use exactly N threads for parallel computation |
+| (unset) | Use all available CPU cores |
+
+```bash
+export RAYON_NUM_THREADS=4
+dima analyze -i aligned.fasta -o results.json
+```
+
+**Precedence:** The `--threads` CLI flag overrides this variable.
+
+**When to use:**
+- In containers with CPU limits (e.g., Kubernetes pods with `resources.limits.cpu`)
+- On shared HPC nodes to avoid monopolizing all cores
+- When running multiple DiMA instances in parallel
+
+---
+
+### `NO_COLOR`
+
+Disables colored output (ANSI escape codes) per the [no-color.org](https://no-color.org/) standard.
+
+| Value | Behavior |
+|-------|----------|
+| Any non-empty value | Disable colored output |
+| (unset or empty) | Colors enabled when stderr is a terminal |
+
+```bash
+export NO_COLOR=1
+dima analyze -i aligned.fasta -o results.json
+```
+
+**When to use:**
+- CI/CD pipelines where ANSI codes appear as garbage
+- Log files where escape codes are unwanted
+- Accessibility needs
+
+---
+
+### `TMPDIR` / `TEMP` / `TMP`
+
+Controls the default temporary directory for disk-backed matrix storage (when `--low-memory` is active and `--temp-dir` is not specified).
+
+| Variable | Platform |
+|----------|----------|
+| `TMPDIR` | macOS, Linux (POSIX standard) |
+| `TEMP` | Windows |
+| `TMP` | Windows (fallback) |
+
+```bash
+export TMPDIR=/scratch/tmp
+dima analyze -i huge_dataset.fasta -o results.json --low-memory
+```
+
+**Precedence:** `--temp-dir` CLI flag > `TMPDIR` > system default (`/tmp`)
+
+---
+
+### `RUST_LOG`
+
+Controls the tracing/logging filter (advanced debugging). Uses [tracing-subscriber's EnvFilter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) syntax.
+
+| Value | Behavior |
+|-------|----------|
+| `debug` | Show debug-level messages for all crates |
+| `dima=trace` | Trace-level messages for DiMA only |
+| `dima=info,hyper=warn` | Mixed per-crate levels |
+| (unset) | Controlled by `-v`/`-q` flags |
+
+```bash
+export RUST_LOG=dima=debug
+dima analyze -i aligned.fasta -o results.json
+```
+
+**When to use:**
+- Debugging unexpected behavior
+- Understanding internal processing steps
+- Filing bug reports (attach trace output)
+
+**Precedence:** `RUST_LOG` overrides the `-v`/`-q` verbosity flags when set.
+
+## Summary Table
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `DIMA_FORCE_MMAP` | Control memory-mapped I/O | auto-detect |
+| `RAYON_NUM_THREADS` | Thread pool size | all CPUs |
+| `NO_COLOR` | Disable ANSI colors | colors enabled |
+| `TMPDIR` | Temp directory for disk-backed mode | `/tmp` |
+| `RUST_LOG` | Logging filter | per `-v`/`-q` |

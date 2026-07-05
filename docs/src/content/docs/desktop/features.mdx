@@ -1,0 +1,34 @@
+---
+title: Desktop Features
+description: GUI-specific features of DiMA Desktop including interactive visualization and export.
+---
+
+## Interactive Analysis
+
+- **File selection** — Native file dialog for choosing input FASTA files
+- **Parameter configuration** — Visual controls for k-mer length, threshold, alphabet, and header format
+- **Real-time progress** — Progress indicators during analysis
+- **Result exploration** — Navigate between k-mer positions interactively
+
+## Visualization
+
+- **Entropy plot** — Panoramic view of diversity across all alignment positions
+- **Motif distribution** — Bar charts showing Index/Major/Minor/Unique breakdown at each position
+- **Metadata charts** — Pie/bar charts for per-variant metadata aggregation (when enabled)
+
+## Export
+
+- Export results to JSON, TSV, or binary `.dima` format
+- Save entropy plots as images
+- Copy data tables to clipboard
+
+## Shared Core
+
+DiMA Desktop uses the same `dima_lib` Rust library as the CLI tool. This guarantees:
+
+- Identical entropy computation algorithms
+- Same diversity motif classification logic
+- Consistent HCS extraction
+- Matching binary format read/write
+
+Results produced by the desktop app are fully interchangeable with CLI output.

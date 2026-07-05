@@ -1,0 +1,101 @@
+---
+title: Architecture
+description: High-level overview of DiMA's codebase architecture and module responsibilities.
+---
+
+import { FileTree } from '@astrojs/starlight/components';
+
+## Module Overview
+
+DiMA is structured around the Single Responsibility Principle — each module handles one concern.
+
+<FileTree>
+- src/
+  - lib.rs — Public API surface (re-exports only)
+  - main.rs — CLI entry point (argument parsing, orchestration)
+  - help.rs — CLI help text constants
+  - **Core Pipeline**
+  - analysis.rs — Orchestrates the full analysis pipeline
+  - entropy.rs — Shannon entropy calculation + rarefaction correction
+  - kmer.rs — K-mer extraction, encoding, sliding window
+  - **I/O Layer**
+  - io.rs — FASTA parsing, mmap, transparent decompression, stdin
+  - output.rs — JSON/TSV/JSONL format writers
+  - binary.rs — .dima binary format (bincode + compression)
+  - **Data Structures**
+  - models.rs — Results, Position, Variant, HighestEntropy
+  - columnar.rs — Column-oriented metadata storage
+  - matrix.rs — Sequence matrix (RAM / disk-backed modes)
+  - **Utilities**
+  - alphabet.rs — Character validation (protein/nucleotide)
+  - simd_string.rs — SIMD-accelerated string operations
+  - zero_copy.rs — Zero-copy header parsing
+  - indexing.rs — K-mer index building
+  - perf.rs — Performance timing and reporting
+</FileTree>
+
+## Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  main.rs                                                     │
+│  ┌─────────────────┐                                        │
+│  │ Argument Parsing │──→ validate_analyze_args()             │
+│  └─────────────────┘                                        │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  analysis.rs — analyze()                                     │
+│                                                              │
+│  1. io.rs: Parse FASTA → encoded k-mers + headers           │
+│  2. entropy.rs: Calculate entropy per position (parallel)    │
+│  3. models.rs: Build Position + Variant objects              │
+│  4. columnar.rs: Aggregate metadata per variant              │
+│  5. Return Results                                           │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  main.rs — Output dispatch                                   │
+│                                                              │
+│  output.rs: JSON / TSV / JSONL                               │
+│  binary.rs: .dima format                                     │
+│  models.rs: HCS extraction (get_hcs)                         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Key Design Decisions
+
+### K-mer Encoding (kmer.rs)
+
+K-mers are encoded as `u64` integers using base-N arithmetic (base-20 for protein, base-5 for nucleotide). This enables:
+- O(1) equality comparison instead of O(k) string comparison
+- Cache-friendly dense storage
+- Maximum k limited by u64 overflow (k≤14 protein, k≤27 nucleotide)
+
+### Parallelism (analysis.rs)
+
+Entropy calculation is embarrassingly parallel across positions. Rayon's `par_iter()` distributes positions across the thread pool with work-stealing for load balance.
+
+### Columnar Storage (columnar.rs)
+
+Metadata is stored in column-oriented arrays (one Vec per field) rather than row-oriented HashMaps. This enables:
+- Sequential memory access during aggregation (cache-friendly)
+- SIMD-compatible memory layout
+- String interning for deduplication
+
+### Memory-Mapped I/O (io.rs)
+
+For large files, the FASTA file is memory-mapped rather than read into a buffer. The OS kernel manages page faults and caching, reducing application memory pressure.
+
+### Atomic Writes (io.rs)
+
+Output files are written atomically: content goes to a temporary file, then renamed to the target path. This prevents partial/corrupted output if the process is interrupted.
+
+### Binary Format (binary.rs)
+
+The `.dima` format uses bincode serialization with:
+- String interning table (deduplicated sequences/values)
+- Per-block CRC32 checksums
+- Configurable compression (None/LZ4/Zstd)

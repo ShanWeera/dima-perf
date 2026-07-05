@@ -1,0 +1,67 @@
+---
+title: Exit Codes
+description: Semantic exit codes returned by DiMA for scripting and automation.
+---
+
+DiMA uses semantic exit codes following Unix conventions to allow scripts and CI pipelines to distinguish between different failure types.
+
+## Exit Code Reference
+
+| Code | Name | Meaning |
+|------|------|---------|
+| `0` | Success | Analysis completed successfully |
+| `1` | Runtime Error | Unexpected error during processing (e.g., computation failure) |
+| `2` | Usage Error | Invalid arguments or configuration (e.g., bad flag values) |
+| `3` | I/O Error | File system error (e.g., file not found, permission denied) |
+| `130` | Cancelled | User interrupted with Ctrl+C (128 + SIGINT signal 2, per POSIX) |
+
+## Usage in Scripts
+
+```bash
+#!/bin/bash
+dima analyze -i input.fasta -o results.json
+
+case $? in
+  0)   echo "Success" ;;
+  1)   echo "Runtime error — check input data" ;;
+  2)   echo "Invalid arguments — check --help" ;;
+  3)   echo "I/O error — check file paths and permissions" ;;
+  130) echo "Cancelled by user" ;;
+  *)   echo "Unknown exit code: $?" ;;
+esac
+```
+
+## Error Type Mapping
+
+DiMA maps internal error types to exit codes:
+
+| Error Source | Exit Code |
+|--------------|-----------|
+| `AnalysisError::Cancelled` | 130 |
+| `AnalysisError::Validation` | 2 |
+| `AnalysisError::Io` | 3 |
+| `AnalysisError::BinaryFormat` | 3 |
+| `std::io::Error (Interrupted)` | 130 |
+| `std::io::Error (other)` | 3 |
+| `UsageError` (argument validation) | 2 |
+| All other errors | 1 |
+
+## Cancellation Behavior
+
+- **First Ctrl+C** — Requests graceful cancellation. DiMA finishes the current operation and exits with code 130.
+- **Second Ctrl+C** — Forces immediate exit (for unresponsive situations). Also exits with code 130.
+
+## CI/CD Integration
+
+```yaml
+# GitHub Actions example
+- name: Run DiMA analysis
+  run: dima analyze -i aligned.fasta -o results.json
+  continue-on-error: false  # Fails job on any non-zero exit
+```
+
+```bash
+# Make targets
+analyze:
+	dima analyze -i $(INPUT) -o $(OUTPUT) || (echo "DiMA failed with exit $$?"; exit 1)
+```

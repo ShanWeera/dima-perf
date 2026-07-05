@@ -1,6 +1,6 @@
 # DiMA - Diversity Motif Analyser
 
-A high-performance command-line tool for analyzing protein and nucleotide sequence diversity using k-mer based entropy analysis.
+A high-performance command-line tool for analyzing protein and nucleotide sequence diversity using k-mer based entropy analysis. Implements the methodology from [Tharanga et al. (2025, PMC11596295)](https://doi.org/10.1093/bioadv/vbae607).
 
 ---
 
@@ -16,23 +16,22 @@ A high-performance command-line tool for analyzing protein and nucleotide sequen
 - [Quick Start](#quick-start)
 - [Usage Guide](#usage-guide)
   - [Basic Analysis](#basic-analysis)
+  - [Input Sources](#input-sources)
+  - [Output Formats](#output-formats)
   - [Working with Metadata](#working-with-metadata)
   - [Extracting Conserved Sequences](#extracting-conserved-sequences)
-  - [Output Formats](#output-formats)
   - [Performance Optimization](#performance-optimization)
   - [Character Validation](#character-validation)
 - [Command Reference](#command-reference)
   - [analyze Command](#analyze-command)
-  - [deflate Command](#deflate-command)
+  - [view Command](#view-command)
 - [Output Format](#output-format)
   - [JSON Structure](#json-structure)
+  - [TSV Structure](#tsv-structure)
   - [Understanding the Results](#understanding-the-results)
 - [Examples](#examples)
-  - [Basic Example](#basic-example)
-  - [With Metadata Aggregation](#with-metadata-aggregation)
-  - [Highly Conserved Sequences](#highly-conserved-sequences)
-  - [Binary Output for Large Datasets](#binary-output-for-large-datasets)
 - [Performance](#performance)
+- [Environment Variables](#environment-variables)
 - [Publications](#publications)
 - [License](#license)
 
@@ -49,13 +48,17 @@ DiMA provides a quantitative measure of sequence diversity by using **Shannon's 
 ### Key Features
 
 - **K-mer Sliding Window Analysis**: Analyze sequence diversity at each position using configurable k-mer lengths
-- **Shannon's Entropy**: Quantify diversity with sample-size corrected entropy calculations
+- **Shannon's Entropy**: Quantify diversity with sample-size corrected entropy calculations (per PMC11596295)
 - **Diversity Motif Classification**: Automatically classify variants as Index, Major, Minor, or Unique
 - **Metadata Aggregation**: Track the distribution of metadata (country, date, host, etc.) per variant
 - **Highly Conserved Sequences (HCS)**: Extract conserved regions for vaccine design and epitope mapping
-- **High Performance**: Written in Rust with parallel processing, capable of analyzing millions of sequences
-- **Flexible Output**: JSON and compact binary formats with optional compression
+- **Multiple Output Formats**: JSON, TSV (17-column vDiveR-aligned), JSONL, and binary `.dima` (via `-O`)
+- **Compressed Input**: Transparent `.gz`, `.bz2`, `.xz`, `.zst` decompression
+- **Stdin/Pipe Support**: Standard Unix piping workflows (`cat seqs.fasta | dima analyze`)
+- **Adaptive Memory**: Auto-detects available RAM and can use disk-backed mode for huge datasets
+- **High Performance**: Written in Rust with parallel processing (rayon), memory-mapped I/O, SIMD string ops
 - **Strict Validation**: Configurable character validation with detailed reporting
+- **Verbose Performance Reporting**: Phase timing and peak memory at `-v`
 
 ### Diversity Motifs
 
@@ -76,39 +79,15 @@ At each k-mer position, distinct sequences are classified into motifs based on t
 
 Download the latest release for your platform from the [Releases](https://github.com/BVU-BILSAB/DiMA/releases) page.
 
-**Linux / macOS:**
-```bash
-# Download and extract
-curl -LO https://github.com/BVU-BILSAB/DiMA/releases/latest/download/dima-<version>-<platform>.tar.gz
-tar -xzf dima-*.tar.gz
-
-# Move to PATH
-sudo mv dima-*/dima /usr/local/bin/
-
-# Verify installation
-dima --help
-```
-
-**Windows (PowerShell):**
-```powershell
-# Download and extract
-Invoke-WebRequest -Uri "https://github.com/BVU-BILSAB/DiMA/releases/latest/download/dima-<version>-x86_64-pc-windows-msvc.zip" -OutFile "dima.zip"
-Expand-Archive -Path "dima.zip" -DestinationPath "."
-
-# Add to PATH or run directly
-.\dima.exe --help
-```
-
 ### Build from Source
 
-Requires [Rust](https://rustup.rs/) 1.70 or later.
+Requires [Rust](https://rustup.rs/) 1.81 or later.
 
 ```bash
-# Clone the repository
 git clone https://github.com/BVU-BILSAB/DiMA.git
 cd DiMA
 
-# Build release binary
+# Build optimized release binary
 cargo build --release
 
 # Binary is at ./target/release/dima
@@ -120,17 +99,23 @@ cargo build --release
 ## Quick Start
 
 ```bash
-# Basic analysis
-dima analyze -i sequences.fasta -o results.json
+# Basic analysis (JSON output)
+dima analyze -i aligned.fasta -o results.json
+
+# TSV output for R/Python workflows
+dima analyze -i aligned.fasta -O tsv -o results.tsv
+
+# Binary format for large datasets (compact, fast I/O)
+dima analyze -i aligned.fasta -O dima -o results.dima
+
+# Convert binary to other formats
+dima view -i results.dima -O tsv -o results.tsv
+
+# Pipe from compressed input
+cat sequences.fasta.gz | dima analyze -k 9 -o results.json
 
 # With metadata extraction
-dima analyze -i sequences.fasta -o results.json --header-format "accession|country|date"
-
-# Extract highly conserved sequences
-dima analyze -i sequences.fasta --hcs-output conserved.json --hcs-threshold 95
-
-# High-performance mode for large datasets
-dima analyze -i large_dataset.fasta -o results --columnar --binary
+dima analyze -i aligned.fasta -o results.json --header-format "country|date|host"
 ```
 
 ---
@@ -139,8 +124,6 @@ dima analyze -i large_dataset.fasta -o results --columnar --binary
 
 ### Basic Analysis
 
-The simplest usage analyzes a FASTA file and outputs diversity metrics:
-
 ```bash
 dima analyze -i aligned_sequences.fasta -o results.json
 ```
@@ -148,142 +131,129 @@ dima analyze -i aligned_sequences.fasta -o results.json
 **Input requirements:**
 - FASTA file with **aligned sequences** (all sequences must be the same length)
 - Sequences can be protein (default) or nucleotide
+- Compressed files (`.gz`, `.bz2`, `.xz`, `.zst`) are transparently decompressed
 
 **Key parameters:**
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `-k, --kmer` | 9 | K-mer length (sliding window size) |
-| `-t, --threshold` | 30 | Support threshold for entropy extrapolation |
+| `-k, --kmer` | 9 (protein) / 27 (nucleotide) | K-mer length (sliding window size) |
+| `-t, --threshold` | 100 | Support threshold for entropy extrapolation |
 | `-n, --name` | "Unknown Protein" | Sample/query name in output |
 | `--alphabet` | protein | Sequence type: `protein` or `nucleotide` |
 
+### Input Sources
+
+DiMA supports multiple input methods:
+
+```bash
+# File input (most common)
+dima analyze -i sequences.fasta -o results.json
+
+# Compressed file input (transparent decompression)
+dima analyze -i sequences.fasta.gz -o results.json
+
+# Explicit stdin
+dima analyze -i - -k 9 -o results.json < sequences.fasta
+
+# Auto-detected piped stdin (--input omitted)
+cat sequences.fasta.gz | dima analyze -k 9 -o results.json
+
+# Pipe between tools
+seqkit grep -p "spike" all_proteins.fasta | dima analyze -o spike_results.json
+```
+
+### Output Formats
+
+DiMA supports four output formats, selected via `-O/--output-type`:
+
+```bash
+# JSON (default) — human-readable, pretty-printed to file, compact to pipe
+dima analyze -i seqs.fasta -o results.json
+
+# TSV — 17-column tab-separated for R/Python/Excel workflows
+dima analyze -i seqs.fasta -O tsv -o results.tsv
+
+# JSONL — one JSON object per position, for streaming/incremental processing
+dima analyze -i seqs.fasta -O jsonl -o results.jsonl
+
+# Binary .dima — compact format with LZ4/Zstd compression
+dima analyze -i seqs.fasta -O dima -o results.dima
+```
+
+**Format auto-detection**: When `-O` is not specified, format is inferred from the output file extension:
+- `.dima` → binary
+- `.tsv` / `.tab` → TSV
+- `.jsonl` / `.ndjson` → JSONL
+- Everything else → JSON
+
+**Compression** (binary format only):
+
+```bash
+dima analyze -i seqs.fasta -O dima -o results.dima --compression 0  # None
+dima analyze -i seqs.fasta -O dima -o results.dima --compression 1  # LZ4 (default)
+dima analyze -i seqs.fasta -O dima -o results.dima --compression 2  # Zstd (smallest)
+```
+
 ### Working with Metadata
 
-FASTA headers often contain metadata separated by pipes (`|`). DiMA can parse this metadata and aggregate it per variant:
+FASTA headers often contain metadata separated by pipes (`|`). DiMA can parse and aggregate metadata per variant:
 
-**Example FASTA header:**
-```
->USA|2023-01-15|Human|Delta
-MFVFLVLLPLVSSQCVNLTTRTQLPPAYTNS...
-```
-
-**Command:**
 ```bash
+# Header format: >USA|2023-01-15|Human|Delta
 dima analyze -i sequences.fasta -o results.json \
   --header-format "country|date|host|variant"
-```
 
-**Filtering metadata fields:**
-
-To aggregate only specific fields (reducing memory and output size):
-
-```bash
+# Aggregate only specific fields
 dima analyze -i sequences.fasta -o results.json \
   --header-format "country|date|host|variant" \
   --metadata-fields "country|variant"
 ```
 
-**Handling missing values:**
-
-```bash
-dima analyze -i sequences.fasta -o results.json \
-  --header-format "country|date|host" \
-  --header-fillna "Unknown"
-```
-
 ### Extracting Conserved Sequences
 
-Highly Conserved Sequences (HCS) are regions where the same k-mer appears most frequently across all sequences. These are valuable for vaccine design and identifying stable epitopes.
+Highly Conserved Sequences (HCS) are regions where the same k-mer appears most frequently:
 
 ```bash
-# Extract all conserved sequences to a file
-dima analyze -i sequences.fasta --hcs-output conserved.json
-
-# Only sequences present in ≥95% of samples
-dima analyze -i sequences.fasta --hcs-output conserved.json --hcs-threshold 95
-
-# Generate both full results and HCS output in one go
-dima analyze -i sequences.fasta -o results.json --hcs-output conserved.json --hcs-threshold 95
-```
-
-### Output Formats
-
-**JSON (default):**
-```bash
-dima analyze -i sequences.fasta -o results.json
-```
-
-**Binary format** (50-70% faster I/O, 90%+ smaller files):
-```bash
-# With LZ4 compression (default, best balance)
-dima analyze -i sequences.fasta -o results --binary
-
-# With Zstd compression (maximum compression)
-dima analyze -i sequences.fasta -o results --binary --compression 2
-
-# No compression (fastest)
-dima analyze -i sequences.fasta -o results --binary --compression 0
-```
-
-**Converting binary back to JSON:**
-```bash
-dima deflate -i results.dima -o results.json
+# Extract sequences conserved in ≥95% of samples
+dima analyze -i sequences.fasta -o results.json \
+  --hcs-output conserved.json --hcs-threshold 95
 ```
 
 ### Performance Optimization
 
-For large datasets (>100,000 sequences), use these optimizations:
-
 ```bash
-# Columnar storage (14% faster with metadata)
-dima analyze -i large.fasta -o results.json --columnar --header-format "..."
-
-# Combined optimizations
-dima analyze -i large.fasta -o results --columnar --binary --header-format "..."
-
-# Limit thread count
+# Limit thread count for shared systems
 dima analyze -i large.fasta -o results.json --threads 4
-```
 
-| Flag | Effect | Best For |
-|------|--------|----------|
-| `--columnar` | 14-17% faster metadata processing | Large datasets with metadata |
-| `--binary` | 90%+ smaller output, faster I/O | Storage, archival, transfer |
-| `--threads N` | Limit parallelism | Shared systems, containers |
+# Verbose mode: shows phase timing and peak memory
+dima analyze -i large.fasta -o results.json -v
+
+# Quiet mode: suppress all non-error output
+dima analyze -i large.fasta -o results.json -q
+
+# Force disk-backed mode for very large datasets
+dima analyze -i huge.fasta -o results.json --low-memory
+
+# Override temp directory for disk-backed mode
+dima analyze -i huge.fasta -o results.json --low-memory --temp-dir /scratch/tmp
+```
 
 ### Character Validation
 
-DiMA validates sequence characters to ensure data quality:
-
-**Validation modes:**
-
-| Mode | Description |
-|------|-------------|
-| `strict` (default) | Only canonical characters (20 amino acids or ACGTU) |
-| `permissive` | Also accepts IUPAC ambiguity codes (X, B, N, etc.) |
-| `report` | Accepts all, tracks statistics |
-
 ```bash
-# Strict mode (recommended)
+# Strict mode (default) — only canonical characters
 dima analyze -i sequences.fasta -o results.json --validation strict
 
-# Allow ambiguous codes
+# Allow IUPAC ambiguity codes
 dima analyze -i sequences.fasta -o results.json --validation permissive
 
-# Handle lowercase input
+# Handle mixed-case input
 dima analyze -i sequences.fasta -o results.json --allow-lowercase
 
-# Report validation statistics
+# Report character validation statistics
 dima analyze -i sequences.fasta -o results.json --report-invalid
 ```
-
-**Valid characters:**
-
-| Alphabet | Valid | Ambiguous (permissive mode) |
-|----------|-------|----------------------------|
-| Protein | `ACDEFGHIKLMNPQRSTVWY` | `XBJZOU` |
-| Nucleotide | `ACGTU` | `RYKMSWBDHVN` |
 
 ---
 
@@ -294,71 +264,97 @@ dima analyze -i sequences.fasta -o results.json --report-invalid
 Analyze a FASTA file and generate diversity motif results.
 
 ```
-dima analyze [OPTIONS] --input <FASTA>
+dima analyze [OPTIONS] [-i <FASTA>]
 ```
 
-**Required:**
+**Input:**
 
 | Option | Description |
 |--------|-------------|
-| `-i, --input <FASTA>` | Path to the aligned FASTA file |
+| `-i, --input <FASTA>` | Path to aligned FASTA file (or `-` for stdin). Omit when piping. |
 
 **Analysis Parameters:**
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `-k, --kmer <N>` | 9 | K-mer length for sliding window |
-| `-t, --threshold <N>` | 30 | Support threshold for entropy calculation |
-| `-n, --name <NAME>` | "Unknown Protein" | Sample/query name |
+| `-k, --kmer <N>` | 9 / 27 | K-mer length (protein / nucleotide) |
+| `-t, --threshold <N>` | 100 | Support threshold for entropy extrapolation |
+| `-n, --name <NAME>` | auto | Sample/query name |
 | `--alphabet <TYPE>` | protein | `protein` or `nucleotide` |
-
-**Metadata Options:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--header-format <FMT>` | - | Pipe-separated field names (e.g., `"country\|date\|host"`) |
-| `--metadata-fields <FMT>` | - | Subset of fields to aggregate |
-| `--header-fillna <VAL>` | "Unknown" | Replacement for empty fields |
 
 **Output Options:**
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `-o, --output <FILE>` | stdout | Output file path |
-| `--hcs-output <FILE>` | - | Output file path for Highly Conserved Sequences |
-| `--hcs-threshold <N>` | - | Minimum incidence % for HCS (0-100) |
-| `--binary` | false | Use binary format (.dima) |
+| `-O, --output-type <FMT>` | auto | `json`, `tsv`, `jsonl`, or `dima` |
+| `--no-header` | false | Omit TSV header row |
 | `--compression <N>` | 1 | Binary compression: 0=none, 1=LZ4, 2=Zstd |
+| `--hcs-output <FILE>` | - | HCS output file path |
+| `--hcs-threshold <N>` | - | Min incidence % for HCS (0-100) |
 
-**Performance Options:**
+**Metadata Options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--header-format <FMT>` | - | Pipe-separated field names |
+| `--metadata-fields <FMT>` | - | Subset of fields to aggregate |
+| `--header-fillna <VAL>` | "Unknown" | Replacement for empty fields |
+
+**Memory & Performance:**
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--threads <N>` | all CPUs | Number of parallel threads |
-| `--columnar` | false | Use columnar storage (faster with metadata) |
-| `--indexing` | false | Enable metadata indexing |
+| `--low-memory` | false | Force disk-backed matrix storage |
+| `--force-ram` | false | Force RAM mode (may OOM) |
+| `--temp-dir <DIR>` | auto | Temp directory for disk-backed mode |
 
-**Validation Options:**
+**Validation:**
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--validation <MODE>` | strict | `strict`, `permissive`, or `report` |
 | `--allow-lowercase` | false | Convert lowercase to uppercase |
-| `--report-invalid` | false | Print validation statistics to stderr |
+| `--report-invalid` | false | Print validation statistics |
 
-### deflate Command
+**Verbosity:**
 
-Convert binary format (.dima) back to JSON.
+| Option | Effect |
+|--------|--------|
+| (default) | Warnings + progress bars |
+| `-v` | + performance report + info messages |
+| `-vv` | + debug messages |
+| `-q` | Suppress all non-error output |
+
+### view Command
+
+View/convert binary `.dima` files to other formats. Follows the samtools/bcftools `view` convention.
 
 ```
-dima deflate [OPTIONS] --input <BINARY>
+dima view [OPTIONS] --input <DIMA_FILE>
 ```
 
-| Option | Description |
-|--------|-------------|
-| `-i, --input <BINARY>` | Path to the .dima file |
-| `-o, --output <FILE>` | Output JSON file (stdout if not specified) |
-| `--no-pretty` | Output compact JSON without formatting |
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-i, --input <FILE>` | required | Path to `.dima` binary file |
+| `-o, --output <FILE>` | stdout | Output file path |
+| `-O, --output-type <FMT>` | json | `json`, `tsv`, `jsonl`, or `dima` |
+| `--no-header` | false | Omit TSV header row |
+| `--compression <N>` | 1 | Compression for `-O dima` re-encoding |
+
+**Examples:**
+
+```bash
+# Convert to JSON
+dima view -i results.dima -o results.json
+
+# Convert to TSV
+dima view -i results.dima -O tsv -o results.tsv
+
+# Re-encode with different compression
+dima view -i results.dima -O dima -o results_zstd.dima --compression 2
+```
 
 ---
 
@@ -369,13 +365,12 @@ dima deflate [OPTIONS] --input <BINARY>
 ```json
 {
   "sequence_count": 1000,
-  "support_threshold": 30,
+  "support_threshold": 100,
   "low_support_count": 5,
   "query_name": "SARS-CoV-2 Spike",
   "kmer_length": 9,
   "average_entropy": 0.156,
-  "highest_entropy_position": 484,
-  "highest_entropy_value": 2.31,
+  "highest_entropy": { "position": 484, "entropy": 2.31 },
   "results": [
     {
       "position": 1,
@@ -383,8 +378,8 @@ dima deflate [OPTIONS] --input <BINARY>
       "support": 1000,
       "low_support": null,
       "distinct_variants_count": 1,
-      "distinct_variants_incidence": 100.0,
-      "total_variants_incidence": 0.0,
+      "distinct_variants_incidence": 50.0,
+      "total_variants_incidence": 0.2,
       "diversity_motifs": [
         {
           "sequence": "MFVFLVLLP",
@@ -392,21 +387,7 @@ dima deflate [OPTIONS] --input <BINARY>
           "incidence": 99.8,
           "motif_short": "I",
           "motif_long": "Index",
-          "metadata": {
-            "country": {"USA": 450, "UK": 300, "Germany": 248},
-            "date": {"2023-01": 500, "2023-02": 498}
-          }
-        },
-        {
-          "sequence": "MFVFLVLLQ",
-          "count": 2,
-          "incidence": 0.2,
-          "motif_short": "U",
-          "motif_long": "Unique",
-          "metadata": {
-            "country": {"USA": 2},
-            "date": {"2023-01": 2}
-          }
+          "metadata": { "country": {"USA": 450, "UK": 300} }
         }
       ]
     }
@@ -414,30 +395,21 @@ dima deflate [OPTIONS] --input <BINARY>
 }
 ```
 
+### TSV Structure
+
+17-column format aligned with vDiveR conventions. Missing values represented as `.` (VCF standard).
+
+```
+position  entropy  support  low_support  distinct_variants_count  distinct_variants_incidence  total_variants_incidence  index_sequence  index_count  index_incidence  major_sequence  major_count  major_incidence  minor_count  minor_incidence  unique_count  unique_incidence
+1         0.000000 1000     .            1                        50.00                        0.20                      MFVFLVLLP       998          99.80            MFVFLVLLQ       2            0.20             .            .                .             .
+```
+
+Tied motifs are comma-separated within cells (VCF v4.5 convention):
+```
+index_sequence=ACDE,FGHI  index_count=100,100  index_incidence=33.33,33.33
+```
+
 ### Understanding the Results
-
-**Top-level fields:**
-
-| Field | Description |
-|-------|-------------|
-| `sequence_count` | Total number of sequences analyzed |
-| `support_threshold` | Minimum support for reliable entropy |
-| `low_support_count` | Positions with support below threshold |
-| `kmer_length` | K-mer window size used |
-| `average_entropy` | Mean entropy across all positions |
-| `highest_entropy_position` | Position with maximum diversity |
-| `highest_entropy_value` | Maximum entropy value |
-
-**Per-position fields:**
-
-| Field | Description |
-|-------|-------------|
-| `position` | 1-indexed position in the alignment |
-| `entropy` | Shannon's entropy (0 = conserved, higher = diverse) |
-| `support` | Number of valid k-mers at this position |
-| `low_support` | Label if support is low: `NS`, `LS`, or `ELS` |
-| `distinct_variants_count` | Number of unique k-mer sequences (excluding Index) |
-| `diversity_motifs` | Array of variant details |
 
 **Low support labels:**
 
@@ -445,83 +417,82 @@ dima deflate [OPTIONS] --input <BINARY>
 |-------|---------|
 | `NS` | No Support (support = 0) |
 | `LS` | Low Support (support < threshold) |
-| `ELS` | Exactly Low Support (support = threshold) |
-| `null` | Normal support (support > threshold) |
+| `ELS` | Exceptional Low Support (support = threshold) |
+| `null` / `.` | Normal (support > threshold) |
 
 ---
 
 ## Examples
 
-### Basic Example
-
 ```bash
-# Analyze protein sequences with default settings
-dima analyze -i spike_protein.fasta -o results.json -n "SARS-CoV-2 Spike"
-```
+# Analyze with TSV output for R
+dima analyze -i spike.fasta -O tsv -o results.tsv -n "SARS-CoV-2 Spike"
 
-### With Metadata Aggregation
+# Nucleotide analysis
+dima analyze -i genome.fasta --alphabet nucleotide -o results.json
 
-```bash
-# Header format: >USA|2023-01-15|Human|Delta
-dima analyze -i sequences.fasta -o results.json \
-  --header-format "country|date|host|variant" \
-  --name "Global SARS-CoV-2"
-```
+# Full pipeline: compressed input → analysis → binary output
+dima analyze -i sequences.fasta.gz -O dima -o results.dima \
+  --header-format "country|date" -n "Global Analysis"
 
-### Highly Conserved Sequences
-
-```bash
-# Extract sequences conserved in ≥98% of samples
-dima analyze -i sequences.fasta --hcs-output conserved.json --hcs-threshold 98
-```
-
-Output:
-```json
-["MFVFLVLLPLVSSQCVNLTTRTQLPPAYTN", "FQFCNDPFLGVYYHKNNKSW"]
-```
-
-### Binary Output for Large Datasets
-
-```bash
-# Analyze with maximum performance
-dima analyze -i large_dataset.fasta \
-  -o results \
-  --columnar \
-  --binary \
-  --compression 2 \
-  --header-format "country|date" \
-  --name "Large Analysis"
-
-# Later, convert to JSON if needed
-dima deflate -i results.dima -o results.json
+# Extract and view conserved regions
+dima analyze -i sequences.fasta --hcs-output hcs.json --hcs-threshold 98
 ```
 
 ---
 
 ## Performance
 
-DiMA is optimized for high-throughput analysis. Benchmark on 2.3M sequences (Apple M3 Pro, 11 cores):
+Benchmark on 2.29M sequences (2.9 GB, Apple M3 Pro, 11 cores):
 
-| Configuration | Runtime | Output Size |
-|---------------|---------|-------------|
-| Baseline (no metadata) | 128s | 29 MB |
-| With metadata | 207s | 132 MB |
-| With metadata + `--columnar` | 178s | 132 MB |
-| With metadata + `--columnar --binary` | 179s | 15 MB |
+| Metric | Value |
+|--------|-------|
+| Total runtime | ~130s |
+| Peak memory | ~18 GB |
+| Throughput | ~17,600 sequences/s |
+| Output (JSON) | ~130 MB |
+| Output (binary, LZ4) | ~15 MB |
 
-**Key insights:**
-- `--columnar` provides **14% speedup** when processing metadata
-- `--binary --compression 1` reduces output size by **90%**
-- Without metadata, baseline is fastest (no optimization needed)
+Use `-v` to see detailed phase timing:
 
-See [BENCHMARK.md](BENCHMARK.md) for detailed performance analysis.
+```
+  Phase timing:
+    I/O + validation:     45.23s  ( 34.8%)
+    Entropy computation:  52.10s  ( 40.1%)
+    Position building:    30.55s  ( 23.5%)
+    Output serialization:  2.12s  (  1.6%)
+  Resources:
+    Peak memory:  18.23 GB
+    Threads used: 11
+    Input size:   2.90 GB (2,291,233 sequences, 1142 positions)
+```
+
+---
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `DIMA_FORCE_MMAP=1` | Force memory-mapped I/O regardless of file size |
+| `DIMA_FORCE_MMAP=0` | Force buffered I/O regardless of file size |
+| `RAYON_NUM_THREADS=N` | Set thread pool size (alternative to `--threads`) |
+| `NO_COLOR=1` | Disable colored output ([no-color.org](https://no-color.org/)) |
+| `TMPDIR` | Override temp directory for disk-backed mode |
+
+---
+
+## Desktop Application
+
+DiMA Desktop is a cross-platform GUI built with [Tauri 2](https://v2.tauri.app/) and React.
+
+See the `src-tauri/` and `ui/` directories for development details.
 
 ---
 
 ## Publications
 
-- DiMA: A tool for analysis of viral protein sequence diversity dynamics  
-  https://arxiv.org/abs/2205.13915
+- Tharanga, S. et al. (2025). DiMA: A tool for analysis of viral protein sequence diversity dynamics.  
+  *Bioinformatics Advances*, 5(1), vbae607. [PMC11596295](https://doi.org/10.1093/bioadv/vbae607)
 
 ---
 

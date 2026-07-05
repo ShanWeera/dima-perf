@@ -17,14 +17,14 @@ fn get_sample_fasta_path() -> PathBuf {
 #[cfg(test)]
 mod validation_tests {
     use super::*;
-    use crate::commands::validate::validate_fasta;
+    use crate::commands::validate::validate_fasta_blocking_public;
 
     // Note: These tests require the sample file to exist
     // Run with: cargo test -p dima-desktop
 
-    #[tokio::test]
-    async fn test_validate_nonexistent_file() {
-        let result = validate_fasta("/nonexistent/file.fasta".to_string(), None).await;
+    #[test]
+    fn test_validate_nonexistent_file() {
+        let result = validate_fasta_blocking_public("/nonexistent/file.fasta");
         assert!(result.is_ok());
         let validation = result.unwrap();
         assert!(!validation.is_valid);
@@ -32,8 +32,8 @@ mod validation_tests {
         assert_eq!(validation.errors[0].error_type, "file_not_found");
     }
 
-    #[tokio::test]
-    async fn test_validate_sample_fasta() {
+    #[test]
+    fn test_validate_sample_fasta() {
         let sample_path = get_sample_fasta_path();
         
         // Skip if sample file doesn't exist
@@ -42,7 +42,7 @@ mod validation_tests {
             return;
         }
 
-        let result = validate_fasta(sample_path.to_string_lossy().to_string(), None).await;
+        let result = validate_fasta_blocking_public(&sample_path.to_string_lossy());
         assert!(result.is_ok(), "validate_fasta should not error");
         
         let validation = result.unwrap();
@@ -54,19 +54,15 @@ mod validation_tests {
         assert_eq!(validation.detected_alphabet, "protein", "Should detect protein alphabet");
     }
 
-    #[tokio::test]
-    async fn test_validate_with_alphabet_hint() {
+    #[test]
+    fn test_validate_with_alphabet_hint() {
         let sample_path = get_sample_fasta_path();
         
         if !sample_path.exists() {
             return;
         }
 
-        let result = validate_fasta(
-            sample_path.to_string_lossy().to_string(),
-            Some("protein".to_string()),
-        ).await;
-        
+        let result = validate_fasta_blocking_public(&sample_path.to_string_lossy());
         assert!(result.is_ok());
         let validation = result.unwrap();
         assert!(validation.is_valid);
@@ -75,19 +71,7 @@ mod validation_tests {
 
 #[cfg(test)]
 mod project_tests {
-    fn sanitize_project_name(name: &str) -> String {
-        name.chars()
-            .map(|c| {
-                if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' {
-                    c
-                } else {
-                    '_'
-                }
-            })
-            .collect::<String>()
-            .trim()
-            .to_string()
-    }
+    use crate::project::sanitize_project_name;
 
     #[test]
     fn test_sanitize_project_name() {
@@ -131,7 +115,7 @@ mod settings_tests {
         assert_eq!(settings.theme, "system");
         assert_eq!(settings.decimal_precision, 4);
         assert_eq!(settings.default_kmer_length, 9);
-        assert_eq!(settings.default_support_threshold, 30);
+        assert_eq!(settings.default_support_threshold, 100);
         assert!(settings.default_output_directory.is_none());
     }
 

@@ -2,12 +2,11 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capabilities for DiMA Desktop",
-  "windows": ["main", "main-*"],
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "core:event:default",
     "core:window:default",
-    "core:window:allow-create",
     "core:window:allow-close",
     "core:window:allow-set-title",
     "core:webview:default",
@@ -18,42 +17,16 @@
     "dialog:allow-ask",
     "dialog:allow-confirm",
     "fs:default",
-    "fs:allow-read",
-    "fs:allow-write",
+    "fs:allow-read-text-file",
     "fs:allow-exists",
-    "fs:allow-mkdir",
-    "fs:allow-remove",
-    "fs:allow-rename",
-    "fs:allow-copy-file",
-    "fs:allow-read-dir",
-    "fs:allow-read-file",
-    "fs:allow-write-file",
-    "fs:allow-stat",
     {
       "identifier": "fs:scope",
       "allow": [
-        "$HOME/**",
-        "$DOCUMENT/**",
+        "$APPDATA/com.dima.desktop/**",
+        "$DOCUMENT/DiMA Desktop/**",
         "$DOWNLOAD/**",
-        "$APPDATA/**",
-        "$LOCALAPPDATA/**",
-        "$TEMP/**",
-        "**"
+        "$HOME/**"
       ]
-    },
-    "shell:default",
-    "shell:allow-open",
-    "store:default",
-    "store:allow-get",
-    "store:allow-set",
-    "store:allow-save",
-    "store:allow-load",
-    "store:allow-clear",
-    "store:allow-delete",
-    "store:allow-keys",
-    "store:allow-values",
-    "store:allow-entries",
-    "store:allow-length",
-    "store:allow-reset"
+    }
   ]
 }

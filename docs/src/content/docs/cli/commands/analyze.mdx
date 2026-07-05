@@ -1,0 +1,126 @@
+---
+title: analyze
+description: Full reference for the dima analyze command — diversity analysis on aligned FASTA sequences.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The `analyze` command is DiMA's primary operation. It reads an aligned FASTA file, computes Shannon's entropy (with sample-size bias correction) at each k-mer position, classifies diversity motifs, and optionally aggregates per-variant metadata.
+
+## Synopsis
+
+```bash
+dima analyze [OPTIONS] -i <FASTA> [-o <OUTPUT>]
+```
+
+## Input Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-i, --input <FASTA>` | Path to aligned FASTA file. Use `-` for stdin. | Required (or pipe) |
+| `--alphabet <TYPE>` | Sequence type: `protein` or `nucleotide` | `protein` |
+| `-k, --kmer <N>` | K-mer sliding window length | 9 (protein) / 27 (nucleotide) |
+| `-t, --threshold <N>` | Minimum support for entropy correction | 100 |
+| `-n, --name <NAME>` | Query name identifier in output | `"Unknown Protein"` |
+| `--validation <MODE>` | Character validation: `strict`, `permissive`, `report` | `strict` |
+| `--allow-lowercase` | Convert lowercase to uppercase instead of rejecting | off |
+| `--report-invalid` | Print character validation statistics to stderr | off |
+
+## Output Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-o, --output <FILE>` | Output file path (stdout if omitted) | stdout |
+| `-O, --output-type <FMT>` | Format: `json`, `tsv`, `jsonl`, `dima` | inferred |
+| `--no-header` | Omit TSV header row (only with `-O tsv`) | off |
+| `--compression <N>` | Binary compression: `0`=none, `1`=LZ4, `2`=Zstd | `1` |
+
+## Metadata Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--header-format <FIELDS>` | Pipe-separated field names for header parsing | disabled |
+| `--metadata-fields <FIELDS>` | Restrict aggregation to these fields only | all fields |
+| `--header-fillna <VALUE>` | Fill value for empty/missing header fields | `"Unknown"` |
+
+## HCS Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--hcs-output <FILE>` | Output path for Highly Conserved Sequences | disabled |
+| `--hcs-threshold <PCT>` | Minimum index incidence percentage (0–100) | 100.0 |
+
+## Performance Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--threads <N>` | Number of parallel worker threads | all CPUs |
+| `--low-memory` | Force disk-backed matrix storage | auto-detected |
+| `--force-ram` | Force RAM mode even for large datasets | off |
+| `--temp-dir <DIR>` | Directory for disk-backed temp files | `$TMPDIR` or input dir |
+
+## Verbosity
+
+| Option | Description |
+|--------|-------------|
+| `-q` | Quiet: suppress all output except errors |
+| (default) | Warnings and progress bars |
+| `-v` | Info-level messages |
+| `-vv` | Debug-level messages |
+| `-vvv` | Trace-level messages |
+
+## Examples
+
+**Basic protein analysis:**
+```bash
+dima analyze -i spike_aligned.fasta -o results.json
+```
+
+**Nucleotide analysis with custom k-mer:**
+```bash
+dima analyze -i pol_gene.fasta --alphabet nucleotide -k 27 -o pol_results.json
+```
+
+**With metadata aggregation:**
+```bash
+dima analyze -i aligned.fasta -o results.json \
+  --header-format "date|country|host" \
+  --name "SARS-CoV-2 Spike"
+```
+
+**Binary output with Zstd compression:**
+```bash
+dima analyze -i aligned.fasta -O dima --compression 2 -o results.dima
+```
+
+**Extract HCS at 95% threshold:**
+```bash
+dima analyze -i aligned.fasta -o results.json \
+  --hcs-output hcs.json --hcs-threshold 95
+```
+
+**Read from stdin (pipe from decompression):**
+```bash
+zcat aligned.fasta.gz | dima analyze -i - -o results.json
+```
+
+<Aside type="tip">
+DiMA natively handles `.gz`, `.bz2`, `.xz`, and `.zst` compressed input files without manual decompression. Simply pass the compressed file directly.
+</Aside>
+
+**Limit threads on shared systems:**
+```bash
+dima analyze -i aligned.fasta -o results.json --threads 4
+```
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Runtime error |
+| 2 | Usage/argument error |
+| 3 | I/O error |
+| 130 | Cancelled (Ctrl+C) |
+
+See [Exit Codes](/dima-perf/cli/advanced/exit-codes/) for details.

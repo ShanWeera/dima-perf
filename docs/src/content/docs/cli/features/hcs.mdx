@@ -1,0 +1,78 @@
+---
+title: Highly Conserved Sequences
+description: Extract and concatenate highly conserved sequence regions from diversity analysis.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Highly Conserved Sequences (HCS) are regions where the same k-mer sequence (the "index" motif) dominates across all aligned sequences at or above a user-defined incidence threshold. These regions are potential targets for vaccine design, drug analysis, and diagnostics.
+
+## How HCS Extraction Works
+
+1. At each k-mer position, the **index** (most frequent variant) is identified
+2. Positions where the index incidence meets or exceeds the threshold are selected
+3. Consecutive qualifying positions are **stitched** by suffix-prefix overlap into longer sequences
+4. Non-consecutive qualifying positions start new HCS regions
+
+## Usage
+
+```bash
+dima analyze -i aligned.fasta -o results.json \
+  --hcs-output hcs.json --hcs-threshold 95
+```
+
+### Output Format
+
+The HCS file is a JSON array of concatenated conserved sequences:
+
+```json
+["ACDEFGHIKLMNPQRSTVWY", "FGHIKLMNPQRS", "VWYACDEFGH"]
+```
+
+Each string represents a contiguous conserved region assembled from overlapping index k-mers.
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--hcs-output <FILE>` | Path for HCS output (required to enable) | disabled |
+| `--hcs-threshold <PCT>` | Minimum index incidence percentage | 100.0 |
+
+## Threshold Guidelines
+
+| Threshold | Conservation Level | Typical Use |
+|-----------|--------------------|-------------|
+| 100% | Completely conserved | Strictest: every sequence has the same k-mer |
+| 95–99% | Highly conserved | Vaccine targets, universal diagnostics |
+| 80–95% | Moderately conserved | Drug targets, broader epitope discovery |
+| 50–80% | Semi-conserved | Less stringent, larger output |
+
+<Aside type="tip">
+For SARS-CoV-2 Spike protein (2.1M sequences), setting `--hcs-threshold 99.95` identified 5 HCS regions of 9–23 amino acids, all matching reported T/B-cell epitopes (Tharanga et al. 2025, *Briefings in Bioinformatics*).
+</Aside>
+
+## Stitching Algorithm
+
+When consecutive k-mer positions qualify, their index sequences overlap by `k-1` characters. DiMA stitches them:
+
+```
+Position 10: ACDEFGHIK  (incidence 99.8%)
+Position 11: CDEFGHIKL  (incidence 99.7%)
+Position 12: DEFGHIKLM  (incidence 99.9%)
+→ Stitched HCS: ACDEFGHIKLM
+```
+
+If position 13 does not qualify, the current HCS ends and any subsequent qualifying positions start a new one.
+
+## Combined Usage
+
+Generate both full analysis results and HCS in a single run:
+
+```bash
+dima analyze -i spike_aligned.fasta \
+  -o results.json \
+  --hcs-output hcs.json \
+  --hcs-threshold 95 \
+  --header-format "date|country|host" \
+  --name "SARS-CoV-2 Spike"
+```
