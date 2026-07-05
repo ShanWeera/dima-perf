@@ -5,6 +5,10 @@ import { starlightKatex } from 'starlight-katex';
 export default defineConfig({
   site: 'https://ShanWeera.github.io',
   base: '/dima-perf/',
+  // Workaround: Astro 6.4.x regression (withastro/astro#16971) broke GFM in .mdx files
+  // for projects using @astrojs/mdx@5.x (Starlight 0.39.x). Remove when upgrading to
+  // Starlight >=0.40.0 which ships @astrojs/mdx@6.x with a proper fallback.
+  markdown: { gfm: true },
   integrations: [
     starlight({
       title: 'DiMA',
