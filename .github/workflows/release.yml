@@ -27,11 +27,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
 
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Rust tests
-        run: cargo test --workspace --locked
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -42,6 +37,15 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
         working-directory: ui
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: ui
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Rust tests (full workspace)
+        run: cargo test --workspace --locked
 
       - name: TypeScript check
         run: npx tsc --noEmit

@@ -11,7 +11,7 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  # Rust checks (core library + Tauri backend)
+  # Rust checks (CLI + library only — desktop is covered by release.yml test-gate)
   rust:
     name: Rust (${{ matrix.check }})
     runs-on: ubuntu-latest
@@ -27,20 +27,15 @@ jobs:
         with:
           components: clippy, rustfmt
 
-      - name: Install system dependencies (Tauri)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
-
       - uses: Swatinem/rust-cache@v2
 
       - name: cargo test
         if: matrix.check == 'test'
-        run: cargo test --workspace --exclude dima-desktop --locked
+        run: cargo test -p dima --locked
 
       - name: cargo clippy
         if: matrix.check == 'clippy'
-        run: cargo clippy --workspace --exclude dima-desktop --locked -- -D warnings
+        run: cargo clippy -p dima --locked -- -D warnings
 
       - name: cargo fmt
         if: matrix.check == 'fmt'
