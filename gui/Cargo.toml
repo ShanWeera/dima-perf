@@ -54,6 +54,17 @@ anyhow = "1"
 # Platform-standard directories (~/.config, ~/Documents)
 dirs = "6"
 
+# ── Windows dependency-unification pin ──────────────────────────────────
+# wgpu-hal 29 uses windows 0.62 for D3D12, but gpu-allocator 0.28 accepts
+# windows >=0.58,<=0.62. Without this pin, Cargo's resolver may split
+# gpu-allocator onto an older windows version (e.g. 0.61), producing
+# incompatible D3D12 types and a build failure (E0277 / E0308) on Windows.
+# Adding a direct dependency forces the resolver to unify on 0.62 for the
+# entire crate graph. This is inert on non-Windows platforms.
+# See: https://github.com/emilk/egui/issues/8069
+[target.'cfg(windows)'.dependencies]
+windows = "0.62"
+
 [package.metadata.bundle]
 name = "DiMA GUI"
 identifier = "com.dima.gui"

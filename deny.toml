@@ -1,0 +1,43 @@
+# cargo-deny configuration
+# https://embarkstudios.github.io/cargo-deny/
+#
+# Catches duplicate crate versions — the class of bug that breaks Windows
+# builds when gpu-allocator and wgpu-hal land on different `windows` crate
+# versions.
+#
+# Run locally:  cargo deny check bans
+# CI:           EmbarkStudios/cargo-deny-action@v2 (check bans)
+
+[graph]
+# Check all three release targets so Windows-only duplicates are caught even
+# when CI runs cargo-deny on Linux.
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "x86_64-pc-windows-msvc" },
+    { triple = "aarch64-apple-darwin" },
+]
+all-features = true
+
+# ─── Bans ────────────────────────────────────────────────────────────────
+[bans]
+# Fail CI when two versions of the same crate appear in the dependency graph.
+# This is the primary guard against the windows 0.61 / 0.62 split that
+# caused the D3D12 build failure.
+multiple-versions = "deny"
+wildcards = "deny"
+highlight = "all"
+
+# Legitimate semver-incompatible duplicates that cannot be unified because
+# our direct deps (rand 0.8, etc.) and transitive deps (proptest → rand 0.9)
+# require different major versions. Each entry has a reason for traceability.
+skip = [
+    # rand ecosystem: dima uses rand 0.8 (getrandom 0.2); proptest (dev-dep)
+    # pulls rand 0.9 (getrandom 0.3). These are semver-incompatible 0.x
+    # versions that cannot be unified.
+    { crate = "getrandom@0.2", reason = "rand 0.8 depends on getrandom 0.2; rand 0.9 uses 0.3" },
+
+    # windows-sys: anstyle-query uses 0.60; console/ctrlc/tempfile use 0.61.
+    # These are semver-incompatible 0.x versions and unrelated to the
+    # windows (not windows-sys) crate conflict we guard against.
+    { crate = "windows-sys@0.60", reason = "anstyle-query uses 0.60; rest of ecosystem on 0.61" },
+]

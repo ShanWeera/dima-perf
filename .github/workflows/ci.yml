@@ -123,6 +123,18 @@ jobs:
       - name: Compile benchmarks (regression check)
         run: cargo bench --no-run --locked -p dima
 
+  # Dependency policy — catches duplicate crate versions (e.g. the
+  # windows 0.61/0.62 split that breaks D3D12 builds) before they
+  # reach expensive platform-specific build jobs.
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check bans
+
   # MSRV check — ensures declared rust-version is actually buildable
   msrv:
     name: MSRV (1.81)
