@@ -1,19 +1,19 @@
 ---
 title: Desktop App Overview
-description: DiMA Desktop — a cross-platform GUI application built with Tauri for interactive diversity analysis.
+description: DiMA GUI — a native, GPU-rendered desktop application built with egui for interactive diversity analysis.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-DiMA Desktop is a cross-platform graphical application that provides an interactive interface for sequence diversity analysis, built with [Tauri](https://tauri.app/) and a modern web frontend.
+DiMA GUI is a native desktop application for interactive sequence diversity analysis, built with [egui](https://github.com/emilk/egui) and rendered via [wgpu](https://wgpu.rs/).
 
 ## Architecture
 
-DiMA Desktop combines:
+DiMA GUI is a single compiled binary with no WebView, no JavaScript, and no runtime dependencies:
 
-- **Tauri runtime** — Lightweight native shell (~5 MB), no Electron/Chromium overhead
-- **Rust backend** — Same `dima_lib` library used by the CLI for computation
-- **Web frontend** — Modern UI built with standard web technologies
+- **egui / eframe** — Immediate-mode GUI framework providing the entire user interface
+- **wgpu** — GPU-accelerated rendering backend (Vulkan, Metal, DX12)
+- **dima_lib** — The same Rust library used by the CLI, linked directly with zero-copy data access
 
 This architecture ensures the desktop app produces **identical results** to the CLI — the same entropy calculations, motif classification, and HCS extraction.
 
@@ -23,7 +23,7 @@ This architecture ensures the desktop app produces **identical results** to the 
 |---------|-----|---------|
 | Interface | Terminal commands | Graphical UI |
 | Interaction | Batch processing | Interactive exploration |
-| Input | File paths, stdin | File dialog |
+| Input | File paths, stdin | File dialog / drag-and-drop |
 | Output | Files, stdout | Visual charts + export |
 | Automation | Scriptable | Manual workflow |
 
@@ -33,4 +33,4 @@ The desktop app is ideal for exploring individual datasets interactively, while 
 
 ## Status
 
-DiMA Desktop is currently in active development. Pre-built binaries are available for all major platforms in the [GitHub Releases](https://github.com/ShanWeera/dima-perf/releases).
+DiMA GUI is in active development. Pre-built binaries are available for all major platforms in the [GitHub Releases](https://github.com/ShanWeera/dima-perf/releases).

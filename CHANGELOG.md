@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Semantic exit codes (0=success, 1=runtime, 2=usage, 3=io, 130=cancelled)
 - Cooperative cancellation via Ctrl+C with double-press force quit
 - `view` command for binary format conversion and re-compression
-- Desktop application (Tauri) with interactive visualization
+- Native desktop GUI (egui) with interactive visualization
 - Atomic file writes (write-to-temp then rename) preventing corrupt output
 - SIMD-accelerated string operations for sequence processing
 - Comprehensive CLI help text with short (-h) and long (--help) variants

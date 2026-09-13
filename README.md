@@ -483,9 +483,9 @@ Use `-v` to see detailed phase timing:
 
 ## Desktop Application
 
-DiMA Desktop is a cross-platform GUI built with [Tauri 2](https://v2.tauri.app/) and React.
+DiMA GUI is a native, GPU-rendered desktop application built with [egui](https://github.com/emilk/egui) and [wgpu](https://wgpu.rs/). Single binary, no WebView or JavaScript.
 
-See the `src-tauri/` and `ui/` directories for development details.
+See the `gui/` directory for development details.
 
 ---
 

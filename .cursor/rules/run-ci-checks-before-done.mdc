@@ -1,0 +1,34 @@
+---
+description: Always run CI checks locally before declaring work complete
+alwaysApply: true
+---
+
+# Run CI Checks Before Declaring Done
+
+After making ANY code changes (Rust, config files, workflows), you MUST run the relevant CI checks locally before considering the task complete. Never rely on remote CI to catch issues.
+
+## Rust Changes (CLI / Library)
+
+After modifying any `.rs` file in `src/` or `tests/`, or `Cargo.toml`:
+
+```bash
+cargo fmt --all
+cargo clippy -p dima -- -D warnings
+cargo test -p dima
+```
+
+Always run `cargo fmt` FIRST (it can change formatting that clippy then checks), then clippy, then tests.
+Use `-p dima` explicitly — never `--workspace` — because the `dima-gui` crate requires
+system GUI libraries (egui/wgpu) that may not be available in all environments.
+
+## Documentation Changes (docs/)
+
+After modifying anything in `docs/`:
+
+```bash
+cd docs && pnpm install && pnpm build
+```
+
+## Workflow Changes (.github/workflows/)
+
+Validate YAML syntax and review the workflow logic manually. Check that referenced paths, actions versions, and environment variables are correct.

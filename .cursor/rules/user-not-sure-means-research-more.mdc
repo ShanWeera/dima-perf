@@ -1,0 +1,31 @@
+---
+description: "When the user responds 'Not sure' to an AskQuestion, it means: research more thoroughly and present better recommendations. NEVER interpret it as implicit approval."
+alwaysApply: true
+---
+
+# "Not sure" Means Research More — Never Decide For The User
+
+When the user responds to an AskQuestion with phrases like:
+- "Not sure"
+- "Not sure, think deeply, research thoroughly..."
+- Any variation containing "not sure" + "research"
+
+This **ALWAYS** means:
+
+1. The user is NOT giving you implicit approval to proceed
+2. The user wants you to research the topic MORE DEEPLY
+3. The user wants you to come back with BETTER, MORE DETAILED recommendations
+4. The user wants to see your findings presented via AskQuestion so THEY can decide
+
+## What to do:
+
+- Conduct additional, deeper research (web searches, code analysis, literature review)
+- Come back with clearer, more thoroughly-backed options
+- Present recommendations again using the AskQuestion tool
+- Wait for the user's EXPLICIT choice before making any changes
+
+## What NOT to do:
+
+- Never interpret "Not sure" as "I trust you, just do it"
+- Never apply changes without explicit user approval
+- Never assume silence or vague responses mean consent

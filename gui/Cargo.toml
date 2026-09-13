@@ -1,0 +1,63 @@
+[package]
+name = "dima-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+# Independent MSRV: NOT .workspace = true.
+# egui 0.34.3 requires Rust 1.92. The workspace MSRV stays at 1.81 for CLI.
+# Per-crate MSRV is a proven pattern (axum/tokio-rs PR #3633; Cargo Book
+# "Multiple Policies in a Workspace"). With resolver 2, no MSRV-aware
+# dependency resolution issues.
+rust-version = "1.92"
+authors = ["Shan Tharanga <stwm2@student.london.ac.uk>"]
+description = "DiMA GUI - GPU-rendered desktop application for diversity motif analysis"
+
+[[bin]]
+name = "dima-gui"
+path = "src/main.rs"
+
+[dependencies]
+dima_lib = { path = "..", package = "dima" }
+
+# eframe 0.34+ defaults: wgpu (not glow), default_fonts, accesskit, x11, wayland.
+# wgpu is the default renderer since 0.34 (#7615) — no need to disable defaults.
+# We only add "persistence" (not a default) for window state save/restore.
+eframe = { version = "0.34.3", features = ["persistence"] }
+egui = "0.34.3"
+egui-wgpu = "0.34.3"
+egui_extras = { version = "0.34.3", features = ["image"] }
+
+# Direct dep for CallbackTrait types (Device, Queue, Buffer, etc.).
+# egui-wgpu 0.34.3 requires wgpu ^29.0.1.
+# Default features include vulkan/metal/dx12 backends.
+# wgpu 29 MSRV is 1.87 (lower than egui's 1.92, so not the bottleneck).
+wgpu = "29"
+
+# Native file dialogs (sync, no async runtime needed)
+rfd = "0.17"
+
+# Chart PNG export
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# GPU buffer data -- derive needed for #[derive(Pod, Zeroable)] on vertex structs
+bytemuck = { version = "1", features = ["derive"] }
+
+serde.workspace = true
+serde_json.workspace = true
+
+# Error type from dima_lib's write_results_to_output() return type
+anyhow = "1"
+
+# Platform-standard directories (~/.config, ~/Documents)
+dirs = "6"
+
+[package.metadata.bundle]
+name = "DiMA GUI"
+identifier = "com.dima.gui"
+icon = ["assets/icon.icns", "assets/icon.png"]
+version = "0.1.0"
+copyright = "Copyright (c) DiMA contributors"
+osx_minimum_system_version = "11.0"

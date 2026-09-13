@@ -9,7 +9,7 @@ import { Steps, Aside } from '@astrojs/starlight/components';
 
 - [Rust](https://www.rust-lang.org/tools/install) 1.81+ (see `rust-version` in Cargo.toml)
 - Git
-- For the desktop app: Node.js 18+ and system dependencies for [Tauri](https://tauri.app/start/prerequisites/)
+- For the desktop GUI: system libraries for egui/wgpu (Linux only — see [Desktop Installation](/desktop/installation/))
 
 ## Building from Source
 
@@ -57,12 +57,11 @@ cargo fmt             # Auto-format
 cargo clippy          # Lint checks
 ```
 
-### Building the Desktop App
+### Running the Desktop GUI
 
 ```bash
-cd src-tauri
-cargo tauri dev       # Development mode with hot reload
-cargo tauri build     # Production build
+cargo run -p dima-gui                 # Debug build
+cargo build --release -p dima-gui     # Production build
 ```
 
 ## Project Layout
@@ -84,8 +83,7 @@ dima-perf/
 │   ├── matrix.rs     # Sequence matrix (RAM/disk-backed)
 │   ├── simd_string.rs # SIMD string operations
 │   └── help.rs       # CLI help text constants
-├── src-tauri/        # Tauri desktop app backend
-├── ui/               # Desktop app frontend
+├── gui/              # Native desktop GUI (egui/wgpu)
 ├── benches/          # Criterion benchmarks
 ├── tests/            # Integration tests
 ├── docs/             # Documentation website (Starlight)
@@ -93,7 +91,7 @@ dima-perf/
 ```
 
 <Aside type="note">
-The workspace has two members: the root crate (CLI + library) and `src-tauri/` (desktop app backend). The default member is the root, so `cargo build` only builds the CLI unless you specify `--workspace`.
+The workspace has two members: the root crate (CLI + library) and `gui/` (native desktop GUI). The default member is the root, so `cargo build` only builds the CLI unless you specify `--workspace`.
 </Aside>
 
 ## Useful Commands

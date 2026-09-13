@@ -2,7 +2,7 @@ use hashbrown::HashMap;
 use indicatif::ProgressStyle;
 use rayon::prelude::*;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 
@@ -65,6 +65,11 @@ pub struct AnalysisConfig {
     /// loops will short-circuit and return `AnalysisError::Cancelled`.
     /// Pass `None` for non-cancellable runs (CLI without signal handling, tests).
     pub cancel_token: Option<Arc<AtomicBool>>,
+    /// Optional progress counter incremented per position during entropy computation.
+    /// Used by GUI frontends to display real progress bars. When `None` (CLI default),
+    /// the branch is predicted-not-taken and has zero performance impact.
+    /// With `lto = true`, LLVM may eliminate the branch entirely for CLI builds.
+    pub progress_counter: Option<Arc<AtomicUsize>>,
 }
 
 impl AnalysisConfig {
@@ -89,6 +94,11 @@ impl AnalysisConfig {
 
     pub fn with_cancel_token(mut self, token: Arc<AtomicBool>) -> Self {
         self.cancel_token = Some(token);
+        self
+    }
+
+    pub fn with_progress_counter(mut self, counter: Arc<AtomicUsize>) -> Self {
+        self.progress_counter = Some(counter);
         self
     }
 
@@ -186,7 +196,7 @@ impl MetadataAggregator for RowAggregator<'_> {
 ///
 /// Progress is driven by the caller's entered span (which has `indicatif.pb_show`).
 /// Each rayon worker propagates the parent span context and increments via `pb_inc`.
-/// When no IndicatifLayer is registered (Tauri, tests), `pb_inc` is a documented no-op.
+/// When no IndicatifLayer is registered (GUI, tests), `pb_inc` is a documented no-op.
 fn compute_entropies(
     encoded_kmers: &[Vec<u64>],
     support_threshold: usize,
@@ -204,6 +214,11 @@ fn compute_entropies(
             let entropy =
                 calculate_entropy_encoded_at_position(position_kmers, &support_threshold, idx);
             tracing::Span::current().pb_inc(1);
+            // Increment GUI progress counter (no-op when None; Relaxed is sufficient
+            // because we only need eventual visibility, not ordering guarantees)
+            if let Some(ref counter) = config.progress_counter {
+                counter.fetch_add(1, Ordering::Relaxed);
+            }
             Ok(entropy)
         })
         .collect()
@@ -766,7 +781,7 @@ fn analyze_stdin(
     )
 }
 
-// Legacy aliases for backward compatibility during migration (Tauri app uses these).
+// Legacy aliases retained for internal test convenience.
 // These return the old 2-tuple signature by discarding the PerfReport.
 #[allow(clippy::too_many_arguments)]
 #[doc(hidden)]

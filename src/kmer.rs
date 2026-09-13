@@ -186,11 +186,9 @@ fn encode_kmer_single_pass(
 ) -> Option<u64> {
     let mut encoded = 0u64;
     for &byte in window {
-        match validator.encode(byte) {
-            Some(code) => {
-                encoded = encoded.checked_mul(base)?.checked_add(code as u64)?;
-            }
-            None => return None,
+        {
+            let code = validator.encode(byte)?;
+            encoded = encoded.checked_mul(base)?.checked_add(code as u64)?;
         }
     }
     Some(encoded)

@@ -1,30 +1,42 @@
 ---
 title: Desktop Features
-description: GUI-specific features of DiMA Desktop including interactive visualization and export.
+description: GUI-specific features of DiMA GUI including interactive visualization, filtering, and export.
 ---
 
 ## Interactive Analysis
 
-- **File selection** — Native file dialog for choosing input FASTA files
-- **Parameter configuration** — Visual controls for k-mer length, threshold, alphabet, and header format
-- **Real-time progress** — Progress indicators during analysis
-- **Result exploration** — Navigate between k-mer positions interactively
+- **File selection** — Drag-and-drop or file dialog for FASTA files (plain, gzip, bzip2, xz, zstd)
+- **FASTA validation** — Background pre-validation with alphabet detection and header format parsing
+- **Parameter configuration** — Visual controls for k-mer length, threshold, alphabet, validation mode, and header format
+- **Real-time progress** — Progress indicators during analysis with cooperative cancellation
+- **Binary import** — Load previously saved `.dima` binary results instantly
 
 ## Visualization
 
-- **Entropy plot** — Panoramic view of diversity across all alignment positions
-- **Motif distribution** — Bar charts showing Index/Major/Minor/Unique breakdown at each position
-- **Metadata charts** — Pie/bar charts for per-variant metadata aggregation (when enabled)
+- **Entropy chart** — Panoramic view of diversity across all alignment positions with pan and zoom
+- **Position explorer** — Sortable, filterable table of all positions with entropy, motif type, and variant counts
+- **Variant details** — Per-position variant panel showing k-mer sequences, counts, motif classification, and percentages
+- **Metadata section** — Per-variant metadata breakdown with progressive disclosure for large field sets
+- **HCS regions** — Highlighted Highly Conserved Sequences with configurable thresholds
+
+## Filtering
+
+- **Metadata filters** — Filter positions and variants by metadata field values
+- **Filter summary** — Visual indicator of active filters with one-click clear
 
 ## Export
 
 - Export results to JSON, TSV, or binary `.dima` format
-- Save entropy plots as images
-- Copy data tables to clipboard
+- Re-import `.dima` files for instant visualization without re-analysis
+
+## Appearance
+
+- **Light / dark theme** — Toggle between light and dark modes
+- **Responsive layout** — Panels adapt to window size
 
 ## Shared Core
 
-DiMA Desktop uses the same `dima_lib` Rust library as the CLI tool. This guarantees:
+DiMA GUI uses the same `dima_lib` Rust library as the CLI tool. This guarantees:
 
 - Identical entropy computation algorithms
 - Same diversity motif classification logic

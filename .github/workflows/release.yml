@@ -22,38 +22,18 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install system dependencies (Tauri)
+      - name: Install system dependencies (egui/wgpu)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: ui/package-lock.json
-
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: ui
-
-      - name: Build frontend
-        run: npm run build
-        working-directory: ui
+          sudo apt-get install -y \
+            libxkbcommon-dev libwayland-dev libxcb-render0-dev libxcb-shape0-dev \
+            libxcb-xfixes0-dev libxrandr-dev libxi-dev libxtst-dev libx11-dev \
+            libgl-dev libegl-dev libvulkan-dev
 
       - uses: Swatinem/rust-cache@v2
 
       - name: Rust tests (full workspace)
         run: cargo test --workspace --locked
-
-      - name: TypeScript check
-        run: npx tsc --noEmit
-        working-directory: ui
-
-      - name: Frontend tests
-        run: npx vitest run
-        working-directory: ui
 
   # Build CLI - builds CLI for all target platforms
   build-cli:
@@ -200,9 +180,10 @@ jobs:
       # We'll reconstruct the table in the update-release job
       version: ${{ github.ref_name }}
 
-  # Build GUI - builds Tauri app for desktop platforms
-  build-gui:
-    name: Build GUI ${{ matrix.target }}
+  # Build dima-gui (egui native app) - builds for desktop platforms
+  # No frontend build step needed — single binary, no WebView.
+  build-dima-gui:
+    name: Build dima-gui ${{ matrix.target }}
     needs: test-gate
     runs-on: ${{ matrix.os }}
     strategy:
@@ -211,22 +192,26 @@ jobs:
         include:
           # Linux x86_64
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-22.04
+            os: ubuntu-latest
+            archive: tar.gz
             platform_name: Linux x86_64
 
           # macOS Intel
           - target: x86_64-apple-darwin
             os: macos-15-intel
-            platform_name: macOS Intel
+            archive: tar.gz
+            platform_name: macOS Intel (x86_64)
 
           # macOS Apple Silicon
           - target: aarch64-apple-darwin
             os: macos-14
-            platform_name: macOS Apple Silicon
+            archive: tar.gz
+            platform_name: macOS Apple Silicon (ARM64)
 
           # Windows x86_64
           - target: x86_64-pc-windows-msvc
             os: windows-latest
+            archive: zip
             platform_name: Windows x86_64
 
     steps:
@@ -238,48 +223,68 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: ui/package-lock.json
-
-      - name: Install Linux dependencies
+      - name: Install Linux dependencies (egui/wgpu)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxkbcommon-dev libwayland-dev libxrandr-dev \
+            libxi-dev libxtst-dev libx11-dev libgl-dev libegl-dev libvulkan-dev
 
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: ui
+      - uses: Swatinem/rust-cache@v2
 
-      - name: Install Tauri CLI
-        run: npm install -g @tauri-apps/cli@^2
+      - name: Build dima-gui
+        run: cargo build --release --locked -p dima-gui --target ${{ matrix.target }}
 
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+      - name: Create archive directory
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          ARCHIVE_NAME="dima-gui-${VERSION}-${{ matrix.target }}"
+          mkdir -p "dist/${ARCHIVE_NAME}"
+          
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            cp "target/${{ matrix.target }}/release/dima-gui.exe" "dist/${ARCHIVE_NAME}/"
+          else
+            cp "target/${{ matrix.target }}/release/dima-gui" "dist/${ARCHIVE_NAME}/"
+          fi
+          
+          cp README.md "dist/${ARCHIVE_NAME}/" 2>/dev/null || true
+          cp LICENSE "dist/${ARCHIVE_NAME}/" 2>/dev/null || true
+
+      - name: Create tarball (Unix)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          ARCHIVE_NAME="dima-gui-${VERSION}-${{ matrix.target }}"
+          cd dist
+          tar -czvf "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}"
+          echo "ASSET_PATH=dist/${ARCHIVE_NAME}.tar.gz" >> $GITHUB_ENV
+          echo "ASSET_NAME=${ARCHIVE_NAME}.tar.gz" >> $GITHUB_ENV
+
+      - name: Create zip archive (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $VERSION = "${{ github.ref_name }}"
+          $ARCHIVE_NAME = "dima-gui-${VERSION}-${{ matrix.target }}"
+          Compress-Archive -Path "dist\${ARCHIVE_NAME}\*" -DestinationPath "dist\${ARCHIVE_NAME}.zip"
+          echo "ASSET_PATH=dist/${ARCHIVE_NAME}.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "ASSET_NAME=${ARCHIVE_NAME}.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ASSET_PATH }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          projectPath: src-tauri
-          tauriScript: npx tauri
-          tagName: ${{ github.ref_name }}
-          releaseName: ${{ github.ref_name }}
-          releaseBody: ''
-          releaseDraft: false
-          prerelease: false
-          args: --target ${{ matrix.target }}
 
   # Update release body with download table
   update-release:
     name: Update Release Body
-    needs: [build-cli, build-gui]
+    needs: [build-cli, build-dima-gui]
     runs-on: ubuntu-latest
     steps:
       - name: Generate release body with download table
@@ -289,26 +294,21 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
-          # Remove 'v' prefix for version number if present
-          VER_NUM="${VERSION#v}"
           
           # Create the release body with download tables
           cat << 'HEADER' > release_body.md
-          ## DiMA Desktop (GUI Application)
+          ## DiMA GUI (Native Desktop App — egui)
           
-          Download the desktop application for your platform:
+          Lightweight GPU-rendered native application. Single binary, no WebView.
           
           | Platform | Download |
           |----------|----------|
           HEADER
           
-          # Add GUI download links (productName is DiMA-Desktop)
-          echo "| macOS (Intel) | [DiMA-Desktop_${VER_NUM}_x64.dmg](${BASE_URL}/DiMA-Desktop_${VER_NUM}_x64.dmg) |" >> release_body.md
-          echo "| macOS (Apple Silicon) | [DiMA-Desktop_${VER_NUM}_aarch64.dmg](${BASE_URL}/DiMA-Desktop_${VER_NUM}_aarch64.dmg) |" >> release_body.md
-          echo "| Windows (Installer) | [DiMA-Desktop_${VER_NUM}_x64-setup.exe](${BASE_URL}/DiMA-Desktop_${VER_NUM}_x64-setup.exe) |" >> release_body.md
-          echo "| Windows (MSI) | [DiMA-Desktop_${VER_NUM}_x64_en-US.msi](${BASE_URL}/DiMA-Desktop_${VER_NUM}_x64_en-US.msi) |" >> release_body.md
-          echo "| Linux (AppImage) | [DiMA-Desktop_${VER_NUM}_amd64.AppImage](${BASE_URL}/DiMA-Desktop_${VER_NUM}_amd64.AppImage) |" >> release_body.md
-          echo "| Linux (deb) | [dima-desktop_${VER_NUM}_amd64.deb](${BASE_URL}/dima-desktop_${VER_NUM}_amd64.deb) |" >> release_body.md
+          echo "| Linux (x86_64) | [dima-gui-${VERSION}-x86_64-unknown-linux-gnu.tar.gz](${BASE_URL}/dima-gui-${VERSION}-x86_64-unknown-linux-gnu.tar.gz) |" >> release_body.md
+          echo "| macOS (Intel) | [dima-gui-${VERSION}-x86_64-apple-darwin.tar.gz](${BASE_URL}/dima-gui-${VERSION}-x86_64-apple-darwin.tar.gz) |" >> release_body.md
+          echo "| macOS (Apple Silicon) | [dima-gui-${VERSION}-aarch64-apple-darwin.tar.gz](${BASE_URL}/dima-gui-${VERSION}-aarch64-apple-darwin.tar.gz) |" >> release_body.md
+          echo "| Windows (x86_64) | [dima-gui-${VERSION}-x86_64-pc-windows-msvc.zip](${BASE_URL}/dima-gui-${VERSION}-x86_64-pc-windows-msvc.zip) |" >> release_body.md
           
           cat << 'CLI_HEADER' >> release_body.md
           

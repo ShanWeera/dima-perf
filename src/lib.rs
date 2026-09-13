@@ -1,5 +1,5 @@
 // Many internal functions are used by consumers outside this crate's binary
-// (Tauri app, benchmarks) but appear dead from the lib's perspective.
+// (GUI app, benchmarks) but appear dead from the lib's perspective.
 #![allow(dead_code)]
 
 // Internal modules — NOT part of the semver-stable public API.
@@ -19,6 +19,7 @@ pub(crate) mod models;
 pub mod output;
 pub mod perf;
 pub(crate) mod simd_string;
+pub(crate) mod validation;
 pub(crate) mod zero_copy;
 
 // ─── Stable Public API ───────────────────────────────────────────────────────
@@ -35,6 +36,9 @@ pub use binary::{BinaryFormat, BinaryFormatConfig, BinaryFormatError, Compressio
 pub use entropy::calculate_entropy_encoded_at_position;
 pub use io::{atomic_write, InputSource, ParseDiagnostics};
 pub use kmer::max_kmer_length;
-pub use models::{HighestEntropy, Position, Results, Variant};
+pub use models::{compute_hcs_regions, HcsRegion, HighestEntropy, Position, Results, Variant};
 pub use output::{resolve_output_type, write_results_to_output, OutputOptions, OutputType};
 pub use perf::PerfReport;
+pub use validation::{
+    validate_fasta, FastaValidationResult, HeaderFormat, ValidationError, ValidationWarning,
+};

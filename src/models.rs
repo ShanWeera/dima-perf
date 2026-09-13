@@ -156,135 +156,193 @@ fn find_overlap_length(acc: &str, kmer: &str) -> usize {
     0
 }
 
+/// A single Highly Conserved Sequence region, representing a contiguous stretch
+/// of positions whose Index variant exceeds the conservation threshold.
+///
+/// Extracted from `Results::get_hcs()` to enable structured access for GUI
+/// visualization (e.g., HCS block maps) without re-parsing formatted strings.
+/// `get_hcs()` delegates to `compute_hcs_regions()` internally, so existing
+/// behavior is unchanged.
+#[derive(Debug, Clone)]
+pub struct HcsRegion {
+    /// First position in this HCS region (1-based, inclusive)
+    pub start_position: usize,
+    /// Last position in this HCS region (1-based, inclusive)
+    pub end_position: usize,
+    /// Stitched k-mer sequence for this region
+    pub sequence: String,
+    /// All 1-based position numbers in this region
+    pub positions: Vec<usize>,
+    /// Positions within this region that have a low-support label (NS/LS/ELS)
+    pub low_support_positions: Vec<usize>,
+}
+
+/// Compute Highly Conserved Sequence (HCS) regions from analysis results.
+///
+/// Algorithm (per PMC11596295):
+/// 1. Walk positions in order; at each position select the lexicographically
+///    first Index variant above the threshold.
+/// 2. A position without a qualifying Index breaks the current HCS region.
+/// 3. Adjacent k-mers are stitched by their (k-1)-overlap: the non-overlapping
+///    suffix is appended (may be >1 char if overlap < k-1).
+/// 4. Single-position Index k-mers ARE valid HCS regions (length = k).
+///
+/// Uses cross-multiplication for threshold comparison (exact, no float error).
+/// Uses kmer_length for overlap (not variant sequence length).
+/// Lexicographic tie-break when multiple Index variants at same position.
+pub fn compute_hcs_regions(results: &Results, threshold: Option<f64>) -> Vec<HcsRegion> {
+    let mut regions: Vec<HcsRegion> = Vec::new();
+    let mut acc = String::new();
+    let mut current_positions: Vec<usize> = Vec::new();
+    let mut current_low_support: Vec<usize> = Vec::new();
+
+    // Defensive sort by position index. During normal analysis, positions are
+    // already in order, but deserialized data (JSON/binary round-trip) may not be.
+    // Sorting guarantees correct consecutive-position stitching regardless of source.
+    let mut sorted_positions: Vec<&Position> = results.results.iter().collect();
+    sorted_positions.sort_unstable_by_key(|p| p.position);
+
+    let mut last_qualifying_position: Option<usize> = None;
+    let kmer_length = results.kmer_length;
+
+    // Flush the current accumulated region into the output vec.
+    // Uses std::mem::take to move owned data without cloning.
+    let flush_region = |acc: &mut String,
+                        positions: &mut Vec<usize>,
+                        low_support: &mut Vec<usize>,
+                        regions: &mut Vec<HcsRegion>| {
+        if !acc.is_empty() {
+            let start = positions.first().copied().unwrap_or(0);
+            let end = positions.last().copied().unwrap_or(0);
+            regions.push(HcsRegion {
+                start_position: start,
+                end_position: end,
+                sequence: std::mem::take(acc),
+                positions: std::mem::take(positions),
+                low_support_positions: std::mem::take(low_support),
+            });
+        }
+    };
+
+    for position in sorted_positions {
+        // Find qualifying Index variant at this position
+        let index_kmer = position.diversity_motifs.as_ref().and_then(|motifs| {
+            let support = position.support;
+            let mut candidates: Vec<&Variant> = motifs
+                .iter()
+                .filter(|v| v.motif_short.as_deref() == Some("I"))
+                .filter(|v| match threshold {
+                    Some(t) => {
+                        // Cross-multiplication avoids floating-point rounding errors
+                        // from the division in incidence = (count/support)*100.
+                        // A variant with 90/100 reads should pass threshold=90.0 exactly,
+                        // but (90.0/100.0)*100.0 may yield 89.99999... due to IEEE 754.
+                        // Cross-multiply: count*100 >= support*threshold (exact for <2^53).
+                        (v.count as f64 * 100.0) >= (support as f64 * t)
+                    }
+                    None => true,
+                })
+                .collect();
+            // Use lexicographically first Index for determinism when ties exist
+            candidates.sort_by(|a, b| a.sequence.cmp(&b.sequence));
+            candidates.first().map(|v| v.sequence.as_str())
+        });
+
+        match index_kmer {
+            Some(sequence) => {
+                // Positions must be consecutive (position N+1 == last + 1) for valid
+                // HCS stitching. Non-consecutive qualifying positions start a new region
+                // even if their sequences happen to share an overlap by coincidence.
+                let is_consecutive =
+                    last_qualifying_position.map_or(true, |last| position.position == last + 1);
+
+                if acc.is_empty() || !is_consecutive {
+                    flush_region(
+                        &mut acc,
+                        &mut current_positions,
+                        &mut current_low_support,
+                        &mut regions,
+                    );
+                    acc = sequence.to_string();
+                    current_positions.push(position.position);
+                } else {
+                    let overlap_len = find_overlap_length(&acc, sequence);
+                    // For k>1, adjacent k-mers share a (k-1)-character overlap.
+                    // For k=1, there's no overlap between single-char k-mers,
+                    // but adjacent positions are still contiguous (overlap=0 is valid).
+                    let min_required_overlap = kmer_length.saturating_sub(1);
+
+                    if overlap_len >= min_required_overlap {
+                        acc.push_str(&sequence[overlap_len..]);
+                        current_positions.push(position.position);
+                    } else {
+                        flush_region(
+                            &mut acc,
+                            &mut current_positions,
+                            &mut current_low_support,
+                            &mut regions,
+                        );
+                        acc = sequence.to_string();
+                        current_positions.push(position.position);
+                    }
+                }
+
+                // Push low_support AFTER flush so it always attributes to the
+                // CURRENT (correct) region, not the previous one being flushed.
+                if position.low_support.is_some() {
+                    current_low_support.push(position.position);
+                }
+
+                last_qualifying_position = Some(position.position);
+            }
+            None => {
+                flush_region(
+                    &mut acc,
+                    &mut current_positions,
+                    &mut current_low_support,
+                    &mut regions,
+                );
+            }
+        }
+    }
+    flush_region(
+        &mut acc,
+        &mut current_positions,
+        &mut current_low_support,
+        &mut regions,
+    );
+
+    regions
+}
+
 impl Results {
     /// Compute Highly Conserved Sequences (HCS) by stitching contiguous Index k-mers.
     ///
-    /// Algorithm (per PMC11596295):
-    /// 1. Walk positions in order; at each position select the lexicographically
-    ///    first Index variant above the threshold.
-    /// 2. A position without a qualifying Index breaks the current HCS region.
-    /// 3. Adjacent k-mers are stitched by their (k-1)-overlap: the non-overlapping
-    ///    suffix is appended (may be >1 char if overlap < k-1).
-    /// 4. Single-position Index k-mers ARE valid HCS regions (length = k).
+    /// Delegates to `compute_hcs_regions()` for the core algorithm, then formats
+    /// the output as `Vec<String>` (sequence strings) and optionally writes to file.
+    /// This preserves full backward compatibility with existing callers (CLI, GUI).
     pub fn get_hcs(
         &self,
         path: Option<String>,
         threshold: Option<f64>,
     ) -> Result<Vec<String>, std::io::Error> {
-        let mut hcs_out: Vec<String> = Vec::new();
-        let mut acc = String::new();
-        // Track which HCS positions have low support for the warning
-        let mut current_region_low_support: Vec<usize> = Vec::new();
-        let mut all_low_support_positions: Vec<(usize, Vec<usize>)> = Vec::new();
-
-        // Defensive sort by position index. During normal analysis, positions are
-        // already in order, but deserialized data (JSON/binary round-trip) may not be.
-        // Sorting guarantees correct consecutive-position stitching regardless of source.
-        let mut sorted_positions: Vec<&Position> = self.results.iter().collect();
-        sorted_positions.sort_unstable_by_key(|p| p.position);
-
-        // Track last qualifying position for explicit consecutive-position check
-        let mut last_qualifying_position: Option<usize> = None;
-
-        for position in sorted_positions {
-            // Find qualifying Index variant at this position
-            let index_kmer = position.diversity_motifs.as_ref().and_then(|motifs| {
-                let support = position.support;
-                let mut candidates: Vec<&Variant> = motifs
-                    .iter()
-                    .filter(|v| v.motif_short.as_deref() == Some("I"))
-                    .filter(|v| match threshold {
-                        Some(t) => {
-                            // Cross-multiplication avoids floating-point rounding errors
-                            // from the division in incidence = (count/support)*100.
-                            // A variant with 90/100 reads should pass threshold=90.0 exactly,
-                            // but (90.0/100.0)*100.0 may yield 89.99999... due to IEEE 754.
-                            // Cross-multiply: count*100 >= support*threshold (exact for <2^53).
-                            (v.count as f64 * 100.0) >= (support as f64 * t)
-                        }
-                        None => true,
-                    })
-                    .collect();
-                // Use lexicographically first Index for determinism when ties exist
-                candidates.sort_by(|a, b| a.sequence.cmp(&b.sequence));
-                candidates.first().map(|v| v.sequence.as_str())
-            });
-
-            match index_kmer {
-                Some(sequence) => {
-                    if position.low_support.is_some() {
-                        current_region_low_support.push(position.position);
-                    }
-
-                    // Positions must be consecutive (position N+1 == last + 1) for valid
-                    // HCS stitching. Non-consecutive qualifying positions start a new region
-                    // even if their sequences happen to share an overlap by coincidence.
-                    let is_consecutive =
-                        last_qualifying_position.map_or(true, |last| position.position == last + 1);
-
-                    if acc.is_empty() || !is_consecutive {
-                        // Start a new region (either first qualifying position, or gap detected)
-                        if !acc.is_empty() {
-                            hcs_out.push(acc);
-                            if !current_region_low_support.is_empty() {
-                                all_low_support_positions
-                                    .push((hcs_out.len(), current_region_low_support.clone()));
-                                current_region_low_support.clear();
-                            }
-                        }
-                        acc = sequence.to_string();
-                    } else {
-                        let overlap_len = find_overlap_length(&acc, sequence);
-                        // For k>1, adjacent k-mers share a (k-1)-character overlap.
-                        // For k=1, there's no overlap between single-char k-mers,
-                        // but adjacent positions are still contiguous (overlap=0 is valid).
-                        let min_required_overlap = self.kmer_length.saturating_sub(1);
-                        if overlap_len >= min_required_overlap {
-                            acc.push_str(&sequence[overlap_len..]);
-                        } else {
-                            hcs_out.push(acc);
-                            if !current_region_low_support.is_empty() {
-                                all_low_support_positions
-                                    .push((hcs_out.len(), current_region_low_support.clone()));
-                                current_region_low_support.clear();
-                            }
-                            acc = sequence.to_string();
-                        }
-                    }
-                    last_qualifying_position = Some(position.position);
-                }
-                None => {
-                    if !acc.is_empty() {
-                        hcs_out.push(acc);
-                        if !current_region_low_support.is_empty() {
-                            all_low_support_positions
-                                .push((hcs_out.len(), current_region_low_support.clone()));
-                            current_region_low_support.clear();
-                        }
-                        acc = String::new();
-                    }
-                }
-            }
-        }
-        if !acc.is_empty() {
-            hcs_out.push(acc);
-            if !current_region_low_support.is_empty() {
-                all_low_support_positions.push((hcs_out.len(), current_region_low_support.clone()));
-            }
-        }
+        let regions = compute_hcs_regions(self, threshold);
 
         // Warn about HCS regions that include low-support positions,
         // which may be statistically unreliable despite meeting the incidence threshold
-        if !all_low_support_positions.is_empty() {
-            let total: usize = all_low_support_positions.iter().map(|(_, v)| v.len()).sum();
+        let total_low_support: usize = regions.iter().map(|r| r.low_support_positions.len()).sum();
+        if total_low_support > 0 {
             tracing::warn!(
-                low_support_positions = total,
-                "HCS contains positions with low support — these regions may be statistically unreliable"
+                low_support_positions = total_low_support,
+                "HCS contains positions with low support \u{2014} these regions may be statistically unreliable"
             );
         }
 
+        let hcs_out: Vec<String> = regions.into_iter().map(|r| r.sequence).collect();
+
         if let Some(save_path) = path {
-            // Atomic write: temp file + fsync + rename (same pattern as to_json)
+            // Atomic write: temp file + fsync + rename (same pattern as to_json).
+            // Uses manual temp+rename, NOT io::atomic_write() (which uses tempfile crate).
             let final_path = std::path::Path::new(&save_path);
             let tmp_path = final_path.with_extension("hcs.tmp");
             {
@@ -1022,5 +1080,60 @@ mod tests {
     fn test_find_overlap_length_single_char() {
         assert_eq!(find_overlap_length("A", "A"), 0);
         assert_eq!(find_overlap_length("AB", "B"), 0);
+    }
+
+    /// Regression test: low_support must be attributed to the region containing
+    /// the position, NOT the previous region being flushed.
+    /// Before the fix, the low_support.push() happened BEFORE the flush,
+    /// incorrectly attributing it to the PREVIOUS region.
+    /// Uses realistic overlapping k-mers (ABC→BCD at adjacent positions).
+    #[test]
+    fn test_low_support_attributed_to_correct_region_after_gap() {
+        fn make_pos_with_ls(pos: usize, kmer: &str, low_support: Option<&str>) -> Position {
+            Position {
+                position: pos,
+                entropy: 0.5,
+                support: 100,
+                low_support: low_support.map(|s| s.to_string()),
+                diversity_motifs: Some(vec![Variant {
+                    sequence: kmer.to_string(),
+                    count: 100,
+                    incidence: 100.0,
+                    motif_short: Some("I".to_string()),
+                    motif_long: Some("Index".to_string()),
+                    metadata: None,
+                }]),
+                distinct_variants_count: 1,
+                distinct_variants_incidence: 0.0,
+                total_variants_incidence: 0.0,
+            }
+        }
+
+        // Region 1: positions 1,2 with proper (k-1) overlap "ABC"→"BCD"
+        // Gap at position 3
+        // Region 2: position 4 with low_support
+        let positions = vec![
+            make_pos_with_ls(1, "ABC", None),
+            make_pos_with_ls(2, "BCD", None),
+            make_pos_with_ls(4, "FGH", Some("LS")),
+        ];
+        let results = make_results_for_hcs(positions, 3);
+        let regions = compute_hcs_regions(&results, None);
+
+        assert_eq!(regions.len(), 2, "should produce 2 regions due to gap");
+        // Region 1 (positions 1,2) should have NO low_support
+        assert!(
+            regions[0].low_support_positions.is_empty(),
+            "Region 1 should have no low_support, got {:?}",
+            regions[0].low_support_positions
+        );
+        assert_eq!(regions[0].sequence, "ABCD");
+        // Region 2 (position 4) should have position 4 as low_support
+        assert_eq!(
+            regions[1].low_support_positions,
+            vec![4],
+            "Region 2 should have position 4 as low_support"
+        );
+        assert_eq!(regions[1].sequence, "FGH");
     }
 }

@@ -687,7 +687,7 @@ pub fn get_kmers_and_headers_encoded_columnar(
 
     let columnar_headers = if let (Some(headers), Some(format)) = (row_headers, header_format) {
         // Use non-indexing variant: the CLI analysis path never queries indices.
-        // Indices remain available via from_row_metadata_with_indexing for Tauri/API consumers.
+        // Indices remain available via from_row_metadata_with_indexing for GUI/API consumers.
         let adapter = ColumnarMetadataAdapter::from_row_metadata(format.clone(), headers);
         Some(adapter)
     } else {
