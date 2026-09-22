@@ -22,8 +22,15 @@ pub struct EntropyVertex {
     pub y: f32,
 }
 
-/// View transform uniform: maps data-space coordinates to clip-space [-1, 1].
+/// View transform uniform: maps data-space coordinates to clip-space [-1, 1]
+/// and carries the line colour.
+///
 /// Updated every frame on pan/zoom, but the vertex buffer stays static.
+///
+/// The colour lives here rather than being baked into the shader so the line
+/// follows the active theme. A hardcoded constant made the GPU path render the
+/// light-theme accent even in dark mode, where it was both wrong and low
+/// contrast, and made the GPU and CPU fallback paths disagree.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct ViewTransform {
@@ -33,9 +40,18 @@ pub struct ViewTransform {
     pub x_range: f32,
     /// Maximum y in data space (top of chart)
     pub y_max: f32,
-    /// Padding to align to 16 bytes (wgpu uniform buffer alignment requirement)
+    /// Padding so `color` starts on a 16-byte boundary, as WGSL requires for
+    /// `vec4<f32>` members.
     pub _padding: f32,
+    /// Line colour as linear RGBA in 0..=1.
+    pub color: [f32; 4],
 }
+
+/// Smallest vertex buffer we keep allocated.
+///
+/// Also the initial size: allocating a tiny buffer up front avoids a
+/// reallocation for small datasets while costing almost nothing.
+const MIN_VERTEX_BUFFER_BYTES: u64 = 1024;
 
 /// GPU resources stored in `egui_wgpu::CallbackResources`.
 /// Registered once at app init, retrieved in `prepare()` and `paint()`.
@@ -82,11 +98,21 @@ impl egui_wgpu::CallbackTrait for EntropyLineCallback {
             if !vertices.is_empty() {
                 let byte_data = bytemuck::cast_slice(vertices);
 
-                // wgpu does NOT auto-resize buffers. Recreate if new data is larger.
-                if byte_data.len() as u64 > resources.vertex_buffer.size() {
+                // wgpu does NOT auto-resize buffers, so grow when the new data no
+                // longer fits. Also shrink when the buffer is far larger than
+                // needed: without this, loading a large dataset and then a small
+                // one would hold the large allocation for the rest of the
+                // session. The 4x hysteresis (and the floor) prevents
+                // reallocating on every minor filter change.
+                let needed = byte_data.len() as u64;
+                let current = resources.vertex_buffer.size();
+                let too_small = needed > current;
+                let wastefully_large = current > MIN_VERTEX_BUFFER_BYTES && needed * 4 < current;
+
+                if too_small || wastefully_large {
                     resources.vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                         label: Some("entropy_vertices"),
-                        size: byte_data.len() as u64,
+                        size: needed.max(MIN_VERTEX_BUFFER_BYTES),
                         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
                         mapped_at_creation: false,
                     });
@@ -126,6 +152,7 @@ struct ViewTransform {
     x_range: f32,
     y_max: f32,
     _padding: f32,
+    color: vec4f,
 }
 
 @group(0) @binding(0) var<uniform> view: ViewTransform;
@@ -143,8 +170,8 @@ fn vs_main(@location(0) data_pos: vec2f) -> VertexOutput {
     // Map data y to clip-space [-1, 1] (y up)
     let ny = data_pos.y / view.y_max * 2.0 - 1.0;
     out.position = vec4f(nx, ny, 0.0, 1.0);
-    // Color: accent blue with slight alpha
-    out.color = vec4f(0.145, 0.388, 0.922, 1.0);
+    // Theme-provided line colour (see ViewTransform docs).
+    out.color = view.color;
     return out;
 }
 
@@ -196,7 +223,7 @@ pub fn init_gpu_resources(render_state: &egui_wgpu::RenderState) {
 
     let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("entropy_vertices"),
-        size: 1024, // Small initial, will be resized on first upload
+        size: MIN_VERTEX_BUFFER_BYTES, // grows/shrinks on upload, see prepare()
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -216,7 +243,9 @@ pub fn init_gpu_resources(render_state: &egui_wgpu::RenderState) {
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: Some("vs_main"),
-            buffers: &[wgpu::VertexBufferLayout {
+            // wgpu 30 models vertex buffer slots as `Option<VertexBufferLayout>`
+            // so a pipeline can declare gaps between occupied slots.
+            buffers: &[Some(wgpu::VertexBufferLayout {
                 array_stride: std::mem::size_of::<EntropyVertex>() as u64,
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &[wgpu::VertexAttribute {
@@ -224,7 +253,7 @@ pub fn init_gpu_resources(render_state: &egui_wgpu::RenderState) {
                     shader_location: 0,
                     format: wgpu::VertexFormat::Float32x2,
                 }],
-            }],
+            })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
         fragment: Some(wgpu::FragmentState {
@@ -277,8 +306,27 @@ mod tests {
 
     #[test]
     fn test_view_transform_alignment() {
-        // wgpu requires uniform buffers to be 16-byte aligned
-        assert_eq!(std::mem::size_of::<ViewTransform>(), 16);
+        // wgpu requires uniform buffer sizes to be a multiple of 16 bytes, and
+        // the WGSL struct must match this layout exactly (3 floats + padding,
+        // then a vec4 colour).
+        assert_eq!(std::mem::size_of::<ViewTransform>(), 32);
+        assert_eq!(std::mem::size_of::<ViewTransform>() % 16, 0);
+    }
+
+    #[test]
+    fn test_view_transform_color_offset_matches_wgsl() {
+        // `color` must begin at byte 16 so it aligns with the vec4f in the
+        // shader; a mismatch would silently render the wrong colour.
+        let v = ViewTransform {
+            x_min: 0.0,
+            x_range: 1.0,
+            y_max: 1.0,
+            _padding: 0.0,
+            color: [0.25, 0.5, 0.75, 1.0],
+        };
+        let bytes = bytemuck::bytes_of(&v);
+        let color_bytes: &[f32] = bytemuck::cast_slice(&bytes[16..32]);
+        assert_eq!(color_bytes, &[0.25, 0.5, 0.75, 1.0]);
     }
 
     #[test]

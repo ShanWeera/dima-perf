@@ -4,8 +4,9 @@
 //! application to egui's style system. All UI code references `DesignTokens`,
 //! never hardcoded colors.
 
+pub mod fonts;
 pub mod palette;
 pub mod tokens;
 
-pub use palette::{apply_theme, init_both_theme_styles, Theme};
+pub use palette::{init_both_theme_styles, Theme};
 pub use tokens::DesignTokens;

@@ -76,9 +76,9 @@ jobs:
         if: matrix.check == 'test'
         run: cargo test -p dima-gui --locked
 
-  # GUI MSRV check — ensures dima-gui's rust-version = "1.92" is buildable
+  # GUI MSRV check — ensures dima-gui's rust-version = "1.95" is buildable
   gui-msrv:
-    name: GUI MSRV (1.92)
+    name: GUI MSRV (1.95)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -86,7 +86,7 @@ jobs:
       - name: Install MSRV toolchain
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.92"
+          toolchain: "1.95"
 
       - name: Install system dependencies (egui/wgpu)
         run: |

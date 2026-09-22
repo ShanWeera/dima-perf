@@ -9,6 +9,7 @@ mod error;
 mod panels;
 mod state;
 mod theme;
+mod util;
 mod views;
 mod workers;
 

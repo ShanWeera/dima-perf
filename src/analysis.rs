@@ -70,6 +70,15 @@ pub struct AnalysisConfig {
     /// the branch is predicted-not-taken and has zero performance impact.
     /// With `lto = true`, LLVM may eliminate the branch entirely for CLI builds.
     pub progress_counter: Option<Arc<AtomicUsize>>,
+    /// Optional progress counter incremented per position during position building
+    /// (variant decoding and metadata aggregation) — the second of the two passes.
+    ///
+    /// Separate from `progress_counter` because both passes visit the same number
+    /// of positions: sharing one counter would make the first pass appear to
+    /// complete the whole run. With two counters a frontend can report the true
+    /// phase. `None` (CLI default) has the same zero-cost properties as above;
+    /// the CLI reports progress through its own `tracing`/indicatif span instead.
+    pub build_progress_counter: Option<Arc<AtomicUsize>>,
 }
 
 impl AnalysisConfig {
@@ -99,6 +108,12 @@ impl AnalysisConfig {
 
     pub fn with_progress_counter(mut self, counter: Arc<AtomicUsize>) -> Self {
         self.progress_counter = Some(counter);
+        self
+    }
+
+    /// Set the counter incremented during the position-building pass.
+    pub fn with_build_progress_counter(mut self, counter: Arc<AtomicUsize>) -> Self {
+        self.build_progress_counter = Some(counter);
         self
     }
 
@@ -251,6 +266,11 @@ fn build_positions(
                 return Err(AnalysisError::Cancelled);
             }
             tracing::Span::current().pb_inc(1);
+            // Mirror of the entropy pass: increment the GUI's second-phase counter
+            // (no-op when None; Relaxed suffices for a monotonic display counter).
+            if let Some(ref counter) = config.build_progress_counter {
+                counter.fetch_add(1, Ordering::Relaxed);
+            }
             let pos = build_single_position(
                 idx,
                 &position_count,
@@ -964,6 +984,68 @@ mod tests {
             );
         }
         assert_eq!(results.low_support_count, 0);
+    }
+
+    #[test]
+    fn test_progress_counters_track_both_phases_independently() {
+        use std::sync::atomic::AtomicUsize;
+
+        let entropy = Arc::new(AtomicUsize::new(0));
+        let build = Arc::new(AtomicUsize::new(0));
+        let config = AnalysisConfig::new()
+            .with_progress_counter(Arc::clone(&entropy))
+            .with_build_progress_counter(Arc::clone(&build));
+
+        let fasta = write_fasta(">s1\nACDEFGHIKL\n>s2\nACDEFGHIKL\n");
+        let path = fasta.path().to_str().unwrap().to_string();
+
+        let (results, _) = get_results_objs(
+            path,
+            3,
+            1,
+            "test".to_string(),
+            None,
+            None,
+            None,
+            None,
+            Some(config),
+        )
+        .unwrap();
+
+        let positions = results.results.len();
+        assert!(positions > 0, "fixture should produce k-mer positions");
+        assert_eq!(
+            entropy.load(Ordering::Relaxed),
+            positions,
+            "entropy pass must visit every position exactly once"
+        );
+        assert_eq!(
+            build.load(Ordering::Relaxed),
+            positions,
+            "position-building pass must visit every position exactly once"
+        );
+    }
+
+    #[test]
+    fn test_build_progress_counter_is_optional() {
+        // The CLI passes no counters; analysis must behave identically.
+        let config = AnalysisConfig::new();
+        assert!(config.build_progress_counter.is_none());
+
+        let fasta = write_fasta(">s1\nACDEFGHIKL\n>s2\nACDEFGHIKL\n");
+        let path = fasta.path().to_str().unwrap().to_string();
+        let result = get_results_objs(
+            path,
+            3,
+            1,
+            "test".to_string(),
+            None,
+            None,
+            None,
+            None,
+            Some(config),
+        );
+        assert!(result.is_ok());
     }
 
     #[test]
