@@ -85,11 +85,22 @@ codegen-units = 1
 strip = true
 panic = "abort"
 
+# Optimize the analysis engine in debug builds.
+#
+# `dima` is compute-bound (Shannon entropy with resampling, k-mer encoding,
+# SIMD string ops, rayon fan-out). At opt-level 0 a real alignment takes orders
+# of magnitude longer than in release — long enough that a debug `cargo run -p
+# dima-gui` looks like a hung application rather than a slow one.
+#
+# Only this package is lifted: dima-gui's own UI code stays at opt-level 0 and
+# remains fully debuggable, and the release profile is untouched. The cost is a
+# slightly slower first compile of the library.
+[profile.dev.package.dima]
+opt-level = 2
+
 # Optimize GPU/UI libraries in debug mode for tolerable egui performance.
-# Only these packages are optimized; the rest (dima, dima-gui app code)
-# stay at opt-level 0 for fast compilation and debuggability.
-# CLI builds (cargo run -p dima) are completely unaffected because dima
-# does not depend on any of these packages.
+# Only these packages are optimized; dima-gui's own app code stays at
+# opt-level 0 for fast compilation and debuggability.
 [profile.dev.package.egui]
 opt-level = 2
 [profile.dev.package.eframe]

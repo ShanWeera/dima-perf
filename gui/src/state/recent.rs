@@ -45,8 +45,28 @@ impl RecentFileStore {
         Self { files }
     }
 
-    /// Save recent files to disk. Errors are logged but not propagated.
+    /// Save recent files to disk synchronously.
+    ///
+    /// Prefer [`Self::save_in_background`] from UI code; this variant exists for
+    /// tests and for shutdown, where blocking is acceptable.
     pub fn save(&self) {
+        Self::write(&self.files);
+    }
+
+    /// Persist without blocking the caller.
+    ///
+    /// `add` runs during a frame, and the config directory may live on a slow or
+    /// network-mounted filesystem, where a synchronous write would stall
+    /// rendering. The snapshot is written on a detached thread; losing it on an
+    /// abrupt exit is acceptable for a convenience list.
+    fn save_in_background(&self) {
+        let snapshot = self.files.clone();
+        std::thread::spawn(move || Self::write(&snapshot));
+    }
+
+    /// Serialize `files` to the config path. Errors are intentionally swallowed:
+    /// a recent-files list is a convenience, never worth interrupting the user.
+    fn write(files: &[RecentFile]) {
         let path = match Self::config_file_path() {
             Some(p) => p,
             None => return,
@@ -54,7 +74,7 @@ impl RecentFileStore {
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        if let Ok(json) = serde_json::to_string_pretty(&self.files) {
+        if let Ok(json) = serde_json::to_string_pretty(files) {
             let _ = std::fs::write(&path, json);
         }
     }
@@ -85,7 +105,19 @@ impl RecentFileStore {
         );
 
         self.files.truncate(MAX_RECENT_FILES);
-        self.save();
+        self.save_in_background();
+    }
+
+    /// Remove a single entry (and persist).
+    pub fn remove(&mut self, path: &std::path::Path) {
+        self.files.retain(|f| f.path != path);
+        self.save_in_background();
+    }
+
+    /// Remove every entry (and persist).
+    pub fn clear(&mut self) {
+        self.files.clear();
+        self.save_in_background();
     }
 
     /// Platform-specific config file path.
@@ -141,6 +173,33 @@ mod tests {
         store.add(PathBuf::from("/tmp/new.fasta"), None, None);
         assert_eq!(store.files[0].path, Path::new("/tmp/new.fasta"));
         assert_eq!(store.files[1].path, Path::new("/tmp/old.fasta"));
+    }
+
+    #[test]
+    fn test_remove_deletes_only_the_named_entry() {
+        let mut store = RecentFileStore::default();
+        store.add(PathBuf::from("/tmp/a.fasta"), None, None);
+        store.add(PathBuf::from("/tmp/b.fasta"), None, None);
+        store.remove(Path::new("/tmp/a.fasta"));
+        assert_eq!(store.files.len(), 1);
+        assert_eq!(store.files[0].path, Path::new("/tmp/b.fasta"));
+    }
+
+    #[test]
+    fn test_remove_unknown_path_is_a_no_op() {
+        let mut store = RecentFileStore::default();
+        store.add(PathBuf::from("/tmp/a.fasta"), None, None);
+        store.remove(Path::new("/tmp/does-not-exist.fasta"));
+        assert_eq!(store.files.len(), 1);
+    }
+
+    #[test]
+    fn test_clear_empties_the_list() {
+        let mut store = RecentFileStore::default();
+        store.add(PathBuf::from("/tmp/a.fasta"), None, None);
+        store.add(PathBuf::from("/tmp/b.fasta"), None, None);
+        store.clear();
+        assert!(store.files.is_empty());
     }
 
     #[test]

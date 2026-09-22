@@ -6,7 +6,9 @@
 use dima_lib::Results;
 
 /// Motif type classification, matching dima_lib's Variant.motif_short values.
-#[derive(Debug, Clone, PartialEq)]
+///
+/// `Copy` because it is a fieldless tag that UI code iterates by value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MotifType {
     Index,
     Major,

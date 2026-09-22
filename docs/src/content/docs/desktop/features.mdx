@@ -3,36 +3,65 @@ title: Desktop Features
 description: GUI-specific features of DiMA GUI including interactive visualization, filtering, and export.
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 ## Interactive Analysis
 
-- **File selection** — Drag-and-drop or file dialog for FASTA files (plain, gzip, bzip2, xz, zstd)
-- **FASTA validation** — Background pre-validation with alphabet detection and header format parsing
-- **Parameter configuration** — Visual controls for k-mer length, threshold, alphabet, validation mode, and header format
-- **Real-time progress** — Progress indicators during analysis with cooperative cancellation
-- **Binary import** — Load previously saved `.dima` binary results instantly
+- **File selection** — Drag-and-drop (anywhere in the window) or a file dialog, for FASTA files (plain, gzip, bzip2, xz, zstd) and `.dima` results
+- **FASTA validation** — Background pre-validation with alphabet detection and header-format parsing; the window stays responsive on large files
+- **Parameter configuration** — Visual controls for k-mer length, support threshold, alphabet, character-validation mode, invalid-character reporting, and header format
+- **Real-time progress** — Determinate, two-phase progress (computing entropy, then building positions) with cooperative cancellation
+- **Binary import** — Load previously saved `.dima` results instantly, off the UI thread
 
 ## Visualization
 
-- **Entropy chart** — Panoramic view of diversity across all alignment positions with pan and zoom
-- **Position explorer** — Sortable, filterable table of all positions with entropy, motif type, and variant counts
-- **Variant details** — Per-position variant panel showing k-mer sequences, counts, motif classification, and percentages
-- **Metadata section** — Per-variant metadata breakdown with progressive disclosure for large field sets
-- **HCS regions** — Highlighted Highly Conserved Sequences with configurable thresholds
+- **Entropy chart** — Panoramic view of diversity across all alignment positions, drawn as a line with a soft fill so conserved troughs and diverse peaks read at a glance
+  - Navigation follows genome-browser conventions: **drag** to pan, **scroll** to zoom, **click** to select a position, **Shift+drag** to zoom to a region, **double-click** to reset (plus explicit −/+/Fit buttons)
+  - Positions with unreliable support (NS/LS) are marked on the axis
+  - GPU-rendered via wgpu, with LTTB downsampling and a CPU fallback
+- **Position explorer** — Sortable, virtualized table of all positions with entropy, support, status, and top variant
+- **Inspector** — A fixed right-hand dock, always populated (a position is auto-selected on load), reading top to bottom from the position to the variant selected within it:
+  - **Position summary** — entropy, support, and the position's **motif composition** as a single stacked bar (Index / Major / Minor / Unique) with exact percentages
+  - **Variants** — a searchable, sortable, virtualized table of the distinct k-mers; selecting a row drives the section below
+  - **Metadata** — the selected variant's fields as an expandable list, each value shown with its share as a proportional bar
+- **Variant tools** — Search variants by sequence or motif and hide low-incidence singletons with a minimum-incidence filter
+- **HCS regions** — Highly Conserved Sequences shown as a conservation strip with a live threshold that recomputes instantly
 
 ## Filtering
 
-- **Metadata filters** — Filter positions and variants by metadata field values
-- **Filter summary** — Visual indicator of active filters with one-click clear
+- **Top filter bar** — Always-visible filters for position range, entropy range, motif type, and low-support inclusion, with a live "shown / total" count and one-click **Reset**
+- Filters apply when an interaction ends, so dragging a range stays smooth on large datasets
+
+<Aside type="note">
+Metadata (host, country, year, …) is presented as a per-variant breakdown rather than
+as a top-level filter. Entropy is computed over *all* sequences, so filtering the view
+by metadata would not change the underlying statistics and could misrepresent them.
+To analyse a metadata subset, filter the alignment and re-run the analysis.
+</Aside>
+
+## Command palette
+
+Press **Cmd/Ctrl + K** to jump to a position, find which positions carry a given
+k-mer, or run any action (export, reset filters, reset zoom, toggle theme, open a
+file). Every action is also available from a visible control.
 
 ## Export
 
-- Export results to JSON, TSV, or binary `.dima` format
-- Re-import `.dima` files for instant visualization without re-analysis
+All exports run in the background and report completion as a notification.
+
+| Format | Contents |
+|--------|----------|
+| JSON | Complete results — identical to `dima analyze -O json` |
+| TSV | 17-column, vDiveR-aligned table for R/Python workflows |
+| `.dima` | Compact binary results, re-importable instantly |
+| SVG | Entropy figure as vector art, for publication figures |
+| PNG | Entropy figure as a raster image, for slides and sharing |
 
 ## Appearance
 
-- **Light / dark theme** — Toggle between light and dark modes
-- **Responsive layout** — Panels adapt to window size
+- **Theme** — Light and dark, following the system setting by default and remembered across sessions
+- **Typography** — Bundled IBM Plex Sans / IBM Plex Mono for consistent rendering on every platform
+- **Responsive layout** — Header, filter bar, inspector and central views each claim their own region and flex to fill the window
 
 ## Shared Core
 

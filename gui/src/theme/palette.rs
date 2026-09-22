@@ -97,34 +97,21 @@ fn build_style(tokens: &DesignTokens, theme: Theme) -> Style {
     style
 }
 
-/// Apply design tokens to egui's style system and activate the given theme.
+/// Install our styles into **both** theme slots.
 ///
-/// egui 0.34 replaced `set_global_style` with a dual-style theme system:
-/// - `ctx.set_style_of(Theme, Style)` stores a style per theme slot
-/// - `ctx.set_theme(ThemePreference)` selects which slot is active
+/// egui keeps one `Style` per theme and a separate `ThemePreference` that
+/// selects between them. Populating both slots up front means the active theme
+/// — whichever it turns out to be — already uses our design tokens.
 ///
-/// `set_global_style` alone is insufficient — the theme system overrides it
-/// each frame. We must use the proper per-theme API.
+/// Deliberately does **not** call `ctx.set_theme`. The preference defaults to
+/// `ThemePreference::System` and is persisted across sessions by eframe, so
+/// forcing a concrete theme here would both ignore the user's OS setting and
+/// discard their saved choice on every launch. The app instead *observes*
+/// `ctx.theme()` each frame and syncs its tokens to match.
+///
+/// Must be called once during `DimaApp::new()`.
 ///
 /// Reference: egui 0.34 changelog, PR #4744 (emilk/egui).
-pub fn apply_theme(ctx: &egui::Context, tokens: &DesignTokens, theme: Theme) {
-    let style = build_style(tokens, theme);
-
-    match theme {
-        Theme::Light => {
-            ctx.set_style_of(egui::Theme::Light, style);
-            ctx.set_theme(egui::Theme::Light);
-        }
-        Theme::Dark => {
-            ctx.set_style_of(egui::Theme::Dark, style);
-            ctx.set_theme(egui::Theme::Dark);
-        }
-    }
-}
-
-/// Initialize both theme slots at startup so toggling always uses our
-/// custom design tokens, never egui's built-in defaults.
-/// Must be called once during `DimaApp::new()`.
 pub fn init_both_theme_styles(ctx: &egui::Context) {
     let light_style = build_style(&DesignTokens::light(), Theme::Light);
     let dark_style = build_style(&DesignTokens::dark(), Theme::Dark);

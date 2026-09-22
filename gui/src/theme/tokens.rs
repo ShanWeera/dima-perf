@@ -12,7 +12,6 @@ use egui::Color32;
 /// Centralized design tokens for the entire application.
 /// All colors are semantically named by function, not appearance.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct DesignTokens {
     // ── Surface colors ──
     pub surface_primary: Color32,
@@ -40,26 +39,16 @@ pub struct DesignTokens {
     pub progress_bar_fill: Color32,
 
     // ── Scientific visualization (perceptually uniform, colorblind-safe) ──
-    pub entropy_gradient: [Color32; 5],
     pub motif_index: Color32,
     pub motif_major: Color32,
     pub motif_minor: Color32,
     pub motif_unique: Color32,
 
-    // ── Categorical palette for metadata bar charts ──
-    /// 6 distinct, colorblind-safe hues (Okabe-Ito family).
-    /// Index-based: value at position i gets palette[i % 6].
-    /// First 4 reuse motif colors (already contrast-verified);
-    /// last 2 are new teal/rose hues with theme-appropriate luminance.
-    pub categorical_palette: [Color32; 6],
-
     // ── HCS visualization ──
     pub hcs_conserved: Color32,
-    pub hcs_non_conserved: Color32,
 
     // ── Chart chrome ──
     pub chart_axis: Color32,
-    pub chart_grid: Color32,
     pub chart_avg_line: Color32,
     /// Full-opacity line for the selected-position indicator on the entropy chart.
     /// Separated from `selection_highlight` (low-alpha area fill) because strokes
@@ -74,7 +63,18 @@ pub struct DesignTokens {
     /// remains readable on top.
     pub selection_bg: Color32,
 
-    // ── Spacing ──
+    // ── Spacing scale ──
+    /// 8px-based spacing scale. Every gap in the UI comes from one of these
+    /// steps so vertical rhythm stays consistent: ad-hoc values were the main
+    /// reason the old layout looked uneven. Values are theme-independent, but
+    /// live here so all layout constants have a single source. Extend the scale
+    /// when a new step is genuinely needed rather than reintroducing literals.
+    pub space_4: f32,
+    pub space_8: f32,
+    pub space_12: f32,
+    pub space_16: f32,
+    pub space_24: f32,
+
     pub panel_padding: f32,
     pub panel_gap: f32,
     pub panel_rounding: f32,
@@ -113,40 +113,26 @@ impl DesignTokens {
             hover_highlight: Color32::from_rgba_premultiplied(37, 99, 235, 15),     // subtler hover
             progress_bar_fill: Color32::from_rgb(37, 99, 235),
 
-            // Viridis-inspired 5-stop gradient (colorblind-safe)
-            entropy_gradient: [
-                Color32::from_rgb(68, 1, 84),    // 0.0 - low
-                Color32::from_rgb(59, 82, 139),  // 0.25
-                Color32::from_rgb(33, 145, 140), // 0.5
-                Color32::from_rgb(94, 201, 98),  // 0.75
-                Color32::from_rgb(253, 231, 37), // 1.0 - high
-            ],
-
             // Distinct hues for motif categories (colorblind-safe via Oklab spacing)
             motif_index: Color32::from_rgb(37, 99, 235), // Blue
             motif_major: Color32::from_rgb(234, 88, 12), // Orange
             motif_minor: Color32::from_rgb(22, 163, 74), // Green
             motif_unique: Color32::from_rgb(168, 85, 247), // Purple
 
-            categorical_palette: [
-                Color32::from_rgb(37, 99, 235),  // Blue (motif_index)
-                Color32::from_rgb(234, 88, 12),  // Orange (motif_major)
-                Color32::from_rgb(22, 163, 74),  // Green (motif_minor)
-                Color32::from_rgb(168, 85, 247), // Purple (motif_unique)
-                Color32::from_rgb(6, 148, 162),  // Teal
-                Color32::from_rgb(190, 60, 90),  // Rose
-            ],
-
             hcs_conserved: Color32::from_rgb(37, 99, 235),
-            hcs_non_conserved: Color32::from_rgb(229, 231, 235),
 
             chart_axis: Color32::from_rgb(107, 114, 128),
-            chart_grid: Color32::from_rgb(229, 231, 235),
             chart_avg_line: Color32::from_rgb(220, 38, 38),
             chart_selection_line: Color32::from_rgb(37, 99, 235), // solid accent blue — 7.3:1 on white
 
             // ~31% opacity blue tint; text_primary (25,25,30) on blended result ≈ 11.7:1
             selection_bg: Color32::from_rgba_unmultiplied(37, 99, 235, 80),
+
+            space_4: 4.0,
+            space_8: 8.0,
+            space_12: 12.0,
+            space_16: 16.0,
+            space_24: 24.0,
 
             panel_padding: 12.0,
             panel_gap: 8.0,
@@ -168,7 +154,11 @@ impl DesignTokens {
 
             text_primary: Color32::from_rgb(240, 240, 245),
             text_secondary: Color32::from_rgb(161, 161, 170),
-            text_muted: Color32::from_rgb(135, 135, 145),
+            // Lightened from (135,135,145), which reached only ~3.6:1 on
+            // surface_secondary — below the WCAG AA 4.5:1 floor for normal
+            // text. (160,160,170) achieves ~5.4:1 there while staying
+            // clearly recessive against text_primary.
+            text_muted: Color32::from_rgb(160, 160, 170),
 
             accent: Color32::from_rgb(96, 165, 250),
             border: Color32::from_rgb(78, 78, 86),
@@ -182,38 +172,25 @@ impl DesignTokens {
             hover_highlight: Color32::from_rgba_premultiplied(96, 165, 250, 20),
             progress_bar_fill: Color32::from_rgb(96, 165, 250),
 
-            entropy_gradient: [
-                Color32::from_rgb(68, 1, 84),
-                Color32::from_rgb(59, 82, 139),
-                Color32::from_rgb(33, 145, 140),
-                Color32::from_rgb(94, 201, 98),
-                Color32::from_rgb(253, 231, 37),
-            ],
-
             motif_index: Color32::from_rgb(96, 165, 250),
             motif_major: Color32::from_rgb(251, 146, 60),
             motif_minor: Color32::from_rgb(74, 222, 128),
             motif_unique: Color32::from_rgb(192, 132, 252),
 
-            categorical_palette: [
-                Color32::from_rgb(96, 165, 250),  // Blue (motif_index)
-                Color32::from_rgb(251, 146, 60),  // Orange (motif_major)
-                Color32::from_rgb(74, 222, 128),  // Green (motif_minor)
-                Color32::from_rgb(192, 132, 252), // Purple (motif_unique)
-                Color32::from_rgb(45, 212, 191),  // Teal
-                Color32::from_rgb(251, 113, 133), // Rose
-            ],
-
             hcs_conserved: Color32::from_rgb(96, 165, 250),
-            hcs_non_conserved: Color32::from_rgb(78, 78, 86),
 
             chart_axis: Color32::from_rgb(161, 161, 170),
-            chart_grid: Color32::from_rgb(78, 78, 86),
             chart_avg_line: Color32::from_rgb(248, 113, 113),
             chart_selection_line: Color32::from_rgb(100, 160, 255), // brighter for dark bg — 5.8:1 on #1E1E22
 
             // ~31% opacity blue tint; text_primary (240,240,245) on blended result ≈ 8.2:1
             selection_bg: Color32::from_rgba_unmultiplied(96, 165, 250, 80),
+
+            space_4: 4.0,
+            space_8: 8.0,
+            space_12: 12.0,
+            space_16: 16.0,
+            space_24: 24.0,
 
             panel_padding: 12.0,
             panel_gap: 8.0,
@@ -332,12 +309,13 @@ mod tests {
             );
         }
 
-        // text_muted on group backgrounds uses WCAG AA large text threshold (3.0:1)
-        // because muted hints on surface_secondary are caption-size secondary text
+        // Muted text is rendered at normal (not large) size, so it must clear the
+        // 4.5:1 normal-text threshold rather than the 3.0:1 large-text one. The
+        // previous 3.0 allowance let the dark palette ship at ~3.6:1.
         let muted_on_secondary = contrast_ratio(t.text_muted, t.surface_secondary);
         assert!(
-            muted_on_secondary >= 3.0,
-            "WCAG AA large text fail: text_muted on surface_secondary has contrast {:.2} (need >= 3.0)",
+            muted_on_secondary >= 4.5,
+            "WCAG AA fail: text_muted on surface_secondary has contrast {:.2} (need >= 4.5)",
             muted_on_secondary
         );
     }
@@ -374,22 +352,50 @@ mod tests {
     }
 
     /// WCAG SC 1.4.11 (Non-text Contrast): graphical objects need >= 3:1
-    /// contrast against their background. Tests all 6 categorical palette
-    /// colors against surface_secondary (the bar track background).
+    /// contrast against their background.
+    ///
+    /// Covers every bar the inspector paints — the metadata value bars and the
+    /// four motif composition segments. The object carrying the meaning is the
+    /// *fill*, so it is checked against both surfaces it can sit on: the panel
+    /// and the track behind it.
+    ///
+    /// The track itself is deliberately not held to 3:1. It is divider-weight
+    /// decoration marking the 100% extent, in the same role (and the same
+    /// token) as the separators elsewhere in the UI; SC 1.4.11 exempts purely
+    /// decorative graphics, and a track dark enough to pass would compete with
+    /// the fill it exists to frame. It must still be visible at all, which the
+    /// last check asserts.
     #[test]
-    fn test_categorical_palette_contrast() {
+    fn test_inspector_bar_contrast() {
         for (name, tokens) in [
             ("light", DesignTokens::light()),
             ("dark", DesignTokens::dark()),
         ] {
-            for (i, color) in tokens.categorical_palette.iter().enumerate() {
-                let ratio = contrast_ratio(*color, tokens.surface_secondary);
+            let fills = [
+                ("accent fill on track", tokens.accent, tokens.border),
+                (
+                    "accent fill on panel",
+                    tokens.accent,
+                    tokens.surface_primary,
+                ),
+                ("motif_index", tokens.motif_index, tokens.surface_primary),
+                ("motif_major", tokens.motif_major, tokens.surface_primary),
+                ("motif_minor", tokens.motif_minor, tokens.surface_primary),
+                ("motif_unique", tokens.motif_unique, tokens.surface_primary),
+            ];
+            for (what, fill, background) in fills {
+                let ratio = contrast_ratio(fill, background);
                 assert!(
                     ratio >= 3.0,
-                    "WCAG 1.4.11 fail: categorical_palette[{}] ({}) has contrast {:.2} on surface_secondary (need >= 3.0)",
-                    i, name, ratio
+                    "WCAG 1.4.11 fail ({name}): {what} has contrast {ratio:.2} (need >= 3.0)"
                 );
             }
+
+            let track = contrast_ratio(tokens.border, tokens.surface_primary);
+            assert!(
+                track > 1.1,
+                "bar track ({name}) is invisible on the panel: contrast {track:.2}"
+            );
         }
     }
 

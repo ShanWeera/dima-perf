@@ -4,11 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 # Independent MSRV: NOT .workspace = true.
-# egui 0.34.3 requires Rust 1.92. The workspace MSRV stays at 1.81 for CLI.
-# Per-crate MSRV is a proven pattern (axum/tokio-rs PR #3633; Cargo Book
-# "Multiple Policies in a Workspace"). With resolver 2, no MSRV-aware
-# dependency resolution issues.
-rust-version = "1.92"
+# egui/eframe/egui-wgpu 0.36.2 require Rust 1.95. The workspace MSRV stays at
+# 1.81 for the CLI. Per-crate MSRV is a proven pattern (axum/tokio-rs PR #3633;
+# Cargo Book "Multiple Policies in a Workspace"). With resolver 2, there are no
+# MSRV-aware dependency resolution issues.
+rust-version = "1.95"
 authors = ["Shan Tharanga <stwm2@student.london.ac.uk>"]
 description = "DiMA GUI - GPU-rendered desktop application for diversity motif analysis"
 
@@ -19,25 +19,33 @@ path = "src/main.rs"
 [dependencies]
 dima_lib = { path = "..", package = "dima" }
 
-# eframe 0.34+ defaults: wgpu (not glow), default_fonts, accesskit, x11, wayland.
+# eframe defaults: wgpu (not glow), default_fonts, accesskit, x11, wayland.
 # wgpu is the default renderer since 0.34 (#7615) — no need to disable defaults.
-# We only add "persistence" (not a default) for window state save/restore.
-eframe = { version = "0.34.3", features = ["persistence"] }
-egui = "0.34.3"
-egui-wgpu = "0.34.3"
-egui_extras = { version = "0.34.3", features = ["image"] }
+# We only add "persistence" (not a default) for window/app state save/restore,
+# which also backs the persisted theme preference and panel sizes.
+eframe = { version = "0.36.2", features = ["persistence"] }
+egui = "0.36.2"
+egui-wgpu = "0.36.2"
+egui_extras = { version = "0.36.2", features = ["image"] }
 
 # Direct dep for CallbackTrait types (Device, Queue, Buffer, etc.).
-# egui-wgpu 0.34.3 requires wgpu ^29.0.1.
-# Default features include vulkan/metal/dx12 backends.
-# wgpu 29 MSRV is 1.87 (lower than egui's 1.92, so not the bottleneck).
-wgpu = "29"
+# MUST match the wgpu major that egui-wgpu links against, or the wgpu types in
+# our render callback belong to a different crate instance and fail to unify:
+# egui-wgpu 0.36.2 depends on wgpu ^30.0.
+# Default features include the vulkan/metal/dx12 backends.
+wgpu = "30"
 
 # Native file dialogs (sync, no async runtime needed)
 rfd = "0.17"
 
 # Chart PNG export
 image = { version = "0.25", default-features = false, features = ["png"] }
+
+# Glyph rasterisation for PNG chart labels. The on-screen chart is drawn by
+# egui, but a file export has no egui frame to draw into, so axis numbers and
+# titles must be rasterised directly. Reuses the same bundled IBM Plex face as
+# the UI, so exported figures match what the user sees.
+ab_glyph = "0.2"
 
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -55,12 +63,14 @@ anyhow = "1"
 dirs = "6"
 
 # ── Windows dependency-unification pin ──────────────────────────────────
-# wgpu-hal 29 uses windows 0.62 for D3D12, but gpu-allocator 0.28 accepts
-# windows >=0.58,<=0.62. Without this pin, Cargo's resolver may split
+# wgpu-hal 30 uses windows 0.62 for D3D12, but gpu-allocator 0.28 accepts
+# windows >=0.53,<=0.62. Without this pin, Cargo's resolver may split
 # gpu-allocator onto an older windows version (e.g. 0.61), producing
 # incompatible D3D12 types and a build failure (E0277 / E0308) on Windows.
 # Adding a direct dependency forces the resolver to unify on 0.62 for the
 # entire crate graph. This is inert on non-Windows platforms.
+# Still required after the wgpu 29 -> 30 upgrade (verified against
+# wgpu-hal 30.0.1 and gpu-allocator 0.28.0 manifests).
 # See: https://github.com/emilk/egui/issues/8069
 [target.'cfg(windows)'.dependencies]
 windows = "0.62"
