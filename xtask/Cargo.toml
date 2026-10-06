@@ -1,0 +1,16 @@
+[package]
+name = "xtask"
+description = "Generators and drift checks for the DiMA repository (`cargo xtask gen --mode write|check`)"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+dima-core.workspace = true
+dima = { path = "../crates/dima" }
+clap = "4.5"
+clap_mangen = "0.2"
+serde_json.workspace = true
+unicode-normalization = "0.1.24"

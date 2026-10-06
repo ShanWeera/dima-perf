@@ -1,0 +1,178 @@
+//! Settings remembered between sessions (D73): the last-used analysis options that do not
+//! depend on the file, the conserved-region parameters, the worker threads, the file-dialog
+//! choice and the export settings.
+//!
+//! Stored as `{"version": N, "settings": {…}}`. A file written by another version, or one that
+//! cannot be read, is replaced by the defaults and the user is told once (safe reset); nothing
+//! half-read is ever used. The alphabet, k and query name are not remembered: they belong to
+//! one file and reset with every new file (G12, G13).
+
+use serde::{Deserialize, Serialize};
+
+use dima_core::config::{DEFAULT_FILL, DEFAULT_SUPPORT_THRESHOLD, Estimator, ValidationMode};
+
+/// Version of the stored settings; bump on any incompatible change.
+pub const SETTINGS_VERSION: u32 = 1;
+
+/// Widths of exported figures, in pixels.
+pub const FIGURE_WIDTH: std::ops::RangeInclusive<u32> = 200..=20_000;
+/// Heights of exported figures, in pixels.
+pub const FIGURE_HEIGHT: std::ops::RangeInclusive<u32> = 150..=20_000;
+
+/// Which file dialog to use (D100).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DialogMode {
+    /// The operating system's dialog, falling back to the built-in browser.
+    #[default]
+    Native,
+    /// Always the built-in browser.
+    BuiltIn,
+}
+
+/// Everything remembered.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Settings {
+    /// Support threshold T.
+    pub support_threshold: u64,
+    /// Entropy estimator.
+    pub estimator: Estimator,
+    /// Validation mode.
+    pub validation: ValidationMode,
+    /// Minimum sample coverage to flag, if any.
+    pub min_coverage: Option<f64>,
+    /// Fill value for empty header fields.
+    pub fill: String,
+    /// HCS threshold as typed (validated on use).
+    pub hcs_threshold: String,
+    /// Build conserved regions from eligible positions only.
+    pub hcs_eligible_only: bool,
+    /// Worker threads; `None` = all CPUs but one (D101).
+    pub threads: Option<usize>,
+    /// File dialogs.
+    pub dialogs: DialogMode,
+    /// Width and height of exported figures, in pixels.
+    pub figure_size: (u32, u32),
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            support_threshold: DEFAULT_SUPPORT_THRESHOLD,
+            estimator: Estimator::default(),
+            validation: ValidationMode::default(),
+            min_coverage: None,
+            fill: DEFAULT_FILL.to_owned(),
+            hcs_threshold: dima_core::config::DEFAULT_HCS_THRESHOLD.to_string(),
+            hcs_eligible_only: false,
+            threads: None,
+            dialogs: DialogMode::default(),
+            figure_size: (1800, 640),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct Stored {
+    version: u32,
+    settings: serde_json::Value,
+}
+
+impl Settings {
+    /// The settings in their stored form.
+    #[must_use]
+    pub fn to_json(&self) -> String {
+        let stored = Stored {
+            version: SETTINGS_VERSION,
+            settings: serde_json::to_value(self).unwrap_or(serde_json::Value::Null),
+        };
+        serde_json::to_string_pretty(&stored).unwrap_or_default()
+    }
+
+    /// Reads stored settings. Returns the defaults with a notice when the text was written by
+    /// another version or cannot be read.
+    #[must_use]
+    pub fn from_json(text: &str) -> (Self, Option<String>) {
+        let reset = |why: &str| {
+            (
+                Self::default(),
+                Some(format!("Settings were reset to the defaults ({why}).")),
+            )
+        };
+        let Ok(stored) = serde_json::from_str::<Stored>(text) else {
+            return reset("the settings file could not be read");
+        };
+        if stored.version != SETTINGS_VERSION {
+            return reset("they were saved by a different version of DiMA");
+        }
+        match serde_json::from_value::<Self>(stored.settings) {
+            Ok(s) if s.is_valid() => (s, None),
+            _ => reset("the saved values were not valid"),
+        }
+    }
+
+    /// Range checks (a hand-edited file could hold anything).
+    fn is_valid(&self) -> bool {
+        self.support_threshold >= 1
+            && self.min_coverage.is_none_or(|c| (0.0..=1.0).contains(&c))
+            && !self.fill.trim().is_empty()
+            && self.threads.is_none_or(|t| t >= 1)
+            && FIGURE_WIDTH.contains(&self.figure_size.0)
+            && FIGURE_HEIGHT.contains(&self.figure_size.1)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn round_trip() {
+        let s = Settings {
+            support_threshold: 30,
+            estimator: Estimator::ChaoWangJost,
+            min_coverage: Some(0.9),
+            hcs_threshold: "95.5".into(),
+            threads: Some(3),
+            dialogs: DialogMode::BuiltIn,
+            ..Settings::default()
+        };
+        let (back, notice) = Settings::from_json(&s.to_json());
+        assert_eq!(back, s);
+        assert_eq!(notice, None);
+    }
+
+    #[test]
+    fn defaults_follow_the_library() {
+        let s = Settings::default();
+        assert_eq!(s.support_threshold, 100, "D6: T = 100 everywhere");
+        assert_eq!(s.hcs_threshold, "100", "D44: HCS default 100");
+        assert_eq!(s.fill, "Unknown");
+        assert_eq!(s.estimator, Estimator::Dima);
+        assert_eq!(s.validation, ValidationMode::Strict);
+    }
+
+    #[test]
+    fn safe_reset_on_other_versions_and_bad_input() {
+        for text in [
+            "",
+            "not json",
+            r#"{"version": 99, "settings": {}}"#,
+            r#"{"version": 1, "settings": {"support_threshold": 0}}"#,
+            r#"{"version": 1, "settings": {"min_coverage": 2.0}}"#,
+            r#"{"version": 1, "settings": {"unknown_key": 1}}"#,
+            r#"{"version": 1, "settings": {"fill": "  "}}"#,
+        ] {
+            let (s, notice) = Settings::from_json(text);
+            assert_eq!(s, Settings::default(), "{text}");
+            assert!(notice.is_some(), "{text}");
+        }
+        // Missing keys take their defaults (forward-compatible within a version).
+        let (s, notice) =
+            Settings::from_json(r#"{"version": 1, "settings": {"support_threshold": 30}}"#);
+        assert_eq!(s.support_threshold, 30);
+        assert_eq!(s.fill, "Unknown");
+        assert_eq!(notice, None);
+    }
+}

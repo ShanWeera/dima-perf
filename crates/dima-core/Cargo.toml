@@ -1,0 +1,52 @@
+[package]
+name = "dima-core"
+description = "Core library of DiMA, the sequence diversity dynamics analyser for viruses (Tharanga et al. 2025, doi:10.1093/bib/bbae607)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+
+[lib]
+name = "dima_core"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
+libm.workspace = true
+seq_io = "0.3.4"
+flate2 = { version = "1.1.10", default-features = false, features = ["zlib-rs", "runtime_detection"] }
+bzip2 = "0.6.1"
+zstd = { version = "0.13.3", default-features = false }
+sha2 = "0.11"
+memchr = "2.7"
+hashbrown = { version = "0.16", default-features = false, features = ["inline-more"] }
+unicode-normalization = "0.1.24"
+unicode-properties = { version = "0.1.3", default-features = false, features = ["general-category"] }
+tempfile = "3.20"
+csv = "1.3"
+ryu = "1.0"
+tracing = { version = "0.1.41", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+proptest = { version = "1.6", default-features = false, features = ["std"] }
+tempfile = "3.20"
+jsonschema = { version = "0.58.5", default-features = false }
+criterion = { version = "0.7", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "reader"
+harness = false
+
+[[bench]]
+name = "engine"
+harness = false
+
+[[bench]]
+name = "rarefaction"
+harness = false

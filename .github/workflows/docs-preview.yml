@@ -1,0 +1,72 @@
+# Publishes the documentation built for a pull request to Cloudflare Pages (D102), including
+# pull requests from forks: the build ran without secrets in docs.yml; this workflow only
+# uploads its static files and never runs code from the pull request. Files that Cloudflare
+# Pages would execute or obey (`_worker.js`, `functions/`, `_routes.json`, `_redirects`,
+# `_headers`) are removed first, so a pull request cannot run code or redirect on the preview.
+#
+# Needs the repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID and a Cloudflare
+# Pages project named "dima-docs"; without them it does nothing.
+
+name: Docs preview
+
+on:
+  # zizmor: ignore[dangerous-triggers] the secure pattern for fork previews: the untrusted build
+  # ran without secrets in docs.yml; this job only uploads static files and validates the PR
+  # number it reads.
+  workflow_run:
+    workflows: [Docs]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  preview:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      pull-requests: write
+    env:
+      HAS_CLOUDFLARE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: env.HAS_CLOUDFLARE == 'true'
+        with:
+          name: docs-preview
+          path: preview
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Read the pull request number (untrusted input, validated)
+        if: env.HAS_CLOUDFLARE == 'true'
+        id: pr
+        shell: bash
+        run: |
+          number=$(head -c 16 preview/.pr-number | tr -d '[:space:]')
+          [[ "$number" =~ ^[0-9]{1,7}$ ]] || { echo "::error::invalid pull request number"; exit 1; }
+          rm preview/.pr-number
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+      - name: Remove Cloudflare control files (untrusted input)
+        if: env.HAS_CLOUDFLARE == 'true'
+        shell: bash
+        run: |
+          # Cloudflare Pages reads these at the root of the deployed directory only.
+          rm -rf preview/_worker.js preview/functions preview/_routes.json preview/_redirects \
+            preview/_headers
+      - uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
+        if: env.HAS_CLOUDFLARE == 'true'
+        id: deploy
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy preview --project-name=dima-docs --branch=pr-${{ steps.pr.outputs.number }}
+      - name: Comment with the preview address
+        if: env.HAS_CLOUDFLARE == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ steps.pr.outputs.number }}
+          URL: ${{ steps.deploy.outputs.deployment-url }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr comment "$NUMBER" --repo "$REPO" --edit-last --create-if-none \
+            --body "Documentation preview: $URL"

@@ -1,0 +1,3 @@
+region_id	start_column	end_column	length	min_incidence	min_support	conservation_lower_bound_95	flagged	low_support_position_count	sequence
+1	1	5	5	100.0	6	0.5407418735600996	false	0	MKTAY
+2	7	17	11	100.0	3	0.29240177382128674	true	4	AKQRQISFVKS

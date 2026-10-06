@@ -1,63 +1,85 @@
 ---
-title: DiMA — Diversity Motif Analyser
-description: A high-performance command-line tool for analyzing protein and nucleotide sequence diversity using k-mer based entropy analysis.
+title: DiMA
+description: DiMA, the sequence diversity dynamics analyser for viruses — k-mer entropy, diversity motifs and conserved sequences of protein and nucleotide alignments, reproducible and fast. Documentation of the command-line tool and the desktop app.
 template: splash
 hero:
   title: DiMA
-  tagline: High-performance sequence diversity analysis with k-mer based entropy and diversity motif classification.
+  tagline: Sequence diversity dynamics analyser for viruses. Position-by-position entropy, diversity motifs and conserved sequences of protein and nucleotide alignments, with the method of the DiMA paper and identical results on every computer.
+  # Relative to this page, so that they work under every base path (frontmatter links are not
+  # rewritten by plugins/remark-site-links.mjs).
   actions:
-    - text: Get Started
-      link: /dima-perf/getting-started/installation/
+    - text: Install
+      link: getting-started/install/
       icon: right-arrow
-      variant: primary
-    - text: View on GitHub
-      link: https://github.com/ShanWeera/dima-perf
-      icon: external
+    - text: Your first analysis
+      link: getting-started/first-analysis/
       variant: minimal
 ---
 
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-## What is DiMA?
+## What DiMA does
 
-DiMA (Diversity Motif Analyser) is a tool designed to facilitate the quantification and dissection of sequence diversity dynamics for viruses. It provides a quantitative measure of sequence diversity using **Shannon's entropy**, corrected for sample size bias, applied via a user-defined k-mer sliding window to an input alignment file.
-
-Each k-mer position is classified into **diversity motifs** — Index, Major, Minor, and Unique — based on the incidence of distinct sequences, providing granular insight into diversity dynamics.
-
-DiMA implements the methodology described in [Tharanga et al. (2025)](https://doi.org/10.1093/bib/bbae607), published in *Briefings in Bioinformatics* (PMC11596295).
-
----
-
-## Key Features
+For every overlapping k-mer position of a viral protein or gene alignment, DiMA counts the
+k-mers and the sequences that support them, estimates their Shannon entropy with the paper's
+correction for sample size, classifies variants as Index, Major, Minor and Unique motifs with
+their incidences, can count them per host, country, year or any header field, and finds the
+historically conserved sequences of the alignment [@tharanga2025].
 
 <CardGrid>
-  <Card title="Shannon's Entropy" icon="star">
-    Quantify diversity with sample-size corrected entropy calculations using linear regression extrapolation to infinite sample size.
+  <Card title="Faithful to the paper" icon="open-book">
+    The method of Tharanga et al. (2025), with every formula and source documented, validated on
+    the paper's own HIV-1 and MERS-CoV datasets.
   </Card>
-  <Card title="Diversity Motifs" icon="puzzle">
-    Automatically classify variants as Index, Major, Minor, or Unique at each k-mer position for granular diversity dynamics insight.
+  <Card title="Reproducible" icon="approve-check">
+    No random numbers: identical results on every platform and thread count, with the full
+    provenance of each run recorded next to the results.
   </Card>
-  <Card title="Multiple Formats" icon="document">
-    Output as JSON, TSV (17-column), JSONL, or compact binary `.dima` with LZ4/Zstd compression — up to 93% smaller than JSON.
+  <Card title="Fast and frugal" icon="rocket">
+    One streaming pass over plain or compressed alignments; memory grows with diversity, not with
+    the number of sequences.
   </Card>
-  <Card title="Blazing Fast" icon="rocket">
-    Written in Rust with parallel processing (Rayon), memory-mapped I/O, and SIMD string operations. Processes 2.3M sequences in ~130 seconds.
-  </Card>
-  <Card title="Metadata Aggregation" icon="list-format">
-    Parse FASTA headers and aggregate metadata (country, date, host, etc.) per variant with columnar storage for optimal performance.
-  </Card>
-  <Card title="Compressed Input" icon="magnifier">
-    Transparent decompression of `.gz`, `.bz2`, `.xz`, and `.zst` files. Pipe data directly from other tools via stdin.
+  <Card title="Command line and desktop" icon="laptop">
+    `dima` for scripts and clusters, the desktop app for exploring entropy, motifs and conserved
+    regions interactively — one library behind both.
   </Card>
 </CardGrid>
 
----
-
-## Quick Links
+## Find your way
 
 <CardGrid>
-  <LinkCard title="Installation" href="/dima-perf/getting-started/installation/" description="Download pre-built binaries or build from source" />
-  <LinkCard title="Quick Start" href="/dima-perf/getting-started/quick-start/" description="Run your first analysis in 2 minutes" />
-  <LinkCard title="CLI Reference" href="/dima-perf/cli/" description="Complete command and option reference" />
-  <LinkCard title="Methodology" href="/dima-perf/methodology/overview/" description="Scientific methodology and formulas" />
+  <LinkCard
+    title="Get started"
+    description="Install DiMA and analyse the MERS-CoV spike alignment of the paper step by step."
+    href="/getting-started/install/"
+  />
+  <LinkCard
+    title="How-to guides"
+    description="Metadata, conserved sequences, outputs, validation, clusters, large alignments, reproducibility."
+    href="/how-to/analyse/"
+  />
+  <LinkCard
+    title="Reference"
+    description="Every option, output field, table column, exit code, environment variable and diagnostic."
+    href="/reference/cli/"
+  />
+  <LinkCard
+    title="Explanation"
+    description="How DiMA measures diversity: entropy and its correction, motifs, conserved sequences, input rules."
+    href="/explanation/method/"
+  />
+  <LinkCard
+    title="Questions and help"
+    description="Short answers to common questions, a glossary of terms, and where to ask or report a bug."
+    href="/getting-started/faq/"
+  />
 </CardGrid>
+
+## Cite DiMA
+
+If you use DiMA, please cite the paper and the version you used; `dima cite` prints both, and
+`dima cite --from results.json` the references of a run. See [Citing DiMA](/reference/citing/).
+
+## References
+
+[^ref]

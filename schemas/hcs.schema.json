@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shanweera.github.io/dima-perf/schemas/1.0/hcs.schema.json",
+  "title": "DiMA historically conserved sequences",
+  "description": "Output of `dima hcs` and `dima analyze --hcs-output`.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "tool": {
+      "$ref": "https://shanweera.github.io/dima-perf/schemas/1.0/results.schema.json#/$defs/tool"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "query_name": {
+          "type": "string"
+        },
+        "kmer_length": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "support_threshold": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sequence_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "input_checksum": {
+          "$ref": "https://shanweera.github.io/dima-perf/schemas/1.0/results.schema.json#/$defs/checksum"
+        },
+        "tool_version": {
+          "type": "string"
+        },
+        "results_schema_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "query_name",
+        "kmer_length",
+        "support_threshold",
+        "sequence_count",
+        "input_checksum",
+        "tool_version",
+        "results_schema_version"
+      ]
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "threshold_percent": {
+          "type": "number",
+          "exclusiveMinimum": 50,
+          "maximum": 100
+        },
+        "merge_rule": {
+          "const": "overlap_or_adjacent"
+        },
+        "eligibility": {
+          "enum": [
+            "all_positions",
+            "support_gt_threshold"
+          ]
+        },
+        "confidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "method": {
+              "const": "clopper_pearson"
+            },
+            "level": {
+              "const": 0.95
+            }
+          },
+          "required": [
+            "method",
+            "level"
+          ]
+        }
+      },
+      "required": [
+        "threshold_percent",
+        "merge_rule",
+        "eligibility",
+        "confidence"
+      ]
+    },
+    "region_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "flagged_region_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "regions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/region"
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "https://shanweera.github.io/dima-perf/schemas/1.0/results.schema.json#/$defs/diagnostic"
+      }
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "$ref": "https://shanweera.github.io/dima-perf/schemas/1.0/results.schema.json#/$defs/reference"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "tool",
+    "source",
+    "parameters",
+    "region_count",
+    "flagged_region_count",
+    "regions",
+    "diagnostics",
+    "references"
+  ],
+  "$defs": {
+    "region": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "start_column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sequence": {
+          "type": "string",
+          "pattern": "^[A-Z]+$"
+        },
+        "min_incidence": {
+          "description": "Lowest member Index incidence, per cent.",
+          "type": "number",
+          "exclusiveMinimum": 50,
+          "maximum": 100
+        },
+        "min_support": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "conservation_lower_bound_95": {
+          "description": "Lowest exact 95 % Clopper–Pearson lower bound among members.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "low_support_positions": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": "Positions in the span with support ≤ T."
+        },
+        "flagged": {
+          "type": "boolean"
+        },
+        "split_from_previous": {
+          "type": "boolean"
+        },
+        "members": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/member"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "start_column",
+        "end_column",
+        "length",
+        "sequence",
+        "min_incidence",
+        "min_support",
+        "conservation_lower_bound_95",
+        "low_support_positions",
+        "flagged",
+        "split_from_previous",
+        "members"
+      ]
+    },
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "position": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "kmer": {
+          "type": "string",
+          "pattern": "^[A-Z]+$"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "support": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "incidence": {
+          "type": "number",
+          "exclusiveMinimum": 50,
+          "maximum": 100
+        },
+        "conservation_lower_bound_95": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "position",
+        "kmer",
+        "count",
+        "support",
+        "incidence",
+        "conservation_lower_bound_95"
+      ]
+    }
+  }
+}

@@ -1,0 +1,24 @@
+# Strict duplicate-version policy for the library and the CLI (D95), used as
+#   cargo deny --config deny-strict.toml --exclude dima-gui --exclude xtask --exclude-dev check bans
+# Dev-dependencies are excluded: they never ship in a binary. Every skip names the crates that
+# pull in each version.
+
+[graph]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
+    "aarch64-unknown-linux-musl",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
+]
+all-features = true
+
+[bans]
+multiple-versions = "deny"
+wildcards = "deny"
+allow-wildcard-paths = true
+highlight = "all"
+skip = []

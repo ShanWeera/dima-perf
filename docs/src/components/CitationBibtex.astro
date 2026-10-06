@@ -1,0 +1,17 @@
+---
+// The BibTeX entries of the DiMA paper and of this software release, taken verbatim from the
+// generated references.bib (crates/dima-core/src/citations.rs via `cargo xtask gen`), so the
+// page always shows the version it documents.
+import { Code } from '@astrojs/starlight/components';
+import bib from '../references.bib?raw';
+
+const entries = bib
+  .split(/\n(?=@)/)
+  .map((e) => e.trim())
+  .filter((e) => e.startsWith('@article{tharanga2025,') || /^@software\{dima_rs_/.test(e));
+if (entries.length !== 2) {
+  throw new Error('references.bib lacks the DiMA paper or the software entry; run `cargo xtask gen --mode write`');
+}
+---
+
+<Code code={entries.join('\n\n')} lang="bibtex" title="dima.bib" />

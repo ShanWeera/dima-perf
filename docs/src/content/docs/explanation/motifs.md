@@ -1,0 +1,130 @@
+---
+title: Diversity motifs and summaries
+description: How DiMA classifies the variants of a position as Index, Major, Minor and Unique motifs, the incidences it reports, when a ratio is undefined, and how the run summaries are formed.
+---
+
+Entropy condenses a position into one number. **Diversity motifs** keep the structure: which
+variant dominates, which variants follow, and how much of the population carries something other
+than the dominant variant. The motif classes were introduced by Hu et al. for HIV-1 [@hu2013] and
+applied by Abd Raman et al. to influenza A (H5N1) [@raman2020], as the paper recounts; DiMA
+reports them as the paper defines them [@tharanga2025].
+
+## Motif classes
+
+At a position with variant counts $c_1 \ge c_2 \ge \dots \ge c_D$:
+
+| Motif | Short | Rule |
+|---|---|---|
+| Index | `I` | the highest count, if it is above 1 |
+| Unique | `U` | count 1 |
+| Major | `Ma` | the highest count among the remaining variants (count above 1) |
+| Minor | `Mi` | every other variant (count above 1) |
+
+Ties are kept, as the paper states that "a position may exhibit more than one index or major
+variant": every variant tied at the highest count is Index, and every variant tied at the
+next-highest count is Major. A position where every variant occurs once has no Index (all are
+Unique). Examples, by count:
+
+| Counts | Motifs |
+|---|---|
+| 129, 14, 9, 6, 4, 4, 1, 1, 1, 1 | I, Ma, Mi, Mi, Mi, Mi, U, U, U, U |
+| 3, 3, 2, 2, 1 | I, I, Ma, Ma, U |
+| 7, 4, 3, 3 | I, Ma, Mi, Mi |
+| 5 | I |
+| 1, 1, 1 | U, U, U |
+
+Variants are listed by count, highest first; variants with equal counts are ordered by their
+sequence (byte order), so the order is the same in every run.
+
+## Incidences
+
+All incidences are percentages of the position's support $N$ or of a part of it:
+
+$$
+\begin{equation}
+\text{incidence}_i = 100 \, \frac{c_i}{N} ,
+\label{eq:incidence}
+\end{equation}
+$$
+
+$$
+\begin{equation}
+\text{total variants incidence} = 100 \, \frac{N - \sum_{\text{Index}} c_i}{N} ,
+\label{eq:total}
+\end{equation}
+$$
+
+$$
+\begin{equation}
+\text{distinct variants incidence} = 100 \,
+  \frac{\text{number of non-Index variants}}{N - \sum_{\text{Index}} c_i} .
+\label{eq:distinct}
+\end{equation}
+$$
+
+The **total variants incidence** $\eqref{eq:total}$ is the share of sequences that carry a
+variant other than the Index; the **distinct variants incidence** $\eqref{eq:distinct}$ measures
+how many different variants those sequences carry, relative to how many sequences there are. The
+number of non-Index variants is reported as `distinct_variants_count`.
+
+At MERS-CoV spike position 25 (support 170; the Index `SVKSACIEV` occurs 129 times):
+41 sequences carry a non-Index variant, so the total variants incidence is
+$100 \cdot 41/170 = 24.12\%$; those 41 sequences carry 9 distinct variants, so the distinct
+variants incidence is $100 \cdot 9/41 = 21.95\%$ (the paper's 22.0%).
+
+The paper's text gives this denominator — the total variants count — and so does its Fig. 1C.
+Its schematic Fig. 1A divides by the support instead ("Distinct variants (6/20)"); DiMA follows
+the text and Fig. 1C [@tharanga2025].
+
+### Undefined ratios
+
+A ratio whose denominator is 0 is undefined, and DiMA reports it as `null` (JSON) or `NA`
+(tables) instead of inventing a value:
+
+- a position **without support** has no variants (`diversity_motifs` is empty) and both
+  incidences are `null`;
+- a **fully conserved** position (every sequence carries the Index) has a total variants
+  incidence of 0 and an undefined distinct variants incidence ($0/0$).
+
+DiMA v5.0.9 reported both cases as 0, which made a conserved position indistinguishable from a
+position with no data.
+
+## Metadata per variant
+
+With `--header-format`, each variant also carries the number of its sequences per value of every
+stratified header field — for example how many of the 14 `SFKSACIEV` sequences at position 25
+came from each host. Fields appear in header-format order and values in byte order. See
+[Stratify by header metadata](/how-to/metadata/).
+
+## Run summaries
+
+Every result file starts with run-level summaries.
+
+**Eligible summary** (top-level keys). The mean, lowest and highest entropy over the eligible
+positions (support above $T$) — exactly the quantities the paper reports for its datasets: the
+mean entropy, the range and the position of the highest entropy [@tharanga2025]. The extrema are
+reported with the **first** position that has the value and the number of tied positions
+(`tied_position_count`), so ties are visible instead of being resolved silently. All three are
+`null` when no position is eligible.
+
+**All-positions summary** (`all_positions_summary`). The same statistics with DiMA v5.0.9's
+averaging rule — every position, NS positions counted as 0 bits and LS/ELS positions with their
+reported entropy (the observed entropy with the `dima` and `raw` estimators) — so that results can
+be compared with earlier analyses. The `rule` key records
+the rule. It is not the paper's summary; see
+[why NS positions have no entropy](/explanation/entropy/#positions-without-support).
+
+**Support classes.** `position_count`, `eligible_position_count`, the counts per label
+(`support_label_counts`: NS, LS, ELS, eligible) and `low_support_count` (NS + LS + ELS).
+
+**Coverage summary** (`coverage_summary`). How many positions have a sample coverage (support of
+at least 2), its minimum and mean, and with `--min-coverage` the threshold and the number of
+positions below it.
+
+For the MERS-CoV spike protein with the defaults: 1,345 positions, all eligible; mean entropy
+0.1261 bits; lowest 0 bits (first at position 7, 455 positions tied); highest 1.5878 bits at
+position 26.
+
+## References
+
+[^ref]

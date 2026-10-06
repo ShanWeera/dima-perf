@@ -1,5 +1,134 @@
-/* Fix KaTeX SVG rendering in Starlight (Starlight issue #2744).
-   Without this, inline math SVG elements collapse to 0px height. */
-.katex-html svg {
-  height: inherit;
+/* DiMA documentation: additions to Starlight's theme. Colours come from Starlight's tokens, so
+   light and dark themes keep their contrast (WCAG 2.2 SC 1.4.3, 1.4.11). */
+
+/* Formulas: MathJax SVG output (the rules of MathJax 3's SVG style sheet that apply to static
+   output; see plugins/rehype-math-a11y.mjs). */
+mjx-container[jax='SVG'] {
+  direction: ltr;
+}
+mjx-container[jax='SVG'] > svg {
+  overflow: visible;
+  min-height: 1px;
+  min-width: 1px;
+}
+/* Starlight displays svg elements as blocks; in-line formulas must stay in the line. */
+mjx-container[jax='SVG']:not([display='true']) > svg {
+  display: inline;
+}
+mjx-container[jax='SVG'][display='true'] {
+  display: block;
+  text-align: center;
+  margin: 1em 0;
+}
+mjx-container[jax='SVG'][display='true'][width='full'] {
+  display: flex;
+}
+mjx-container[jax='SVG'][justify='left'] {
+  text-align: left;
+}
+mjx-container[jax='SVG'][justify='right'] {
+  text-align: right;
+}
+g[data-mml-node='mtable'] > line[data-line],
+svg[data-table] > g > line[data-line],
+g[data-mml-node='mtable'] > rect[data-frame],
+svg[data-table] > g > rect[data-frame] {
+  stroke-width: 70px;
+  fill: none;
+}
+g[data-mml-node='mtable'] > g > svg {
+  overflow: visible;
+}
+mjx-container[jax='SVG'] path[data-c],
+mjx-container[jax='SVG'] use[data-c] {
+  stroke-width: 3;
+}
+
+.dima-math-block {
+  /* Wide formulas scroll inside their block on narrow screens (SC 1.4.10); the block is
+     focusable while it overflows so that keyboard users can scroll it (SC 2.1.1; see
+     src/components/overrides/MarkdownContent.astro). */
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  margin-block: 1rem;
+  padding-block: 0.25rem;
+}
+.dima-math-block:focus-visible {
+  outline: 2px solid var(--sl-color-text-accent);
+  outline-offset: 2px;
+}
+.dima-math-block mjx-container[jax='SVG'][display='true'] {
+  margin: 0;
+}
+.sl-markdown-content mjx-container[jax='SVG'] > svg a {
+  fill: var(--sl-color-text-accent);
+  stroke: var(--sl-color-text-accent);
+}
+.sl-markdown-content mjx-container {
+  color: var(--sl-color-white);
+}
+
+/* Reference lists, generated from the citation registry (plugins/rehype-registry-citations.mjs). */
+.sl-markdown-content .dima-references {
+  font-size: var(--sl-text-sm);
+}
+.sl-markdown-content .dima-references ul {
+  padding-inline-start: 0;
+  list-style: none;
+}
+.sl-markdown-content .dima-references li {
+  padding-inline-start: 2em;
+  text-indent: -2em;
+  margin-block: 0.5rem;
+  overflow-wrap: anywhere;
+}
+/* The entry or citation a link leads to is highlighted, so the eye finds it after the jump. */
+.sl-markdown-content .dima-references li:target,
+.sl-markdown-content a[role='doc-biblioref']:target {
+  background-color: var(--sl-color-accent-low);
+  border-radius: 0.25rem;
+  outline: 2px solid var(--sl-color-text-accent);
+  outline-offset: 2px;
+}
+.sl-markdown-content .dima-backlinks a {
+  /* Underlined like every link in text (WCAG 2.2 SC 1.4.1); a little room makes them easier to hit. */
+  padding-inline: 0.15em;
+}
+/* Reference preview shown next to a citation on hover or focus
+   (src/components/overrides/MarkdownContent.astro). */
+.dima-ref-preview {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  max-width: min(34rem, calc(100vw - 2rem));
+  padding: 0.75rem 1rem;
+  font-size: var(--sl-text-sm);
+  line-height: var(--sl-line-height);
+  color: var(--sl-color-white);
+  background-color: var(--sl-color-bg-nav);
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.5rem;
+  box-shadow: var(--sl-shadow-md);
+  overflow-wrap: anywhere;
+}
+.dima-ref-preview a {
+  color: var(--sl-color-text-accent);
+}
+@media print {
+  .dima-backlinks {
+    display: none;
+  }
+}
+
+/* Long identifiers (k-mers, hashes, options) must not widen the page on small screens. */
+.sl-markdown-content :not(pre) > code {
+  overflow-wrap: anywhere;
+}
+
+/* Tables scroll horizontally inside the content column instead of widening the page, and are
+   focusable while they overflow (src/components/overrides/MarkdownContent.astro). */
+.sl-markdown-content table:focus-visible {
+  outline: 2px solid var(--sl-color-text-accent);
+  outline-offset: 2px;
 }

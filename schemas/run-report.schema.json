@@ -1,0 +1,313 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shanweera.github.io/dima-perf/schemas/1.0/run-report.schema.json",
+  "title": "DiMA run report",
+  "description": "Written by `dima analyze --run-report PATH` and by the desktop app's \"Save run report\" (D103): how a run went. It is separate from the results, which stay byte-identical from run to run, and holds no host or user names, no directories, no raw command line and no environment values.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.1.0"
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "enum": [
+            "dima",
+            "dima-gui"
+          ],
+          "description": "dima (command line) or dima-gui (desktop app)."
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Rust target triple of the binary, e.g. x86_64-unknown-linux-gnu."
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "target"
+      ]
+    },
+    "command": {
+      "type": "array",
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "const": "dima"
+        },
+        {
+          "const": "analyze"
+        }
+      ],
+      "items": {
+        "type": "string"
+      },
+      "description": "The equivalent dima command, rebuilt from the parameters: long option names, file names without directories."
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "exit_code": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "error": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The error report (message, causes and hint) with directories removed; null when the run completed or was cancelled."
+    },
+    "start_time": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}\\+00:00$",
+      "description": "RFC 3339, UTC, milliseconds."
+    },
+    "end_time": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}\\+00:00$"
+    },
+    "threads": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Worker threads requested."
+            },
+            "started": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "description": "Worker threads started: count, or fewer when the system refused some (D110); null when the run stopped before they were started."
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "description": "--threads, RAYON_NUM_THREADS, available_parallelism, settings (desktop app), or the name of the scheduler variable that limited the count (D101)."
+            }
+          },
+          "required": [
+            "count",
+            "started",
+            "source"
+          ]
+        }
+      ],
+      "description": "null when the run stopped before the thread count was resolved."
+    },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "os": {
+          "type": "string",
+          "minLength": 1
+        },
+        "arch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "logical_cpus": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "os",
+        "arch",
+        "logical_cpus"
+      ]
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wall_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cpu_user_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "CPU time; null where it is not measured (the desktop app's process time includes drawing the interface)."
+        },
+        "cpu_system_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "CPU time; null where it is not measured (the desktop app's process time includes drawing the interface)."
+        },
+        "peak_rss_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Peak resident memory; null where the platform does not report it."
+        },
+        "waited_for_input_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Time the counting threads waited for input; null when the analysis did not finish (it failed or was cancelled)."
+        }
+      },
+      "required": [
+        "wall_seconds",
+        "cpu_user_seconds",
+        "cpu_system_seconds",
+        "peak_rss_bytes",
+        "waited_for_input_seconds"
+      ]
+    },
+    "phases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "enum": [
+              "opening",
+              "counting",
+              "finalising",
+              "writing"
+            ]
+          },
+          "wall_seconds": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "name",
+          "wall_seconds"
+        ]
+      }
+    },
+    "work": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "positions": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "required": [
+        "records",
+        "positions"
+      ]
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/file"
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/file"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "tool",
+    "command",
+    "status",
+    "exit_code",
+    "error",
+    "start_time",
+    "end_time",
+    "threads",
+    "platform",
+    "resources",
+    "phases",
+    "work",
+    "inputs",
+    "outputs"
+  ],
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "type": "string",
+          "description": "What the file is: alignment, results, results_jsonl, positions_table, variants_table, metadata_table, hcs_table or hcs.",
+          "enum": [
+            "alignment",
+            "results",
+            "results_jsonl",
+            "positions_table",
+            "variants_table",
+            "metadata_table",
+            "hcs_table",
+            "hcs"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "File name without directories; '-' for a standard stream."
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Stored size (compressed when compressed)."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the stored bytes."
+        }
+      },
+      "required": [
+        "role",
+        "name",
+        "size_bytes",
+        "sha256"
+      ]
+    }
+  }
+}

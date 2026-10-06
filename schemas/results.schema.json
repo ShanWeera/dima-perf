@@ -1,0 +1,1180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shanweera.github.io/dima-perf/schemas/1.0/results.schema.json",
+  "title": "DiMA results",
+  "description": "Results of `dima analyze` (DiMA: Tharanga et al. 2025, Brief Bioinform 26(1):bbae607, doi:10.1093/bib/bbae607). Keys follow DiMA; undefined values are null.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "query_name": {
+      "type": "string"
+    },
+    "sequence_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "support_threshold": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "kmer_length": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "low_support_count": {
+      "description": "Positions with support ≤ T (NS + LS + ELS).",
+      "type": "integer",
+      "minimum": 0
+    },
+    "average_entropy": {
+      "description": "Mean entropy over eligible positions (support > T).",
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "lowest_entropy": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/extremum"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "highest_entropy": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/extremum"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "position_count": {
+      "description": "Alignment length − k + 1.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "eligible_position_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "support_label_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "NS": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "LS": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ELS": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "eligible": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "NS",
+        "LS",
+        "ELS",
+        "eligible"
+      ]
+    },
+    "all_positions_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rule": {
+          "type": "string"
+        },
+        "position_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "average_entropy": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "lowest_entropy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/extremum"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "highest_entropy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/extremum"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "rule",
+        "position_count",
+        "average_entropy",
+        "lowest_entropy",
+        "highest_entropy"
+      ],
+      "description": "Summary with DiMA v5.0.9's averaging rule."
+    },
+    "coverage_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "evaluated": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "min": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "mean": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "min_coverage": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "below_min_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "required": [
+        "evaluated",
+        "min",
+        "mean",
+        "min_coverage",
+        "below_min_count"
+      ]
+    },
+    "run": {
+      "$ref": "#/$defs/run"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/position"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "query_name",
+    "sequence_count",
+    "support_threshold",
+    "kmer_length",
+    "low_support_count",
+    "average_entropy",
+    "lowest_entropy",
+    "highest_entropy",
+    "position_count",
+    "eligible_position_count",
+    "support_label_counts",
+    "all_positions_summary",
+    "coverage_summary",
+    "run",
+    "results"
+  ],
+  "$defs": {
+    "origin": {
+      "description": "Where a parameter's value came from.",
+      "enum": [
+        "default",
+        "user",
+        "derived"
+      ]
+    },
+    "alphabet": {
+      "enum": [
+        "protein",
+        "dna",
+        "rna"
+      ]
+    },
+    "estimator": {
+      "enum": [
+        "dima",
+        "chao_wang_jost",
+        "miller_madow",
+        "raw"
+      ]
+    },
+    "validation_mode": {
+      "enum": [
+        "strict",
+        "permissive",
+        "report"
+      ]
+    },
+    "extremum": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "position": {
+          "description": "1-based position of the first position with this value.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "entropy": {
+          "description": "Entropy in bits.",
+          "type": "number",
+          "minimum": 0
+        },
+        "tied_position_count": {
+          "description": "Number of positions with exactly this value.",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "position",
+        "entropy",
+        "tied_position_count"
+      ],
+      "description": "An entropy extremum."
+    },
+    "checksum": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "sha-256"
+        },
+        "value": {
+          "description": "Lower-case hexadecimal digest.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "type",
+        "value"
+      ]
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "const": "dima"
+        },
+        "version": {
+          "description": "SemVer version.",
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "description": "Stable diagnostic code.",
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "count": {
+          "description": "Number of occurrences.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "examples": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "string"
+          },
+          "description": "The first occurrences, in input order."
+        },
+        "hint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "message",
+        "count",
+        "examples",
+        "hint"
+      ],
+      "description": "A condition worth knowing about (it did not stop the analysis)."
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "citation": {
+          "description": "Full reference text.",
+          "type": "string"
+        },
+        "doi": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^10\\."
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^https://"
+        }
+      },
+      "required": [
+        "key",
+        "citation",
+        "doi",
+        "url"
+      ]
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sequence": {
+          "description": "The k-mer, upper case.",
+          "type": "string",
+          "pattern": "^[A-Z]+$"
+        },
+        "count": {
+          "description": "Sequences carrying it.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "incidence": {
+          "description": "count / support × 100.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100
+        },
+        "motif_short": {
+          "enum": [
+            "I",
+            "Ma",
+            "Mi",
+            "U"
+          ]
+        },
+        "motif_long": {
+          "enum": [
+            "Index",
+            "Major",
+            "Minor",
+            "Unique"
+          ]
+        },
+        "metadata": {
+          "description": "Header-field value counts, in header-format order, values sorted; null without a header format.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "sequence",
+        "count",
+        "incidence",
+        "motif_short",
+        "motif_long",
+        "metadata"
+      ],
+      "description": "A distinct k-mer at a position."
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "position": {
+          "description": "1-based alignment column of the k-mer's first residue.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "low_support": {
+          "description": "NS (support 0), LS (0 < support < T), ELS (support = T), null when eligible (support > T).",
+          "enum": [
+            "NS",
+            "LS",
+            "ELS",
+            null
+          ]
+        },
+        "support": {
+          "description": "Sequences with a valid k-mer here (N).",
+          "type": "integer",
+          "minimum": 0
+        },
+        "distinct_variants_count": {
+          "description": "Distinct non-Index variants.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "entropy": {
+          "description": "Entropy in bits from entropy_method; null without support.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "observed_entropy": {
+          "description": "Plug-in (observed) entropy in bits.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "entropy_method": {
+          "enum": [
+            "dima",
+            "chao_wang_jost",
+            "miller_madow",
+            "plug_in",
+            "not_estimable"
+          ]
+        },
+        "entropy_fallback": {
+          "description": "Why the requested estimator was not used.",
+          "enum": [
+            "support_at_or_below_threshold",
+            "too_few_points",
+            "degenerate_regression",
+            "single_observation",
+            null
+          ]
+        },
+        "distinct_variants_incidence": {
+          "description": "Non-Index variant types per 100 non-Index sequences.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "total_variants_incidence": {
+          "description": "Non-Index sequences per 100 supporting sequences.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "sample_coverage": {
+          "description": "Estimated sample coverage (Chao & Jost 2012).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "below_min_coverage": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "diversity_motifs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/variant"
+          }
+        }
+      },
+      "required": [
+        "position",
+        "low_support",
+        "support",
+        "distinct_variants_count",
+        "entropy",
+        "observed_entropy",
+        "entropy_method",
+        "entropy_fallback",
+        "distinct_variants_incidence",
+        "total_variants_incidence",
+        "sample_coverage",
+        "below_min_coverage",
+        "diversity_motifs"
+      ],
+      "description": "Results for one k-mer position."
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "$ref": "#/$defs/tool"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "alphabet": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "$ref": "#/$defs/alphabet"
+                },
+                "origin": {
+                  "$ref": "#/$defs/origin"
+                }
+              },
+              "required": [
+                "value",
+                "origin"
+              ],
+              "description": "Sequence alphabet."
+            },
+            "kmer_length": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "origin": {
+                  "$ref": "#/$defs/origin"
+                }
+              },
+              "required": [
+                "value",
+                "origin"
+              ],
+              "description": "k-mer length."
+            },
+            "support_threshold": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "origin": {
+                  "$ref": "#/$defs/origin"
+                }
+              },
+              "required": [
+                "value",
+                "origin"
+              ],
+              "description": "Support threshold T."
+            },
+            "estimator": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "$ref": "#/$defs/estimator"
+                },
+                "origin": {
+                  "$ref": "#/$defs/origin"
+                }
+              },
+              "required": [
+                "value",
+                "origin"
+              ],
+              "description": "Entropy estimator."
+            },
+            "validation": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "$ref": "#/$defs/validation_mode"
+                },
+                "origin": {
+                  "$ref": "#/$defs/origin"
+                }
+              },
+              "required": [
+                "value",
+                "origin"
+              ],
+              "description": "Validation mode."
+            },
+            "min_coverage": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "origin": {
+                  "$ref": "#/$defs/origin"
+                }
+              },
+              "required": [
+                "value",
+                "origin"
+              ],
+              "description": "Minimum sample coverage."
+            },
+            "query_name": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "string"
+                },
+                "origin": {
+                  "$ref": "#/$defs/origin"
+                }
+              },
+              "required": [
+                "value",
+                "origin"
+              ],
+              "description": "Query name."
+            },
+            "header_format": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "origin": {
+                  "$ref": "#/$defs/origin"
+                }
+              },
+              "required": [
+                "value",
+                "origin"
+              ],
+              "description": "Header field names."
+            },
+            "metadata_fields": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "origin": {
+                  "$ref": "#/$defs/origin"
+                }
+              },
+              "required": [
+                "value",
+                "origin"
+              ],
+              "description": "Stratified header fields."
+            },
+            "header_fill": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "origin": {
+                  "$ref": "#/$defs/origin"
+                }
+              },
+              "required": [
+                "value",
+                "origin"
+              ],
+              "description": "Fill value."
+            }
+          },
+          "required": [
+            "alphabet",
+            "kmer_length",
+            "support_threshold",
+            "estimator",
+            "validation",
+            "min_coverage",
+            "query_name",
+            "header_format",
+            "metadata_fields",
+            "header_fill"
+          ]
+        },
+        "alphabet": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "resolved": {
+              "$ref": "#/$defs/alphabet"
+            },
+            "method": {
+              "enum": [
+                "detected",
+                "user"
+              ]
+            },
+            "records_examined": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "residues_examined": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "t_u_folded": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "contradiction": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "resolved",
+            "method",
+            "records_examined",
+            "residues_examined",
+            "t_u_folded",
+            "contradiction"
+          ]
+        },
+        "alignment_length": {
+          "description": "Alignment columns.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "description": "File name without directories, or '-'.",
+              "type": "string"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "checksum": {
+              "$ref": "#/$defs/checksum"
+            },
+            "compression": {
+              "enum": [
+                "none",
+                "gzip",
+                "bzip2",
+                "zstd"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "size_bytes",
+            "checksum",
+            "compression"
+          ]
+        },
+        "validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "$ref": "#/$defs/validation_mode"
+            },
+            "records": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "lowercase_folded": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "whitespace": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "trailing": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "interior": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "trailing",
+                "interior"
+              ]
+            },
+            "characters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "char": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "minLength": 1,
+                    "maxLength": 1
+                  },
+                  "byte": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255
+                  },
+                  "class": {
+                    "enum": [
+                      "residue",
+                      "gap",
+                      "missing",
+                      "ambiguity",
+                      "stop",
+                      "frameshift",
+                      "whitespace",
+                      "unknown"
+                    ]
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "char",
+                  "byte",
+                  "class",
+                  "count"
+                ]
+              }
+            },
+            "unknown_total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "header_utf8_replacements": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "header_cleaning": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "unicode_version": {
+                  "type": "string"
+                },
+                "trimmed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "invisible_removed": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "code_point": {
+                        "type": "string",
+                        "pattern": "^U\\+[0-9A-F]{4,6}$"
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": [
+                      "code_point",
+                      "count"
+                    ]
+                  }
+                },
+                "nfc_changed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "fill_uses": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "unicode_version",
+                "trimmed",
+                "invisible_removed",
+                "nfc_changed",
+                "fill_uses"
+              ]
+            }
+          },
+          "required": [
+            "mode",
+            "records",
+            "lowercase_folded",
+            "whitespace",
+            "characters",
+            "unknown_total",
+            "header_utf8_replacements",
+            "header_cleaning"
+          ]
+        },
+        "metadata": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "stratified": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "probe_records": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "mismatches": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "first": {
+                  "type": "array",
+                  "maxItems": 20,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "record": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "line": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "header": {
+                        "type": "string"
+                      },
+                      "expected": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "found": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "record",
+                      "line",
+                      "header",
+                      "expected",
+                      "found"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "count",
+                "first"
+              ]
+            },
+            "fill_uses": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "fields",
+            "stratified",
+            "probe_records",
+            "mismatches",
+            "fill_uses"
+          ]
+        },
+        "entropy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "estimator": {
+              "$ref": "#/$defs/estimator"
+            },
+            "log_base": {
+              "const": 2
+            },
+            "rarefaction": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "grid": {
+                  "const": "paper_fig2"
+                },
+                "size_rounding": {
+                  "const": "ceil"
+                },
+                "start_rounding": {
+                  "const": "ceil_to_5"
+                },
+                "sampling": {
+                  "const": "expected_with_replacement"
+                },
+                "min_points": {
+                  "const": 5
+                }
+              },
+              "required": [
+                "grid",
+                "size_rounding",
+                "start_rounding",
+                "sampling",
+                "min_points"
+              ]
+            }
+          },
+          "required": [
+            "estimator",
+            "log_base",
+            "rarefaction"
+          ]
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diagnostic"
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/reference"
+          }
+        }
+      },
+      "required": [
+        "tool",
+        "parameters",
+        "alphabet",
+        "alignment_length",
+        "input",
+        "validation",
+        "metadata",
+        "entropy",
+        "diagnostics",
+        "references"
+      ],
+      "description": "Deterministic provenance of the run."
+    }
+  }
+}

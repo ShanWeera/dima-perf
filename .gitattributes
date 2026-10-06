@@ -1,0 +1,17 @@
+# Default: normalise text to LF in the repository.
+* text=auto eol=lf
+
+# Byte-exact fixtures: never convert line endings (checksums and golden comparisons depend on it).
+samples/*.fasta -text
+tests/data/** -text
+tests/golden/** -text
+crates/*/tests/golden/** -text
+
+# Binary assets.
+*.png binary
+*.ico binary
+*.icns binary
+*.ttf binary
+*.bz2 binary
+*.gz binary
+*.zst binary

@@ -1,0 +1,9 @@
+# Questions go to Discussions, bugs to the form in this folder (decision D112).
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question or suggest an idea
+    url: https://github.com/ShanWeera/dima-perf/discussions
+    about: Questions about using DiMA, interpreting results, or ideas for new features.
+  - name: Frequently asked questions
+    url: https://shanweera.github.io/dima-perf/latest/getting-started/faq/
+    about: Short answers to common questions, with links to the full documentation.

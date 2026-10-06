@@ -1,43 +1,74 @@
-# cargo-deny configuration
-# https://embarkstudios.github.io/cargo-deny/
+# cargo-deny policy (D95). https://embarkstudios.github.io/cargo-deny/
 #
-# Catches duplicate crate versions — the class of bug that breaks Windows
-# builds when gpu-allocator and wgpu-hal land on different `windows` crate
-# versions.
+#   cargo deny check                       advisories, bans, licenses, sources (workspace)
+#   cargo deny --config deny-strict.toml --exclude dima-gui --exclude xtask --exclude-dev check bans
+#                                          no duplicate crate versions in the library and CLI
 #
-# Run locally:  cargo deny check bans
-# CI:           EmbarkStudios/cargo-deny-action@v2 (check bans)
+# CI runs both (advisories are non-blocking on pull requests, blocking on the default branch and weekly).
 
 [graph]
-# Check all three release targets so Windows-only duplicates are caught even
-# when CI runs cargo-deny on Linux.
+# Every release target, so platform-only dependencies are checked on any host.
 targets = [
-    { triple = "x86_64-unknown-linux-gnu" },
-    { triple = "x86_64-pc-windows-msvc" },
-    { triple = "aarch64-apple-darwin" },
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
+    "aarch64-unknown-linux-musl",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
 ]
 all-features = true
 
-# ─── Bans ────────────────────────────────────────────────────────────────
-[bans]
-# Fail CI when two versions of the same crate appear in the dependency graph.
-# This is the primary guard against the windows 0.61 / 0.62 split that
-# caused the D3D12 build failure.
-multiple-versions = "deny"
-wildcards = "deny"
-highlight = "all"
-
-# Legitimate semver-incompatible duplicates that cannot be unified because
-# our direct deps (rand 0.8, etc.) and transitive deps (proptest → rand 0.9)
-# require different major versions. Each entry has a reason for traceability.
-skip = [
-    # rand ecosystem: dima uses rand 0.8 (getrandom 0.2); proptest (dev-dep)
-    # pulls rand 0.9 (getrandom 0.3). These are semver-incompatible 0.x
-    # versions that cannot be unified.
-    { crate = "getrandom@0.2", reason = "rand 0.8 depends on getrandom 0.2; rand 0.9 uses 0.3" },
-
-    # windows-sys: anstyle-query uses 0.60; console/ctrlc/tempfile use 0.61.
-    # These are semver-incompatible 0.x versions and unrelated to the
-    # windows (not windows-sys) crate conflict we guard against.
-    { crate = "windows-sys@0.60", reason = "anstyle-query uses 0.60; rest of ecosystem on 0.61" },
+[advisories]
+# Every ignore needs an id, a reason and a review date in the reason ("until YYYY-MM-DD").
+ignore = [
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml is used only by the wayland-scanner proc-macro, which parses the Wayland protocol XML shipped in the wayland crates at compile time (trusted, fixed input); no runtime use; upstream pins quick-xml 0.39 (until 2027-04-05)" },
+    { id = "RUSTSEC-2026-0195", reason = "same as RUSTSEC-2026-0194: compile-time parsing of trusted Wayland protocol files only (until 2027-04-05)" },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser is unmaintained but has no known vulnerability; the desktop app parses only its bundled fonts (ab_glyph, sctk-adwaita); no maintained replacement is used by egui yet (until 2027-04-05)" },
 ]
+
+[licenses]
+# Permissive licences only; anything else needs a deliberate decision.
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "ISC",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Zlib",
+    "0BSD",
+    # bzip2's own licence (BSD-style), of the pure-Rust bzip2 decoder libbz2-rs-sys.
+    "bzip2-1.0.6",
+    # The fonts bundled by egui (epaint_default_fonts) for the desktop app.
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+]
+confidence-threshold = 0.93
+
+[bans]
+# Workspace-wide duplicates are reported; the library and CLI deny them (deny-strict.toml).
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+highlight = "all"
+skip = [
+    { crate = "objc2@0.5.2", reason = "eframe 0.36 itself depends on both: accesskit_macos 0.26 on objc2 0.5 and arboard/rfd on 0.6; their types are never mixed (until the next egui upgrade)" },
+]
+# Two versions of these split GPU and windowing types and break the desktop build.
+deny = [
+    { crate = "windows", deny-multiple-versions = true, reason = "split D3D12 types break the Windows GUI build" },
+    { crate = "wgpu", deny-multiple-versions = true, reason = "the GPU callback types must unify with egui-wgpu" },
+    { crate = "raw-window-handle", deny-multiple-versions = true, reason = "window handles must unify across winit and wgpu" },
+    { crate = "objc2", deny-multiple-versions = true, reason = "Objective-C runtime types must unify on macOS" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
