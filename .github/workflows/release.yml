@@ -367,6 +367,10 @@ jobs:
       - uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2.87.24
         with:
           tool: cargo-packager@0.11.8,cargo-auditable@0.7.7
+      # cargo-packager (0.11.8) takes the binary from target/<--target>/release (it ignores
+      # --binaries-dir), and changes into crates/dima-gui before packaging, so a relative --out-dir
+      # that does not exist yet ends up under that directory: the package steps pass --target and an
+      # absolute --out-dir.
       - name: Build (macOS universal binary)
         if: matrix.kind == 'macos'
         shell: bash
@@ -377,8 +381,8 @@ jobs:
           mkdir -p target/universal-apple-darwin/release
           lipo -create -output target/universal-apple-darwin/release/dima-gui \
             target/x86_64-apple-darwin/release/dima-gui target/aarch64-apple-darwin/release/dima-gui
-          cargo packager -p dima-gui --release --formats app,dmg \
-            --binaries-dir target/universal-apple-darwin/release --out-dir dist-raw
+          cargo packager -p dima-gui --release --formats app,dmg --target universal-apple-darwin \
+            --out-dir "$PWD/dist-raw"
           mkdir -p dist
           mv dist-raw/*.dmg "dist/DiMA-$VERSION-universal.dmg"
       - name: Build (Windows)
@@ -386,8 +390,9 @@ jobs:
         shell: bash
         run: |
           cargo auditable build --release --locked -p dima-gui --target "$TARGET"
+          # The packager is a native program: give it a Windows path (D:/a/...).
           cargo packager -p dima-gui --release --formats wix --target "$TARGET" \
-            --binaries-dir "target/$TARGET/release" --out-dir dist-raw
+            --out-dir "$(cygpath -m "$PWD/dist-raw")"
           mkdir -p dist
           mv dist-raw/*.msi "dist/DiMA-$VERSION-$ARCH.msi"
       - name: Build in a manylinux_2_28 container (glibc 2.28)
@@ -414,7 +419,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y --no-install-recommends libfuse2t64
           cargo packager -p dima-gui --release --formats deb,appimage --target "$TARGET" \
-            --binaries-dir "target/$TARGET/release" --out-dir dist-raw
+            --out-dir "$PWD/dist-raw"
           mkdir -p dist
           mv dist-raw/*.AppImage "dist/DiMA-$VERSION-$ARCH.AppImage"
           mv dist-raw/*.deb "dist/dima-gui_${VERSION}_${ARCH}.deb"
