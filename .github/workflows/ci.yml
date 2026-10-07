@@ -333,8 +333,8 @@ jobs:
 
   links:
     name: External links and DOIs (weekly, non-blocking)
-    # Not when the release workflow runs this suite (the github context, and so github.workflow,
-    # is the caller's there).
+    # Not when the release workflow runs this suite: the github context, and so github.workflow,
+    # is the caller's there ("Release"), while this workflow's own runs carry its `name:` (CI).
     if: github.workflow == 'CI' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     permissions:

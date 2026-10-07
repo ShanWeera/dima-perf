@@ -124,9 +124,10 @@ named by `CHROME_PATH`.
    `master` and enter the version (`X.Y.Z`). Pushing a tag `vX.Y.Z` does the same. The release
    workflow refuses a version that does not match the workspace version, has no dated changelog
    section or already has a release, runs the full CI suite, builds and checks every package,
-   and publishes the release with its checksums and attestations; a run started from the
-   Actions page creates the tag `vX.Y.Z` on the newest `master` commit only after every build
-   has passed. The documentation of the new version is then published at `/dima-perf/vX.Y/`.
+   and publishes the release with its checksums and attestations. A run started from the
+   Actions page releases the newest `master` commit at the time it starts, and creates the tag
+   `vX.Y.Z` on it only after every build and check has passed, so a failed run can simply be
+   started again. The documentation of the new version is then published at `/dima-perf/vX.Y/`.
    Do not create the release on GitHub's release page: the workflow creates it.
 
 ## Other scripts
