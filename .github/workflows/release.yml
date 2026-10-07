@@ -329,16 +329,13 @@ jobs:
           - name: macOS (universal)
             os: macos-15
             kind: macos
+          # No Windows ARM64 desktop package for now: cargo-packager 0.11.8 builds MSIs with WiX
+          # 3.11, which cannot target ARM64. The ARM64 command-line archive is built above.
           - name: Windows x86_64
             os: windows-2025
             kind: windows
             target: x86_64-pc-windows-msvc
             arch: x86_64
-          - name: Windows ARM64
-            os: windows-11-arm
-            kind: windows
-            target: aarch64-pc-windows-msvc
-            arch: aarch64
           - name: Linux x86_64
             os: ubuntu-24.04
             kind: linux
