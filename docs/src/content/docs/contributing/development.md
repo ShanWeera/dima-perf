@@ -122,7 +122,8 @@ named by `CHROME_PATH`.
    `vX.Y.Z`. The release workflow refuses a tag that does not match the workspace version or
    has no dated changelog section, runs the full CI suite, builds and checks every package, and
    publishes the release with its checksums and attestations; the documentation of the new
-   version is then published at `/dima-perf/vX.Y/`.
+   version is then published at `/dima-perf/vX.Y/`. Do not create the release on GitHub's
+   release page: the workflow creates it, and stops if a release for the tag already exists.
 
 ## Other scripts
 

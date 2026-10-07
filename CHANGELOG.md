@@ -6,12 +6,12 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). The
 "Methodology" group lists every change that can alter a result, with the sources behind it.
 
-## [1.0.0] - Unreleased
+## [1.0.0] - 2026-10-07
 
 First release of the Rust implementation of DiMA (Tharanga et al. 2025, *Briefings in
 Bioinformatics* 26(1):bbae607, [doi:10.1093/bib/bbae607](https://doi.org/10.1093/bib/bbae607)).
-It replaces every earlier, unreleased version of this repository; results of those versions
-are not comparable (see "Fixed").
+It replaces every earlier version of this repository; results of those versions are not
+comparable (see "Fixed").
 
 ### Methodology
 
