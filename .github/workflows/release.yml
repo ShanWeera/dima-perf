@@ -407,10 +407,24 @@ jobs:
           mkdir -p target/universal-apple-darwin/release
           lipo -create -output target/universal-apple-darwin/release/dima-gui \
             target/x86_64-apple-darwin/release/dima-gui target/aarch64-apple-darwin/release/dima-gui
-          cargo packager -p dima-gui --release --formats app,dmg --target universal-apple-darwin \
-            --out-dir "$PWD/dist-raw"
+          # hdiutil on the macOS runners now and then fails to create the disk image with
+          # "Resource busy" while another process still holds it; that error alone is retried, at
+          # most three times in all, each attempt in a new output folder.
+          log="$RUNNER_TEMP/packager.log"
+          for attempt in 1 2 3; do
+            out="$PWD/dist-raw-$attempt"
+            if cargo packager -p dima-gui --release --formats app,dmg --target universal-apple-darwin \
+              --out-dir "$out" 2>&1 | tee "$log"; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ] || ! grep -q 'Resource busy' "$log"; then
+              exit 1
+            fi
+            echo "::warning::hdiutil could not create the disk image (Resource busy, attempt $attempt of 3); trying again"
+            sleep 20
+          done
           mkdir -p dist
-          mv dist-raw/*.dmg "dist/DiMA-$VERSION-universal.dmg"
+          mv "$out"/*.dmg "dist/DiMA-$VERSION-universal.dmg"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         if: matrix.kind == 'windows'
         with:
