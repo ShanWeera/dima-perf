@@ -47,7 +47,7 @@ tar xzf dima-${version}-x86_64-unknown-linux-gnu.tar.gz
 
 From source (Rust 1.85 or newer): \`cargo install --locked --git ${repo} --tag v${version} dima\`.
 
-Desktop app: \`DiMA-${version}-universal.dmg\` (macOS), \`DiMA-${version}-x86_64.msi\` / \`DiMA-${version}-aarch64.msi\` (Windows), and for Linux (glibc 2.28 or newer) \`DiMA-${version}-x86_64.AppImage\`, \`dima-gui_${version}_x86_64.deb\` or \`dima-gui-${version}-x86_64-linux.tar.gz\`, with the same names for ARM64 (\`aarch64\` in place of \`x86_64\`). The packages are not code-signed; see the installation guide for first-run steps.
+Desktop app: \`DiMA-${version}-universal.dmg\` (macOS), \`DiMA-${version}-x86_64.msi\` (Windows x86_64), and for Linux (glibc 2.28 or newer) \`DiMA-${version}-x86_64.AppImage\`, \`dima-gui_${version}_x86_64.deb\` or \`dima-gui-${version}-x86_64-linux.tar.gz\`, with the same names for ARM64 (\`aarch64\` in place of \`x86_64\`). The packages are not code-signed; see the installation guide for first-run steps.
 
 Verify a download: \`sha256sum -c SHA256SUMS --ignore-missing\`, and its build provenance: \`gh attestation verify <file> --repo ShanWeera/dima-perf\`. Each archive has a CycloneDX SBOM (\`.cdx.json\`), and the binaries embed their dependency list (\`cargo auditable\`).
 

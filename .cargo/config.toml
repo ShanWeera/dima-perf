@@ -1,3 +1,12 @@
 # `cargo xtask …` runs the repository's generators and checks (D94).
 [alias]
 xtask = "run --quiet --package xtask --"
+
+# Windows (MSVC): link the C runtime into the programs, so dima.exe and dima-gui.exe start on PCs
+# without the Microsoft Visual C++ Redistributable (vcruntime140.dll). One `cfg` table rather than
+# one per target triple, so every MSVC target (x86_64 and aarch64) gets it; cc-rs then compiles the
+# bundled C code (zstd) with /MT to match. A RUSTFLAGS or CARGO_ENCODED_RUSTFLAGS environment
+# variable, even an empty one, replaces these flags, and `cargo install --git` does not read this
+# file: CI and the release workflow check every Windows binary (scripts/release/check-windows-crt.py).
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]

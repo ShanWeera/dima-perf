@@ -96,6 +96,16 @@ jobs:
           target/debug/dima analyze -i samples/mers_spike_aa.fasta -q -o "$RUNNER_TEMP/r.json"
           target/debug/dima view -i "$RUNNER_TEMP/r.json" -q -o "$RUNNER_TEMP/back.json"
           cmp "$RUNNER_TEMP/r.json" "$RUNNER_TEMP/back.json"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: runner.os == 'Windows'
+        with:
+          python-version: "3.12"
+      # .cargo/config.toml links the C runtime statically on Windows: the program must not need
+      # the Visual C++ Redistributable (a RUSTFLAGS variable would silently drop the setting).
+      - name: The C runtime is linked statically (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: python scripts/release/check-windows-crt.py --machine x86_64 target/debug/dima.exe
       - name: gzip decoding uses zlib-rs with SIMD detection (D93)
         if: runner.os == 'Linux'
         shell: bash
@@ -261,6 +271,8 @@ jobs:
           cffconvert --validate
       - name: Independent Python reference implementation self-test
         run: python scripts/reference/dima_reference.py --self-test
+      - name: Windows C runtime checker self-test
+        run: python scripts/release/check-windows-crt.py --self-test
       # About 45 s: the reference implementation on the four bundled datasets.
       - name: The paper test's expected values match the reference implementation
         run: python scripts/reference/paper_values.py --check

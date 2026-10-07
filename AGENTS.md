@@ -88,6 +88,7 @@ cargo xtask gen --mode check
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps -p dima-core -p dima --locked  # API docs build cleanly
 cargo bench --no-run -p dima-core --locked                         # benchmarks compile
 python3 scripts/reference/dima_reference.py --self-test
+python3 scripts/release/check-windows-crt.py --self-test
 python3 scripts/notices/generate.py --check                       # after dependency changes (cargo-about)
 python3 scripts/reference/paper_values.py --check                 # after changes to the reference implementation or the datasets
 cargo deny check bans licenses sources                             # after dependency changes (cargo-deny)

@@ -47,6 +47,7 @@ cargo xtask gen --mode check
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps -p dima-core -p dima --locked  # API docs
 cargo bench --no-run -p dima-core --locked                         # benchmarks compile
 python3 scripts/reference/dima_reference.py --self-test
+python3 scripts/release/check-windows-crt.py --self-test
 pnpm -C docs install --frozen-lockfile && pnpm -C docs build       # after documentation changes
 ```
 
@@ -138,3 +139,4 @@ named by `CHROME_PATH`.
 | `scripts/validate_paper.sh` | Prints the comparison with the paper's published values ([Comparison with the paper](/explanation/paper-comparison/)) |
 | `scripts/bench/run.sh` | Regenerates `BENCHMARK.md` ([Benchmarks](/explanation/benchmarks/)) |
 | `scripts/reference/dima_reference.py` | The independent reference implementation ([Testing](/contributing/testing/)) |
+| `scripts/release/check-windows-crt.py` | Checks that Windows programs need no Visual C++ runtime DLL, by reading their import tables; CI and the release workflow run it on every Windows program |

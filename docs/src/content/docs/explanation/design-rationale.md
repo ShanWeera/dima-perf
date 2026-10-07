@@ -66,6 +66,7 @@ evidence used instead.
 | Linux binaries built against an old C library (glibc 2.17 for x86_64, 2.28 for ARM64) plus static builds | Many omics tools fail to install, which limits their use [@mangul2019install]. **Gap:** that many HPC clusters still run old Linux distributions comes from community surveys, not peer-reviewed work. |
 | Bioconda, BioContainers and Apptainer as the preferred channels once the recipe is accepted | [@gruning2018bioconda; @daveigaleprevost2017; @kurtzer2017; @gruning2018repro]. |
 | Release archives with checksums, build-provenance attestations and software bills of materials; CI actions pinned by commit | Defences against supply-chain attacks [@ladisa2023] [general]; pinning alone is not enough [@he2025] [general]; [@zahan2023] [general]. |
+| Windows programs link the C runtime statically, and the release checks every Windows program's imports | So that they need no other software installed: without it they need the Microsoft Visual C++ Redistributable, which Windows does not include. **Gap:** an engineering choice; no peer-reviewed source. |
 | Unsigned desktop packages with documented first-run steps | **Gap:** code signing needs certificates the project does not hold; no peer-reviewed source. |
 
 ## Desktop app
