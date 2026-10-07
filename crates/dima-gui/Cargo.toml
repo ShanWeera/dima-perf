@@ -56,7 +56,7 @@ libm.workspace = true
 # Settings and recent files.
 serde.workspace = true
 serde_json.workspace = true
-dirs = "6"
+dirs = "7"
 
 # Worker threads run below normal priority so the interface stays responsive (plan D101).
 thread-priority = "3.1"
