@@ -120,7 +120,10 @@ With Rust 1.85 or newer ([rustup](https://rustup.rs/)):
 cargo install --locked --git https://github.com/ShanWeera/dima-perf --tag v1.0.0 dima
 ```
 
-`--locked` builds with exactly the dependency versions of the release.
+`--locked` builds with exactly the dependency versions of the release. On Windows, `cargo install`
+does not apply the repository's build settings, so the program it builds needs the Microsoft
+Visual C++ Redistributable; for a self-contained program like the release archives, run
+`$env:RUSTFLAGS = "-C target-feature=+crt-static"` in PowerShell first.
 
 ### Bioconda and containers
 
