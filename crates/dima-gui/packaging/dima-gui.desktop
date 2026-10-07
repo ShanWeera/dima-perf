@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name={{name}}
+GenericName=Viral sequence diversity analyser
+{{#if comment}}
+Comment={{comment}}
+{{/if}}
+Exec={{exec}} {{exec_arg}}
+Icon={{icon}}
+Terminal=false
+Categories=Science;Biology;Education;
+Keywords=DiMA;diversity;entropy;virus;alignment;FASTA;k-mer;
+StartupWMClass=dima-gui

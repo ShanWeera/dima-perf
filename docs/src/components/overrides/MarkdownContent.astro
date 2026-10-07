@@ -1,0 +1,122 @@
+---
+// Starlight's Markdown content, plus keyboard access to the parts of it that scroll and previews
+// of the references that citations point to.
+//
+// Tables and display formulas scroll horizontally inside the content column when they are wider
+// than it (WCAG 2.2 SC 1.4.10 Reflow). A region that scrolls must be reachable with the keyboard
+// (SC 2.1.1 Keyboard), so each one is made focusable while — and only while — it overflows;
+// regions that fit the column stay out of the tab order. Display formulas are focusable in the
+// static HTML as a fallback for browsers without JavaScript.
+//
+// Reference previews (plan D111): hovering a citation with a mouse or pen, or focusing it, shows
+// its full reference next to it, so readers need not jump to the reference list and back. The
+// preview follows WCAG 2.2 SC 1.4.13 (Content on Hover or Focus): Escape dismisses it, the pointer
+// can move onto it, and it stays until the pointer and focus leave. It repeats the list entry,
+// which screen readers already announce as the citation's description, so it is hidden from
+// them. Touch, keyboard activation and browsers without JavaScript or the popover API follow the
+// link to the entry, which has a back-link (plugins/rehype-registry-citations.mjs).
+import Default from '@astrojs/starlight/components/MarkdownContent.astro';
+---
+
+<Default><slot /></Default>
+
+<script>
+  const SCROLLERS = '.sl-markdown-content table, .sl-markdown-content .dima-math-block';
+
+  function update(region: Element) {
+    if (!(region instanceof HTMLElement)) return;
+    if (region.scrollWidth > region.clientWidth + 1) region.tabIndex = 0;
+    else region.removeAttribute('tabindex');
+  }
+
+  const regions = document.querySelectorAll(SCROLLERS);
+  const observer = new ResizeObserver((entries) => entries.forEach((e) => update(e.target)));
+  regions.forEach((region) => {
+    update(region);
+    observer.observe(region);
+  });
+
+  const CITE = '.sl-markdown-content a[role="doc-biblioref"]';
+  const cites = document.querySelectorAll<HTMLAnchorElement>(CITE);
+  if (cites.length > 0 && 'popover' in HTMLElement.prototype) {
+    // Delays before showing on hover (so passing over a citation does not flash it) and before
+    // hiding (so the pointer can cross the gap onto the preview).
+    const OPEN_MS = 250;
+    const CLOSE_MS = 300;
+    const GAP = 6;
+    const preview = document.createElement('div');
+    preview.className = 'dima-ref-preview';
+    preview.popover = 'manual';
+    preview.setAttribute('aria-hidden', 'true');
+    document.body.append(preview);
+    let owner: HTMLAnchorElement | null = null;
+    let timer: number | undefined;
+
+    const later = (fn: () => void, ms: number) => {
+      clearTimeout(timer);
+      timer = window.setTimeout(fn, ms);
+    };
+    const hide = () => {
+      clearTimeout(timer);
+      if (preview.matches(':popover-open')) preview.hidePopover();
+      owner = null;
+    };
+    // Below the citation if it fits, else above; never outside the window.
+    const place = (cite: HTMLAnchorElement) => {
+      const r = cite.getBoundingClientRect();
+      const p = preview.getBoundingClientRect();
+      const below = r.bottom + GAP + p.height <= window.innerHeight || r.top - GAP - p.height < 0;
+      preview.style.top = `${below ? r.bottom + GAP : r.top - GAP - p.height}px`;
+      preview.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - p.width - 8))}px`;
+    };
+    const show = (cite: HTMLAnchorElement) => {
+      clearTimeout(timer);
+      const entry = document.getElementById(decodeURIComponent(cite.hash.slice(1)));
+      if (!entry) return;
+      const content = [...entry.childNodes]
+        .filter((n) => !(n instanceof HTMLElement && n.classList.contains('dima-backlinks')))
+        .map((n) => n.cloneNode(true));
+      for (const n of content) {
+        if (!(n instanceof HTMLElement)) continue;
+        n.removeAttribute('id');
+        if (n instanceof HTMLAnchorElement) n.tabIndex = -1;
+        n.querySelectorAll('a').forEach((a) => (a.tabIndex = -1));
+      }
+      preview.replaceChildren(...content);
+      if (!preview.matches(':popover-open')) preview.showPopover();
+      owner = cite;
+      place(cite);
+    };
+    // When the pointer leaves, the preview of the focused citation (if any) stays.
+    const settle = () => {
+      const active = document.activeElement;
+      if (active instanceof HTMLAnchorElement && active.matches(CITE)) show(active);
+      else hide();
+    };
+
+    cites.forEach((cite) => {
+      cite.addEventListener('pointerenter', (e) => {
+        if (e.pointerType !== 'touch') later(() => show(cite), owner ? 0 : OPEN_MS);
+      });
+      cite.addEventListener('pointerleave', () => later(settle, CLOSE_MS));
+      cite.addEventListener('focus', () => show(cite));
+      // Focus leaves for the preview itself when it is clicked (to follow its DOI, or to
+      // select its text); the preview stays then.
+      cite.addEventListener('blur', () => {
+        if (!preview.matches(':hover')) hide();
+      });
+    });
+    preview.addEventListener('pointerenter', () => clearTimeout(timer));
+    preview.addEventListener('pointerleave', () => later(settle, CLOSE_MS));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && owner) hide();
+    });
+    // Following a citation (or any in-page link) moves away from it.
+    window.addEventListener('hashchange', hide);
+    const follow = () => {
+      if (owner) place(owner);
+    };
+    window.addEventListener('scroll', follow, { passive: true });
+    window.addEventListener('resize', follow);
+  }
+</script>

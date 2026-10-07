@@ -1,0 +1,34 @@
+{
+  "access_right": "open",
+  "creators": [
+    {
+      "name": "Tharanga, Shan"
+    }
+  ],
+  "description": "<p>A fast, deterministic Rust implementation of DiMA, the sequence diversity dynamics analyser for viruses (Tharanga et al. 2025, <i>Briefings in Bioinformatics</i> 26(1):bbae607). It quantifies the diversity of viral protein or nucleotide alignments by k-mer position: Shannon entropy with a sample-size correction, Index/Major/Minor/Unique motif classification, metadata stratification and historically conserved sequences. Command-line tool and desktop application.</p>",
+  "keywords": [
+    "bioinformatics",
+    "virology",
+    "sequence diversity",
+    "Shannon entropy",
+    "k-mer",
+    "multiple sequence alignment"
+  ],
+  "license": "MIT",
+  "related_identifiers": [
+    {
+      "identifier": "10.1093/bib/bbae607",
+      "relation": "isSupplementTo",
+      "resource_type": "publication-article",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "https://github.com/ShanWeera/dima-perf",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ],
+  "title": "dima: sequence diversity dynamics analyser for viruses (Rust implementation)",
+  "upload_type": "software",
+  "version": "1.0.0"
+}

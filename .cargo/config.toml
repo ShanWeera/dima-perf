@@ -1,15 +1,3 @@
-[target.x86_64-pc-windows-gnu]
-linker = "x86_64-w64-mingw32-gcc"
-ar = "x86_64-w64-mingw32-ar"
-
-# Performance-optimized release settings for release builds
-# (moved from unused release-optimized profile to active release profile)
-# See Cargo.toml [profile.release] section for the actual configuration
-
-# Platform-specific optimizations
-[target.x86_64-pc-windows-gnu.env]
-CC_x86_64_pc_windows_gnu = "x86_64-w64-mingw32-gcc"
-CXX_x86_64_pc_windows_gnu = "x86_64-w64-mingw32-g++"
-
-[target.aarch64-apple-darwin.env]
-# Apple Silicon optimizations will use native toolchain
+# `cargo xtask …` runs the repository's generators and checks (D94).
+[alias]
+xtask = "run --quiet --package xtask --"

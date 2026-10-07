@@ -1,0 +1,670 @@
+//! The entropy chart (D87): one line per run of shown positions — solid Okabe–Ito blue where
+//! support > T (corrected entropy), dashed vermillion where support ≤ T (uncorrected) — with
+//! hatched full-height bands labelled "no usable support" over positions without support
+//! (never drawn as 0), the eligible-mean line, coverage marks, a legend and per-point
+//! tooltips. Long ranges are M4-downsampled per pixel column, keeping class boundaries.
+//!
+//! Gestures: scroll zooms about the cursor, drag pans, Shift-drag zooms to a region,
+//! double-click resets, click selects; the hovered position is mirrored in the table.
+
+use std::sync::Arc;
+
+use egui::{Color32, Pos2, Rect, Stroke, Ui};
+
+use super::common::{Swatch, hatch_rect, heading, legend_entry};
+use super::help_text;
+use crate::app::msg::Msg;
+use crate::charts::axis::{integer_ticks, nice_ticks};
+use crate::charts::gpu_line::{LineCallback, LineUniforms, SegmentVertex, segment_vertices};
+use crate::charts::series::{
+    Class, NsSpan, Series, Style, legend, nearest_point, ns_span_at, strokes,
+};
+use crate::charts::transform::{XMap, YMap, y_axis_max};
+use crate::charts::viewport;
+use crate::state::session::{SelectSource, Session};
+use crate::theme::DesignTokens;
+
+/// Left margin for the y axis (shared with the conserved-region strip, G18).
+pub const LEFT_MARGIN: f32 = 58.0;
+/// Right margin.
+pub const RIGHT_MARGIN: f32 = 10.0;
+const BOTTOM_MARGIN: f32 = 34.0;
+const TOP_MARGIN: f32 = 6.0;
+const LINE_WIDTH: f32 = 1.6;
+const NS_LABEL: &str = "no usable support";
+
+/// Chart state that is not application state.
+#[derive(Default)]
+pub struct ChartUi {
+    /// Screen x where a Shift-drag began.
+    pub drag_origin: Option<f32>,
+    /// Vertices on the GPU: their key and data.
+    gpu: Option<(u64, Arc<Vec<SegmentVertex>>)>,
+}
+
+/// What the chart reports to the strip below it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Shared {
+    /// The x mapping of the plot area.
+    pub x: XMap,
+}
+
+/// Draws the chart; returns its x mapping (for the conserved-region strip), if drawn.
+pub fn show(
+    ui: &mut Ui,
+    s: &mut Session,
+    chart: &mut ChartUi,
+    gpu: bool,
+    t: &DesignTokens,
+    out: &mut Vec<Msg>,
+) -> Option<Shared> {
+    let threshold = s.results.support_threshold;
+    let series = Arc::clone(&s.series);
+    header(ui, s, &series, t, threshold);
+    let height = (ui.ctx().content_rect().height() * 0.28).clamp(150.0, 380.0);
+    let (full_rect, response) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width(), height + BOTTOM_MARGIN + TOP_MARGIN),
+        egui::Sense::click_and_drag(),
+    );
+    let plot = Rect::from_min_max(
+        egui::pos2(full_rect.left() + LEFT_MARGIN, full_rect.top() + TOP_MARGIN),
+        egui::pos2(
+            full_rect.right() - RIGHT_MARGIN,
+            full_rect.bottom() - BOTTOM_MARGIN,
+        ),
+    );
+    s.hovered = None;
+    let painter = ui.painter_at(full_rect);
+    let (Some(full), false) = (s.extent(), series.is_empty()) else {
+        painter.text(
+            full_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "No positions match the current filters",
+            egui::FontId::proportional(t.font_size_body),
+            t.text_muted,
+        );
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(
+                egui::WidgetType::Other,
+                true,
+                "Entropy chart: no positions shown",
+            )
+        });
+        return None;
+    };
+    let view = s.viewport.unwrap_or(full);
+    let x = XMap {
+        lo: view.0,
+        hi: view.1,
+        left: plot.left(),
+        right: plot.right(),
+    };
+    let y = YMap {
+        max: y_axis_max(series.y_max),
+        top: plot.top(),
+        bottom: plot.bottom(),
+    };
+    let plot_painter = ui.painter_at(plot);
+
+    draw_ns_bands(&plot_painter, &series, x, plot, t);
+    draw_mean(&plot_painter, s.results.average_entropy, y, plot, t);
+    draw_lines(
+        ui,
+        &plot_painter,
+        &series,
+        x,
+        y,
+        plot,
+        chart,
+        gpu,
+        s.version,
+        t,
+    );
+    draw_coverage(&plot_painter, &series, x, plot, t);
+    draw_axes(&painter, x, y, plot, full_rect, t);
+    if let Some(sel) = s.selection.position {
+        #[allow(clippy::cast_precision_loss)]
+        let sx = x.to_screen(sel as f64);
+        if plot.x_range().contains(sx) {
+            plot_painter.line_segment(
+                [egui::pos2(sx, plot.top()), egui::pos2(sx, plot.bottom())],
+                Stroke::new(1.5, t.chart_selection_line),
+            );
+        }
+    }
+
+    // Accessibility: the chart is painted, so it describes itself (AccessKit).
+    let description = format!(
+        "Entropy chart: {} positions shown, {} with support \u{2264} {threshold}, {} spans with {NS_LABEL}",
+        s.shown.len(),
+        series.uncorrected_count(),
+        series.ns_spans.len()
+    );
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, &description));
+
+    interact(ui, &response, s, chart, &series, x, y, plot, full, t, out);
+    Some(Shared { x })
+}
+
+fn header(ui: &mut Ui, s: &mut Session, series: &Series, t: &DesignTokens, threshold: u64) {
+    ui.horizontal_wrapped(|ui| {
+        heading(ui, t, "Entropy");
+        ui.add_space(t.space_8);
+        let has = |st: Style| {
+            series
+                .paths
+                .iter()
+                .flat_map(|p| &p.points)
+                .any(|p| p.style == st)
+        };
+        let estimator = s.results.run.parameters.estimator.value;
+        let tip = help_text::chart_encoding(threshold, estimator);
+        let [solid, dashed] = legend(threshold, estimator);
+        if has(Style::Eligible) {
+            legend_entry(ui, t, &solid, Swatch::Line(t.series_eligible)).on_hover_text(&tip);
+        }
+        if has(Style::Uncorrected) {
+            legend_entry(ui, t, &dashed, Swatch::Dashed(t.series_uncorrected)).on_hover_text(&tip);
+        }
+        if !series.ns_spans.is_empty() {
+            legend_entry(
+                ui,
+                t,
+                &format!("NS: {NS_LABEL}"),
+                Swatch::Hatched(t.ns_band_fill, t.ns_hatch),
+            )
+            .on_hover_text(&tip);
+        }
+        if s.results.average_entropy.is_some() {
+            legend_entry(ui, t, "eligible mean", Swatch::Dashed(t.mean_line)).on_hover_text(
+                "Mean entropy over the eligible positions (support > T), as in the summaries",
+            );
+        }
+        if let (Some(c), false) = (
+            s.results.coverage_summary.min_coverage,
+            series.low_coverage.is_empty(),
+        ) {
+            legend_entry(
+                ui,
+                t,
+                &format!("sample coverage < {c}"),
+                Swatch::Tick(t.coverage_mark),
+            )
+            .on_hover_text(help_text::min_coverage());
+        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let zoomed = s.viewport.is_some();
+            let full = s.extent();
+            if ui
+                .add_enabled(zoomed, egui::Button::new("Fit").small())
+                .on_hover_text("Show every shown position (or double-click the chart)")
+                .clicked()
+            {
+                s.viewport = None;
+            }
+            if let Some(full) = full {
+                if ui
+                    .small_button("+")
+                    .on_hover_text("Zoom in (or scroll over the chart)")
+                    .clicked()
+                {
+                    s.viewport = viewport::zoom(s.viewport, full, 0.8, 0.5);
+                }
+                if ui
+                    .add_enabled(zoomed, egui::Button::new("\u{2212}").small())
+                    .on_hover_text("Zoom out")
+                    .clicked()
+                {
+                    s.viewport = viewport::zoom(s.viewport, full, 1.25, 0.5);
+                }
+            }
+            ui.weak("drag: pan \u{2022} Shift-drag: zoom to region");
+        });
+    });
+}
+
+fn band_rect(span: NsSpan, x: XMap, plot: Rect) -> Rect {
+    #[allow(clippy::cast_precision_loss)]
+    let (a, b) = (
+        x.to_screen(span.first as f64 - 0.5),
+        x.to_screen(span.last as f64 + 0.5),
+    );
+    Rect::from_min_max(
+        egui::pos2(a.max(plot.left()), plot.top()),
+        egui::pos2(b.min(plot.right()).max(a + 1.0), plot.bottom()),
+    )
+}
+
+fn draw_ns_bands(p: &egui::Painter, series: &Series, x: XMap, plot: Rect, t: &DesignTokens) {
+    let label_font = egui::FontId::proportional(t.font_size_caption);
+    let label_width = p
+        .layout_no_wrap(NS_LABEL.to_owned(), label_font.clone(), t.text_secondary)
+        .size()
+        .x;
+    // Spans less than a pixel apart are drawn as one band (they cannot be told apart).
+    let mut merged: Option<Rect> = None;
+    let flush = |r: Rect| {
+        p.rect_filled(r, 0.0, t.ns_band_fill);
+        hatch_rect(p, r, t.ns_hatch, 6.0);
+        if r.width() >= label_width + 8.0 {
+            p.text(
+                egui::pos2(r.center().x, r.top() + 4.0),
+                egui::Align2::CENTER_TOP,
+                NS_LABEL,
+                label_font.clone(),
+                t.text_primary,
+            );
+        }
+    };
+    for span in &series.ns_spans {
+        if !span.in_view(x.lo, x.hi) {
+            continue;
+        }
+        let r = band_rect(*span, x, plot);
+        merged = match merged {
+            Some(m) if r.left() - m.right() < 1.0 => Some(m.union(r)),
+            Some(m) => {
+                flush(m);
+                Some(r)
+            }
+            None => Some(r),
+        };
+    }
+    if let Some(m) = merged {
+        flush(m);
+    }
+}
+
+fn draw_mean(p: &egui::Painter, mean: Option<f64>, y: YMap, plot: Rect, t: &DesignTokens) {
+    let Some(mean) = mean else {
+        return;
+    };
+    let sy = y.to_screen(mean);
+    if !plot.y_range().contains(sy) {
+        return;
+    }
+    p.extend(egui::Shape::dashed_line(
+        &[egui::pos2(plot.left(), sy), egui::pos2(plot.right(), sy)],
+        Stroke::new(1.0, t.mean_line),
+        3.0,
+        3.0,
+    ));
+    p.text(
+        egui::pos2(plot.right() - 4.0, sy - 2.0),
+        egui::Align2::RIGHT_BOTTOM,
+        format!("eligible mean {mean:.4}"),
+        egui::FontId::proportional(t.font_size_caption),
+        t.mean_line,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_lines(
+    ui: &Ui,
+    p: &egui::Painter,
+    series: &Series,
+    x: XMap,
+    y: YMap,
+    plot: Rect,
+    chart: &mut ChartUi,
+    gpu: bool,
+    version: u64,
+    t: &DesignTokens,
+) {
+    let ppp = ui.ctx().pixels_per_point();
+    // M4 per physical pixel column (G4: fills and lines are drawn once per stroke).
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let columns = (plot.width() * ppp).ceil().max(1.0) as usize;
+    let (strokes, markers) = strokes(series, x.lo, x.hi, Some(columns));
+    let screen = |pts: &[(f64, f64)]| -> Vec<Pos2> {
+        pts.iter()
+            .map(|&(px, py)| egui::pos2(x.to_screen(px), y.to_screen(py)))
+            .collect()
+    };
+    // Fills under the line, one mesh per stroke.
+    for st in &strokes {
+        let color = match st.style {
+            Style::Eligible => t.series_fill,
+            Style::Uncorrected => {
+                let [r, g, b, _] = t.series_uncorrected.to_srgba_unmultiplied();
+                Color32::from_rgba_unmultiplied(r, g, b, 22)
+            }
+        };
+        let pts = screen(&st.points);
+        let mut mesh = egui::Mesh::default();
+        for (i, q) in pts.iter().enumerate() {
+            mesh.colored_vertex(*q, color);
+            mesh.colored_vertex(egui::pos2(q.x, plot.bottom()), color);
+            if i > 0 {
+                #[allow(clippy::cast_possible_truncation)]
+                let k = (i * 2) as u32;
+                mesh.add_triangle(k - 2, k - 1, k);
+                mesh.add_triangle(k - 1, k + 1, k);
+            }
+        }
+        p.add(egui::Shape::mesh(mesh));
+    }
+    let mut gpu_lines: Vec<Vec<[f32; 2]>> = Vec::new();
+    for st in &strokes {
+        match st.style {
+            Style::Eligible if gpu => {
+                #[allow(clippy::cast_possible_truncation)]
+                gpu_lines.push(
+                    st.points
+                        .iter()
+                        .map(|&(px, py)| [(px - x.lo) as f32, py as f32])
+                        .collect(),
+                );
+            }
+            Style::Eligible => {
+                p.add(egui::Shape::line(
+                    screen(&st.points),
+                    Stroke::new(LINE_WIDTH, t.series_eligible),
+                ));
+            }
+            Style::Uncorrected => {
+                p.extend(egui::Shape::dashed_line(
+                    &screen(&st.points),
+                    Stroke::new(LINE_WIDTH, t.series_uncorrected),
+                    5.0,
+                    3.5,
+                ));
+            }
+        }
+    }
+    if gpu && !gpu_lines.is_empty() {
+        let key = {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            (
+                version,
+                x.lo.to_bits(),
+                x.hi.to_bits(),
+                y.max.to_bits(),
+                columns,
+            )
+                .hash(&mut h);
+            h.finish()
+        };
+        let vertices = match &chart.gpu {
+            Some((k, v)) if *k == key => Arc::clone(v),
+            _ => {
+                let v = Arc::new(segment_vertices(&gpu_lines));
+                chart.gpu = Some((key, Arc::clone(&v)));
+                v
+            }
+        };
+        #[allow(clippy::cast_possible_truncation)]
+        let uniforms = LineUniforms {
+            x_min: 0.0,
+            x_range: x.span() as f32,
+            y_max: y.max as f32,
+            half_width: LINE_WIDTH * ppp / 2.0,
+            viewport: [plot.width() * ppp, plot.height() * ppp],
+            padding: [0.0; 2],
+            color: t.series_eligible.to_normalized_gamma_f32(),
+        };
+        p.add(egui_wgpu::Callback::new_paint_callback(
+            plot,
+            LineCallback {
+                uniforms,
+                key,
+                vertices,
+            },
+        ));
+    }
+    for m in markers {
+        let color = match m.style {
+            Style::Eligible => t.series_eligible,
+            Style::Uncorrected => t.series_uncorrected,
+        };
+        p.circle_filled(egui::pos2(x.to_screen(m.x), y.to_screen(m.y)), 3.0, color);
+    }
+}
+
+fn draw_coverage(p: &egui::Painter, series: &Series, x: XMap, plot: Rect, t: &DesignTokens) {
+    for &pos in &series.low_coverage {
+        #[allow(clippy::cast_precision_loss)]
+        let sx = x.to_screen(pos as f64);
+        if plot.x_range().contains(sx) {
+            p.line_segment(
+                [egui::pos2(sx, plot.top()), egui::pos2(sx, plot.top() + 7.0)],
+                Stroke::new(1.5, t.coverage_mark),
+            );
+        }
+    }
+}
+
+fn draw_axes(p: &egui::Painter, x: XMap, y: YMap, plot: Rect, full: Rect, t: &DesignTokens) {
+    let stroke = Stroke::new(1.0, t.chart_axis);
+    let font = egui::FontId::proportional(t.font_size_caption);
+    p.line_segment([plot.left_top(), plot.left_bottom()], stroke);
+    p.line_segment([plot.left_bottom(), plot.right_bottom()], stroke);
+    for v in nice_ticks(0.0, y.max, 6) {
+        let sy = y.to_screen(v);
+        if !(plot.top() - 0.5..=plot.bottom() + 0.5).contains(&sy) {
+            continue;
+        }
+        p.line_segment(
+            [
+                egui::pos2(plot.left() - 4.0, sy),
+                egui::pos2(plot.left(), sy),
+            ],
+            stroke,
+        );
+        p.text(
+            egui::pos2(plot.left() - 6.0, sy),
+            egui::Align2::RIGHT_CENTER,
+            format!("{v:.2}"),
+            font.clone(),
+            t.chart_axis,
+        );
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let max_ticks = ((plot.width() / 80.0) as usize).clamp(2, 12);
+    for v in integer_ticks(x.lo, x.hi, max_ticks) {
+        #[allow(clippy::cast_precision_loss)]
+        let sx = x.to_screen(v as f64);
+        p.line_segment(
+            [
+                egui::pos2(sx, plot.bottom()),
+                egui::pos2(sx, plot.bottom() + 4.0),
+            ],
+            stroke,
+        );
+        p.text(
+            egui::pos2(sx, plot.bottom() + 6.0),
+            egui::Align2::CENTER_TOP,
+            v.to_string(),
+            font.clone(),
+            t.chart_axis,
+        );
+    }
+    p.text(
+        egui::pos2(plot.center().x, full.bottom() - 2.0),
+        egui::Align2::CENTER_BOTTOM,
+        "Position",
+        font.clone(),
+        t.chart_axis,
+    );
+    let galley = p.layout_no_wrap("Entropy (bits)".to_owned(), font, t.chart_axis);
+    let pos = egui::pos2(full.left() + 2.0, plot.center().y + galley.size().x / 2.0);
+    p.add(
+        egui::epaint::TextShape::new(pos, galley, t.chart_axis)
+            .with_angle(-std::f32::consts::FRAC_PI_2),
+    );
+}
+
+/// The tooltip text of a hovered position (pure, for tests).
+#[must_use]
+pub fn point_tooltip(s: &Session, position: u64) -> Option<String> {
+    let p = s.position(position)?;
+    let class = Class::of(p);
+    let t = s.results.support_threshold;
+    let mut text = format!("Position {}\n", p.position);
+    match p.entropy {
+        Some(e) => {
+            text.push_str(&format!(
+                "entropy {e:.4} bits ({})",
+                p.entropy_method.as_str()
+            ));
+            if let Some(o) = p.observed_entropy {
+                text.push_str(&format!(", observed {o:.4}"));
+            }
+            text.push('\n');
+        }
+        None => text.push_str("no entropy\n"),
+    }
+    text.push_str(&format!(
+        "support {}\n{}",
+        p.support,
+        class.describe(
+            t,
+            s.results.run.parameters.estimator.value,
+            p.entropy_method
+        )
+    ));
+    if p.below_min_coverage == Some(true) {
+        text.push_str(&format!(
+            "\nsample coverage {} below the minimum",
+            crate::util::opt_f64(p.sample_coverage, 3)
+        ));
+    }
+    Some(text)
+}
+
+/// The tooltip text of a hovered no-support band.
+#[must_use]
+pub fn band_tooltip(span: NsSpan) -> String {
+    if span.first == span.last {
+        format!(
+            "Position {}: {NS_LABEL} (support 0, no entropy)",
+            span.first
+        )
+    } else {
+        format!(
+            "Positions {}\u{2013}{}: {NS_LABEL} (support 0, no entropy)",
+            span.first, span.last
+        )
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn interact(
+    ui: &Ui,
+    response: &egui::Response,
+    s: &mut Session,
+    chart: &mut ChartUi,
+    series: &Series,
+    x: XMap,
+    y: YMap,
+    plot: Rect,
+    full: (f64, f64),
+    t: &DesignTokens,
+    out: &mut Vec<Msg>,
+) {
+    let pointer = ui.ctx().pointer_latest_pos();
+    let in_plot = |p: Pos2| plot.x_range().contains(p.x);
+    // Hover: a band takes precedence (it has no point), else the nearest point.
+    if response.hovered()
+        && let Some(pp) = pointer.filter(|p| in_plot(*p))
+    {
+        let dx = x.to_data(pp.x);
+        if let Some(span) = ns_span_at(series, dx) {
+            let r = band_rect(span, x, plot);
+            ui.painter_at(plot).rect_stroke(
+                r,
+                0.0,
+                Stroke::new(1.0, t.text_secondary),
+                egui::StrokeKind::Inside,
+            );
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let at = dx.round().clamp(span.first as f64, span.last as f64) as u64;
+            s.hovered = Some(at);
+            response
+                .clone()
+                .on_hover_text_at_pointer(band_tooltip(span));
+        } else if let Some(pt) = nearest_point(series, dx) {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let pos = pt.x as u64;
+            s.hovered = Some(pos);
+            ui.painter_at(plot).circle_filled(
+                egui::pos2(x.to_screen(pt.x), y.to_screen(pt.y)),
+                3.5,
+                t.chart_selection_line,
+            );
+            if let Some(text) = point_tooltip(s, pos) {
+                response.clone().on_hover_text_at_pointer(text);
+            }
+        }
+    }
+    // Click selects the hovered position.
+    if response.clicked()
+        && let Some(pos) = s.hovered
+    {
+        out.push(Msg::Select(pos, SelectSource::Chart));
+    }
+    // Scroll zooms about the cursor.
+    let scroll = ui.ctx().input(|i| i.smooth_scroll_delta.y);
+    if response.hovered()
+        && scroll.abs() > 0.1
+        && let Some(pp) = pointer
+    {
+        let anchor = f64::from(((pp.x - plot.left()) / plot.width().max(1.0)).clamp(0.0, 1.0));
+        let factor = if scroll > 0.0 { 0.85 } else { 1.18 };
+        s.viewport = viewport::zoom(s.viewport, full, factor, anchor);
+    }
+    // Shift-drag zooms to a region; a plain drag pans.
+    let shift = ui.ctx().input(|i| i.modifiers.shift);
+    if shift && response.drag_started() {
+        chart.drag_origin = response.interact_pointer_pos().map(|p| p.x);
+    }
+    if let Some(origin) = chart.drag_origin {
+        let current = pointer.map_or(origin, |p| p.x);
+        if response.dragged() {
+            let band =
+                Rect::from_x_y_ranges(origin.min(current)..=origin.max(current), plot.y_range());
+            ui.painter_at(plot)
+                .rect_filled(band, 0.0, t.selection_highlight);
+        } else {
+            chart.drag_origin = None;
+            s.viewport = viewport::region(s.viewport, full, x.to_data(origin), x.to_data(current));
+        }
+    } else if response.dragged() {
+        let delta = -f64::from(response.drag_delta().x) * x.data_per_pixel();
+        s.viewport = viewport::pan(s.viewport, full, delta);
+    }
+    if response.double_clicked() {
+        s.viewport = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::charts::series::tests::{position, results_of};
+    use crate::state::session::Origin;
+
+    #[test]
+    fn tooltips_name_the_class_and_never_call_ns_zero() {
+        let r = results_of(vec![
+            position(1, Some(0.5), 200, 100),
+            position(2, None, 0, 100),
+            position(3, Some(0.25), 40, 100),
+        ]);
+        let s = Session::new(1, Arc::new(r), Origin::Opened("x.json".into()));
+        let a = point_tooltip(&s, 1).unwrap();
+        assert!(
+            a.contains("support 200") && a.contains(": corrected entropy"),
+            "{a}"
+        );
+        let c = point_tooltip(&s, 3).unwrap();
+        assert!(c.contains("LS") && c.contains("uncorrected"), "{c}");
+        let b = point_tooltip(&s, 2).unwrap();
+        assert!(b.contains("no entropy") && !b.contains("0.0000"), "{b}");
+        assert_eq!(
+            band_tooltip(NsSpan { first: 4, last: 9 }),
+            "Positions 4\u{2013}9: no usable support (support 0, no entropy)"
+        );
+    }
+}

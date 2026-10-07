@@ -1,0 +1,140 @@
+[package]
+name = "dima-gui"
+description = "DiMA desktop app: sequence diversity dynamics analyser for viruses (Tharanga et al. 2025, doi:10.1093/bib/bbae607)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+# The GUI has its own MSRV: egui/eframe/egui-wgpu 0.36 need Rust 1.95, while the library and the
+# CLI keep the workspace MSRV (1.85). Resolver 3 resolves each crate's dependencies for its own
+# MSRV (Cargo Book, "Multiple Policies in a Workspace").
+rust-version = "1.95"
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "dima-gui"
+path = "src/main.rs"
+
+[dependencies]
+# The library is the single source of truth for every computation, default, validation rule,
+# citation and output format (plan D23).
+dima-core.workspace = true
+
+# eframe defaults: wgpu renderer, default fonts, AccessKit, X11 and Wayland. "persistence" saves
+# the window geometry and egui's memory (including the theme preference).
+eframe = { version = "0.36.2", features = ["persistence"] }
+egui = "0.36.2"
+egui-wgpu = "0.36.2"
+# Tables only; no image loaders.
+egui_extras = { version = "0.36.2", default-features = false }
+# Must be the wgpu major that egui-wgpu links against (egui-wgpu 0.36 uses wgpu 30), or the
+# render-callback types would come from a different crate instance.
+wgpu = "30"
+# Vertex structs for the GPU line.
+bytemuck = { version = "1", features = ["derive"] }
+
+# File dialogs (plan D100): the native dialog through the desktop portal on Linux, with the
+# in-app browser as the fallback.
+rfd = "0.17"
+egui-file-dialog = "0.15"
+
+# Chart PNG export: encoding, and glyph rasterisation with the bundled IBM Plex face.
+image = { version = "0.25", default-features = false, features = ["png"] }
+ab_glyph = "0.2"
+
+# Content sniffing of opened files (G64: results JSON or FASTA, also when gzip/zstd-compressed).
+# Same versions and features as dima-core, so no extra code is compiled.
+flate2 = { version = "1.1.10", default-features = false, features = ["zlib-rs", "runtime_detection"] }
+zstd = { version = "0.13.3", default-features = false }
+
+# Platform-independent maths in the exported figures (byte-identical PNGs everywhere).
+libm.workspace = true
+
+# Settings and recent files.
+serde.workspace = true
+serde_json.workspace = true
+dirs = "6"
+
+# Worker threads run below normal priority so the interface stays responsive (plan D101).
+thread-priority = "3.1"
+
+# wgpu-hal 30 uses windows 0.62 for D3D12 while gpu-allocator 0.28 accepts windows
+# >=0.53,<=0.62; this direct dependency makes the resolver unify every user on 0.62 (otherwise
+# the D3D12 types of two versions fail to unify; emilk/egui#8069). Inert elsewhere.
+[target.'cfg(windows)'.dependencies]
+windows = "0.62"
+
+[build-dependencies]
+# Embeds the icon and version information in the Windows executable (only when building for
+# Windows; it needs the Windows SDK resource compiler, never the network).
+winresource = { version = "0.1.31", default-features = false }
+
+[dev-dependencies]
+egui_kittest = "0.36.2"
+proptest = { version = "1.6", default-features = false, features = ["std"] }
+tempfile = "3.20"
+jsonschema = { version = "0.58.5", default-features = false }
+
+# Packaging with cargo-packager 0.11 (plan D82): after `cargo build --release -p dima-gui`,
+# `cargo packager --release -p dima-gui` makes the macOS .app/.dmg, the Windows .msi (no console
+# window, icon and version information) and the Linux .deb/AppImage. The release workflow builds
+# the binaries itself (auditable, per target, universal on macOS) and passes --binaries-dir, so
+# packaging never rebuilds them. Packages are unsigned; the docs give the first-run steps for
+# macOS Gatekeeper and Windows SmartScreen. Paths are relative to this manifest.
+[package.metadata.packager]
+product-name = "DiMA"
+identifier = "io.github.shanweera.dima"
+publisher = "Shan Tharanga"
+copyright = "Copyright (c) Shan Tharanga. Licensed under the MIT License."
+category = "Medical"
+description = "Sequence diversity dynamics analyser for viruses"
+long-description = """
+DiMA quantifies the diversity of viral protein or nucleotide alignments: for every k-mer \
+position it estimates the Shannon entropy with a correction for sample size, classifies \
+variants into Index, Major, Minor and Unique motifs, reports their incidence, optionally \
+stratified by FASTA header metadata, and finds historically conserved sequences \
+(Tharanga et al. 2025, Brief Bioinform 26(1):bbae607, doi:10.1093/bib/bbae607).
+"""
+homepage = "https://shanweera.github.io/dima-perf/"
+license-file = "../../LICENSE"
+binaries = [{ path = "dima-gui", main = true }]
+icons = [
+    "../../assets/icon/dima-32.png",
+    "../../assets/icon/dima-128.png",
+    "../../assets/icon/dima-256.png",
+    "../../assets/icon/dima-512.png",
+    "../../assets/icon/dima.icns",
+    "../../assets/icon/dima.ico",
+]
+resources = [
+    { src = "../../LICENSE", target = "LICENSE" },
+    { src = "../../THIRD-PARTY-NOTICES.md", target = "THIRD-PARTY-NOTICES.md" },
+    { src = "assets/fonts/OFL.txt", target = "fonts/OFL.txt" },
+]
+formats = ["app", "dmg", "wix", "deb", "appimage"]
+
+[package.metadata.packager.deb]
+section = "science"
+priority = "optional"
+# winit and wgpu load the windowing and graphics libraries at run time, so dpkg-shlibdeps cannot
+# see them; glibc 2.28 is the floor of the Linux GUI builds (plan D91).
+depends = [
+    "libc6 (>= 2.28)",
+    "libxkbcommon0",
+    "libwayland-client0",
+    "libx11-6",
+    "libxcursor1",
+    "libxrandr2",
+    "libxi6",
+    "libvulkan1 | libegl1",
+]
+desktop-template = "packaging/dima-gui.desktop"
+
+[package.metadata.packager.macos]
+minimum-system-version = "11.0"
+
+[package.metadata.packager.wix]
+languages = ["en-US"]

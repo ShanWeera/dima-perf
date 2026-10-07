@@ -1,0 +1,119 @@
+---
+// Version notices (plan D102, D113), with a link to the same page in the newest release:
+// * outdated: on the documentation of a release when a newer release exists;
+// * unreleased: on /latest/ (the default branch, `master`) while its changelog has unreleased changes.
+// Driven by versions.json; absent without it. The decision is cached for the browser tab so that
+// later pages show the notice before their first paint instead of shifting the page when it
+// arrives.
+import { NOTICE_CACHE_KEY } from '../lib/versions';
+
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+const unreleased = __DIMA_UNRELEASED__;
+---
+
+<dima-version-notice data-base={base} data-unreleased={String(unreleased)} hidden>
+  <p data-kind="outdated" hidden>
+    This is the documentation of DiMA <span data-current></span>.{' '}
+    The newest release is <a data-newest href={base}></a>.
+  </p>
+  <p data-kind="unreleased" hidden>
+    This documentation of the development version includes changes that are not released yet.{' '}
+    The newest release is <a data-newest href={base}></a>.
+  </p>
+</dima-version-notice>
+
+<script is:inline define:vars={{ base, key: NOTICE_CACHE_KEY }}>
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(key) || 'null');
+    const notice = document.querySelector('dima-version-notice');
+    if (notice && cached && cached.base === base) {
+      const text = notice.querySelector(`[data-kind="${cached.kind}"]`);
+      const current = text.querySelector('[data-current]');
+      if (current) current.textContent = cached.current;
+      const link = text.querySelector('[data-newest]');
+      link.textContent = cached.newest;
+      link.href = cached.path;
+      text.hidden = false;
+      notice.hidden = false;
+    }
+  } catch {
+    // Storage unavailable: the module script below shows the notice once the list loads.
+  }
+</script>
+
+<script>
+  import { NOTICE_CACHE_KEY, goToVersion, loadVersions, notice, versionLabel } from '../lib/versions';
+
+  class VersionNotice extends HTMLElement {
+    connectedCallback() {
+      const base = this.dataset.base ?? '/';
+      const unreleased = this.dataset.unreleased === 'true';
+      void loadVersions(base).then((entries) => {
+        const result = entries ? notice(entries, base, unreleased) : null;
+        try {
+          if (result) {
+            sessionStorage.setItem(
+              NOTICE_CACHE_KEY,
+              JSON.stringify({
+                base,
+                kind: result.kind,
+                current: versionLabel(result.current),
+                newest: versionLabel(result.newest.version),
+                path: result.newest.path,
+              }),
+            );
+          } else {
+            sessionStorage.removeItem(NOTICE_CACHE_KEY);
+          }
+        } catch {
+          // Storage unavailable: nothing to cache.
+        }
+        for (const text of this.querySelectorAll<HTMLElement>('[data-kind]')) {
+          text.hidden = !result || text.dataset.kind !== result.kind;
+        }
+        if (!result) {
+          this.hidden = true;
+          return;
+        }
+        const text = this.querySelector<HTMLElement>(`[data-kind="${result.kind}"]`);
+        const current = text?.querySelector<HTMLElement>('[data-current]');
+        const link = text?.querySelector<HTMLAnchorElement>('[data-newest]');
+        if (!text || !link) return;
+        if (current) current.textContent = versionLabel(result.current);
+        link.textContent = versionLabel(result.newest.version);
+        link.href = result.newest.path;
+        link.onclick = (event) => {
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          void goToVersion(result.newest, base);
+        };
+        this.hidden = false;
+      });
+    }
+  }
+  customElements.define('dima-version-notice', VersionNotice);
+</script>
+
+<style>
+  dima-version-notice {
+    display: block;
+    padding: var(--sl-nav-pad-y) var(--sl-nav-pad-x);
+    background-color: var(--sl-color-bg-accent);
+    color: var(--sl-color-text-invert);
+    line-height: var(--sl-line-height-headings);
+    text-align: center;
+    text-wrap: balance;
+  }
+  dima-version-notice[hidden],
+  p[hidden] {
+    display: none;
+  }
+  p {
+    margin: 0;
+  }
+  a {
+    color: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+  }
+</style>

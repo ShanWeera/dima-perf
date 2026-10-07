@@ -1,0 +1,64 @@
+name: Bug report
+description: DiMA crashed, printed "internal error", or gave a result or message you believe is wrong.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Thank you for reporting a problem. Please search the existing issues first. For questions
+        about using DiMA or reading its results, ask in Discussions instead.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `dima --version`, or Help > About DiMA in the desktop app.
+      placeholder: dima 1.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: interface
+    attributes:
+      label: Interface
+      options:
+        - Command line
+        - Desktop app
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system
+      placeholder: Ubuntu 24.04, macOS 15, Windows 11, ...
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command or settings
+      description: The full command line, or the settings you used in the desktop app.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect?
+      description: Include the full error message, if any.
+    validations:
+      required: true
+  - type: textarea
+    id: run-report
+    attributes:
+      label: Run report (optional)
+      description: >-
+        If you can, run again with `--run-report report.json` (or export the run report from the
+        desktop app) and paste it here. It records how the run went, without user or host names,
+        directories or environment values.
+      render: json
+  - type: textarea
+    id: input
+    attributes:
+      label: Input (optional)
+      description: >-
+        If you can share it, attach the alignment or a small part of it that shows the problem.
+        Do not attach data you are not allowed to share.

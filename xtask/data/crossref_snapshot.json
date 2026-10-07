@@ -1,0 +1,4275 @@
+{
+ "10.1002/asi.23538": {
+  "authors": [
+   [
+    "Howison",
+    "James"
+   ],
+   [
+    "Bullard",
+    "Julia"
+   ]
+  ],
+  "issue": "9",
+  "key": "howison2016",
+  "pages": "2137-2155",
+  "title": "Software in the scientific literature: Problems with seeing, finding, and using software mentioned in the biology literature",
+  "venue": "Journal of the Association for Information Science and Technology",
+  "volume": "67",
+  "year": 2016
+ },
+ "10.1002/imt2.191": {
+  "authors": [
+   [
+    "Shen",
+    "Wei"
+   ],
+   [
+    "Sipos",
+    "Botond"
+   ],
+   [
+    "Zhao",
+    "Liuyang"
+   ]
+  ],
+  "issue": "3",
+  "key": "shen2024",
+  "pages": "e191",
+  "title": "SeqKit2: A Swiss army knife for sequence and alignment processing",
+  "venue": "iMeta",
+  "volume": "3",
+  "year": 2024
+ },
+ "10.1002/j.1538-7305.1948.tb01338.x": {
+  "authors": [
+   [
+    "Shannon",
+    "C. E."
+   ]
+  ],
+  "issue": "3",
+  "key": "shannon1948",
+  "pages": "379-423",
+  "title": "A Mathematical Theory of Communication",
+  "venue": "Bell System Technical Journal",
+  "volume": "27",
+  "year": 1948
+ },
+ "10.1007/11555261_68": {
+  "authors": [
+   [
+    "Eaton",
+    "Cyntrica"
+   ],
+   [
+    "Plaisant",
+    "Catherine"
+   ],
+   [
+    "Drizd",
+    "Terence"
+   ]
+  ],
+  "issue": null,
+  "key": "eaton2005",
+  "pages": "861-872",
+  "title": "Visualizing Missing Data: Graph Interpretation User Study",
+  "venue": "Lecture Notes in Computer Science",
+  "volume": null,
+  "year": 2005
+ },
+ "10.1007/978-3-030-34175-6_13": {
+  "authors": [
+   [
+    "Leijen",
+    "Daan"
+   ],
+   [
+    "Zorn",
+    "Benjamin"
+   ],
+   [
+    "de Moura",
+    "Leonardo"
+   ]
+  ],
+  "issue": null,
+  "key": "leijen2019",
+  "pages": "244-265",
+  "title": "Mimalloc: Free List Sharding in Action",
+  "venue": "Lecture Notes in Computer Science",
+  "volume": null,
+  "year": 2019
+ },
+ "10.1007/BF02166031": {
+  "authors": [
+   [
+    "Henrici",
+    "Peter"
+   ],
+   [
+    "Pflüger",
+    "Pia"
+   ]
+  ],
+  "issue": "2",
+  "key": "henrici1966",
+  "pages": "120-138",
+  "title": "Truncation error estimates for Stieltjes fractions",
+  "venue": "Numerische Mathematik",
+  "volume": "9",
+  "year": 1966
+ },
+ "10.1016/S0021-9258(18)89400-5": {
+  "authors": [
+   [
+    "Ohtsuka",
+    "E"
+   ],
+   [
+    "Matsuki",
+    "S"
+   ],
+   [
+    "Ikehara",
+    "M"
+   ],
+   [
+    "Takahashi",
+    "Y"
+   ],
+   [
+    "Matsubara",
+    "K"
+   ]
+  ],
+  "issue": "5",
+  "key": "ohtsuka1985",
+  "pages": "2605-2608",
+  "title": "An alternative approach to deoxyoligonucleotides as hybridization probes by insertion of deoxyinosine at ambiguous codon positions",
+  "venue": "Journal of Biological Chemistry",
+  "volume": "260",
+  "year": 1985
+ },
+ "10.1016/j.cels.2018.03.014": {
+  "authors": [
+   [
+    "Grüning",
+    "Björn"
+   ],
+   [
+    "Chilton",
+    "John"
+   ],
+   [
+    "Köster",
+    "Johannes"
+   ],
+   [
+    "Dale",
+    "Ryan"
+   ],
+   [
+    "Soranzo",
+    "Nicola"
+   ],
+   [
+    "van den Beek",
+    "Marius"
+   ],
+   [
+    "Goecks",
+    "Jeremy"
+   ],
+   [
+    "Backofen",
+    "Rolf"
+   ],
+   [
+    "Nekrutenko",
+    "Anton"
+   ],
+   [
+    "Taylor",
+    "James"
+   ]
+  ],
+  "issue": "6",
+  "key": "gruning2018repro",
+  "pages": "631-635",
+  "title": "Practical Computational Reproducibility in the Life Sciences",
+  "venue": "Cell Systems",
+  "volume": "6",
+  "year": 2018
+ },
+ "10.1016/j.csbj.2020.09.014": {
+  "authors": [
+   [
+    "Silverman",
+    "Justin D."
+   ],
+   [
+    "Roche",
+    "Kimberly"
+   ],
+   [
+    "Mukherjee",
+    "Sayan"
+   ],
+   [
+    "David",
+    "Lawrence A."
+   ]
+  ],
+  "issue": null,
+  "key": "silverman2020",
+  "pages": "2789-2798",
+  "title": "Naught all zeros in sequence count data are the same",
+  "venue": "Computational and Structural Biotechnology Journal",
+  "volume": "18",
+  "year": 2020
+ },
+ "10.1016/j.infsof.2014.05.006": {
+  "authors": [
+   [
+    "Kanewala",
+    "Upulee"
+   ],
+   [
+    "Bieman",
+    "James M."
+   ]
+  ],
+  "issue": "10",
+  "key": "kanewala2014",
+  "pages": "1219-1232",
+  "title": "Testing scientific software: A systematic literature review",
+  "venue": "Information and Software Technology",
+  "volume": "56",
+  "year": 2014
+ },
+ "10.1016/j.intcom.2007.01.003": {
+  "authors": [
+   [
+    "Bargas-Avila",
+    "Javier A."
+   ],
+   [
+    "Oberholzer",
+    "Glenn"
+   ],
+   [
+    "Schmutz",
+    "Peter"
+   ],
+   [
+    "de Vito",
+    "Marco"
+   ],
+   [
+    "Opwis",
+    "Klaus"
+   ]
+  ],
+  "issue": "3",
+  "key": "bargasavila2007",
+  "pages": "330-341",
+  "title": "Usable error message presentation in the World Wide Web: Do not show errors right away",
+  "venue": "Interacting with Computers",
+  "volume": "19",
+  "year": 2007
+ },
+ "10.1021/acs.jproteome.5b00981": {
+  "authors": [
+   [
+    "Lazar",
+    "Cosmin"
+   ],
+   [
+    "Gatto",
+    "Laurent"
+   ],
+   [
+    "Ferro",
+    "Myriam"
+   ],
+   [
+    "Bruley",
+    "Christophe"
+   ],
+   [
+    "Burger",
+    "Thomas"
+   ]
+  ],
+  "issue": "4",
+  "key": "lazar2016",
+  "pages": "1116-1125",
+  "title": "Accounting for the multiple natures of missing values in label-free quantitative proteomics data sets to compare imputation strategies",
+  "venue": "Journal of Proteome Research",
+  "volume": "15",
+  "year": 2016
+ },
+ "10.1037/1082-989x.7.2.147": {
+  "authors": [
+   [
+    "Schafer",
+    "Joseph L."
+   ],
+   [
+    "Graham",
+    "John W."
+   ]
+  ],
+  "issue": "2",
+  "key": "schafer2002",
+  "pages": "147-177",
+  "title": "Missing data: Our view of the state of the art",
+  "venue": "Psychological Methods",
+  "volume": "7",
+  "year": 2002
+ },
+ "10.1038/351290a0": {
+  "authors": [
+   [
+    "Falk",
+    "Kirsten"
+   ],
+   [
+    "Rötzschke",
+    "Olaf"
+   ],
+   [
+    "Stevanović",
+    "Stefan"
+   ],
+   [
+    "Jung",
+    "Günther"
+   ],
+   [
+    "Rammensee",
+    "Hans-Georg"
+   ]
+  ],
+  "issue": "6324",
+  "key": "falk1991",
+  "pages": "290-296",
+  "title": "Allele-specific motifs revealed by sequencing of self-peptides eluted from MHC molecules",
+  "venue": "Nature",
+  "volume": "351",
+  "year": 1991
+ },
+ "10.1038/msb.2011.75": {
+  "authors": [
+   [
+    "Sievers",
+    "Fabian"
+   ],
+   [
+    "Wilm",
+    "Andreas"
+   ],
+   [
+    "Dineen",
+    "David"
+   ],
+   [
+    "Gibson",
+    "Toby J"
+   ],
+   [
+    "Karplus",
+    "Kevin"
+   ],
+   [
+    "Li",
+    "Weizhong"
+   ],
+   [
+    "Lopez",
+    "Rodrigo"
+   ],
+   [
+    "McWilliam",
+    "Hamish"
+   ],
+   [
+    "Remmert",
+    "Michael"
+   ],
+   [
+    "Söding",
+    "Johannes"
+   ],
+   [
+    "Thompson",
+    "Julie D"
+   ],
+   [
+    "Higgins",
+    "Desmond G"
+   ]
+  ],
+  "issue": "1",
+  "key": "sievers2011",
+  "pages": "MSB201175",
+  "title": "Fast, scalable generation of high-quality protein multiple sequence alignments using Clustal Omega",
+  "venue": "Molecular Systems Biology",
+  "volume": "7",
+  "year": 2011
+ },
+ "10.1038/nmeth.1618": {
+  "authors": [
+   [
+    "Wong",
+    "Bang"
+   ]
+  ],
+  "issue": "6",
+  "key": "wong2011",
+  "pages": "441-441",
+  "title": "Points of view: Color blindness",
+  "venue": "Nature Methods",
+  "volume": "8",
+  "year": 2011
+ },
+ "10.1038/s41467-019-09406-4": {
+  "authors": [
+   [
+    "Mangul",
+    "Serghei"
+   ],
+   [
+    "Martin",
+    "Lana S."
+   ],
+   [
+    "Hill",
+    "Brian L."
+   ],
+   [
+    "Lam",
+    "Angela Ka-Mei"
+   ],
+   [
+    "Distler",
+    "Margaret G."
+   ],
+   [
+    "Zelikovsky",
+    "Alex"
+   ],
+   [
+    "Eskin",
+    "Eleazar"
+   ],
+   [
+    "Flint",
+    "Jonathan"
+   ]
+  ],
+  "issue": "1",
+  "key": "mangul2019bench",
+  "pages": "1393",
+  "title": "Systematic benchmarking of omics computational tools",
+  "venue": "Nature Communications",
+  "volume": "10",
+  "year": 2019
+ },
+ "10.1038/s41587-019-0209-9": {
+  "authors": [
+   [
+    "Bolyen",
+    "Evan"
+   ],
+   [
+    "Rideout",
+    "Jai Ram"
+   ],
+   [
+    "Dillon",
+    "Matthew R."
+   ],
+   [
+    "Bokulich",
+    "Nicholas A."
+   ],
+   [
+    "Abnet",
+    "Christian C."
+   ],
+   [
+    "Al-Ghalith",
+    "Gabriel A."
+   ],
+   [
+    "Alexander",
+    "Harriet"
+   ],
+   [
+    "Alm",
+    "Eric J."
+   ],
+   [
+    "Arumugam",
+    "Manimozhiyan"
+   ],
+   [
+    "Asnicar",
+    "Francesco"
+   ],
+   [
+    "Bai",
+    "Yang"
+   ],
+   [
+    "Bisanz",
+    "Jordan E."
+   ],
+   [
+    "Bittinger",
+    "Kyle"
+   ],
+   [
+    "Brejnrod",
+    "Asker"
+   ],
+   [
+    "Brislawn",
+    "Colin J."
+   ],
+   [
+    "Brown",
+    "C. Titus"
+   ],
+   [
+    "Callahan",
+    "Benjamin J."
+   ],
+   [
+    "Caraballo-Rodríguez",
+    "Andrés Mauricio"
+   ],
+   [
+    "Chase",
+    "John"
+   ],
+   [
+    "Cope",
+    "Emily K."
+   ],
+   [
+    "Da Silva",
+    "Ricardo"
+   ],
+   [
+    "Diener",
+    "Christian"
+   ],
+   [
+    "Dorrestein",
+    "Pieter C."
+   ],
+   [
+    "Douglas",
+    "Gavin M."
+   ],
+   [
+    "Durall",
+    "Daniel M."
+   ],
+   [
+    "Duvallet",
+    "Claire"
+   ],
+   [
+    "Edwardson",
+    "Christian F."
+   ],
+   [
+    "Ernst",
+    "Madeleine"
+   ],
+   [
+    "Estaki",
+    "Mehrbod"
+   ],
+   [
+    "Fouquier",
+    "Jennifer"
+   ],
+   [
+    "Gauglitz",
+    "Julia M."
+   ],
+   [
+    "Gibbons",
+    "Sean M."
+   ],
+   [
+    "Gibson",
+    "Deanna L."
+   ],
+   [
+    "Gonzalez",
+    "Antonio"
+   ],
+   [
+    "Gorlick",
+    "Kestrel"
+   ],
+   [
+    "Guo",
+    "Jiarong"
+   ],
+   [
+    "Hillmann",
+    "Benjamin"
+   ],
+   [
+    "Holmes",
+    "Susan"
+   ],
+   [
+    "Holste",
+    "Hannes"
+   ],
+   [
+    "Huttenhower",
+    "Curtis"
+   ],
+   [
+    "Huttley",
+    "Gavin A."
+   ],
+   [
+    "Janssen",
+    "Stefan"
+   ],
+   [
+    "Jarmusch",
+    "Alan K."
+   ],
+   [
+    "Jiang",
+    "Lingjing"
+   ],
+   [
+    "Kaehler",
+    "Benjamin D."
+   ],
+   [
+    "Kang",
+    "Kyo Bin"
+   ],
+   [
+    "Keefe",
+    "Christopher R."
+   ],
+   [
+    "Keim",
+    "Paul"
+   ],
+   [
+    "Kelley",
+    "Scott T."
+   ],
+   [
+    "Knights",
+    "Dan"
+   ],
+   [
+    "Koester",
+    "Irina"
+   ],
+   [
+    "Kosciolek",
+    "Tomasz"
+   ],
+   [
+    "Kreps",
+    "Jorden"
+   ],
+   [
+    "Langille",
+    "Morgan G. I."
+   ],
+   [
+    "Lee",
+    "Joslynn"
+   ],
+   [
+    "Ley",
+    "Ruth"
+   ],
+   [
+    "Liu",
+    "Yong-Xin"
+   ],
+   [
+    "Loftfield",
+    "Erikka"
+   ],
+   [
+    "Lozupone",
+    "Catherine"
+   ],
+   [
+    "Maher",
+    "Massoud"
+   ],
+   [
+    "Marotz",
+    "Clarisse"
+   ],
+   [
+    "Martin",
+    "Bryan D."
+   ],
+   [
+    "McDonald",
+    "Daniel"
+   ],
+   [
+    "McIver",
+    "Lauren J."
+   ],
+   [
+    "Melnik",
+    "Alexey V."
+   ],
+   [
+    "Metcalf",
+    "Jessica L."
+   ],
+   [
+    "Morgan",
+    "Sydney C."
+   ],
+   [
+    "Morton",
+    "Jamie T."
+   ],
+   [
+    "Naimey",
+    "Ahmad Turan"
+   ],
+   [
+    "Navas-Molina",
+    "Jose A."
+   ],
+   [
+    "Nothias",
+    "Louis Felix"
+   ],
+   [
+    "Orchanian",
+    "Stephanie B."
+   ],
+   [
+    "Pearson",
+    "Talima"
+   ],
+   [
+    "Peoples",
+    "Samuel L."
+   ],
+   [
+    "Petras",
+    "Daniel"
+   ],
+   [
+    "Preuss",
+    "Mary Lai"
+   ],
+   [
+    "Pruesse",
+    "Elmar"
+   ],
+   [
+    "Rasmussen",
+    "Lasse Buur"
+   ],
+   [
+    "Rivers",
+    "Adam"
+   ],
+   [
+    "Robeson",
+    "Michael S."
+   ],
+   [
+    "Rosenthal",
+    "Patrick"
+   ],
+   [
+    "Segata",
+    "Nicola"
+   ],
+   [
+    "Shaffer",
+    "Michael"
+   ],
+   [
+    "Shiffer",
+    "Arron"
+   ],
+   [
+    "Sinha",
+    "Rashmi"
+   ],
+   [
+    "Song",
+    "Se Jin"
+   ],
+   [
+    "Spear",
+    "John R."
+   ],
+   [
+    "Swafford",
+    "Austin D."
+   ],
+   [
+    "Thompson",
+    "Luke R."
+   ],
+   [
+    "Torres",
+    "Pedro J."
+   ],
+   [
+    "Trinh",
+    "Pauline"
+   ],
+   [
+    "Tripathi",
+    "Anupriya"
+   ],
+   [
+    "Turnbaugh",
+    "Peter J."
+   ],
+   [
+    "Ul-Hasan",
+    "Sabah"
+   ],
+   [
+    "van der Hooft",
+    "Justin J. J."
+   ],
+   [
+    "Vargas",
+    "Fernando"
+   ],
+   [
+    "Vázquez-Baeza",
+    "Yoshiki"
+   ],
+   [
+    "Vogtmann",
+    "Emily"
+   ],
+   [
+    "von Hippel",
+    "Max"
+   ],
+   [
+    "Walters",
+    "William"
+   ],
+   [
+    "Wan",
+    "Yunhu"
+   ],
+   [
+    "Wang",
+    "Mingxun"
+   ],
+   [
+    "Warren",
+    "Jonathan"
+   ],
+   [
+    "Weber",
+    "Kyle C."
+   ],
+   [
+    "Williamson",
+    "Charles H. D."
+   ],
+   [
+    "Willis",
+    "Amy D."
+   ],
+   [
+    "Xu",
+    "Zhenjiang Zech"
+   ],
+   [
+    "Zaneveld",
+    "Jesse R."
+   ],
+   [
+    "Zhang",
+    "Yilong"
+   ],
+   [
+    "Zhu",
+    "Qiyun"
+   ],
+   [
+    "Knight",
+    "Rob"
+   ],
+   [
+    "Caporaso",
+    "J. Gregory"
+   ]
+  ],
+  "issue": "8",
+  "key": "bolyen2019",
+  "pages": "852-857",
+  "title": "Reproducible, interactive, scalable and extensible microbiome data science using QIIME 2",
+  "venue": "Nature Biotechnology",
+  "volume": "37",
+  "year": 2019
+ },
+ "10.1038/s41592-018-0046-7": {
+  "authors": [
+   [
+    "Grüning",
+    "Björn"
+   ],
+   [
+    "Dale",
+    "Ryan"
+   ],
+   [
+    "Sjödin",
+    "Andreas"
+   ],
+   [
+    "Chapman",
+    "Brad A."
+   ],
+   [
+    "Rowe",
+    "Jillian"
+   ],
+   [
+    "Tomkins-Tinch",
+    "Christopher H."
+   ],
+   [
+    "Valieris",
+    "Renan"
+   ],
+   [
+    "Köster",
+    "Johannes"
+   ],
+   [
+    "Bioconda Team",
+    ""
+   ]
+  ],
+  "issue": "7",
+  "key": "gruning2018bioconda",
+  "pages": "475-476",
+  "title": "Bioconda: sustainable and comprehensive software distribution for the life sciences",
+  "venue": "Nature Methods",
+  "volume": "15",
+  "year": 2018
+ },
+ "10.1038/s41597-022-01710-x": {
+  "authors": [
+   [
+    "Barker",
+    "Michelle"
+   ],
+   [
+    "Chue Hong",
+    "Neil P."
+   ],
+   [
+    "Katz",
+    "Daniel S."
+   ],
+   [
+    "Lamprecht",
+    "Anna-Lena"
+   ],
+   [
+    "Martinez-Ortiz",
+    "Carlos"
+   ],
+   [
+    "Psomopoulos",
+    "Fotis"
+   ],
+   [
+    "Harrow",
+    "Jennifer"
+   ],
+   [
+    "Castro",
+    "Leyla Jael"
+   ],
+   [
+    "Gruenpeter",
+    "Morane"
+   ],
+   [
+    "Martinez",
+    "Paula Andrea"
+   ],
+   [
+    "Honeyman",
+    "Tom"
+   ]
+  ],
+  "issue": "1",
+  "key": "barker2022",
+  "pages": "622",
+  "title": "Introducing the FAIR Principles for research software",
+  "venue": "Scientific Data",
+  "volume": "9",
+  "year": 2022
+ },
+ "10.1038/sdata.2016.18": {
+  "authors": [
+   [
+    "Wilkinson",
+    "Mark D."
+   ],
+   [
+    "Dumontier",
+    "Michel"
+   ],
+   [
+    "Aalbersberg",
+    "IJsbrand Jan"
+   ],
+   [
+    "Appleton",
+    "Gabrielle"
+   ],
+   [
+    "Axton",
+    "Myles"
+   ],
+   [
+    "Baak",
+    "Arie"
+   ],
+   [
+    "Blomberg",
+    "Niklas"
+   ],
+   [
+    "Boiten",
+    "Jan-Willem"
+   ],
+   [
+    "da Silva Santos",
+    "Luiz Bonino"
+   ],
+   [
+    "Bourne",
+    "Philip E."
+   ],
+   [
+    "Bouwman",
+    "Jildau"
+   ],
+   [
+    "Brookes",
+    "Anthony J."
+   ],
+   [
+    "Clark",
+    "Tim"
+   ],
+   [
+    "Crosas",
+    "Mercè"
+   ],
+   [
+    "Dillo",
+    "Ingrid"
+   ],
+   [
+    "Dumon",
+    "Olivier"
+   ],
+   [
+    "Edmunds",
+    "Scott"
+   ],
+   [
+    "Evelo",
+    "Chris T."
+   ],
+   [
+    "Finkers",
+    "Richard"
+   ],
+   [
+    "Gonzalez-Beltran",
+    "Alejandra"
+   ],
+   [
+    "Gray",
+    "Alasdair J.G."
+   ],
+   [
+    "Groth",
+    "Paul"
+   ],
+   [
+    "Goble",
+    "Carole"
+   ],
+   [
+    "Grethe",
+    "Jeffrey S."
+   ],
+   [
+    "Heringa",
+    "Jaap"
+   ],
+   [
+    "’t Hoen",
+    "Peter A.C"
+   ],
+   [
+    "Hooft",
+    "Rob"
+   ],
+   [
+    "Kuhn",
+    "Tobias"
+   ],
+   [
+    "Kok",
+    "Ruben"
+   ],
+   [
+    "Kok",
+    "Joost"
+   ],
+   [
+    "Lusher",
+    "Scott J."
+   ],
+   [
+    "Martone",
+    "Maryann E."
+   ],
+   [
+    "Mons",
+    "Albert"
+   ],
+   [
+    "Packer",
+    "Abel L."
+   ],
+   [
+    "Persson",
+    "Bengt"
+   ],
+   [
+    "Rocca-Serra",
+    "Philippe"
+   ],
+   [
+    "Roos",
+    "Marco"
+   ],
+   [
+    "van Schaik",
+    "Rene"
+   ],
+   [
+    "Sansone",
+    "Susanna-Assunta"
+   ],
+   [
+    "Schultes",
+    "Erik"
+   ],
+   [
+    "Sengstag",
+    "Thierry"
+   ],
+   [
+    "Slater",
+    "Ted"
+   ],
+   [
+    "Strawn",
+    "George"
+   ],
+   [
+    "Swertz",
+    "Morris A."
+   ],
+   [
+    "Thompson",
+    "Mark"
+   ],
+   [
+    "van der Lei",
+    "Johan"
+   ],
+   [
+    "van Mulligen",
+    "Erik"
+   ],
+   [
+    "Velterop",
+    "Jan"
+   ],
+   [
+    "Waagmeester",
+    "Andra"
+   ],
+   [
+    "Wittenburg",
+    "Peter"
+   ],
+   [
+    "Wolstencroft",
+    "Katherine"
+   ],
+   [
+    "Zhao",
+    "Jun"
+   ],
+   [
+    "Mons",
+    "Barend"
+   ]
+  ],
+  "issue": "1",
+  "key": "wilkinson2016",
+  "pages": "160018",
+  "title": "The FAIR Guiding Principles for scientific data management and stewardship",
+  "venue": "Scientific Data",
+  "volume": "3",
+  "year": 2016
+ },
+ "10.1073/pnas.85.8.2444": {
+  "authors": [
+   [
+    "Pearson",
+    "W R"
+   ],
+   [
+    "Lipman",
+    "D J"
+   ]
+  ],
+  "issue": "8",
+  "key": "pearson1988",
+  "pages": "2444-2448",
+  "title": "Improved tools for biological sequence comparison",
+  "venue": "Proceedings of the National Academy of Sciences",
+  "volume": "85",
+  "year": 1988
+ },
+ "10.1080/00031305.2017.1375989": {
+  "authors": [
+   [
+    "Broman",
+    "Karl W."
+   ],
+   [
+    "Woo",
+    "Kara H."
+   ]
+  ],
+  "issue": "1",
+  "key": "broman2018",
+  "pages": "2-10",
+  "title": "Data Organization in Spreadsheets",
+  "venue": "The American Statistician",
+  "volume": "72",
+  "year": 2018
+ },
+ "10.1080/01621459.1984.10478080": {
+  "authors": [
+   [
+    "Cleveland",
+    "William S."
+   ],
+   [
+    "McGill",
+    "Robert"
+   ]
+  ],
+  "issue": "387",
+  "key": "cleveland1984",
+  "pages": "531-554",
+  "title": "Graphical Perception: Theory, Experimentation, and Application to the Development of Graphical Methods",
+  "venue": "Journal of the American Statistical Association",
+  "volume": "79",
+  "year": 1984
+ },
+ "10.1090/S0025-5718-1974-0373265-5": {
+  "authors": [
+   [
+    "Jones",
+    "William B."
+   ],
+   [
+    "Thron",
+    "W. J."
+   ]
+  ],
+  "issue": "127",
+  "key": "jones1974",
+  "pages": "795-810",
+  "title": "Numerical stability in evaluating continued fractions",
+  "venue": "Mathematics of Computation",
+  "volume": "28",
+  "year": 1974
+ },
+ "10.1090/S0025-5718-97-00807-7": {
+  "authors": [
+   [
+    "Alzer",
+    "Horst"
+   ]
+  ],
+  "issue": "217",
+  "key": "alzer1997",
+  "pages": "373-389",
+  "title": "On some inequalities for the gamma and psi functions",
+  "venue": "Mathematics of Computation",
+  "volume": "66",
+  "year": 1997
+ },
+ "10.1093/bib/bbae607": {
+  "authors": [
+   [
+    "Tharanga",
+    "Shan"
+   ],
+   [
+    "Ünlü",
+    "Eyyüb Selim"
+   ],
+   [
+    "Hu",
+    "Yongli"
+   ],
+   [
+    "Sjaugi",
+    "Muhammad Farhan"
+   ],
+   [
+    "Çelik",
+    "Muhammet A"
+   ],
+   [
+    "Hekimoğlu",
+    "Hilal"
+   ],
+   [
+    "Miotto",
+    "Olivo"
+   ],
+   [
+    "Öncel",
+    "Muhammed Miran"
+   ],
+   [
+    "Khan",
+    "Asif M"
+   ]
+  ],
+  "issue": "1",
+  "key": "tharanga2025",
+  "pages": "bbae607",
+  "title": "DiMA: sequence diversity dynamics analyser for viruses",
+  "venue": "Briefings in Bioinformatics",
+  "volume": "26",
+  "year": 2025
+ },
+ "10.1093/bib/bbw134": {
+  "authors": [
+   [
+    "Karimzadeh",
+    "Mehran"
+   ],
+   [
+    "Hoffman",
+    "Michael M"
+   ]
+  ],
+  "issue": "4",
+  "key": "karimzadeh2018",
+  "pages": "693-699",
+  "title": "Top considerations for creating bioinformatics software documentation",
+  "venue": "Briefings in Bioinformatics",
+  "volume": "19",
+  "year": 2018
+ },
+ "10.1093/bioinformatics/btm270": {
+  "authors": [
+   [
+    "Capra",
+    "John A."
+   ],
+   [
+    "Singh",
+    "Mona"
+   ]
+  ],
+  "issue": "15",
+  "key": "capra2007",
+  "pages": "1875-1882",
+  "title": "Predicting functionally important residues from sequence conservation",
+  "venue": "Bioinformatics",
+  "volume": "23",
+  "year": 2007
+ },
+ "10.1093/bioinformatics/btp163": {
+  "authors": [
+   [
+    "Cock",
+    "Peter J. A."
+   ],
+   [
+    "Antao",
+    "Tiago"
+   ],
+   [
+    "Chang",
+    "Jeffrey T."
+   ],
+   [
+    "Chapman",
+    "Brad A."
+   ],
+   [
+    "Cox",
+    "Cymon J."
+   ],
+   [
+    "Dalke",
+    "Andrew"
+   ],
+   [
+    "Friedberg",
+    "Iddo"
+   ],
+   [
+    "Hamelryck",
+    "Thomas"
+   ],
+   [
+    "Kauff",
+    "Frank"
+   ],
+   [
+    "Wilczynski",
+    "Bartek"
+   ],
+   [
+    "de Hoon",
+    "Michiel J. L."
+   ]
+  ],
+  "issue": "11",
+  "key": "cock2009",
+  "pages": "1422-1423",
+  "title": "Biopython: freely available Python tools for computational molecular biology and bioinformatics",
+  "venue": "Bioinformatics",
+  "volume": "25",
+  "year": 2009
+ },
+ "10.1093/bioinformatics/btp352": {
+  "authors": [
+   [
+    "Li",
+    "Heng"
+   ],
+   [
+    "Handsaker",
+    "Bob"
+   ],
+   [
+    "Wysoker",
+    "Alec"
+   ],
+   [
+    "Fennell",
+    "Tim"
+   ],
+   [
+    "Ruan",
+    "Jue"
+   ],
+   [
+    "Homer",
+    "Nils"
+   ],
+   [
+    "Marth",
+    "Gabor"
+   ],
+   [
+    "Abecasis",
+    "Goncalo"
+   ],
+   [
+    "Durbin",
+    "Richard"
+   ],
+   [
+    "1000 Genome Project Data Processing Subgroup",
+    ""
+   ]
+  ],
+  "issue": "16",
+  "key": "li2009",
+  "pages": "2078-2079",
+  "title": "The Sequence Alignment/Map format and SAMtools",
+  "venue": "Bioinformatics",
+  "volume": "25",
+  "year": 2009
+ },
+ "10.1093/bioinformatics/btq351": {
+  "authors": [
+   [
+    "Kent",
+    "W. J."
+   ],
+   [
+    "Zweig",
+    "A. S."
+   ],
+   [
+    "Barber",
+    "G."
+   ],
+   [
+    "Hinrichs",
+    "A. S."
+   ],
+   [
+    "Karolchik",
+    "D."
+   ]
+  ],
+  "issue": "17",
+  "key": "kent2010",
+  "pages": "2204-2207",
+  "title": "BigWig and BigBed: enabling browsing of large distributed datasets",
+  "venue": "Bioinformatics",
+  "volume": "26",
+  "year": 2010
+ },
+ "10.1093/bioinformatics/btr011": {
+  "authors": [
+   [
+    "Marçais",
+    "Guillaume"
+   ],
+   [
+    "Kingsford",
+    "Carl"
+   ]
+  ],
+  "issue": "6",
+  "key": "marcais2011",
+  "pages": "764-770",
+  "title": "A fast, lock-free approach for efficient parallel counting of occurrences of k-mers",
+  "venue": "Bioinformatics",
+  "volume": "27",
+  "year": 2011
+ },
+ "10.1093/bioinformatics/btw354": {
+  "authors": [
+   [
+    "Ewels",
+    "Philip"
+   ],
+   [
+    "Magnusson",
+    "Måns"
+   ],
+   [
+    "Lundin",
+    "Sverker"
+   ],
+   [
+    "Käller",
+    "Max"
+   ]
+  ],
+  "issue": "19",
+  "key": "ewels2016",
+  "pages": "3047-3048",
+  "title": "MultiQC: summarize analysis results for multiple tools and samples in a single report",
+  "venue": "Bioinformatics",
+  "volume": "32",
+  "year": 2016
+ },
+ "10.1093/bioinformatics/btx192": {
+  "authors": [
+   [
+    "da Veiga Leprevost",
+    "Felipe"
+   ],
+   [
+    "Grüning",
+    "Björn A"
+   ],
+   [
+    "Alves Aflitos",
+    "Saulo"
+   ],
+   [
+    "Röst",
+    "Hannes L"
+   ],
+   [
+    "Uszkoreit",
+    "Julian"
+   ],
+   [
+    "Barsnes",
+    "Harald"
+   ],
+   [
+    "Vaudel",
+    "Marc"
+   ],
+   [
+    "Moreno",
+    "Pablo"
+   ],
+   [
+    "Gatto",
+    "Laurent"
+   ],
+   [
+    "Weber",
+    "Jonas"
+   ],
+   [
+    "Bai",
+    "Mingze"
+   ],
+   [
+    "Jimenez",
+    "Rafael C"
+   ],
+   [
+    "Sachsenberg",
+    "Timo"
+   ],
+   [
+    "Pfeuffer",
+    "Julianus"
+   ],
+   [
+    "Vera Alvarez",
+    "Roberto"
+   ],
+   [
+    "Griss",
+    "Johannes"
+   ],
+   [
+    "Nesvizhskii",
+    "Alexey I"
+   ],
+   [
+    "Perez-Riverol",
+    "Yasset"
+   ]
+  ],
+  "issue": "16",
+  "key": "daveigaleprevost2017",
+  "pages": "2580-2582",
+  "title": "BioContainers: an open-source and community-driven framework for software standardization",
+  "venue": "Bioinformatics",
+  "volume": "33",
+  "year": 2017
+ },
+ "10.1093/biomet/26.4.404": {
+  "authors": [
+   [
+    "Clopper",
+    "C. J."
+   ],
+   [
+    "Pearson",
+    "E. S."
+   ]
+  ],
+  "issue": "4",
+  "key": "clopper1934",
+  "pages": "404-413",
+  "title": "The use of confidence or fiducial limits illustrated in the case of the binomial",
+  "venue": "Biometrika",
+  "volume": "26",
+  "year": 1934
+ },
+ "10.1093/biomet/63.3.581": {
+  "authors": [
+   [
+    "Rubin",
+    "Donald B."
+   ]
+  ],
+  "issue": "3",
+  "key": "rubin1976",
+  "pages": "581-592",
+  "title": "Inference and missing data",
+  "venue": "Biometrika",
+  "volume": "63",
+  "year": 1976
+ },
+ "10.1093/gigascience/giaa072": {
+  "authors": [
+   [
+    "Kryukov",
+    "Kirill"
+   ],
+   [
+    "Ueda",
+    "Mahoko Takahashi"
+   ],
+   [
+    "Nakagawa",
+    "So"
+   ],
+   [
+    "Imanishi",
+    "Tadashi"
+   ]
+  ],
+  "issue": "7",
+  "key": "kryukov2020",
+  "pages": "giaa072",
+  "title": "Sequence Compression Benchmark (SCB) database—A comprehensive evaluation of reference-free compressors for FASTA-formatted sequences",
+  "venue": "GigaScience",
+  "volume": "9",
+  "year": 2020
+ },
+ "10.1093/gigascience/giab007": {
+  "authors": [
+   [
+    "Bonfield",
+    "James K"
+   ],
+   [
+    "Marshall",
+    "John"
+   ],
+   [
+    "Danecek",
+    "Petr"
+   ],
+   [
+    "Li",
+    "Heng"
+   ],
+   [
+    "Ohan",
+    "Valeriu"
+   ],
+   [
+    "Whitwham",
+    "Andrew"
+   ],
+   [
+    "Keane",
+    "Thomas"
+   ],
+   [
+    "Davies",
+    "Robert M"
+   ]
+  ],
+  "issue": "2",
+  "key": "bonfield2021",
+  "pages": "giab007",
+  "title": "HTSlib: C library for reading/writing high-throughput sequencing data",
+  "venue": "GigaScience",
+  "volume": "10",
+  "year": 2021
+ },
+ "10.1093/gigascience/giy125": {
+  "authors": [
+   [
+    "Manekar",
+    "Swati C"
+   ],
+   [
+    "Sathe",
+    "Shailesh R"
+   ]
+  ],
+  "issue": "12",
+  "key": "manekar2018",
+  "pages": "giy125",
+  "title": "A benchmark study of k-mer counting methods for high-throughput sequencing",
+  "venue": "GigaScience",
+  "volume": "7",
+  "year": 2018
+ },
+ "10.1093/gigascience/giz095": {
+  "authors": [
+   [
+    "Khan",
+    "Farah Zaib"
+   ],
+   [
+    "Soiland-Reyes",
+    "Stian"
+   ],
+   [
+    "Sinnott",
+    "Richard O"
+   ],
+   [
+    "Lonie",
+    "Andrew"
+   ],
+   [
+    "Goble",
+    "Carole"
+   ],
+   [
+    "Crusoe",
+    "Michael R"
+   ]
+  ],
+  "issue": "11",
+  "key": "khan2019",
+  "pages": "giz095",
+  "title": "Sharing interoperable workflow provenance: A review of best practices and their practical application in CWLProv",
+  "venue": "GigaScience",
+  "volume": "8",
+  "year": 2019
+ },
+ "10.1093/molbev/mst010": {
+  "authors": [
+   [
+    "Katoh",
+    "K."
+   ],
+   [
+    "Standley",
+    "D. M."
+   ]
+  ],
+  "issue": "4",
+  "key": "katoh2013",
+  "pages": "772-780",
+  "title": "MAFFT Multiple Sequence Alignment Software Version 7: Improvements in Performance and Usability",
+  "venue": "Molecular Biology and Evolution",
+  "volume": "30",
+  "year": 2013
+ },
+ "10.1093/molbev/msy014": {
+  "authors": [
+   [
+    "Darriba",
+    "Diego"
+   ],
+   [
+    "Flouri",
+    "Tomáš"
+   ],
+   [
+    "Stamatakis",
+    "Alexandros"
+   ]
+  ],
+  "issue": "5",
+  "key": "darriba2018",
+  "pages": "1037-1046",
+  "title": "The State of Software for Evolutionary Biology",
+  "venue": "Molecular Biology and Evolution",
+  "volume": "35",
+  "year": 2018
+ },
+ "10.1093/nar/13.24.8927": {
+  "authors": [
+   [
+    "Martin",
+    "Francis H."
+   ],
+   [
+    "Castro",
+    "Miguel M."
+   ],
+   [
+    "Aboul-ela",
+    "Fareed"
+   ],
+   [
+    "Tinoco",
+    "Ignacio"
+   ]
+  ],
+  "issue": "24",
+  "key": "martin1985",
+  "pages": "8927-8938",
+  "title": "Base pairing involving deoxyinosine: implications for probe design",
+  "venue": "Nucleic Acids Research",
+  "volume": "13",
+  "year": 1985
+ },
+ "10.1093/nar/13.9.3021": {
+  "authors": [
+   [
+    "Cornish-Bowden",
+    "Athel"
+   ]
+  ],
+  "issue": "9",
+  "key": "cornishbowden1985",
+  "pages": "3021-3030",
+  "title": "Nomenclature for incompletely specified bases in nucleic acid sequences: recommendations 1984",
+  "venue": "Nucleic Acids Research",
+  "volume": "13",
+  "year": 1985
+ },
+ "10.1093/nar/gkw1065": {
+  "authors": [
+   [
+    "Hatcher",
+    "Eneida L."
+   ],
+   [
+    "Zhdanov",
+    "Sergey A."
+   ],
+   [
+    "Bao",
+    "Yiming"
+   ],
+   [
+    "Blinkova",
+    "Olga"
+   ],
+   [
+    "Nawrocki",
+    "Eric P."
+   ],
+   [
+    "Ostapchuck",
+    "Yuri"
+   ],
+   [
+    "Schäffer",
+    "Alejandro A."
+   ],
+   [
+    "Brister",
+    "J. Rodney"
+   ]
+  ],
+  "issue": "D1",
+  "key": "hatcher2017",
+  "pages": "D482-D490",
+  "title": "Virus Variation Resource – improved response to emergent viral outbreaks",
+  "venue": "Nucleic Acids Research",
+  "volume": "45",
+  "year": 2017
+ },
+ "10.1093/oxfordjournals.molbev.a026334": {
+  "authors": [
+   [
+    "Castresana",
+    "J."
+   ]
+  ],
+  "issue": "4",
+  "key": "castresana2000",
+  "pages": "540-552",
+  "title": "Selection of Conserved Blocks from Multiple Alignments for Their Use in Phylogenetic Analysis",
+  "venue": "Molecular Biology and Evolution",
+  "volume": "17",
+  "year": 2000
+ },
+ "10.1103/PhysRevLett.80.197": {
+  "authors": [
+   [
+    "Strong",
+    "S. P."
+   ],
+   [
+    "Koberle",
+    "Roland"
+   ],
+   [
+    "de Ruyter van Steveninck",
+    "Rob R."
+   ],
+   [
+    "Bialek",
+    "William"
+   ]
+  ],
+  "issue": "1",
+  "key": "strong1998",
+  "pages": "197-200",
+  "title": "Entropy and Information in Neural Spike Trains",
+  "venue": "Physical Review Letters",
+  "volume": "80",
+  "year": 1998
+ },
+ "10.1109/ICDE.2013.6544839": {
+  "authors": [
+   [
+    "Balkesen",
+    "C."
+   ],
+   [
+    "Teubner",
+    "J."
+   ],
+   [
+    "Alonso",
+    "G."
+   ],
+   [
+    "Ozsu",
+    "M. T."
+   ]
+  ],
+  "issue": null,
+  "key": "balkesen2013",
+  "pages": "362-373",
+  "title": "Main-memory hash joins on multi-core CPUs: Tuning to the underlying hardware",
+  "venue": "2013 IEEE 29th International Conference on Data Engineering (ICDE)",
+  "volume": null,
+  "year": 2013
+ },
+ "10.1109/ICSE.2019.00122": {
+  "authors": [
+   [
+    "Aghajani",
+    "Emad"
+   ],
+   [
+    "Nagy",
+    "Csaba"
+   ],
+   [
+    "Vega-Márquez",
+    "Olga Lucero"
+   ],
+   [
+    "Linares-Vásquez",
+    "Mario"
+   ],
+   [
+    "Moreno",
+    "Laura"
+   ],
+   [
+    "Bavota",
+    "Gabriele"
+   ],
+   [
+    "Lanza",
+    "Michele"
+   ]
+  ],
+  "issue": null,
+  "key": "aghajani2019",
+  "pages": "1199-1210",
+  "title": "Software Documentation Issues Unveiled",
+  "venue": "2019 IEEE/ACM 41st International Conference on Software Engineering (ICSE)",
+  "volume": null,
+  "year": 2019
+ },
+ "10.1109/MSEC.2023.3279773": {
+  "authors": [
+   [
+    "Zahan",
+    "Nusrat"
+   ],
+   [
+    "Kanakiya",
+    "Parth"
+   ],
+   [
+    "Hambleton",
+    "Brian"
+   ],
+   [
+    "Shohan",
+    "Shohanuzzaman"
+   ],
+   [
+    "Williams",
+    "Laurie"
+   ]
+  ],
+  "issue": "6",
+  "key": "zahan2023",
+  "pages": "76-88",
+  "title": "OpenSSF Scorecard: On the Path Toward Ecosystem-Wide Automated Security Metrics",
+  "venue": "IEEE Security & Privacy",
+  "volume": "21",
+  "year": 2023
+ },
+ "10.1109/MSR.2019.00077": {
+  "authors": [
+   [
+    "Pimentel",
+    "Joao Felipe"
+   ],
+   [
+    "Murta",
+    "Leonardo"
+   ],
+   [
+    "Braganholo",
+    "Vanessa"
+   ],
+   [
+    "Freire",
+    "Juliana"
+   ]
+  ],
+  "issue": null,
+  "key": "pimentel2019",
+  "pages": "507-517",
+  "title": "A Large-Scale Study About Quality and Reproducibility of Jupyter Notebooks",
+  "venue": "2019 IEEE/ACM 16th International Conference on Mining Software Repositories (MSR)",
+  "volume": null,
+  "year": 2019
+ },
+ "10.1109/SP46215.2023.10179304": {
+  "authors": [
+   [
+    "Ladisa",
+    "Piergiorgio"
+   ],
+   [
+    "Plate",
+    "Henrik"
+   ],
+   [
+    "Martinez",
+    "Matias"
+   ],
+   [
+    "Barais",
+    "Olivier"
+   ]
+  ],
+  "issue": null,
+  "key": "ladisa2023",
+  "pages": "1509-1526",
+  "title": "SoK: Taxonomy of Attacks on Open-Source Software Supply Chains",
+  "venue": "2023 IEEE Symposium on Security and Privacy (SP)",
+  "volume": null,
+  "year": 2023
+ },
+ "10.1109/TSE.2019.2906315": {
+  "authors": [
+   [
+    "Zhang",
+    "Haoxiang"
+   ],
+   [
+    "Wang",
+    "Shaowei"
+   ],
+   [
+    "Chen",
+    "Tse-Hsun"
+   ],
+   [
+    "Zou",
+    "Ying"
+   ],
+   [
+    "Hassan",
+    "Ahmed E."
+   ]
+  ],
+  "issue": "4",
+  "key": "zhang2021",
+  "pages": "850-862",
+  "title": "An Empirical Study of Obsolete Answers on Stack Overflow",
+  "venue": "IEEE Transactions on Software Engineering",
+  "volume": "47",
+  "year": 2021
+ },
+ "10.1109/TVCG.2012.279": {
+  "authors": [
+   [
+    "MacEachren",
+    "A. M."
+   ],
+   [
+    "Roth",
+    "R. E."
+   ],
+   [
+    "O'Brien",
+    "J."
+   ],
+   [
+    "Li",
+    "B."
+   ],
+   [
+    "Swingley",
+    "D."
+   ],
+   [
+    "Gahegan",
+    "M."
+   ]
+  ],
+  "issue": "12",
+  "key": "maceachren2012",
+  "pages": "2496-2505",
+  "title": "Visual Semiotics & Uncertainty Visualization: An Empirical Study",
+  "venue": "IEEE Transactions on Visualization and Computer Graphics",
+  "volume": "18",
+  "year": 2012
+ },
+ "10.1109/TVCG.2018.2864914": {
+  "authors": [
+   [
+    "Song",
+    "Hayeong"
+   ],
+   [
+    "Szafir",
+    "Danielle Albers"
+   ]
+  ],
+  "issue": "1",
+  "key": "song2019",
+  "pages": "914-924",
+  "title": "Where's My Data? Evaluating Visualizations with Missing Data",
+  "venue": "IEEE Transactions on Visualization and Computer Graphics",
+  "volume": "25",
+  "year": 2019
+ },
+ "10.1111/2041-210X.12108": {
+  "authors": [
+   [
+    "Chao",
+    "Anne"
+   ],
+   [
+    "Wang",
+    "Y. T."
+   ],
+   [
+    "Jost",
+    "Lou"
+   ]
+  ],
+  "issue": "11",
+  "key": "chao2013",
+  "pages": "1091-1100",
+  "title": "Entropy and the species accumulation curve: a novel entropy estimator via discovery rates of new species",
+  "venue": "Methods in Ecology and Evolution",
+  "volume": "4",
+  "year": 2013
+ },
+ "10.1111/j.1365-2958.1991.tb00722.x": {
+  "authors": [
+   [
+    "Böck",
+    "A."
+   ],
+   [
+    "Forchhammer",
+    "K."
+   ],
+   [
+    "Heider",
+    "J."
+   ],
+   [
+    "Leinfelder",
+    "W."
+   ],
+   [
+    "Sawers",
+    "G."
+   ],
+   [
+    "Veprek",
+    "B."
+   ],
+   [
+    "Zinoni",
+    "F."
+   ]
+  ],
+  "issue": "3",
+  "key": "bock1991",
+  "pages": "515-520",
+  "title": "Selenocysteine: the 21st amino acid",
+  "venue": "Molecular Microbiology",
+  "volume": "5",
+  "year": 1991
+ },
+ "10.1126/science.1069588": {
+  "authors": [
+   [
+    "Srinivasan",
+    "Gayathri"
+   ],
+   [
+    "James",
+    "Carey M."
+   ],
+   [
+    "Krzycki",
+    "Joseph A."
+   ]
+  ],
+  "issue": "5572",
+  "key": "srinivasan2002",
+  "pages": "1459-1462",
+  "title": "Pyrrolysine Encoded by UAG in Archaea: Charging of a UAG-Decoding Specialized tRNA",
+  "venue": "Science",
+  "volume": "296",
+  "year": 2002
+ },
+ "10.1145/103162.103163": {
+  "authors": [
+   [
+    "Goldberg",
+    "David"
+   ]
+  ],
+  "issue": "1",
+  "key": "goldberg1991",
+  "pages": "5-48",
+  "title": "What every computer scientist should know about floating-point arithmetic",
+  "venue": "ACM Computing Surveys",
+  "volume": "23",
+  "year": 1991
+ },
+ "10.1145/108844.108874": {
+  "authors": [
+   [
+    "Card",
+    "Stuart K."
+   ],
+   [
+    "Robertson",
+    "George G."
+   ],
+   [
+    "Mackinlay",
+    "Jock D."
+   ]
+  ],
+  "issue": null,
+  "key": "card1991",
+  "pages": "181-186",
+  "title": "The information visualizer, an information workspace",
+  "venue": "Proceedings of the SIGCHI conference on Human factors in computing systems Reaching through technology - CHI '91",
+  "volume": null,
+  "year": 1991
+ },
+ "10.1145/1294211.1294231": {
+  "authors": [
+   [
+    "Harrison",
+    "Chris"
+   ],
+   [
+    "Amento",
+    "Brian"
+   ],
+   [
+    "Kuznetsov",
+    "Stacey"
+   ],
+   [
+    "Bell",
+    "Robert"
+   ]
+  ],
+  "issue": null,
+  "key": "harrison2007",
+  "pages": "115-118",
+  "title": "Rethinking the progress bar",
+  "venue": "Proceedings of the 20th annual ACM symposium on User interface software and technology",
+  "volume": null,
+  "year": 2007
+ },
+ "10.1145/1476589.1476628": {
+  "authors": [
+   [
+    "Miller",
+    "Robert B."
+   ]
+  ],
+  "issue": null,
+  "key": "miller1968",
+  "pages": "267",
+  "title": "Response time in man-computer conversational transactions",
+  "venue": "Proceedings of the December 9-11, 1968, fall joint computer conference, part I on - AFIPS '68 (Fall, part I)",
+  "volume": null,
+  "year": 1968
+ },
+ "10.1145/191666.191729": {
+  "authors": [
+   [
+    "Nielsen",
+    "Jakob"
+   ]
+  ],
+  "issue": null,
+  "key": "nielsen1994",
+  "pages": "152-158",
+  "title": "Enhancing the explanatory power of usability heuristics",
+  "venue": "Proceedings of the SIGCHI Conference on Human Factors in Computing Systems",
+  "volume": null,
+  "year": 1994
+ },
+ "10.1145/1989323.1989328": {
+  "authors": [
+   [
+    "Blanas",
+    "Spyros"
+   ],
+   [
+    "Li",
+    "Yinan"
+   ],
+   [
+    "Patel",
+    "Jignesh M."
+   ]
+  ],
+  "issue": null,
+  "key": "blanas2011",
+  "pages": "37-48",
+  "title": "Design and evaluation of main memory hash join algorithms for multi-core CPUs",
+  "venue": "Proceedings of the 2011 ACM SIGMOD International Conference on Management of data",
+  "volume": null,
+  "year": 2011
+ },
+ "10.1145/3366423.3380300": {
+  "authors": [
+   [
+    "Piccardi",
+    "Tiziano"
+   ],
+   [
+    "Redi",
+    "Miriam"
+   ],
+   [
+    "Colavizza",
+    "Giovanni"
+   ],
+   [
+    "West",
+    "Robert"
+   ]
+  ],
+  "issue": null,
+  "key": "piccardi2020",
+  "pages": "2365-2376",
+  "title": "Quantifying Engagement with Citations on Wikipedia",
+  "venue": "Proceedings of The Web Conference 2020",
+  "volume": null,
+  "year": 2020
+ },
+ "10.1145/3411764.3445544": {
+  "authors": [
+   [
+    "Sampath",
+    "Harini"
+   ],
+   [
+    "Merrick",
+    "Alice"
+   ],
+   [
+    "Macvean",
+    "Andrew"
+   ]
+  ],
+  "issue": null,
+  "key": "sampath2021",
+  "pages": "1-10",
+  "title": "Accessibility of Command Line Interfaces",
+  "venue": "Proceedings of the 2021 CHI Conference on Human Factors in Computing Systems",
+  "volume": null,
+  "year": 2021
+ },
+ "10.1145/3441852.3476545": {
+  "authors": [
+   [
+    "Wang",
+    "Lucy Lu"
+   ],
+   [
+    "Cachola",
+    "Isabel"
+   ],
+   [
+    "Bragg",
+    "Jonathan"
+   ],
+   [
+    "Cheng",
+    "Evie Yu-Yen"
+   ],
+   [
+    "Haupt",
+    "Chelsea"
+   ],
+   [
+    "Latzke",
+    "Matt"
+   ],
+   [
+    "Kuehl",
+    "Bailey"
+   ],
+   [
+    "van Zuylen",
+    "Madeleine N"
+   ],
+   [
+    "Wagner",
+    "Linda"
+   ],
+   [
+    "Weld",
+    "Daniel"
+   ]
+  ],
+  "issue": null,
+  "key": "wang2021",
+  "pages": "1-4",
+  "title": "SciA11y: Converting Scientific Papers to Accessible HTML",
+  "venue": "Proceedings of the 23rd International ACM SIGACCESS Conference on Computers and Accessibility",
+  "volume": null,
+  "year": 2021
+ },
+ "10.1145/351240.351266": {
+  "authors": [
+   [
+    "Claessen",
+    "Koen"
+   ],
+   [
+    "Hughes",
+    "John"
+   ]
+  ],
+  "issue": null,
+  "key": "claessen2000",
+  "pages": "268-279",
+  "title": "QuickCheck: a lightweight tool for random testing of Haskell programs",
+  "venue": "Proceedings of the fifth ACM SIGPLAN international conference on Functional programming",
+  "volume": null,
+  "year": 2000
+ },
+ "10.1145/3659096": {
+  "authors": [
+   [
+    "Lo",
+    "Kyle"
+   ],
+   [
+    "Chang",
+    "Joseph Chee"
+   ],
+   [
+    "Head",
+    "Andrew"
+   ],
+   [
+    "Bragg",
+    "Jonathan"
+   ],
+   [
+    "Zhang",
+    "Amy X."
+   ],
+   [
+    "Trier",
+    "Cassidy"
+   ],
+   [
+    "Anastasiades",
+    "Chloe"
+   ],
+   [
+    "August",
+    "Tal"
+   ],
+   [
+    "Authur",
+    "Russell"
+   ],
+   [
+    "Bragg",
+    "Danielle"
+   ],
+   [
+    "Bransom",
+    "Erin"
+   ],
+   [
+    "Cachola",
+    "Isabel"
+   ],
+   [
+    "Candra",
+    "Stefan"
+   ],
+   [
+    "Chandrasekhar",
+    "Yoganand"
+   ],
+   [
+    "Chen",
+    "Yen-Sung"
+   ],
+   [
+    "Cheng",
+    "Evie Yu-Yen"
+   ],
+   [
+    "Chou",
+    "Yvonne"
+   ],
+   [
+    "Downey",
+    "Doug"
+   ],
+   [
+    "Evans",
+    "Rob"
+   ],
+   [
+    "Fok",
+    "Raymond"
+   ],
+   [
+    "Hu",
+    "Fangzhou"
+   ],
+   [
+    "Huff",
+    "Regan"
+   ],
+   [
+    "Kang",
+    "Dongyeop"
+   ],
+   [
+    "Kim",
+    "Tae Soo"
+   ],
+   [
+    "Kinney",
+    "Rodney"
+   ],
+   [
+    "Kittur",
+    "Aniket"
+   ],
+   [
+    "Kang",
+    "Hyeonsu B."
+   ],
+   [
+    "Klevak",
+    "Egor"
+   ],
+   [
+    "Kuehl",
+    "Bailey"
+   ],
+   [
+    "Langan",
+    "Michael J."
+   ],
+   [
+    "Latzke",
+    "Matt"
+   ],
+   [
+    "Lochner",
+    "Jaron"
+   ],
+   [
+    "MacMillan",
+    "Kelsey"
+   ],
+   [
+    "Marsh",
+    "Eric"
+   ],
+   [
+    "Murray",
+    "Tyler"
+   ],
+   [
+    "Naik",
+    "Aakanksha"
+   ],
+   [
+    "Nguyen",
+    "Ngoc-Uyen"
+   ],
+   [
+    "Palani",
+    "Srishti"
+   ],
+   [
+    "Park",
+    "Soya"
+   ],
+   [
+    "Paulic",
+    "Caroline"
+   ],
+   [
+    "Rachatasumrit",
+    "Napol"
+   ],
+   [
+    "Rao",
+    "Smita"
+   ],
+   [
+    "Sayre",
+    "Paul"
+   ],
+   [
+    "Shen",
+    "Zejiang"
+   ],
+   [
+    "Siangliulue",
+    "Pao"
+   ],
+   [
+    "Soldaini",
+    "Luca"
+   ],
+   [
+    "Tran",
+    "Huy"
+   ],
+   [
+    "van Zuylen",
+    "Madeleine"
+   ],
+   [
+    "Wang",
+    "Lucy Lu"
+   ],
+   [
+    "Wilhelm",
+    "Christopher"
+   ],
+   [
+    "Wu",
+    "Caroline"
+   ],
+   [
+    "Yang",
+    "Jiangjiang"
+   ],
+   [
+    "Zamarron",
+    "Angele"
+   ],
+   [
+    "Hearst",
+    "Marti A."
+   ],
+   [
+    "Weld",
+    "Daniel S."
+   ]
+  ],
+  "issue": "10",
+  "key": "lo2024",
+  "pages": "50-61",
+  "title": "The Semantic Reader Project",
+  "venue": "Communications of the ACM",
+  "volume": "67",
+  "year": 2024
+ },
+ "10.1145/3715728": {
+  "authors": [
+   [
+    "He",
+    "Hao"
+   ],
+   [
+    "Vasilescu",
+    "Bogdan"
+   ],
+   [
+    "Kästner",
+    "Christian"
+   ]
+  ],
+  "issue": "FSE",
+  "key": "he2025",
+  "pages": "266-289",
+  "title": "Pinning Is Futile: You Need More Than Local Dependency Versioning to Defend against Supply Chain Attacks",
+  "venue": "Proceedings of the ACM on Software Engineering",
+  "volume": "2",
+  "year": 2025
+ },
+ "10.1145/97243.97281": {
+  "authors": [
+   [
+    "Nielsen",
+    "Jakob"
+   ],
+   [
+    "Molich",
+    "Rolf"
+   ]
+  ],
+  "issue": null,
+  "key": "nielsen1990",
+  "pages": "249-256",
+  "title": "Heuristic evaluation of user interfaces",
+  "venue": "Proceedings of the SIGCHI conference on Human factors in computing systems Empowering people - CHI '90",
+  "volume": null,
+  "year": 1990
+ },
+ "10.1146/annurev.immunol.11.1.213": {
+  "authors": [
+   [
+    "Rammensee",
+    "H"
+   ]
+  ],
+  "issue": "1",
+  "key": "rammensee1993",
+  "pages": "213-244",
+  "title": "Peptides Naturally Presented by MHC Class I Molecules",
+  "venue": "Annual Review of Immunology",
+  "volume": "11",
+  "year": 1993
+ },
+ "10.1147/rd.312.0249": {
+  "authors": [
+   [
+    "Karp",
+    "Richard M."
+   ],
+   [
+    "Rabin",
+    "Michael O."
+   ]
+  ],
+  "issue": "2",
+  "key": "karp1987",
+  "pages": "249-260",
+  "title": "Efficient randomized pattern-matching algorithms",
+  "venue": "IBM Journal of Research and Development",
+  "volume": "31",
+  "year": 1987
+ },
+ "10.1152/jn.00559.2007": {
+  "authors": [
+   [
+    "Panzeri",
+    "Stefano"
+   ],
+   [
+    "Senatore",
+    "Riccardo"
+   ],
+   [
+    "Montemurro",
+    "Marcelo A."
+   ],
+   [
+    "Petersen",
+    "Rasmus S."
+   ]
+  ],
+  "issue": "3",
+  "key": "panzeri2007",
+  "pages": "1064-1072",
+  "title": "Correcting for the Sampling Bias Problem in Spike Train Information Measures",
+  "venue": "Journal of Neurophysiology",
+  "volume": "98",
+  "year": 2007
+ },
+ "10.1162/089976603321780272": {
+  "authors": [
+   [
+    "Paninski",
+    "Liam"
+   ]
+  ],
+  "issue": "6",
+  "key": "paninski2003",
+  "pages": "1191-1253",
+  "title": "Estimation of Entropy and Mutual Information",
+  "venue": "Neural Computation",
+  "volume": "15",
+  "year": 2003
+ },
+ "10.1186/1471-2105-9-S1-S18": {
+  "authors": [
+   [
+    "Miotto",
+    "Olivo"
+   ],
+   [
+    "Heiny",
+    "A. T."
+   ],
+   [
+    "Tan",
+    "Tin Wee"
+   ],
+   [
+    "August",
+    "J. Thomas"
+   ],
+   [
+    "Brusic",
+    "Vladimir"
+   ]
+  ],
+  "issue": "S1",
+  "key": "miotto2008",
+  "pages": "S18",
+  "title": "Identification of human-to-human transmissibility factors in PB2 proteins of influenza A by large-scale mutual information analysis",
+  "venue": "BMC Bioinformatics",
+  "volume": "9",
+  "year": 2008
+ },
+ "10.1186/2047-217X-2-15": {
+  "authors": [
+   [
+    "Seemann",
+    "Torsten"
+   ]
+  ],
+  "issue": "1",
+  "key": "seemann2013",
+  "pages": "15",
+  "title": "Ten recommendations for creating usable bioinformatics command line software",
+  "venue": "GigaScience",
+  "volume": "2",
+  "year": 2013
+ },
+ "10.1186/gb-2010-11-8-r86": {
+  "authors": [
+   [
+    "Goecks",
+    "Jeremy"
+   ],
+   [
+    "Nekrutenko",
+    "Anton"
+   ],
+   [
+    "Taylor",
+    "James"
+   ],
+   [
+    "Galaxy Team",
+    ""
+   ]
+  ],
+  "issue": "8",
+  "key": "goecks2010",
+  "pages": "R86",
+  "title": "Galaxy: a comprehensive approach for supporting accessible, reproducible, and transparent computational research in the life sciences",
+  "venue": "Genome Biology",
+  "volume": "11",
+  "year": 2010
+ },
+ "10.1186/s12911-017-0430-8": {
+  "authors": [
+   [
+    "Ancker",
+    "Jessica S."
+   ],
+   [
+    "Edwards",
+    "Alison"
+   ],
+   [
+    "Nosal",
+    "Sarah"
+   ],
+   [
+    "Hauser",
+    "Diane"
+   ],
+   [
+    "Mauer",
+    "Elizabeth"
+   ],
+   [
+    "Kaushal",
+    "Rainu"
+   ],
+   [
+    "HITEC Investigators",
+    ""
+   ]
+  ],
+  "issue": "1",
+  "key": "ancker2017",
+  "pages": "36",
+  "title": "Effects of workload, work complexity, and repeated alerts on alert fatigue in a clinical decision support system",
+  "venue": "BMC Medical Informatics and Decision Making",
+  "volume": "17",
+  "year": 2017
+ },
+ "10.1186/s12920-017-0301-2": {
+  "authors": [
+   [
+    "Khan",
+    "Asif M."
+   ],
+   [
+    "Hu",
+    "Yongli"
+   ],
+   [
+    "Miotto",
+    "Olivo"
+   ],
+   [
+    "Thevasagayam",
+    "Natascha M."
+   ],
+   [
+    "Sukumaran",
+    "Rashmi"
+   ],
+   [
+    "Abd Raman",
+    "Hadia Syahirah"
+   ],
+   [
+    "Brusic",
+    "Vladimir"
+   ],
+   [
+    "Tan",
+    "Tin Wee"
+   ],
+   [
+    "August",
+    "J. Thomas"
+   ]
+  ],
+  "issue": "S4",
+  "key": "khan2017",
+  "pages": "78",
+  "title": "Analysis of viral diversity for vaccine target discovery",
+  "venue": "BMC Medical Genomics",
+  "volume": "10",
+  "year": 2017
+ },
+ "10.1186/s13059-018-1486-1": {
+  "authors": [
+   [
+    "Kerpedjiev",
+    "Peter"
+   ],
+   [
+    "Abdennur",
+    "Nezar"
+   ],
+   [
+    "Lekschas",
+    "Fritz"
+   ],
+   [
+    "McCallum",
+    "Chuck"
+   ],
+   [
+    "Dinkla",
+    "Kasper"
+   ],
+   [
+    "Strobelt",
+    "Hendrik"
+   ],
+   [
+    "Luber",
+    "Jacob M."
+   ],
+   [
+    "Ouellette",
+    "Scott B."
+   ],
+   [
+    "Azhir",
+    "Alaleh"
+   ],
+   [
+    "Kumar",
+    "Nikhil"
+   ],
+   [
+    "Hwang",
+    "Jeewon"
+   ],
+   [
+    "Lee",
+    "Soohyun"
+   ],
+   [
+    "Alver",
+    "Burak H."
+   ],
+   [
+    "Pfister",
+    "Hanspeter"
+   ],
+   [
+    "Mirny",
+    "Leonid A."
+   ],
+   [
+    "Park",
+    "Peter J."
+   ],
+   [
+    "Gehlenborg",
+    "Nils"
+   ]
+  ],
+  "issue": "1",
+  "key": "kerpedjiev2018",
+  "pages": "125",
+  "title": "HiGlass: web-based visual exploration and analysis of genome interaction maps",
+  "venue": "Genome Biology",
+  "volume": "19",
+  "year": 2018
+ },
+ "10.1186/s13059-019-1738-8": {
+  "authors": [
+   [
+    "Weber",
+    "Lukas M."
+   ],
+   [
+    "Saelens",
+    "Wouter"
+   ],
+   [
+    "Cannoodt",
+    "Robrecht"
+   ],
+   [
+    "Soneson",
+    "Charlotte"
+   ],
+   [
+    "Hapfelmeier",
+    "Alexander"
+   ],
+   [
+    "Gardner",
+    "Paul P."
+   ],
+   [
+    "Boulesteix",
+    "Anne-Laure"
+   ],
+   [
+    "Saeys",
+    "Yvan"
+   ],
+   [
+    "Robinson",
+    "Mark D."
+   ]
+  ],
+  "issue": "1",
+  "key": "weber2019",
+  "pages": "125",
+  "title": "Essential guidelines for computational method benchmarking",
+  "venue": "Genome Biology",
+  "volume": "20",
+  "year": 2019
+ },
+ "10.1197/jamia.M1809": {
+  "authors": [
+   [
+    "van der Sijs",
+    "H."
+   ],
+   [
+    "Aarts",
+    "J."
+   ],
+   [
+    "Vulto",
+    "A."
+   ],
+   [
+    "Berg",
+    "M."
+   ]
+  ],
+  "issue": "2",
+  "key": "vandersijs2006",
+  "pages": "138-147",
+  "title": "Overriding of Drug Safety Alerts in Computerized Physician Order Entry",
+  "venue": "Journal of the American Medical Informatics Association",
+  "volume": "13",
+  "year": 2006
+ },
+ "10.1214/aoms/1177730497": {
+  "authors": [
+   [
+    "Blackwell",
+    "David"
+   ]
+  ],
+  "issue": "1",
+  "key": "blackwell1947",
+  "pages": "105-110",
+  "title": "Conditional Expectation and Unbiased Sequential Estimation",
+  "venue": "The Annals of Mathematical Statistics",
+  "volume": "18",
+  "year": 1947
+ },
+ "10.1214/aos/1176344552": {
+  "authors": [
+   [
+    "Efron",
+    "B."
+   ]
+  ],
+  "issue": "1",
+  "key": "efron1979",
+  "pages": "1-26",
+  "title": "Bootstrap Methods: Another Look at the Jackknife",
+  "venue": "The Annals of Statistics",
+  "volume": "7",
+  "year": 1979
+ },
+ "10.1214/ss/1009213286": {
+  "authors": [
+   [
+    "Brown",
+    "Lawrence D."
+   ],
+   [
+    "Cai",
+    "T. Tony"
+   ],
+   [
+    "DasGupta",
+    "Anirban"
+   ]
+  ],
+  "issue": "2",
+  "key": "brown2001",
+  "pages": "101-133",
+  "title": "Interval Estimation for a Binomial Proportion",
+  "venue": "Statistical Science",
+  "volume": "16",
+  "year": 2001
+ },
+ "10.12688/f1000research.26932.2": {
+  "authors": [
+   [
+    "Katz",
+    "Daniel S."
+   ],
+   [
+    "Chue Hong",
+    "Neil P."
+   ],
+   [
+    "Clark",
+    "Tim"
+   ],
+   [
+    "Muench",
+    "August"
+   ],
+   [
+    "Stall",
+    "Shelley"
+   ],
+   [
+    "Bouquin",
+    "Daina"
+   ],
+   [
+    "Cannon",
+    "Matthew"
+   ],
+   [
+    "Edmunds",
+    "Scott"
+   ],
+   [
+    "Faez",
+    "Telli"
+   ],
+   [
+    "Feeney",
+    "Patricia"
+   ],
+   [
+    "Fenner",
+    "Martin"
+   ],
+   [
+    "Friedman",
+    "Michael"
+   ],
+   [
+    "Grenier",
+    "Gerry"
+   ],
+   [
+    "Harrison",
+    "Melissa"
+   ],
+   [
+    "Heber",
+    "Joerg"
+   ],
+   [
+    "Leary",
+    "Adam"
+   ],
+   [
+    "MacCallum",
+    "Catriona"
+   ],
+   [
+    "Murray",
+    "Hollydawn"
+   ],
+   [
+    "Pastrana",
+    "Erika"
+   ],
+   [
+    "Perry",
+    "Katherine"
+   ],
+   [
+    "Schuster",
+    "Douglas"
+   ],
+   [
+    "Stockhause",
+    "Martina"
+   ],
+   [
+    "Yeston",
+    "Jake"
+   ]
+  ],
+  "issue": null,
+  "key": "katz2021",
+  "pages": "1257",
+  "title": "Recognizing the value of software: a software citation guide",
+  "venue": "F1000Research",
+  "volume": "9",
+  "year": 2021
+ },
+ "10.1371/journal.pbio.1001745": {
+  "authors": [
+   [
+    "Wilson",
+    "Greg"
+   ],
+   [
+    "Aruliah",
+    "D. A."
+   ],
+   [
+    "Brown",
+    "C. Titus"
+   ],
+   [
+    "Chue Hong",
+    "Neil P."
+   ],
+   [
+    "Davis",
+    "Matt"
+   ],
+   [
+    "Guy",
+    "Richard T."
+   ],
+   [
+    "Haddock",
+    "Steven H. D."
+   ],
+   [
+    "Huff",
+    "Kathryn D."
+   ],
+   [
+    "Mitchell",
+    "Ian M."
+   ],
+   [
+    "Plumbley",
+    "Mark D."
+   ],
+   [
+    "Waugh",
+    "Ben"
+   ],
+   [
+    "White",
+    "Ethan P."
+   ],
+   [
+    "Wilson",
+    "Paul"
+   ]
+  ],
+  "issue": "1",
+  "key": "wilson2014",
+  "pages": "e1001745",
+  "title": "Best Practices for Scientific Computing",
+  "venue": "PLoS Biology",
+  "volume": "12",
+  "year": 2014
+ },
+ "10.1371/journal.pbio.3000333": {
+  "authors": [
+   [
+    "Mangul",
+    "Serghei"
+   ],
+   [
+    "Mosqueiro",
+    "Thiago"
+   ],
+   [
+    "Abdill",
+    "Richard J."
+   ],
+   [
+    "Duong",
+    "Dat"
+   ],
+   [
+    "Mitchell",
+    "Keith"
+   ],
+   [
+    "Sarwal",
+    "Varuni"
+   ],
+   [
+    "Hill",
+    "Brian"
+   ],
+   [
+    "Brito",
+    "Jaqueline"
+   ],
+   [
+    "Littman",
+    "Russell Jared"
+   ],
+   [
+    "Statz",
+    "Benjamin"
+   ],
+   [
+    "Lam",
+    "Angela Ka-Mei"
+   ],
+   [
+    "Dayama",
+    "Gargi"
+   ],
+   [
+    "Grieneisen",
+    "Laura"
+   ],
+   [
+    "Martin",
+    "Lana S."
+   ],
+   [
+    "Flint",
+    "Jonathan"
+   ],
+   [
+    "Eskin",
+    "Eleazar"
+   ],
+   [
+    "Blekhman",
+    "Ran"
+   ]
+  ],
+  "issue": "6",
+  "key": "mangul2019install",
+  "pages": "e3000333",
+  "title": "Challenges and recommendations to improve the installability and archival stability of omics computational tools",
+  "venue": "PLOS Biology",
+  "volume": "17",
+  "year": 2019
+ },
+ "10.1371/journal.pcbi.1002195": {
+  "authors": [
+   [
+    "Eddy",
+    "Sean R."
+   ]
+  ],
+  "issue": "10",
+  "key": "eddy2011",
+  "pages": "e1002195",
+  "title": "Accelerated Profile HMM Searches",
+  "venue": "PLoS Computational Biology",
+  "volume": "7",
+  "year": 2011
+ },
+ "10.1371/journal.pcbi.1003285": {
+  "authors": [
+   [
+    "Sandve",
+    "Geir Kjetil"
+   ],
+   [
+    "Nekrutenko",
+    "Anton"
+   ],
+   [
+    "Taylor",
+    "James"
+   ],
+   [
+    "Hovig",
+    "Eivind"
+   ]
+  ],
+  "issue": "10",
+  "key": "sandve2013",
+  "pages": "e1003285",
+  "title": "Ten Simple Rules for Reproducible Computational Research",
+  "venue": "PLoS Computational Biology",
+  "volume": "9",
+  "year": 2013
+ },
+ "10.1371/journal.pcbi.1005265": {
+  "authors": [
+   [
+    "List",
+    "Markus"
+   ],
+   [
+    "Ebert",
+    "Peter"
+   ],
+   [
+    "Albrecht",
+    "Felipe"
+   ]
+  ],
+  "issue": "1",
+  "key": "list2017",
+  "pages": "e1005265",
+  "title": "Ten Simple Rules for Developing Usable Software in Computational Biology",
+  "venue": "PLOS Computational Biology",
+  "volume": "13",
+  "year": 2017
+ },
+ "10.1371/journal.pcbi.1005412": {
+  "authors": [
+   [
+    "Taschuk",
+    "Morgan"
+   ],
+   [
+    "Wilson",
+    "Greg"
+   ]
+  ],
+  "issue": "4",
+  "key": "taschuk2017",
+  "pages": "e1005412",
+  "title": "Ten simple rules for making research software more robust",
+  "venue": "PLOS Computational Biology",
+  "volume": "13",
+  "year": 2017
+ },
+ "10.1371/journal.pcbi.1006561": {
+  "authors": [
+   [
+    "Lee",
+    "Benjamin D."
+   ]
+  ],
+  "issue": "12",
+  "key": "lee2018",
+  "pages": "e1006561",
+  "title": "Ten simple rules for documenting scientific software",
+  "venue": "PLOS Computational Biology",
+  "volume": "14",
+  "year": 2018
+ },
+ "10.1371/journal.pcbi.1008259": {
+  "authors": [
+   [
+    "Hattab",
+    "Georges"
+   ],
+   [
+    "Rhyne",
+    "Theresa-Marie"
+   ],
+   [
+    "Heider",
+    "Dominik"
+   ]
+  ],
+  "issue": "10",
+  "key": "hattab2020",
+  "pages": "e1008259",
+  "title": "Ten simple rules to colorize biological data visualization",
+  "venue": "PLOS Computational Biology",
+  "volume": "16",
+  "year": 2020
+ },
+ "10.1371/journal.pcbi.1009481": {
+  "authors": [
+   [
+    "Hunter-Zinck",
+    "Haley"
+   ],
+   [
+    "de Siqueira",
+    "Alexandre Fioravante"
+   ],
+   [
+    "Vásquez",
+    "Váleri N."
+   ],
+   [
+    "Barnes",
+    "Richard"
+   ],
+   [
+    "Martinez",
+    "Ciera C."
+   ]
+  ],
+  "issue": "11",
+  "key": "hunterzinck2021",
+  "pages": "e1009481",
+  "title": "Ten simple rules on writing clean and reliable open-source scientific software",
+  "venue": "PLOS Computational Biology",
+  "volume": "17",
+  "year": 2021
+ },
+ "10.1371/journal.pcbi.1010622": {
+  "authors": [
+   [
+    "Durant",
+    "Eloi"
+   ],
+   [
+    "Rouard",
+    "Mathieu"
+   ],
+   [
+    "Ganko",
+    "Eric W."
+   ],
+   [
+    "Muller",
+    "Cedric"
+   ],
+   [
+    "Cleary",
+    "Alan M."
+   ],
+   [
+    "Farmer",
+    "Andrew D."
+   ],
+   [
+    "Conte",
+    "Matthieu"
+   ],
+   [
+    "Sabot",
+    "Francois"
+   ]
+  ],
+  "issue": "11",
+  "key": "durant2022",
+  "pages": "e1010622",
+  "title": "Ten simple rules for developing visualization tools in genomics",
+  "venue": "PLOS Computational Biology",
+  "volume": "18",
+  "year": 2022
+ },
+ "10.1371/journal.pntd.0000272": {
+  "authors": [
+   [
+    "Khan",
+    "Asif M."
+   ],
+   [
+    "Miotto",
+    "Olivo"
+   ],
+   [
+    "Nascimento",
+    "Eduardo J. M."
+   ],
+   [
+    "Srinivasan",
+    "K. N."
+   ],
+   [
+    "Heiny",
+    "A. T."
+   ],
+   [
+    "Zhang",
+    "Guang Lan"
+   ],
+   [
+    "Marques",
+    "E. T."
+   ],
+   [
+    "Tan",
+    "Tin Wee"
+   ],
+   [
+    "Brusic",
+    "Vladimir"
+   ],
+   [
+    "Salmon",
+    "Jerome"
+   ],
+   [
+    "August",
+    "J. Thomas"
+   ]
+  ],
+  "issue": "8",
+  "key": "khan2008",
+  "pages": "e272",
+  "title": "Conservation and Variability of Dengue Virus Proteins: Implications for Vaccine Design",
+  "venue": "PLoS Neglected Tropical Diseases",
+  "volume": "2",
+  "year": 2008
+ },
+ "10.1371/journal.pone.0059994": {
+  "authors": [
+   [
+    "Hu",
+    "Yongli"
+   ],
+   [
+    "Tan",
+    "Paul ThiamJoo"
+   ],
+   [
+    "Tan",
+    "Tin Wee"
+   ],
+   [
+    "August",
+    "J. Thomas"
+   ],
+   [
+    "Khan",
+    "Asif M."
+   ]
+  ],
+  "issue": "4",
+  "key": "hu2013",
+  "pages": "e59994",
+  "title": "Dissecting the Dynamics of HIV-1 Protein Sequence Diversity",
+  "venue": "PLoS ONE",
+  "volume": "8",
+  "year": 2013
+ },
+ "10.1371/journal.pone.0163962": {
+  "authors": [
+   [
+    "Shen",
+    "Wei"
+   ],
+   [
+    "Le",
+    "Shuai"
+   ],
+   [
+    "Li",
+    "Yan"
+   ],
+   [
+    "Hu",
+    "Fuquan"
+   ]
+  ],
+  "issue": "10",
+  "key": "shen2016",
+  "pages": "e0163962",
+  "title": "SeqKit: A Cross-Platform and Ultrafast Toolkit for FASTA/Q File Manipulation",
+  "venue": "PLOS ONE",
+  "volume": "11",
+  "year": 2016
+ },
+ "10.1371/journal.pone.0177459": {
+  "authors": [
+   [
+    "Kurtzer",
+    "Gregory M."
+   ],
+   [
+    "Sochat",
+    "Vanessa"
+   ],
+   [
+    "Bauer",
+    "Michael W."
+   ]
+  ],
+  "issue": "5",
+  "key": "kurtzer2017",
+  "pages": "e0177459",
+  "title": "Singularity: Scientific containers for mobility of compute",
+  "venue": "PLOS ONE",
+  "volume": "12",
+  "year": 2017
+ },
+ "10.1371/journal.pone.0309210": {
+  "authors": [
+   [
+    "Leo",
+    "Simone"
+   ],
+   [
+    "Crusoe",
+    "Michael R."
+   ],
+   [
+    "Rodríguez-Navas",
+    "Laura"
+   ],
+   [
+    "Sirvent",
+    "Raül"
+   ],
+   [
+    "Kanitz",
+    "Alexander"
+   ],
+   [
+    "De Geest",
+    "Paul"
+   ],
+   [
+    "Wittner",
+    "Rudolf"
+   ],
+   [
+    "Pireddu",
+    "Luca"
+   ],
+   [
+    "Garijo",
+    "Daniel"
+   ],
+   [
+    "Fernández",
+    "José M."
+   ],
+   [
+    "Colonnelli",
+    "Iacopo"
+   ],
+   [
+    "Gallo",
+    "Matej"
+   ],
+   [
+    "Ohta",
+    "Tazro"
+   ],
+   [
+    "Suetake",
+    "Hirotaka"
+   ],
+   [
+    "Capella-Gutierrez",
+    "Salvador"
+   ],
+   [
+    "de Wit",
+    "Renske"
+   ],
+   [
+    "Kinoshita",
+    "Bruno P."
+   ],
+   [
+    "Soiland-Reyes",
+    "Stian"
+   ]
+  ],
+  "issue": "9",
+  "key": "leo2024",
+  "pages": "e0309210",
+  "title": "Recording provenance of workflow runs with RO-Crate",
+  "venue": "PLOS ONE",
+  "volume": "19",
+  "year": 2024
+ },
+ "10.1371/journal.ppat.0030157": {
+  "authors": [
+   [
+    "Rolland",
+    "Morgane"
+   ],
+   [
+    "Nickle",
+    "David C"
+   ],
+   [
+    "Mullins",
+    "James I"
+   ]
+  ],
+  "issue": "11",
+  "key": "rolland2007",
+  "pages": "e157",
+  "title": "HIV-1 Group M Conserved Elements Vaccine",
+  "venue": "PLoS Pathogens",
+  "volume": "3",
+  "year": 2007
+ },
+ "10.14778/2732951.2732953": {
+  "authors": [
+   [
+    "Jugel",
+    "Uwe"
+   ],
+   [
+    "Jerzak",
+    "Zbigniew"
+   ],
+   [
+    "Hackenbroich",
+    "Gregor"
+   ],
+   [
+    "Markl",
+    "Volker"
+   ]
+  ],
+  "issue": "10",
+  "key": "jugel2014",
+  "pages": "797-808",
+  "title": "M4",
+  "venue": "Proceedings of the VLDB Endowment",
+  "volume": "7",
+  "year": 2014
+ },
+ "10.17487/RFC4180": {
+  "authors": [
+   [
+    "Shafranovich",
+    "Y."
+   ]
+  ],
+  "issue": null,
+  "key": "rfc4180",
+  "pages": null,
+  "title": "Common Format and MIME Type for Comma-Separated Values (CSV) Files",
+  "venue": "RFC 4180",
+  "volume": null,
+  "year": 2005
+ },
+ "10.17487/RFC6596": {
+  "authors": [
+   [
+    "Ohye",
+    "M."
+   ],
+   [
+    "Kupke",
+    "J."
+   ]
+  ],
+  "issue": null,
+  "key": "rfc6596",
+  "pages": null,
+  "title": "The Canonical Link Relation",
+  "venue": "RFC 6596",
+  "volume": null,
+  "year": 2012
+ },
+ "10.17487/RFC7322": {
+  "authors": [
+   [
+    "Flanagan",
+    "H."
+   ],
+   [
+    "Ginoza",
+    "S."
+   ]
+  ],
+  "issue": null,
+  "key": "rfc7322",
+  "pages": null,
+  "title": "RFC Style Guide",
+  "venue": "RFC 7322",
+  "volume": null,
+  "year": 2014
+ },
+ "10.17487/RFC8259": {
+  "authors": [
+   [
+    "Bray",
+    "Tim"
+   ]
+  ],
+  "issue": null,
+  "key": "rfc8259",
+  "pages": null,
+  "title": "The JavaScript Object Notation (JSON) Data Interchange Format",
+  "venue": "RFC 8259",
+  "volume": null,
+  "year": 2017
+ },
+ "10.17487/RFC9309": {
+  "authors": [
+   [
+    "Koster",
+    "M."
+   ],
+   [
+    "Illyes",
+    "G."
+   ],
+   [
+    "Zeller",
+    "H."
+   ],
+   [
+    "Sassman",
+    "L."
+   ]
+  ],
+  "issue": null,
+  "key": "rfc9309",
+  "pages": null,
+  "title": "Robots Exclusion Protocol",
+  "venue": "RFC 9309",
+  "volume": null,
+  "year": 2022
+ },
+ "10.18637/jss.v059.i10": {
+  "authors": [
+   [
+    "Wickham",
+    "Hadley"
+   ]
+  ],
+  "issue": "10",
+  "key": "wickham2014",
+  "pages": "1-23",
+  "title": "Tidy Data",
+  "venue": "Journal of Statistical Software",
+  "volume": "59",
+  "year": 2014
+ },
+ "10.1890/11-1952.1": {
+  "authors": [
+   [
+    "Chao",
+    "Anne"
+   ],
+   [
+    "Jost",
+    "Lou"
+   ]
+  ],
+  "issue": "12",
+  "key": "chao2012",
+  "pages": "2533-2547",
+  "title": "Coverage-based rarefaction and extrapolation: standardizing samples by completeness rather than size",
+  "venue": "Ecology",
+  "volume": "93",
+  "year": 2012
+ },
+ "10.2307/1967627": {
+  "authors": [
+   [
+    "Van Vleck",
+    "Edward B."
+   ]
+  ],
+  "issue": "1/4",
+  "key": "vanvleck1901",
+  "pages": "1-18",
+  "title": "On the Convergence of the Continued Fraction of Gauss and Other Continued Fractions",
+  "venue": "The Annals of Mathematics",
+  "volume": "3",
+  "year": 1901
+ },
+ "10.2307/2333344": {
+  "authors": [
+   [
+    "Good",
+    "I. J."
+   ]
+  ],
+  "issue": "3/4",
+  "key": "good1953",
+  "pages": "237-264",
+  "title": "The Population Frequencies of Species and the Estimation of Population Parameters",
+  "venue": "Biometrika",
+  "volume": "40",
+  "year": 1953
+ },
+ "10.32614/RJ-2015-022": {
+  "authors": [
+   [
+    "Hankin",
+    "Robin K. S."
+   ]
+  ],
+  "issue": "2",
+  "key": "hankin2015",
+  "pages": "81-88",
+  "title": "Numerical Evaluation of the Gauss Hypergeometric Function with the hypergeo Package",
+  "venue": "The R Journal",
+  "volume": "7",
+  "year": 2015
+ },
+ "10.3389/fbinf.2022.793819": {
+  "authors": [
+   [
+    "Weiskopf",
+    "Daniel"
+   ]
+  ],
+  "issue": null,
+  "key": "weiskopf2022",
+  "pages": "793819",
+  "title": "Uncertainty Visualization: Concepts, Methods, and Applications in Biological Data Visualization",
+  "venue": "Frontiers in Bioinformatics",
+  "volume": "2",
+  "year": 2022
+ },
+ "10.59161/AUEZ1291": {
+  "authors": [
+   [
+    "Bureau International des Poids et Mesures",
+    ""
+   ]
+  ],
+  "issue": null,
+  "key": "bipm2019",
+  "pages": null,
+  "title": "The International System of Units (SI), 9th edition",
+  "venue": "BIPM",
+  "volume": null,
+  "year": 2019
+ },
+ "10.7717/peerj-cs.86": {
+  "authors": [
+   [
+    "Smith",
+    "Arfon M."
+   ],
+   [
+    "Katz",
+    "Daniel S."
+   ],
+   [
+    "Niemeyer",
+    "Kyle E."
+   ],
+   [
+    "FORCE11 Software Citation Working Group",
+    ""
+   ]
+  ],
+  "issue": null,
+  "key": "smith2016",
+  "pages": "e86",
+  "title": "Software citation principles",
+  "venue": "PeerJ Computer Science",
+  "volume": "2",
+  "year": 2016
+ },
+ "10.7717/peerj.7954": {
+  "authors": [
+   [
+    "Abd Raman",
+    "Hadia Syahirah"
+   ],
+   [
+    "Tan",
+    "Swan"
+   ],
+   [
+    "August",
+    "Joseph Thomas"
+   ],
+   [
+    "Khan",
+    "Asif M."
+   ]
+  ],
+  "issue": null,
+  "key": "raman2020",
+  "pages": "e7954",
+  "title": "Dynamics of Influenza A (H5N1) virus protein sequence diversity",
+  "venue": "PeerJ",
+  "volume": "7",
+  "year": 2020
+ }
+}

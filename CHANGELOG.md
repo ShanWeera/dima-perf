@@ -1,30 +1,138 @@
 # Changelog
 
-All notable changes to DiMA will be documented in this file.
+All notable changes to this project are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/), and this
+project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). The
+"Methodology" group lists every change that can alter a result, with the sources behind it.
 
-## [Unreleased]
+## [1.0.0] - Unreleased
+
+First release of the Rust implementation of DiMA (Tharanga et al. 2025, *Briefings in
+Bioinformatics* 26(1):bbae607, [doi:10.1093/bib/bbae607](https://doi.org/10.1093/bib/bbae607)).
+It replaces every earlier, unreleased version of this repository; results of those versions
+are not comparable (see "Fixed").
+
+### Methodology
+
+- **Entropy correction (`--estimator dima`, the default) follows the paper's Fig. 2 exactly**:
+  subsample sizes of R% of the sequences, with R from max(50, ⌈100·T/N⌉) rounded up to a
+  multiple of 5 in steps of 5, plus 100%; sizes ⌈R·N/100⌉; sampling with replacement; the
+  entropy regressed on 1/n; the intercept is the estimate, with the paper's fallbacks (raw
+  entropy when N ≤ T or with fewer than 5 points). It is computed as the
+  exact expectation of the random intercept, so results are reproducible bit for bit, with the
+  random intercept's mean and no resampling noise (Rao 1945; Blackwell 1947,
+  [doi:10.1214/aoms/1177730497](https://doi.org/10.1214/aoms/1177730497)): the limit of
+  averaging many random subsets, as DiMA's predecessors did (Khan et al. 2017,
+  [doi:10.1186/s12920-017-0301-2](https://doi.org/10.1186/s12920-017-0301-2)). The expected
+  intercept is never negative, so the paper's negative-intercept rule never applies; DiMA
+  v5.0.9 applied it to each random run, which raised its average at near-conserved positions
+  (MERS-CoV spike protein eligible mean 0.126 bits here, about 0.142 averaged over v5.0.9 runs;
+  HIV-1 pol unchanged). Every reported entropy is checked to be a finite number of at least 0
+  bits; a violation is an internal error (exit 1), never replaced by another value. On the paper's HIV-1 pol dataset the eligible mean is 5.3504 bits (paper: ~5.35).
+- **Alternative estimators**: `chao-wang-jost` (Chao, Wang & Jost 2013,
+  [doi:10.1111/2041-210X.12108](https://doi.org/10.1111/2041-210X.12108)), `miller-madow`
+  (Miller 1955) and `raw` (plug-in). Each position records the estimator or fallback used.
+  The second term of Chao–Wang–Jost is evaluated exactly in a time independent of the number of
+  sequences (hypergeometric series or Gauss's continued fraction: Hankin 2015,
+  [doi:10.32614/RJ-2015-022](https://doi.org/10.32614/RJ-2015-022); Van Vleck 1901,
+  [doi:10.2307/1967627](https://doi.org/10.2307/1967627); Henrici & Pflüger 1966,
+  [doi:10.1007/BF02166031](https://doi.org/10.1007/BF02166031); Jones & Thron 1974,
+  [doi:10.1090/S0025-5718-1974-0373265-5](https://doi.org/10.1090/S0025-5718-1974-0373265-5);
+  Alzer 1997, [doi:10.1090/S0025-5718-97-00807-7](https://doi.org/10.1090/S0025-5718-97-00807-7)),
+  where summing it over every sequence would cost about 10% of a run and lose up to 8 digits.
+- **Sample coverage** per position (Chao & Jost 2012, Eq. 4a,
+  [doi:10.1890/11-1952.1](https://doi.org/10.1890/11-1952.1)), with an optional
+  `--min-coverage` flag.
+- **Positions without support** (NS) have no entropy (`null`/`NA`), never 0 bits; summaries
+  cover positions with support above T only, with the paper's averaging also reported as
+  `all_positions_summary`.
+- **Lowest entropy** is reported next to the mean and the highest, each with its position and
+  the number of tied positions (first position wins).
+- **Historically conserved sequences** follow the DiMA lineage (Hu et al. 2013,
+  [doi:10.1371/journal.pone.0059994](https://doi.org/10.1371/journal.pone.0059994); Abd Raman
+  et al. 2020, [doi:10.7717/peerj.7954](https://doi.org/10.7717/peerj.7954)): positions whose
+  Index incidence reaches the threshold (above 50% and at most 100%, compared exactly) are
+  joined when their k-mers overlap or abut and agree; regions that include positions with
+  support ≤ T are flagged, and each region reports the exact 95% Clopper–Pearson lower bound
+  of its conservation (Clopper & Pearson 1934,
+  [doi:10.1093/biomet/26.4.404](https://doi.org/10.1093/biomet/26.4.404)).
+  `--hcs-eligible-only` builds regions from positions with support above T only.
+- **Alphabet**: detected with Easel's rules as in HMMER (Eddy 2011,
+  [doi:10.1371/journal.pcbi.1002195](https://doi.org/10.1371/journal.pcbi.1002195)) or set
+  with `--alphabet`; lower case is folded to upper case; T and U are one symbol; gaps
+  (`- . _`), missing data (`~ ?`), stops (`* $ ^`), frameshifts (`#`) and ambiguity codes
+  (Cornish-Bowden 1985, [doi:10.1093/nar/13.9.3021](https://doi.org/10.1093/nar/13.9.3021);
+  Los Alamos HIV Sequence Database symbols) exclude the k-mers that contain them; protein U and
+  O are residues.
+- **Default k** follows the alphabet: 9 for proteins, 27 for nucleotides. Any k from 1 to the
+  alignment length is accepted.
+- **Header metadata**: values are split on `|`, cleaned (invisible characters removed, white
+  space trimmed, Unicode NFC; Unicode Standard Annex #15) and empty values get the fill value.
 
 ### Added
 
-- Core diversity analysis engine with Shannon's entropy and sample-size bias correction
-- Diversity motif classification (Index, Major, Minor, Unique)
-- HCS (Highly Conserved Sequences) extraction with threshold-based filtering and stitching
-- Multiple output formats: JSON, TSV (17-column), JSONL, binary `.dima`
-- Binary format with LZ4/Zstd compression and string interning
-- Transparent decompression of gz/bz2/xz/zst input files via needletail
-- Metadata parsing and per-variant aggregation with automatic columnar storage
-- Memory-mapped I/O with configurable heuristic (`DIMA_FORCE_MMAP`)
-- Disk-backed matrix mode for datasets exceeding available RAM
-- Parallel computation via Rayon thread pool
-- Character validation modes (strict/permissive/report) with configurable lowercase handling
-- Shell completion generation for bash/zsh/fish/powershell/elvish
-- Semantic exit codes (0=success, 1=runtime, 2=usage, 3=io, 130=cancelled)
-- Cooperative cancellation via Ctrl+C with double-press force quit
-- `view` command for binary format conversion and re-compression
-- Native desktop GUI (egui) with interactive visualization
-- Atomic file writes (write-to-temp then rename) preventing corrupt output
-- SIMD-accelerated string operations for sequence processing
-- Comprehensive CLI help text with short (-h) and long (--help) variants
+- `dima analyze`, `view`, `hcs`, `cite` and `completions` subcommands; `--run-report` writes
+  a separate JSON record of how a run went (versions, command, times, threads, resources,
+  checksums) without identifying details.
+- Outputs: complete JSON with provenance, JSONL (one position per line), four tidy TSV tables
+  (positions, variants, metadata, conserved sequences) and conserved-sequence JSON, each
+  optionally compressed (`.gz`, `.zst`); JSON Schemas (Draft 2020-12) for every JSON output.
+- Typed diagnostics in the results and on standard error, each with a count, examples and a
+  hint; `--validation strict|permissive|report`.
+- Input: plain, gzip/BGZF, bzip2 and zstd files (xz and other formats are refused with a hint
+  on how to convert them), concatenated streams, standard input, pipes and FIFOs; the SHA-256
+  of the stored input is recorded.
+- `dima cite` prints the references in text, BibTeX, RIS or CFF; `--from results.json`
+  prints a methods paragraph and the references of that run. `CITATION.cff` and
+  `.zenodo.json` describe the software.
+- Interruptions: SIGINT, SIGTERM and SIGHUP (and SIGUSR1, SIGUSR2, SIGXCPU and SIGALRM, which
+  batch systems send before a limit) stop the run, remove unfinished outputs and end it by the
+  same signal; outputs are written to temporary files and replace their destinations only when
+  complete, keeping the permissions of a replaced file.
+- Batch-scheduler-aware default thread count (Slurm, PBS, SGE, LSF). When the system refuses
+  some worker threads (a process, thread or container limit), the analysis continues with those
+  it started and warns (`threads_refused`); the run report records both numbers.
+- Messages, `--help` (apart from authors' names) and the progress line are plain ASCII, so they
+  read the same in any locale, pager, Windows console or screen reader;
+  `--progress auto|plain|off` (or `DIMA_PROGRESS`) chooses between a line redrawn on terminals,
+  appended lines for screen readers and logs, and nothing; colour follows `--color`,
+  `NO_COLOR`, `FORCE_COLOR` and `CLICOLOR_FORCE`.
+- Numerical accuracy is measured and documented up to 17.5 million sequences per position:
+  rounding error reaches at most 5e-11 relative, at least 10^10 times below the sampling error
+  (Darriba et al. 2018,
+  [doi:10.1093/molbev/msy014](https://doi.org/10.1093/molbev/msy014)). A fix for the last
+  digits was prototyped and is deferred, because it would change stored digits without
+  changing any scientific result.
+- Desktop application on the same library.
+
+### Changed
+
+- New command-line names (`-s/--support-threshold`, `-a/--alphabet`, `--estimator`,
+  `--query-name`, `--hcs-min-incidence`, …); the support threshold defaults to 100 as in the
+  paper.
+- Exit codes: 0 success, 1 internal error, 2 usage, 3 input/output or system error (such as a
+  refused thread), 4 invalid input data, 130/143/129 interrupted.
+- Results are identical across operating systems, thread counts and batch sizes, and for
+  wrapped, lower-case, CRLF or compressed copies of the same alignment.
+- Lines before the first record that are blank or hold only white space are skipped (DiMA
+  v5.0.9 stopped at any line before the first header); other text before it, including an
+  indented `>`, is an error with its line and column.
+- Memory grows with the diversity of the alignment, not with the number of sequences times
+  its length.
+
+### Removed
+
+- The binary `.dima` format, memory-mapping and disk-backed matrix options
+  (`--low-memory`, `--force-ram`, `--temp-dir`), `--allow-lowercase`, `--report-invalid`,
+  `--no-header` and the record-length and sequence-count limits.
+
+### Fixed
+
+- Line-wrapped FASTA files were read with line breaks inside k-mers.
+- Lower-case residues were rejected, and malformed records were skipped silently.
+- Concatenated bzip2 streams were truncated after the first stream.
+- The equal-length check compared k-mer counts instead of alignment columns.
+- k was limited to 14 (protein) or 27 (nucleotide).
+- Several options had no effect; the desktop app and the command line disagreed on defaults
+  and alphabets.

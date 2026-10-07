@@ -1,10 +1,12 @@
-# pnpm 11+ workspace manifest (required even for single-package projects)
+# pnpm settings of the documentation site (a single package).
 packages:
   - "."
 
-# Allow postinstall scripts for packages that need platform-specific binaries.
-# esbuild: Astro/Vite's JavaScript bundler (downloads native binary)
-# sharp: Astro's image optimization library (downloads native binary)
+# Package scripts run in pnpm's built-in POSIX shell on every operating system, so that
+# `VARIABLE=value command` in package.json also works on Windows.
+shellEmulator: true
+
+# The only dependency allowed to run an install script: esbuild (used by Vite and Astro) checks
+# that its platform-specific binary is installed.
 allowBuilds:
   esbuild: true
-  sharp: true

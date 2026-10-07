@@ -1,0 +1,54 @@
+{% set name = "dima" %}
+{% set version = "1.0.0" %}
+
+package:
+  name: {{ name }}
+  version: {{ version }}
+
+source:
+  url: https://github.com/ShanWeera/dima-perf/archive/refs/tags/v{{ version }}.tar.gz
+  # Fill in after tagging: curl -sL <url> | sha256sum
+  sha256: 0000000000000000000000000000000000000000000000000000000000000000
+
+build:
+  number: 0
+  run_exports:
+    - {{ pin_subpackage(name, max_pin="x") }}
+
+requirements:
+  build:
+    - {{ compiler('rust') }}
+    - {{ compiler('c') }}
+    - cargo-bundle-licenses
+
+test:
+  source_files:
+    - tests/golden/tiny/input.fasta
+    - tests/golden/tiny/tables/input.positions.tsv
+  commands:
+    - dima --version
+    - dima analyze --help
+    - dima analyze -i tests/golden/tiny/input.fasta -a protein -k 3 -s 4 --validation permissive --header-format 'Accession|Host|Year' --metadata-fields 'Host|Year' --hcs-min-incidence 60 --tsv-dir out -q
+    - cmp out/input.positions.tsv tests/golden/tiny/tables/input.positions.tsv
+
+about:
+  home: https://github.com/ShanWeera/dima-perf
+  license: MIT
+  license_family: MIT
+  license_file:
+    - LICENSE
+    - THIRDPARTY.yml
+  summary: "DiMA: sequence diversity dynamics analyser for viruses"
+  description: |
+    DiMA quantifies the diversity of viral protein or nucleotide alignments by k-mer position:
+    Shannon entropy with a sample-size correction, Index/Major/Minor/Unique motif
+    classification, metadata stratification and historically conserved sequences
+    (Tharanga et al. 2025, Briefings in Bioinformatics 26(1):bbae607).
+  doc_url: https://shanweera.github.io/dima-perf/
+  dev_url: https://github.com/ShanWeera/dima-perf
+
+extra:
+  identifiers:
+    - doi:10.1093/bib/bbae607
+  recipe-maintainers:
+    - ShanWeera

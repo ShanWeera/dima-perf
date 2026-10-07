@@ -1,0 +1,72 @@
+---
+title: Citing DiMA
+description: How to cite DiMA — the paper, the software version you used, and the references of the methods a run used — in text, BibTeX, RIS or CFF.
+---
+
+import CitationBibtex from '../../../components/CitationBibtex.astro';
+
+If you use DiMA, please cite **the paper** that describes the method [@tharanga2025] and **the
+version of the software** you used. Citing the version lets readers reproduce your results
+exactly; citing the paper credits the method.
+
+## The citation
+
+`dima cite` prints both, in the style of the life-science literature:
+
+```sh
+dima cite                    # plain text
+dima cite --format bibtex    # for LaTeX and most reference managers
+dima cite --format ris       # for EndNote, Zotero, Mendeley
+dima cite --format cff       # Citation File Format
+```
+
+The same entries in BibTeX, for this version of DiMA:
+
+<CitationBibtex />
+
+The repository's `CITATION.cff` holds the same information (GitHub shows it as "Cite this
+repository"), with the paper as the preferred citation and the references of every method DiMA
+can use.
+
+## The methods of a run
+
+A DiMA analysis can use several methods, each with its own sources: the entropy estimator, the
+sample coverage, the motif definitions, alphabet detection, nucleotide ambiguity codes. Every
+results file lists the references of the methods that run actually used, in `run.references`.
+`dima cite --from` turns them into a methods paragraph and a numbered reference list, ready to
+adapt for a manuscript:
+
+```sh
+dima cite --from results.json            # methods paragraph and references, plain text
+dima cite --from results.json --format bibtex
+dima cite --from results.json --from conserved.json   # with the conserved sequences
+```
+
+Conserved sequences are computed separately (`--hcs-output` or `dima hcs`), so their method and
+references are in their own file; give it as a second `--from` to add a sentence on them and
+their sources (the Clopper–Pearson bounds, the joining rule) to the text and the list.
+
+For the MERS-CoV spike sample with the defaults, the paragraph reads:
+
+> Sequence diversity was analysed with DiMA (Tharanga et al. 2025) using dima 1.0.0. In the
+> protein alignment of 191 sequences (1353 columns), the overlapping 9-mers at each of the 1345
+> positions were counted; positions supported by more than 100 sequences were eligible for the
+> corrected entropy and the summary statistics. Shannon entropy (Shannon 1948) was estimated with
+> the rarefaction-regression correction of Tharanga et al. (2025, Fig. 2), computed as its exact
+> expectation (Rao 1945; Blackwell 1947), and sample coverage after Chao & Jost (2012). Variants
+> were classified as Index, Major, Minor and Unique motifs (Hu et al. 2013).
+
+The desktop app offers the same as **Methods & references** and **References (BibTeX)** exports,
+which include the conserved sequences at the threshold shown, and **Cite DiMA** in its Help menu.
+
+## Everything else
+
+Every reference cited by DiMA's help, desktop app and these pages comes from one registry in the
+source code and is listed in the [bibliography](/reference/bibliography/). If your analysis
+relies on a specific method — for example the Chao–Wang–Jost estimator, or the Clopper–Pearson
+bounds of conserved sequences — cite its original source too; `dima cite --from` includes it
+when the run used it (for conserved sequences, when their file is given too).
+
+## References
+
+[^ref]

@@ -1,404 +1,465 @@
+# Release (plan §15; D67, D79, D82, D91, D92, D95, D102).
+#
+# Pushing a tag vX.Y.Z runs the full CI suite, checks that the tag matches the workspace version
+# and that CHANGELOG.md has a dated section for it, builds every archive and package, smoke-tests
+# the Linux builds on old and new distributions, then creates a *draft* release, uploads the
+# assets with SHA256SUMS and build-provenance attestations, and publishes it (immutable
+# releases: nothing is added after publication). No caches are used in release jobs.
+
 name: Release
 
 on:
-  release:
-    types: [created]
+  # Tag pushes only: the CI gate (a reusable workflow) checks out the triggering commit, which
+  # for a tag push is the tagged commit. A failed release is re-run from the Actions page.
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
-  BINARY_NAME: dima
-
-permissions:
-  contents: write
+  CARGO_INCREMENTAL: 0
+  RELEASE_TAG: ${{ github.ref_name }}
+  # Release builds link the documentation of their own version (/vX.Y/) in --help, the app and
+  # their messages (D113); other builds link /latest/.
+  DIMA_RELEASE: "1"
 
 jobs:
-  # Run tests before building release artifacts to prevent broken binaries
-  test-gate:
-    name: Test Gate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install system dependencies (egui/wgpu)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libxkbcommon-dev libwayland-dev libxcb-render0-dev libxcb-shape0-dev \
-            libxcb-xfixes0-dev libxrandr-dev libxi-dev libxtst-dev libx11-dev \
-            libgl-dev libegl-dev libvulkan-dev
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Rust tests (full workspace)
-        run: cargo test --workspace --locked
-
-  # Build CLI - builds CLI for all target platforms
-  build-cli:
-    name: Build ${{ matrix.target }}
-    needs: test-gate
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Linux x86_64 (glibc)
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            archive: tar.gz
-            platform_name: Linux x86_64
-
-          # Linux x86_64 (musl - static binary)
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            archive: tar.gz
-            platform_name: Linux x86_64 (musl)
-            cross: true
-
-          # Linux ARM64 (glibc)
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            archive: tar.gz
-            platform_name: Linux ARM64
-            cross: true
-
-          # Linux ARM64 (musl - static binary)
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-latest
-            archive: tar.gz
-            platform_name: Linux ARM64 (musl)
-            cross: true
-
-          # macOS Intel
-          - target: x86_64-apple-darwin
-            os: macos-15-intel
-            archive: tar.gz
-            platform_name: macOS Intel (x86_64)
-
-          # macOS Apple Silicon
-          - target: aarch64-apple-darwin
-            os: macos-14
-            archive: tar.gz
-            platform_name: macOS Apple Silicon (ARM64)
-
-          # Windows x86_64
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            archive: zip
-            platform_name: Windows x86_64
-
-          # Windows ARM64
-          - target: aarch64-pc-windows-msvc
-            os: windows-latest
-            archive: zip
-            platform_name: Windows ARM64
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Install cross-compilation tools
-        if: matrix.cross
-        uses: taiki-e/install-action@cross
-
-      - name: Install musl tools (Linux musl targets)
-        if: contains(matrix.target, 'musl') && !matrix.cross
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
-
-      - name: Build binary (native)
-        if: ${{ !matrix.cross }}
-        run: cargo build --release --locked --target ${{ matrix.target }}
-
-      - name: Build binary (cross)
-        if: matrix.cross
-        run: cross build --release --locked --target ${{ matrix.target }}
-
-      - name: Create archive directory
-        shell: bash
-        run: |
-          VERSION="${{ github.ref_name }}"
-          ARCHIVE_NAME="${{ env.BINARY_NAME }}-${VERSION}-${{ matrix.target }}"
-          mkdir -p "dist/${ARCHIVE_NAME}"
-          
-          # Copy binary
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            cp "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}.exe" "dist/${ARCHIVE_NAME}/"
-          else
-            cp "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}" "dist/${ARCHIVE_NAME}/"
-          fi
-          
-          # Copy documentation
-          cp README.md "dist/${ARCHIVE_NAME}/" 2>/dev/null || true
-          cp LICENSE "dist/${ARCHIVE_NAME}/" 2>/dev/null || true
-          cp BENCHMARK.md "dist/${ARCHIVE_NAME}/" 2>/dev/null || true
-
-      - name: Create tarball (Unix)
-        if: matrix.archive == 'tar.gz'
-        shell: bash
-        run: |
-          VERSION="${{ github.ref_name }}"
-          ARCHIVE_NAME="${{ env.BINARY_NAME }}-${VERSION}-${{ matrix.target }}"
-          cd dist
-          tar -czvf "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}"
-          echo "ASSET_PATH=dist/${ARCHIVE_NAME}.tar.gz" >> $GITHUB_ENV
-          echo "ASSET_NAME=${ARCHIVE_NAME}.tar.gz" >> $GITHUB_ENV
-
-      - name: Create zip archive (Windows)
-        if: matrix.archive == 'zip'
-        shell: pwsh
-        run: |
-          $VERSION = "${{ github.ref_name }}"
-          $ARCHIVE_NAME = "${{ env.BINARY_NAME }}-${VERSION}-${{ matrix.target }}"
-          Compress-Archive -Path "dist\${ARCHIVE_NAME}\*" -DestinationPath "dist\${ARCHIVE_NAME}.zip"
-          echo "ASSET_PATH=dist/${ARCHIVE_NAME}.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "ASSET_NAME=${ARCHIVE_NAME}.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: Upload release asset
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ env.ASSET_PATH }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Output artifact info
-        id: artifact-info
-        shell: bash
-        run: |
-          echo "platform_name=${{ matrix.platform_name }}" >> $GITHUB_OUTPUT
-          echo "asset_name=${{ env.ASSET_NAME }}" >> $GITHUB_OUTPUT
-          echo "target=${{ matrix.target }}" >> $GITHUB_OUTPUT
-
+  version:
+    name: Tag, version and changelog
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     outputs:
-      # Note: Matrix outputs only capture the last job's values
-      # We'll reconstruct the table in the update-release job
-      version: ${{ github.ref_name }}
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+      - id: v
+        shell: bash
+        run: |
+          version="${RELEASE_TAG#v}"
+          workspace=$(sed -n '/^\[workspace.package\]/,/^\[/{s/^version = "\(.*\)"/\1/p}' Cargo.toml)
+          if [ "$version" != "$workspace" ]; then
+            echo "::error::tag $RELEASE_TAG does not match the workspace version $workspace"
+            exit 1
+          fi
+          scripts/release/release-notes.sh "$version" > /dev/null
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
-  # Build dima-gui (egui native app) - builds for desktop platforms
-  # No frontend build step needed — single binary, no WebView.
-  build-dima-gui:
-    name: Build dima-gui ${{ matrix.target }}
-    needs: test-gate
+  ci:
+    name: Full CI suite
+    needs: version
+    # The documented local-path form of a reusable workflow in the same repository.
+    uses: ./.github/workflows/ci.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: read
+
+  man:
+    name: Man pages
+    needs: version
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        with:
+          toolchain: stable
+      - run: cargo xtask man --out-dir man
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: man
+          path: man/
+
+  cli:
+    name: CLI ${{ matrix.target }}
+    needs: [version, ci, man]
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Linux x86_64
+          # glibc 2.17 floor: built inside manylinux2014 (D91).
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            archive: tar.gz
-            platform_name: Linux x86_64
-
-          # macOS Intel
+            os: ubuntu-24.04
+            container: quay.io/pypa/manylinux2014_x86_64
+            glibc: "2.17"
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+            container: quay.io/pypa/manylinux_2_28_aarch64
+            glibc: "2.28"
+          # Static musl builds with mimalloc (D92).
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-24.04
+            musl: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+            musl: true
           - target: x86_64-apple-darwin
             os: macos-15-intel
-            archive: tar.gz
-            platform_name: macOS Intel (x86_64)
-
-          # macOS Apple Silicon
           - target: aarch64-apple-darwin
-            os: macos-14
-            archive: tar.gz
-            platform_name: macOS Apple Silicon (ARM64)
-
-          # Windows x86_64
+            os: macos-15
           - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            archive: zip
-            platform_name: Windows x86_64
-
+            os: windows-2025
+          - target: aarch64-pc-windows-msvc
+            os: windows-11-arm
+    env:
+      TARGET: ${{ matrix.target }}
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        with:
+          toolchain: stable
           targets: ${{ matrix.target }}
-
-      - name: Install Linux dependencies (egui/wgpu)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxkbcommon-dev libwayland-dev libxrandr-dev \
-            libxi-dev libxtst-dev libx11-dev libgl-dev libegl-dev libvulkan-dev
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Build dima-gui
-        run: cargo build --release --locked -p dima-gui --target ${{ matrix.target }}
-
-      - name: Create archive directory
-        shell: bash
-        run: |
-          VERSION="${{ github.ref_name }}"
-          ARCHIVE_NAME="dima-gui-${VERSION}-${{ matrix.target }}"
-          mkdir -p "dist/${ARCHIVE_NAME}"
-          
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            cp "target/${{ matrix.target }}/release/dima-gui.exe" "dist/${ARCHIVE_NAME}/"
-          else
-            cp "target/${{ matrix.target }}/release/dima-gui" "dist/${ARCHIVE_NAME}/"
-          fi
-          
-          cp README.md "dist/${ARCHIVE_NAME}/" 2>/dev/null || true
-          cp LICENSE "dist/${ARCHIVE_NAME}/" 2>/dev/null || true
-
-      - name: Create tarball (Unix)
-        if: matrix.archive == 'tar.gz'
-        shell: bash
-        run: |
-          VERSION="${{ github.ref_name }}"
-          ARCHIVE_NAME="dima-gui-${VERSION}-${{ matrix.target }}"
-          cd dist
-          tar -czvf "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}"
-          echo "ASSET_PATH=dist/${ARCHIVE_NAME}.tar.gz" >> $GITHUB_ENV
-          echo "ASSET_NAME=${ARCHIVE_NAME}.tar.gz" >> $GITHUB_ENV
-
-      - name: Create zip archive (Windows)
-        if: matrix.archive == 'zip'
-        shell: pwsh
-        run: |
-          $VERSION = "${{ github.ref_name }}"
-          $ARCHIVE_NAME = "dima-gui-${VERSION}-${{ matrix.target }}"
-          Compress-Archive -Path "dist\${ARCHIVE_NAME}\*" -DestinationPath "dist\${ARCHIVE_NAME}.zip"
-          echo "ASSET_PATH=dist/${ARCHIVE_NAME}.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "ASSET_NAME=${ARCHIVE_NAME}.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: Upload release asset
-        uses: softprops/action-gh-release@v2
+      - uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2.87.24
         with:
-          files: ${{ env.ASSET_PATH }}
+          tool: cargo-auditable@0.7.7,cargo-cyclonedx@0.5.9
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: man
+          path: man
+      - name: Install musl tools
+        if: matrix.musl
+        shell: bash
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends musl-tools
+          # musl-tools ships only `musl-gcc`; on arm64 hosts cc-rs would look for
+          # `aarch64-linux-musl-gcc` to build the C code of zstd-sys and libmimalloc-sys.
+          echo "CC_${TARGET//-/_}=musl-gcc" >> "$GITHUB_ENV"
+      - name: Build in a manylinux container (glibc ${{ matrix.glibc }})
+        if: matrix.container
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ matrix.container }}
+        run: |
+          docker run --rm -v "$PWD:/io" -w /io -e TARGET -e CARGO_INCREMENTAL -e DIMA_RELEASE "$IMAGE" bash -euo pipefail -c '
+            curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+            source "$HOME/.cargo/env"
+            cargo install --locked cargo-auditable@0.7.7
+            cargo auditable build --release --locked -p dima --target "$TARGET"
+          '
+          sudo chown -R "$(id -u):$(id -g)" target
+      - name: Build
+        if: ${{ !matrix.container }}
+        shell: bash
+        run: cargo auditable build --release --locked -p dima --target "$TARGET"
+      - name: Check the glibc floor (D91)
+        if: matrix.glibc
+        shell: bash
+        env:
+          FLOOR: ${{ matrix.glibc }}
+        run: |
+          newest=$(objdump -T "target/$TARGET/release/dima" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)
+          echo "newest glibc symbol: $newest (floor $FLOOR)"
+          [ "$(printf '%s\n%s\n' "$newest" "$FLOOR" | sort -V | tail -1)" = "$FLOOR" ]
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p dist
+          exe="target/$TARGET/release/dima"
+          case "$TARGET" in *windows*) exe="$exe.exe"; man="" ;; *) man="man" ;; esac
+          scripts/release/package-cli.sh "$TARGET" "$VERSION" "$exe" dist $man
+      - name: SBOM (CycloneDX)
+        shell: bash
+        run: |
+          name="dima-$VERSION-$TARGET.cdx"
+          cargo cyclonedx --manifest-path crates/dima/Cargo.toml --format json --all \
+            --target "$TARGET" --spec-version 1.5 --override-filename "$name"
+          sbom=$(find crates/dima -maxdepth 1 -name "$name*.json" | head -1)
+          test -n "$sbom"
+          mv "$sbom" "dist/$name.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cli-${{ matrix.target }}
+          path: dist/
 
-  # Update release body with download table
-  update-release:
-    name: Update Release Body
-    needs: [build-cli, build-dima-gui]
-    runs-on: ubuntu-latest
+  smoke:
+    name: Smoke test ${{ matrix.image }}
+    needs: [version, cli]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: "centos:7", target: x86_64-unknown-linux-gnu }
+          - { image: "rockylinux:8", target: x86_64-unknown-linux-gnu }
+          - { image: "rockylinux:9", target: x86_64-unknown-linux-gnu }
+          - { image: "ubuntu:20.04", target: x86_64-unknown-linux-gnu }
+          - { image: "ubuntu:24.04", target: x86_64-unknown-linux-gnu }
+          - { image: "debian:12", target: x86_64-unknown-linux-gnu }
+          - { image: "alpine:3", target: x86_64-unknown-linux-musl }
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      TARGET: ${{ matrix.target }}
+      IMAGE: ${{ matrix.image }}
     steps:
-      - name: Generate release body with download table
-        id: release-body
-        env:
-          VERSION: ${{ github.ref_name }}
-          REPO: ${{ github.repository }}
-        run: |
-          BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
-          
-          # Create the release body with download tables
-          cat << 'HEADER' > release_body.md
-          ## DiMA GUI (Native Desktop App — egui)
-          
-          Lightweight GPU-rendered native application. Single binary, no WebView.
-          
-          | Platform | Download |
-          |----------|----------|
-          HEADER
-          
-          echo "| Linux (x86_64) | [dima-gui-${VERSION}-x86_64-unknown-linux-gnu.tar.gz](${BASE_URL}/dima-gui-${VERSION}-x86_64-unknown-linux-gnu.tar.gz) |" >> release_body.md
-          echo "| macOS (Intel) | [dima-gui-${VERSION}-x86_64-apple-darwin.tar.gz](${BASE_URL}/dima-gui-${VERSION}-x86_64-apple-darwin.tar.gz) |" >> release_body.md
-          echo "| macOS (Apple Silicon) | [dima-gui-${VERSION}-aarch64-apple-darwin.tar.gz](${BASE_URL}/dima-gui-${VERSION}-aarch64-apple-darwin.tar.gz) |" >> release_body.md
-          echo "| Windows (x86_64) | [dima-gui-${VERSION}-x86_64-pc-windows-msvc.zip](${BASE_URL}/dima-gui-${VERSION}-x86_64-pc-windows-msvc.zip) |" >> release_body.md
-          
-          cat << 'CLI_HEADER' >> release_body.md
-          
-          ---
-          
-          ## DiMA CLI (Command-Line Tool)
-          
-          Download the CLI binary for your platform:
-          
-          | Platform | Architecture | Download |
-          |----------|--------------|----------|
-          CLI_HEADER
-          
-          # Add CLI download links for each platform
-          echo "| Linux | x86_64 (glibc) | [dima-${VERSION}-x86_64-unknown-linux-gnu.tar.gz](${BASE_URL}/dima-${VERSION}-x86_64-unknown-linux-gnu.tar.gz) |" >> release_body.md
-          echo "| Linux | x86_64 (musl/static) | [dima-${VERSION}-x86_64-unknown-linux-musl.tar.gz](${BASE_URL}/dima-${VERSION}-x86_64-unknown-linux-musl.tar.gz) |" >> release_body.md
-          echo "| Linux | ARM64 (glibc) | [dima-${VERSION}-aarch64-unknown-linux-gnu.tar.gz](${BASE_URL}/dima-${VERSION}-aarch64-unknown-linux-gnu.tar.gz) |" >> release_body.md
-          echo "| Linux | ARM64 (musl/static) | [dima-${VERSION}-aarch64-unknown-linux-musl.tar.gz](${BASE_URL}/dima-${VERSION}-aarch64-unknown-linux-musl.tar.gz) |" >> release_body.md
-          echo "| macOS | Intel (x86_64) | [dima-${VERSION}-x86_64-apple-darwin.tar.gz](${BASE_URL}/dima-${VERSION}-x86_64-apple-darwin.tar.gz) |" >> release_body.md
-          echo "| macOS | Apple Silicon (ARM64) | [dima-${VERSION}-aarch64-apple-darwin.tar.gz](${BASE_URL}/dima-${VERSION}-aarch64-apple-darwin.tar.gz) |" >> release_body.md
-          echo "| Windows | x86_64 | [dima-${VERSION}-x86_64-pc-windows-msvc.zip](${BASE_URL}/dima-${VERSION}-x86_64-pc-windows-msvc.zip) |" >> release_body.md
-          echo "| Windows | ARM64 | [dima-${VERSION}-aarch64-pc-windows-msvc.zip](${BASE_URL}/dima-${VERSION}-aarch64-pc-windows-msvc.zip) |" >> release_body.md
-          
-          # Add installation instructions
-          cat << 'FOOTER' >> release_body.md
-          
-          ### Quick Install (Unix/Linux/macOS)
-          
-          ```bash
-          # Download and extract (replace URL with your platform)
-          curl -LO <download-url>
-          tar -xzf dima-*.tar.gz
-          
-          # Move to PATH
-          sudo mv dima-*/dima /usr/local/bin/
-          
-          # Verify installation
-          dima --version
-          ```
-          
-          ### Quick Install (Windows PowerShell)
-          
-          ```powershell
-          # Download and extract
-          Invoke-WebRequest -Uri "<download-url>" -OutFile "dima.zip"
-          Expand-Archive -Path "dima.zip" -DestinationPath "."
-          
-          # Add to PATH or move to a directory in PATH
-          # Verify installation
-          .\dima.exe --version
-          ```
-          
-          ### Build from Source
-          
-          ```bash
-          # Requires Rust toolchain
-          cargo install --git https://github.com/${{ github.repository }} --tag ${VERSION}
-          ```
-          
-          ---
-          
-          **Note:** 
-          - `musl` builds are statically linked and work on any Linux distribution without dependencies
-          - `glibc` builds require a compatible glibc version (most modern distributions)
-          - For Alpine Linux or Docker containers, use the `musl` builds
-          FOOTER
-          
-          # Store body for the next step
-          echo "RELEASE_BODY<<EOF" >> $GITHUB_ENV
-          cat release_body.md >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-
-      - name: Update release
-        uses: softprops/action-gh-release@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          body: ${{ env.RELEASE_BODY }}
-          append_body: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-${{ matrix.target }}
+          path: dist
+      # The paper's MERS dataset must give the committed golden tables byte for byte.
+      - shell: bash
+        run: |
+          tar -xzf "dist/dima-$VERSION-$TARGET.tar.gz" -C dist
+          docker run --rm -v "$PWD:/w" -w /w -e VERSION -e TARGET "$IMAGE" sh -euc '
+            bin="dist/dima-$VERSION-$TARGET/dima"
+            "$bin" --version
+            "$bin" analyze -i samples/mers_spike_aa.fasta --tsv-dir /tmp/out -q
+            # cksum is in every base image (coreutils, busybox); cmp/diffutils is not.
+            for t in positions variants; do
+              test "$(cksum < /tmp/out/mers_spike_aa.$t.tsv)" = \
+                   "$(cksum < tests/golden/mers_spike_aa/tables/mers_spike_aa.$t.tsv)"
+            done
+            echo ok
+          '
 
-  # Optional: Publish to crates.io
-  # Uncomment and add CARGO_REGISTRY_TOKEN secret to enable
-  # publish-crate:
-  #   name: Publish to crates.io
-  #   needs: build
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: dtolnay/rust-toolchain@stable
-  #     - name: Publish
-  #       run: cargo publish
-  #       env:
-  #         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+  allocator-benchmark:
+    name: musl (mimalloc) vs glibc benchmark (D92)
+    needs: [version, cli]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: cli-x86_64-unknown-linux-*
+          path: dist
+          merge-multiple: true
+      - shell: bash
+        run: |
+          for t in gnu musl; do tar -xzf "dist/dima-$VERSION-x86_64-unknown-linux-$t.tar.gz" -C dist; done
+          bzip2 -dk tests/data/HIV1_FLT_2022_pol_DNA.fasta.bz2
+          scripts/release/allocator-benchmark.sh \
+            "dist/dima-$VERSION-x86_64-unknown-linux-gnu/dima" \
+            "dist/dima-$VERSION-x86_64-unknown-linux-musl/dima" \
+            tests/data/HIV1_FLT_2022_pol_DNA.fasta > allocator.md
+          cat allocator.md
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: allocator-benchmark
+          path: allocator.md
+
+  gui:
+    name: Desktop app ${{ matrix.name }}
+    needs: [version, ci]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (universal)
+            os: macos-15
+            kind: macos
+          - name: Windows x86_64
+            os: windows-2025
+            kind: windows
+            target: x86_64-pc-windows-msvc
+            arch: x86_64
+          - name: Windows ARM64
+            os: windows-11-arm
+            kind: windows
+            target: aarch64-pc-windows-msvc
+            arch: aarch64
+          - name: Linux x86_64
+            os: ubuntu-24.04
+            kind: linux
+            target: x86_64-unknown-linux-gnu
+            arch: x86_64
+            container: quay.io/pypa/manylinux_2_28_x86_64
+          - name: Linux ARM64
+            os: ubuntu-24.04-arm
+            kind: linux
+            target: aarch64-unknown-linux-gnu
+            arch: aarch64
+            container: quay.io/pypa/manylinux_2_28_aarch64
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      TARGET: ${{ matrix.target }}
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        with:
+          toolchain: stable
+          targets: ${{ matrix.kind == 'macos' && 'x86_64-apple-darwin,aarch64-apple-darwin' || matrix.target }}
+      - uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2.87.24
+        with:
+          tool: cargo-packager@0.11.8,cargo-auditable@0.7.7
+      - name: Build (macOS universal binary)
+        if: matrix.kind == 'macos'
+        shell: bash
+        run: |
+          for t in x86_64-apple-darwin aarch64-apple-darwin; do
+            cargo auditable build --release --locked -p dima-gui --target "$t"
+          done
+          mkdir -p target/universal-apple-darwin/release
+          lipo -create -output target/universal-apple-darwin/release/dima-gui \
+            target/x86_64-apple-darwin/release/dima-gui target/aarch64-apple-darwin/release/dima-gui
+          cargo packager -p dima-gui --release --formats app,dmg \
+            --binaries-dir target/universal-apple-darwin/release --out-dir dist-raw
+          mkdir -p dist
+          mv dist-raw/*.dmg "dist/DiMA-$VERSION-universal.dmg"
+      - name: Build (Windows)
+        if: matrix.kind == 'windows'
+        shell: bash
+        run: |
+          cargo auditable build --release --locked -p dima-gui --target "$TARGET"
+          cargo packager -p dima-gui --release --formats wix --target "$TARGET" \
+            --binaries-dir "target/$TARGET/release" --out-dir dist-raw
+          mkdir -p dist
+          mv dist-raw/*.msi "dist/DiMA-$VERSION-$ARCH.msi"
+      - name: Build in a manylinux_2_28 container (glibc 2.28)
+        if: matrix.kind == 'linux'
+        shell: bash
+        env:
+          IMAGE: ${{ matrix.container }}
+        run: |
+          docker run --rm -v "$PWD:/io" -w /io -e TARGET -e CARGO_INCREMENTAL -e DIMA_RELEASE "$IMAGE" bash -euo pipefail -c '
+            dnf install -y libxkbcommon-devel wayland-devel libX11-devel libXcursor-devel \
+              libXrandr-devel libXi-devel mesa-libEGL-devel mesa-libGL-devel vulkan-loader-devel
+            curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+            source "$HOME/.cargo/env"
+            cargo install --locked cargo-auditable@0.7.7
+            cargo auditable build --release --locked -p dima-gui --target "$TARGET"
+          '
+          sudo chown -R "$(id -u):$(id -g)" target
+          newest=$(objdump -T "target/$TARGET/release/dima-gui" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)
+          echo "newest glibc symbol: $newest (floor 2.28)"
+          [ "$(printf '%s\n2.28\n' "$newest" | sort -V | tail -1)" = "2.28" ]
+      - name: Package (Linux)
+        if: matrix.kind == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends libfuse2t64
+          cargo packager -p dima-gui --release --formats deb,appimage --target "$TARGET" \
+            --binaries-dir "target/$TARGET/release" --out-dir dist-raw
+          mkdir -p dist
+          mv dist-raw/*.AppImage "dist/DiMA-$VERSION-$ARCH.AppImage"
+          mv dist-raw/*.deb "dist/dima-gui_${VERSION}_${ARCH}.deb"
+          # A plain archive for HPC login nodes without FUSE.
+          stage="dima-gui-$VERSION-$ARCH-linux"
+          mkdir -p "$stage"
+          cp "target/$TARGET/release/dima-gui" README.md LICENSE THIRD-PARTY-NOTICES.md "$stage/"
+          cp crates/dima-gui/assets/fonts/OFL.txt "$stage/"
+          tar -czf "dist/$stage.tar.gz" "$stage"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gui-${{ matrix.kind }}-${{ matrix.arch || 'universal' }}
+          path: dist/
+
+  docs:
+    name: Documentation for this version
+    needs: [version, ci]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: docs/package.json
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: docs/.node-version
+          # No dependency cache: a poisoned cache must never reach a deployment or release.
+          package-manager-cache: false
+      - run: pnpm -C docs install --frozen-lockfile
+      # Each release's docs live at /dima-perf/vX.Y/ and are never rebuilt later (D102): the
+      # Pages deployment unpacks this archive.
+      - name: Build
+        shell: bash
+        run: |
+          minor="${VERSION%.*}"
+          DOCS_BASE="/dima-perf/v$minor/" pnpm -C docs run build
+          mkdir -p dist
+          tar -C docs/dist -czf "dist/dima-$VERSION-docs.tar.gz" .
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docs
+          path: dist/
+
+  publish:
+    name: Publish the release
+    needs: [version, cli, smoke, allocator-benchmark, gui, docs]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      # Events created with the workflow token do not start other workflows, so the docs
+      # deployment (which adds /vX.Y/ from this release's docs archive) is dispatched here.
+      actions: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: artifacts
+      - name: Collect assets and checksums
+        shell: bash
+        run: |
+          mkdir -p assets
+          find artifacts -type f ! -name 'allocator.md' ! -path 'artifacts/man/*' -exec cp {} assets/ \;
+          (cd assets && sha256sum -- * > ../SHA256SUMS)
+          mv SHA256SUMS assets/
+          cat assets/SHA256SUMS
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        id: attest
+        with:
+          subject-checksums: assets/SHA256SUMS
+      - name: Attach the attestation bundle
+        shell: bash
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: cp "$BUNDLE" "assets/dima-$VERSION.intoto.jsonl"
+      - name: Create a draft, upload, publish
+        shell: bash
+        run: |
+          scripts/release/release-notes.sh "$VERSION" artifacts/allocator-benchmark/allocator.md > notes.md
+          gh release create "$RELEASE_TAG" --draft --verify-tag --title "DiMA $VERSION" --notes-file notes.md
+          gh release upload "$RELEASE_TAG" assets/*
+          gh release edit "$RELEASE_TAG" --draft=false
+          gh workflow run docs.yml --ref master

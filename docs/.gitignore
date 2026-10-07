@@ -1,4 +1,5 @@
 node_modules/
 dist/
-public/api/
 .astro/
+.lighthouseci/
+.starlight-links-validator/

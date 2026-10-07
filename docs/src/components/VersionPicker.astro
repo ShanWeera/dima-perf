@@ -1,0 +1,141 @@
+---
+// Version picker (plan D102): lists the published documentation versions from versions.json.
+// It stays hidden when the list is unavailable (local builds, previews, offline archives).
+// A disclosure of plain links (not a <select> that navigates on change; WCAG 2.2 SC 3.2.2).
+import { Icon } from '@astrojs/starlight/components';
+
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+const match = /\/(latest|v\d+(?:\.\d+){1,2})\/$/.exec(base);
+const current = match ? match[1] : 'versions';
+---
+
+<dima-version-picker data-base={base} hidden>
+  <details class="dima-versions">
+    <summary>
+      <span class="sr-only">Documentation version:{' '}</span><span>{current}</span>
+      <Icon name="down-caret" class="caret" />
+    </summary>
+    <ul></ul>
+  </details>
+</dima-version-picker>
+
+<script>
+  import { goToVersion, loadVersions, newestRelease, versionLabel } from '../lib/versions';
+
+  class VersionPicker extends HTMLElement {
+    connectedCallback() {
+      const base = this.dataset.base ?? '/';
+      const details = this.querySelector('details');
+      const list = this.querySelector('ul');
+      if (!details || !list) return;
+      void loadVersions(base).then((entries) => {
+        if (!entries) return;
+        const newest = newestRelease(entries);
+        list.replaceChildren(
+          ...entries.map((entry) => {
+            const item = document.createElement('li');
+            const link = document.createElement('a');
+            link.href = entry.path;
+            link.textContent =
+              versionLabel(entry.version) +
+              (entry.version === 'latest' ? ' (development version)' : entry === newest ? ' (newest release)' : '');
+            if (entry.path === base) link.setAttribute('aria-current', 'page');
+            link.addEventListener('click', (event) => {
+              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              event.preventDefault();
+              void goToVersion(entry, base);
+            });
+            item.append(link);
+            return item;
+          }),
+        );
+        this.hidden = false;
+      });
+      // Close like a menu: Escape returns focus to the button, a click elsewhere closes it.
+      details.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && details.open) {
+          details.open = false;
+          details.querySelector('summary')?.focus();
+        }
+      });
+      document.addEventListener('click', (event) => {
+        if (details.open && !details.contains(event.target as Node)) details.open = false;
+      });
+    }
+  }
+  customElements.define('dima-version-picker', VersionPicker);
+</script>
+
+<style>
+  dima-version-picker {
+    display: flex;
+    align-items: center;
+  }
+  dima-version-picker[hidden] {
+    display: none;
+  }
+  .dima-versions {
+    position: relative;
+  }
+  summary {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 0.25rem;
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-sm);
+    cursor: pointer;
+    list-style: none;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary:hover {
+    color: var(--sl-color-white);
+  }
+  .caret {
+    font-size: 1.25rem;
+  }
+  [open] .caret {
+    transform: rotate(180deg);
+  }
+  ul {
+    position: absolute;
+    inset-inline-end: 0;
+    top: 100%;
+    z-index: 10;
+    min-width: 13rem;
+    margin: 0;
+    padding: 0.25rem 0;
+    list-style: none;
+    background-color: var(--sl-color-bg-nav);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    box-shadow: var(--sl-shadow-md);
+  }
+  /* The list items are created by the script, so they carry no scoped-style attribute. */
+  ul :global(a) {
+    display: block;
+    padding: 0.5rem 0.875rem;
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-sm);
+    text-decoration: none;
+  }
+  ul :global(a:hover),
+  ul :global(a:focus-visible) {
+    color: var(--sl-color-white);
+    background-color: var(--sl-color-gray-6);
+  }
+  ul :global(a[aria-current='page']) {
+    color: var(--sl-color-text-accent);
+    font-weight: 600;
+  }
+  /* In the mobile menu the list opens in place instead of over the page. */
+  @media (max-width: 50rem) {
+    ul {
+      position: static;
+      box-shadow: none;
+      margin-top: 0.25rem;
+    }
+  }
+</style>

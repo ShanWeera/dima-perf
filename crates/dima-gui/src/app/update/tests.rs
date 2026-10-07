@@ -1,0 +1,965 @@
+//! Unit tests of the pure state machine: every transition without a window or a thread.
+
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::time::Duration;
+
+use dima_core::control::Progress;
+use dima_core::input::Source;
+
+use super::*;
+use crate::state::recent::RecentFiles;
+use crate::state::settings::Settings;
+use crate::state::toasts::Severity;
+use crate::tests::fixtures;
+use crate::workers::analysis::{self, Outcome, Request};
+use crate::workers::inspect::Opened;
+
+fn state() -> AppState {
+    AppState::new(Settings::default(), RecentFiles::default())
+}
+
+fn opened_alignment(state: &mut AppState) -> Vec<Effect> {
+    let path = fixtures::mers_path();
+    let effects = update(state, Msg::OpenPath(path.clone()));
+    let Some(Effect::Open { generation, .. }) = effects.first() else {
+        panic!("an open effect");
+    };
+    let inspection = dima_core::validation::inspect(&Source::Path(path.clone())).unwrap();
+    update(
+        state,
+        Msg::Opened {
+            generation: *generation,
+            path,
+            outcome: Ok(Opened::Alignment(Box::new(inspection))),
+        },
+    )
+}
+
+fn with_session(state: &mut AppState) {
+    let effects = update(state, Msg::OpenPath(PathBuf::from("results.json")));
+    let Some(Effect::Open { generation, .. }) = effects.first() else {
+        panic!("an open effect");
+    };
+    update(
+        state,
+        Msg::Opened {
+            generation: *generation,
+            path: PathBuf::from("results.json"),
+            outcome: Ok(Opened::Results(Box::new((*fixtures::mers()).clone()))),
+        },
+    );
+}
+
+fn tick(state: &mut AppState, after: Duration, pointer_down: bool) -> Vec<Effect> {
+    let now = state.now + after;
+    update(state, Msg::Tick { now, pointer_down })
+}
+
+#[test]
+fn opening_an_alignment_resets_the_per_file_options_only() {
+    let mut s = state();
+    s.setup.options.alphabet = crate::state::options::AlphabetChoice::Dna;
+    s.setup.options.kmer_length = Some(5);
+    s.setup.options.query_name = "old".into();
+    s.setup.options.support_threshold = 30;
+    let effects = opened_alignment(&mut s);
+    assert!(matches!(effects.as_slice(), [Effect::SaveRecent(_)]));
+    assert_eq!(s.setup.file, Some(fixtures::mers_path()));
+    assert_eq!(
+        s.setup.options.alphabet,
+        crate::state::options::AlphabetChoice::Auto,
+        "G12"
+    );
+    assert_eq!(s.setup.options.kmer_length, None, "G12");
+    assert!(s.setup.options.query_name.is_empty(), "G13");
+    assert_eq!(
+        s.setup.options.support_threshold, 30,
+        "remembered options stay"
+    );
+    assert_eq!(
+        s.setup.header.names(),
+        ["field_1", "field_2", "field_3", "field_4"],
+        "G36"
+    );
+    assert!(!s.setup.header.enabled);
+    assert_eq!(s.recent.files.len(), 1);
+    assert_eq!(s.view, View::Setup);
+}
+
+#[test]
+fn stale_open_results_are_ignored() {
+    let mut s = state();
+    update(&mut s, Msg::OpenPath(PathBuf::from("a.fa")));
+    let effects = update(
+        &mut s,
+        Msg::Opened {
+            generation: 999,
+            path: PathBuf::from("a.fa"),
+            outcome: Err(dima_core::DimaError::usage("x")),
+        },
+    );
+    assert!(effects.is_empty());
+    assert!(
+        s.setup.opening.is_some(),
+        "still waiting for the current job"
+    );
+    assert!(s.setup.open_error.is_none());
+    update(&mut s, Msg::CancelOpen);
+    assert!(s.setup.opening.is_none());
+}
+
+#[test]
+fn opening_results_starts_a_session_and_clears_the_setup() {
+    let mut s = state();
+    opened_alignment(&mut s);
+    s.setup.failure = Some(ErrorCard::new("x", dima_core::DimaError::usage("x")));
+    let effects = update(&mut s, Msg::OpenPath(PathBuf::from("r.json")));
+    let Some(Effect::Open { generation, .. }) = effects.first() else {
+        panic!();
+    };
+    let effects = update(
+        &mut s,
+        Msg::Opened {
+            generation: *generation,
+            path: PathBuf::from("r.json"),
+            outcome: Ok(Opened::Results(Box::new((*fixtures::mers()).clone()))),
+        },
+    );
+    assert!(
+        effects
+            .iter()
+            .any(|e| matches!(e, Effect::ComputeHcs { .. }))
+    );
+    assert_eq!(s.view, View::Workspace);
+    assert!(
+        s.setup.file.is_none() && s.setup.inspection.is_none(),
+        "G31"
+    );
+    assert!(s.setup.failure.is_none());
+    let session = s.session.as_ref().unwrap();
+    assert_eq!(
+        session.selection.position,
+        Some(1),
+        "first position selected"
+    );
+    assert!(matches!(session.origin, Origin::Opened(_)));
+}
+
+#[test]
+fn a_missing_file_is_reported_and_forgotten() {
+    let mut s = state();
+    let path = PathBuf::from("/definitely/missing.fasta");
+    s.recent.add(crate::state::recent::RecentFile {
+        path: path.clone(),
+        opened: 1,
+        kind: crate::state::recent::RecentKind::Alignment,
+        sequences: None,
+        estimated: false,
+        alphabet: None,
+    });
+    let effects = update(&mut s, Msg::OpenPath(path.clone()));
+    let Some(Effect::Open { generation, .. }) = effects.first() else {
+        panic!();
+    };
+    let error = crate::workers::inspect::open(&path, &AtomicBool::new(false)).unwrap_err();
+    let effects = update(
+        &mut s,
+        Msg::Opened {
+            generation: *generation,
+            path,
+            outcome: Err(error),
+        },
+    );
+    assert!(matches!(effects.as_slice(), [Effect::SaveRecent(_)]));
+    assert!(s.recent.files.is_empty());
+    let card = s.setup.open_error.as_ref().unwrap();
+    assert!(card.error.to_string().contains("missing.fasta"), "G34");
+}
+
+#[test]
+fn analyze_builds_the_request_from_the_form() {
+    let mut s = state();
+    assert!(update(&mut s, Msg::Analyze).is_empty(), "no file");
+    opened_alignment(&mut s);
+    s.setup.options.fill = " ".into();
+    s.setup.header.enabled = true;
+    assert!(
+        update(&mut s, Msg::Analyze).is_empty(),
+        "invalid fill (G52)"
+    );
+    assert!(
+        s.toasts
+            .items()
+            .iter()
+            .any(|t| t.text.contains("fill value"))
+    );
+    s.setup.options.fill = "Unknown".into();
+    s.setup.header.rows[0].name = "Accession".into();
+    s.setup.header.rows[0].stratify = false;
+    s.settings.threads = Some(3);
+    let effects = update(&mut s, Msg::Analyze);
+    let [
+        Effect::Analyze {
+            request,
+            generation,
+        },
+    ] = effects.as_slice()
+    else {
+        panic!("{effects:?}");
+    };
+    assert_eq!(request.threads.get(), 3);
+    assert_eq!(request.params.alphabet, None, "Auto stays detection (G1)");
+    assert_eq!(request.params.kmer_length, None, "no clamp (G1)");
+    assert_eq!(
+        request.params.header_format.as_deref(),
+        Some(
+            &[
+                "Accession".to_owned(),
+                "field_2".into(),
+                "field_3".into(),
+                "field_4".into()
+            ][..]
+        )
+    );
+    assert_eq!(
+        request.params.metadata_fields.as_deref(),
+        Some(&["field_2".to_owned(), "field_3".into(), "field_4".into()][..])
+    );
+    assert!(request.expected.is_some(), "G65 stamp");
+    assert_eq!(s.setup.run, RunState::Running(*generation));
+    assert!(update(&mut s, Msg::Analyze).is_empty(), "one run at a time");
+}
+
+#[test]
+fn opening_a_file_while_running_asks_first() {
+    let mut s = state();
+    opened_alignment(&mut s);
+    update(&mut s, Msg::Analyze);
+    assert!(update(&mut s, Msg::OpenPath(PathBuf::from("b.fa"))).is_empty());
+    assert_eq!(
+        s.confirm,
+        Some(Confirm::ReplaceRun(PathBuf::from("b.fa"))),
+        "G35"
+    );
+    assert!(update(&mut s, Msg::Confirmed(false)).is_empty());
+    assert!(s.running());
+    update(&mut s, Msg::OpenPath(PathBuf::from("b.fa")));
+    let effects = update(&mut s, Msg::Confirmed(true));
+    assert!(matches!(
+        effects.as_slice(),
+        [Effect::CancelAnalysis, Effect::Open { .. }]
+    ));
+    assert!(
+        matches!(s.setup.run, RunState::Cancelling(_)),
+        "G27: no new run until it stops"
+    );
+    assert!(update(&mut s, Msg::Analyze).is_empty());
+}
+
+#[test]
+fn a_run_that_ends_after_cancellation_is_cancelled() {
+    let mut s = state();
+    let (generation, request) = run_outcome(&mut s);
+    let outcome = analysis::run(
+        &request,
+        &Arc::new(Progress::new()),
+        Arc::new(AtomicBool::new(false)),
+    );
+    assert!(matches!(outcome, Outcome::Completed(..)));
+    update(&mut s, Msg::CancelAnalysis);
+    assert!(matches!(s.setup.run, RunState::Cancelling(_)));
+    // It completed before it saw the request: nothing of it is kept.
+    let effects = update(
+        &mut s,
+        Msg::AnalysisDone {
+            generation,
+            outcome,
+        },
+    );
+    assert!(effects.is_empty(), "{effects:?}");
+    assert!(s.session.is_none());
+    assert_eq!(s.setup.run, RunState::Idle);
+    assert!(
+        s.toasts
+            .items()
+            .iter()
+            .any(|t| t.text.starts_with("Analysis cancelled"))
+    );
+}
+
+fn run_outcome(s: &mut AppState) -> (u64, Request) {
+    opened_alignment(s);
+    let effects = update(s, Msg::Analyze);
+    let [
+        Effect::Analyze {
+            request,
+            generation,
+        },
+    ] = effects.as_slice()
+    else {
+        panic!();
+    };
+    (*generation, (**request).clone())
+}
+
+#[test]
+fn a_completed_run_opens_the_results() {
+    let mut s = state();
+    let (generation, request) = run_outcome(&mut s);
+    let outcome = analysis::run(
+        &request,
+        &Arc::new(Progress::new()),
+        Arc::new(AtomicBool::new(false)),
+    );
+    assert!(
+        update(
+            &mut s,
+            Msg::AnalysisDone {
+                generation: generation + 100,
+                outcome: Outcome::Changed
+            }
+        )
+        .is_empty()
+    );
+    let effects = update(
+        &mut s,
+        Msg::AnalysisDone {
+            generation,
+            outcome,
+        },
+    );
+    assert!(
+        effects
+            .iter()
+            .any(|e| matches!(e, Effect::ComputeHcs { .. }))
+    );
+    assert_eq!(s.view, View::Workspace);
+    assert_eq!(s.setup.run, RunState::Idle);
+    let session = s.session.as_ref().unwrap();
+    assert!(matches!(&session.origin, Origin::Analysed(r) if r.facts.positions == Some(1345)));
+    assert_eq!(
+        *session.results,
+        *fixtures::mers(),
+        "the same results as the library"
+    );
+    assert!(
+        s.toasts
+            .items()
+            .iter()
+            .any(|t| t.text.starts_with("Analysed 191 sequences"))
+    );
+}
+
+#[test]
+fn a_run_with_fewer_threads_than_requested_warns() {
+    let mut s = state();
+    let (generation, request) = run_outcome(&mut s);
+    let Outcome::Completed(analysis, mut facts) = analysis::run(
+        &request,
+        &Arc::new(Progress::new()),
+        Arc::new(AtomicBool::new(false)),
+    ) else {
+        panic!("completed");
+    };
+    // The system refused all but one of the requested threads (D110).
+    facts.threads = 4;
+    facts.threads_started = Some(1);
+    update(
+        &mut s,
+        Msg::AnalysisDone {
+            generation,
+            outcome: Outcome::Completed(analysis, facts),
+        },
+    );
+    let warning = s
+        .toasts
+        .items()
+        .iter()
+        .find(|t| t.severity == Severity::Warning)
+        .expect("a warning");
+    assert!(
+        warning
+            .text
+            .starts_with("Used 1 of 4 worker threads: the system refused to start more."),
+        "{}",
+        warning.text
+    );
+    assert_eq!(s.view, View::Workspace, "the results open all the same");
+}
+
+#[test]
+fn a_failed_run_shows_a_card_and_reads_the_record_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("bad.fa");
+    std::fs::write(&path, ">a|x\nACDEFGHIK\n>b|y\nACDEF1HIK\n").unwrap();
+    let mut s = state();
+    s.setup.file = Some(path.clone());
+    s.setup.options.alphabet = crate::state::options::AlphabetChoice::Protein;
+    let effects = update(&mut s, Msg::Analyze);
+    let [
+        Effect::Analyze {
+            request,
+            generation,
+        },
+    ] = effects.as_slice()
+    else {
+        panic!("{effects:?}");
+    };
+    let outcome = analysis::run(
+        request,
+        &Arc::new(Progress::new()),
+        Arc::new(AtomicBool::new(false)),
+    );
+    let effects = update(
+        &mut s,
+        Msg::AnalysisDone {
+            generation: *generation,
+            outcome,
+        },
+    );
+    let [
+        Effect::ReadErrorContext {
+            generation: g,
+            record,
+            column,
+            ..
+        },
+    ] = effects.as_slice()
+    else {
+        panic!("{effects:?}");
+    };
+    assert_eq!((*record, *column), (2, Some(6)));
+    let card = s.setup.failure.as_ref().unwrap();
+    assert!(card.failed_run.is_some());
+    assert!(card.details().contains("No results were written"));
+    let excerpt =
+        crate::workers::error_context::excerpt(&path, 2, Some(6), &AtomicBool::new(false));
+    update(
+        &mut s,
+        Msg::ErrorContext {
+            generation: *g,
+            excerpt,
+        },
+    );
+    let card = s.setup.failure.as_ref().unwrap();
+    assert_eq!(card.excerpt.as_ref().unwrap().header, "b|y");
+    assert_eq!(
+        card.excerpt.as_ref().unwrap().around_column.as_deref(),
+        Some("ACDEF[1]HIK")
+    );
+    // The failed run's report goes through a save dialog.
+    let effects = update(&mut s, Msg::SaveFailedRunReport);
+    assert!(matches!(
+        effects.as_slice(),
+        [Effect::Dialog {
+            purpose: Purpose::FailedRunReport,
+            ..
+        }]
+    ));
+    let effects = update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose: Purpose::FailedRunReport,
+            path: Some(dir.path().join("report")),
+            failed_fast: false,
+        },
+    );
+    let [Effect::Export { session: None, job }] = effects.as_slice() else {
+        panic!();
+    };
+    assert_eq!(
+        job.path,
+        dir.path().join("report.json"),
+        "extension appended (D100)"
+    );
+    let written = crate::workers::export::run(job).unwrap();
+    let v: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&written[0].path).unwrap()).unwrap();
+    assert_eq!(v["status"], "failed");
+    assert_eq!(v["exit_code"], 4);
+}
+
+#[test]
+fn a_changed_file_is_checked_again_keeping_the_choices() {
+    let mut s = state();
+    let (generation, request) = run_outcome(&mut s);
+    s.setup.header.enabled = true;
+    s.setup.header.rows[1].name = "Host".into();
+    s.setup.options.support_threshold = 30;
+    s.setup.options.alphabet = crate::state::options::AlphabetChoice::Protein;
+    let effects = update(
+        &mut s,
+        Msg::AnalysisDone {
+            generation,
+            outcome: Outcome::Changed,
+        },
+    );
+    let [
+        Effect::Open {
+            generation: g,
+            path,
+        },
+    ] = effects.as_slice()
+    else {
+        panic!("{effects:?}");
+    };
+    assert!(
+        s.toasts
+            .items()
+            .iter()
+            .any(|t| t.text.contains("changed after it was checked")),
+        "G65"
+    );
+    let inspection = dima_core::validation::inspect(&Source::Path(request.path.clone())).unwrap();
+    update(
+        &mut s,
+        Msg::Opened {
+            generation: *g,
+            path: path.clone(),
+            outcome: Ok(Opened::Alignment(Box::new(inspection))),
+        },
+    );
+    assert_eq!(s.setup.header.rows[1].name, "Host");
+    assert!(s.setup.header.enabled);
+    assert_eq!(
+        s.setup.options.alphabet,
+        crate::state::options::AlphabetChoice::Protein
+    );
+}
+
+#[test]
+fn hidden_positions_ask_to_clear_the_filters() {
+    let mut s = state();
+    with_session(&mut s);
+    {
+        let session = s.session.as_mut().unwrap();
+        session.filter.position_range = (1, 10);
+        session.apply_filters();
+    }
+    assert!(
+        update(
+            &mut s,
+            Msg::Select(500, crate::state::session::SelectSource::Palette)
+        )
+        .is_empty()
+    );
+    assert_eq!(s.confirm, Some(Confirm::ClearFiltersFor(500)), "G20");
+    update(&mut s, Msg::Confirmed(true));
+    let session = s.session.as_ref().unwrap();
+    assert_eq!(session.selection.position, Some(500));
+    assert_eq!(session.shown.len(), 1345);
+    update(
+        &mut s,
+        Msg::Select(99_999, crate::state::session::SelectSource::Palette),
+    );
+    assert!(
+        s.toasts
+            .items()
+            .iter()
+            .any(|t| t.text.contains("no position 99999"))
+    );
+}
+
+#[test]
+fn filters_apply_when_the_pointer_is_released() {
+    let mut s = state();
+    with_session(&mut s);
+    s.session.as_mut().unwrap().filter.position_range = (1, 100);
+    update(&mut s, Msg::FiltersEdited);
+    tick(&mut s, Duration::from_millis(16), true);
+    assert_eq!(
+        s.session.as_ref().unwrap().shown.len(),
+        1345,
+        "not while dragging"
+    );
+    tick(&mut s, Duration::from_millis(32), false);
+    assert_eq!(s.session.as_ref().unwrap().shown.len(), 100);
+    update(&mut s, Msg::ResetFilters);
+    assert_eq!(s.session.as_ref().unwrap().shown.len(), 1345);
+}
+
+#[test]
+fn hcs_edits_are_debounced_and_results_matched() {
+    let mut s = state();
+    with_session(&mut s);
+    // The initial computation.
+    let (g0, _, _) = s.hcs.running.unwrap();
+    s.hcs.text = "40".into();
+    let effects = update(&mut s, Msg::HcsEdited);
+    assert!(matches!(effects.as_slice(), [Effect::SaveSettings(_)]));
+    assert!(s.hcs.error.is_some(), "(50, 100] (G41)");
+    s.hcs.text = "95".into();
+    update(&mut s, Msg::HcsEdited);
+    assert!(
+        tick(&mut s, Duration::from_millis(10), false).is_empty(),
+        "debounced"
+    );
+    let effects = tick(&mut s, Duration::from_millis(400), false);
+    let [
+        Effect::ComputeHcs {
+            generation,
+            params,
+            results,
+        },
+    ] = effects.as_slice()
+    else {
+        panic!("{effects:?}");
+    };
+    assert_eq!(params.threshold.to_string(), "95");
+    // The first job's late result is ignored.
+    let stale =
+        Arc::new(dima_core::hcs::compute(results, &dima_core::hcs::HcsParams::default()).unwrap());
+    update(
+        &mut s,
+        Msg::HcsDone {
+            generation: g0,
+            outcome: Ok(stale),
+        },
+    );
+    assert!(s.hcs.result.is_none());
+    let fresh = Arc::new(dima_core::hcs::compute(results, params).unwrap());
+    update(
+        &mut s,
+        Msg::HcsDone {
+            generation: *generation,
+            outcome: Ok(fresh),
+        },
+    );
+    let id = s.session.as_ref().unwrap().id;
+    assert!(s.hcs.current(id).is_some());
+    assert_eq!(s.settings.hcs_threshold, "95", "remembered (D73)");
+}
+
+#[test]
+fn an_hcs_edit_without_results_leaves_nothing_pending() {
+    // Edited on the setup screen before any results exist: nothing waits, so the app stops
+    // repainting once the debounce time has passed.
+    let mut s = state();
+    s.hcs.text = "95".into();
+    update(&mut s, Msg::HcsEdited);
+    assert!(s.busy());
+    assert!(tick(&mut s, Duration::from_millis(400), false).is_empty());
+    assert_eq!(s.hcs.pending_since, None);
+    assert!(!s.busy());
+    // Loading results computes the regions at the edited threshold.
+    with_session(&mut s);
+    let (_, _, params) = s.hcs.running.unwrap();
+    assert_eq!(params.threshold.to_string(), "95");
+}
+
+#[test]
+fn exports_are_guarded_and_go_through_a_dialog() {
+    let mut s = state();
+    with_session(&mut s);
+    let id = s.session.as_ref().unwrap().id;
+    // A run report needs a run made in the app.
+    assert!(update(&mut s, Msg::Export(ExportKind::RunReport)).is_empty());
+    // One export at a time, whoever starts it (G6).
+    s.export_busy = Some(ExportKind::Png);
+    assert!(update(&mut s, Msg::Export(ExportKind::Svg)).is_empty());
+    assert!(
+        s.toasts
+            .items()
+            .iter()
+            .any(|t| t.text.contains("already running"))
+    );
+    s.export_busy = None;
+    let effects = update(&mut s, Msg::Export(ExportKind::Svg));
+    assert!(matches!(
+        effects.as_slice(),
+        [Effect::Dialog {
+            purpose: Purpose::Export {
+                kind: ExportKind::Svg,
+                session,
+            },
+            kind: DialogKind::Save { .. },
+            built_in: false,
+            ..
+        }] if *session == id
+    ));
+    assert!(
+        update(&mut s, Msg::Export(ExportKind::Png)).is_empty(),
+        "one dialog at a time"
+    );
+    assert!(
+        s.toasts
+            .items()
+            .iter()
+            .any(|t| t.text.starts_with("A file dialog is already open")),
+        "and the user is told why"
+    );
+    // The native dialog failed at once: the built-in browser takes over.
+    let effects = update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose: Purpose::Export {
+                kind: ExportKind::Svg,
+                session: id,
+            },
+            path: None,
+            failed_fast: true,
+        },
+    );
+    assert!(matches!(
+        effects.as_slice(),
+        [Effect::Dialog { built_in: true, .. }]
+    ));
+    let effects = update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose: Purpose::Export {
+                kind: ExportKind::Svg,
+                session: id,
+            },
+            path: Some(PathBuf::from("/x/figure")),
+            failed_fast: false,
+        },
+    );
+    let [
+        Effect::Export {
+            session: Some(exported_from),
+            job,
+        },
+    ] = effects.as_slice()
+    else {
+        panic!("{effects:?}");
+    };
+    assert_eq!(*exported_from, id);
+    assert_eq!(job.path, PathBuf::from("/x/figure.svg"));
+    assert_eq!(s.export_busy, Some(ExportKind::Svg));
+    let files = vec![crate::workers::export::WrittenFile {
+        path: PathBuf::from("/x/r.json"),
+        role: Some("results"),
+        bytes: 5,
+        sha256: "0".repeat(64),
+    }];
+    update(
+        &mut s,
+        Msg::ExportDone {
+            kind: ExportKind::ResultsJson,
+            session: Some(id),
+            outcome: Ok(files.clone()),
+        },
+    );
+    assert_eq!(s.export_busy, None);
+    assert_eq!(s.session.as_ref().unwrap().exports.len(), 1);
+    // An export of results replaced meanwhile is not recorded for the new ones.
+    update(
+        &mut s,
+        Msg::ExportDone {
+            kind: ExportKind::ResultsJson,
+            session: Some(id + 1),
+            outcome: Ok(files),
+        },
+    );
+    assert_eq!(s.session.as_ref().unwrap().exports.len(), 1);
+    // Nothing to draw: no figure export.
+    s.session.as_mut().unwrap().filter.position_range = (5, 1);
+    s.session.as_mut().unwrap().apply_filters();
+    assert!(update(&mut s, Msg::Export(ExportKind::Png)).is_empty());
+}
+
+#[test]
+fn built_in_dialogs_follow_the_setting_and_the_environment() {
+    let mut s = state();
+    s.native_dialogs = false;
+    let effects = update(&mut s, Msg::OpenDialog);
+    assert!(matches!(
+        effects.as_slice(),
+        [Effect::Dialog {
+            built_in: true,
+            kind: DialogKind::Open,
+            ..
+        }]
+    ));
+    assert!(!s.dialog.native);
+    let mut s = state();
+    update(&mut s, Msg::OpenDialog);
+    assert!(s.dialog.native);
+    let effects = update(&mut s, Msg::UseBuiltInBrowser);
+    assert!(matches!(
+        effects.as_slice(),
+        [Effect::Dialog { built_in: true, .. }]
+    ));
+    let effects = update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose: Purpose::OpenInput,
+            path: Some(PathBuf::from("a.fa")),
+            failed_fast: false,
+        },
+    );
+    assert!(matches!(effects.as_slice(), [Effect::Open { .. }]));
+}
+
+#[test]
+fn panics_become_errors_with_details() {
+    let mut s = state();
+    s.export_busy = Some(ExportKind::Png);
+    update(
+        &mut s,
+        Msg::Panicked {
+            what: "exporting",
+            message: "boom".into(),
+        },
+    );
+    assert_eq!(s.export_busy, None);
+    let t = &s.toasts.items()[0];
+    assert_eq!(t.severity, Severity::Error);
+    assert!(t.details.as_deref().unwrap().contains("boom"));
+}
+
+#[test]
+fn refused_threads_are_not_reported_as_bugs() {
+    let mut s = state();
+    s.export_busy = Some(ExportKind::Png);
+    update(
+        &mut s,
+        Msg::Refused {
+            what: "exporting",
+            reason: "Resource temporarily unavailable (os error 11)".into(),
+        },
+    );
+    assert_eq!(s.export_busy, None);
+    let t = &s.toasts.items()[0];
+    assert_eq!(t.severity, Severity::Error);
+    assert!(t.text.contains("refused a new thread"), "{}", t.text);
+    assert!(!t.text.contains("report"), "{}", t.text);
+}
+
+#[test]
+fn drops_options_views_and_threads() {
+    let mut s = state();
+    let effects = update(
+        &mut s,
+        Msg::Dropped(vec![PathBuf::from("a.fa"), PathBuf::from("b.fa")]),
+    );
+    assert!(matches!(effects.as_slice(), [Effect::Open { .. }]));
+    assert!(
+        s.toasts.items()[0].text.contains("One file at a time"),
+        "G32"
+    );
+    update(&mut s, Msg::ShowView(View::Workspace));
+    assert_eq!(s.view, View::Setup, "no results to show");
+    s.setup.options.support_threshold = 7;
+    let effects = update(&mut s, Msg::ResetOptions);
+    assert!(matches!(effects.as_slice(), [Effect::SaveSettings(_)]));
+    assert_eq!(s.setup.options.support_threshold, 100);
+    update(&mut s, Msg::ThreadsChanged(Some(2)));
+    assert_eq!(s.settings.threads, Some(2));
+}
+
+#[test]
+fn an_export_never_writes_results_loaded_while_its_dialog_was_open() {
+    let mut s = state();
+    with_session(&mut s);
+    let first = s.session.as_ref().unwrap().id;
+    update(&mut s, Msg::Export(ExportKind::ResultsJson));
+    // Other results are opened (a drop or a recent file) before the dialog closes.
+    with_session(&mut s);
+    assert_ne!(s.session.as_ref().unwrap().id, first);
+    let effects = update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose: Purpose::Export {
+                kind: ExportKind::ResultsJson,
+                session: first,
+            },
+            path: Some(PathBuf::from("/x/first.json")),
+            failed_fast: false,
+        },
+    );
+    assert!(effects.is_empty(), "{effects:?}");
+    assert_eq!(s.export_busy, None);
+    assert_eq!(s.dialog.pending, None);
+    assert!(
+        s.toasts
+            .items()
+            .iter()
+            .any(|t| t.text.starts_with("Nothing was saved"))
+    );
+}
+
+#[test]
+fn closing_during_an_export_asks_first() {
+    let mut s = state();
+    assert!(
+        update(&mut s, Msg::CloseRequested).is_empty(),
+        "nothing to lose"
+    );
+    assert_eq!(s.confirm, None);
+    s.export_busy = Some(ExportKind::ResultsJson);
+    let effects = update(&mut s, Msg::CloseRequested);
+    assert!(matches!(effects.as_slice(), [Effect::CancelClose]));
+    assert_eq!(s.confirm, Some(Confirm::QuitDuringExport));
+    // "Keep DiMA open".
+    assert!(update(&mut s, Msg::Confirmed(false)).is_empty());
+    assert_eq!(s.confirm, None);
+    // Asked again, then confirmed.
+    update(&mut s, Msg::CloseRequested);
+    let effects = update(&mut s, Msg::Confirmed(true));
+    assert!(matches!(effects.as_slice(), [Effect::Quit]));
+    // The export finishing while the question is open makes it moot.
+    update(&mut s, Msg::CloseRequested);
+    update(
+        &mut s,
+        Msg::ExportDone {
+            kind: ExportKind::ResultsJson,
+            session: None,
+            outcome: Ok(Vec::new()),
+        },
+    );
+    assert_eq!(s.confirm, None);
+}
+
+#[test]
+fn an_appended_extension_never_replaces_a_file_unasked() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("results.json"), "old").unwrap();
+    let mut s = state();
+    with_session(&mut s);
+    let session = s.session.as_ref().unwrap().id;
+    let purpose = Purpose::Export {
+        kind: ExportKind::ResultsJson,
+        session,
+    };
+    update(&mut s, Msg::Export(ExportKind::ResultsJson));
+    // "results" was typed: the dialog checked that name, the app adds ".json", which exists.
+    let effects = update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose,
+            path: Some(dir.path().join("results")),
+            failed_fast: false,
+        },
+    );
+    assert!(effects.is_empty(), "{effects:?}");
+    let asked = Confirm::Overwrite {
+        purpose,
+        path: dir.path().join("results.json"),
+    };
+    assert_eq!(s.confirm, Some(asked.clone()));
+    assert!(update(&mut s, Msg::Confirmed(false)).is_empty());
+    assert_eq!(s.export_busy, None);
+    // Asked again and confirmed: the export is written there.
+    s.confirm = Some(asked);
+    let effects = update(&mut s, Msg::Confirmed(true));
+    let [Effect::Export { job, .. }] = effects.as_slice() else {
+        panic!("{effects:?}");
+    };
+    assert_eq!(job.path, dir.path().join("results.json"));
+    // A name the dialog itself checked (with the extension) is not asked about again.
+    s.export_busy = None;
+    update(&mut s, Msg::Export(ExportKind::ResultsJson));
+    let effects = update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose,
+            path: Some(dir.path().join("results.json")),
+            failed_fast: false,
+        },
+    );
+    assert!(matches!(effects.as_slice(), [Effect::Export { .. }]));
+}

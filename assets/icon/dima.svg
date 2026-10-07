@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- DiMA application icon (plan D80): an entropy trace over a baseline, with one diverse peak.
+     Okabe-Ito blue and vermillion (Wong 2011). Raster formats are generated from the same
+     geometry by generate.py (keep the two in step). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>DiMA</title>
+  <rect x="64" y="64" width="896" height="896" rx="200" ry="200" fill="#0072B2"/>
+  <line x1="192" y1="792" x2="832" y2="792" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="28"/>
+  <polyline points="192,704 296,704 360,440 424,640 488,560 560,296 632,664 704,600 768,704 832,704"
+            fill="none" stroke="#FFFFFF" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="560" cy="296" r="58" fill="#D55E00" stroke="#FFFFFF" stroke-width="22"/>
+</svg>
