@@ -19,8 +19,10 @@ on:
 
 permissions: {}
 
+# github.workflow is "Release" when the release workflow runs this suite, so a release's CI gate
+# never shares a group with (and is never cancelled by) this workflow's own runs.
 concurrency:
-  group: ci-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 env:

@@ -125,10 +125,11 @@ named by `CHROME_PATH`.
    workflow refuses a version that does not match the workspace version, has no dated changelog
    section or already has a release, runs the full CI suite, builds and checks every package,
    and publishes the release with its checksums and attestations. A run started from the
-   Actions page releases the newest `master` commit at the time it starts, and creates the tag
-   `vX.Y.Z` on it only after every build and check has passed, so a failed run can simply be
-   started again. The documentation of the new version is then published at `/dima-perf/vX.Y/`.
-   Do not create the release on GitHub's release page: the workflow creates it.
+   Actions page releases the newest `master` commit at the time it starts and tags it `vX.Y.Z`
+   at once; if the run fails or is cancelled, the tag is removed again, so its failed jobs can be
+   re-run or a new run started. Only one release runs at a time. The documentation of the new
+   version is then published at `/dima-perf/vX.Y/`. Do not create the release on GitHub's
+   release page: the workflow creates it.
 
 ## Other scripts
 

@@ -2,16 +2,19 @@
 #
 # Started in either of two ways:
 #   * from the Actions page: Release > Run workflow on the default branch, with the version
-#     (X.Y.Z). The branch's newest commit when the run starts is released; the tag vX.Y.Z is
-#     created on it in the last job, just before the release, so a run that fails in any build
-#     or check leaves no tag behind (a re-run accepts a tag already on that commit);
+#     (X.Y.Z). The branch's newest commit when the run starts is released. The first job tags it
+#     vX.Y.Z at once, while it is still the branch's newest commit (GitHub can refuse a tag from
+#     the workflow token on an older commit whose workflow files differ from the branch); if the
+#     run then fails or is cancelled, the last job removes the tag again, and a re-run of its
+#     failed jobs re-creates it;
 #   * by pushing a tag vX.Y.Z.
 # Either way the workflow checks that the version matches the workspace version, that
-# CHANGELOG.md has a dated section for it and that no release for it exists yet, runs the full CI
-# suite, builds every archive and package, smoke-tests the Linux builds on old and new
-# distributions, then creates a *draft* release, uploads the assets with SHA256SUMS and
-# build-provenance attestations, and publishes it (immutable releases: nothing is added after
-# publication). No caches are used in release jobs.
+# CHANGELOG.md has a dated section for it and that it has no published release yet, runs the full
+# CI suite, builds every archive and package from the run's commit, smoke-tests the Linux builds
+# on old and new distributions, checks that the tag is still on that commit, and publishes the
+# release with the assets, SHA256SUMS and build-provenance attestations (gh uploads to a draft and
+# publishes it only when every upload succeeded: with immutable releases nothing can be added
+# after publication). No caches are used in release jobs.
 
 name: Release
 
@@ -22,24 +25,25 @@ on:
         description: "Version to release, for example 1.0.0 (the workspace version, with a dated CHANGELOG.md section)"
         required: true
         type: string
-  # The CI gate (a reusable workflow) checks out the triggering commit: the tagged commit for a
-  # tag push, the newest commit of the branch for a run started from the Actions page. A failed
-  # release is re-run from the Actions page.
+  # A failed release is re-run from the Actions page.
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
 permissions: {}
 
+# One release at a time: a second run waits until the first has finished, then stops early if
+# the version is already released.
 concurrency:
-  group: release-${{ inputs.version && format('v{0}', inputs.version) || github.ref_name }}
+  group: release
   cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
-  # What every job checks out: the pushed tag, or the commit a run from the Actions page started
-  # on (fixed for the whole run, even if the branch moves on).
-  RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
+  # What every job builds: the commit that started the run (the tagged commit for a tag push, the
+  # branch's newest commit for a run from the Actions page), fixed for the run and its re-runs
+  # even if the tag or the branch moves. The CI gate, a reusable workflow, builds it too.
+  RELEASE_REF: ${{ github.sha }}
   # Release builds link the documentation of their own version (/vX.Y/) in --help, the app and
   # their messages (D113); other builds link /latest/.
   DIMA_RELEASE: "1"
@@ -49,7 +53,7 @@ jobs:
     name: Tag, version and changelog
     runs-on: ubuntu-24.04
     permissions:
-      contents: read
+      contents: write # creates the tag of a run started from the Actions page
     outputs:
       version: ${{ steps.v.outputs.version }}
       tag: ${{ steps.v.outputs.tag }}
@@ -87,15 +91,16 @@ jobs:
             exit 1
           fi
           scripts/release/release-notes.sh "$version" > /dev/null
-          # A run from the Actions page creates the tag on this commit later, so an existing tag
-          # must already be on it; a pushed tag is the commit.
-          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
-            scripts/release/tag.sh check "$tag" "$GITHUB_SHA"
-          else
-            scripts/release/tag.sh check "$tag"
-          fi
+          scripts/release/tag.sh check "$tag" "$(git rev-parse HEAD)"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Create the tag
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.v.outputs.tag }}
+        run: scripts/release/tag.sh create "$RELEASE_TAG" "$(git rev-parse HEAD)"
 
   ci:
     name: Full CI suite
@@ -500,17 +505,47 @@ jobs:
         env:
           BUNDLE: ${{ steps.attest.outputs.bundle-path }}
         run: cp "$BUNDLE" "assets/dima-$VERSION.intoto.jsonl"
-      # A run from the Actions page tags the commit it built only now, after every job passed. A
-      # tag created with the workflow token starts no other workflow, so this stays the only run.
-      - name: Create the tag
-        if: github.event_name == 'workflow_dispatch'
+      # The release goes on the commit this run built. A run from the Actions page re-creates its
+      # tag here if a failed earlier attempt of the run removed it (a tag created with the
+      # workflow token starts no other workflow); a pushed tag must not have moved.
+      - name: Check the tag
         shell: bash
-        run: scripts/release/tag.sh create "$RELEASE_TAG" "$GITHUB_SHA"
-      - name: Create a draft, upload, publish
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            scripts/release/tag.sh create "$RELEASE_TAG" "$(git rev-parse HEAD)"
+          else
+            scripts/release/tag.sh verify "$RELEASE_TAG" "$(git rev-parse HEAD)"
+          fi
+      # One call: gh creates a draft, uploads every asset, then publishes it, and deletes the draft
+      # again if an upload fails, so the step can be re-run.
+      - name: Publish
         shell: bash
         run: |
           scripts/release/release-notes.sh "$VERSION" artifacts/allocator-benchmark/allocator.md > notes.md
-          gh release create "$RELEASE_TAG" --draft --verify-tag --title "DiMA $VERSION" --notes-file notes.md
-          gh release upload "$RELEASE_TAG" assets/*
-          gh release edit "$RELEASE_TAG" --draft=false
-          gh workflow run docs.yml --ref master
+          gh release create "$RELEASE_TAG" assets/* --verify-tag --title "DiMA $VERSION" --notes-file notes.md
+      # Every push to master also deploys the documentation, with each release's docs archive.
+      - name: Deploy the documentation of this version
+        shell: bash
+        run: |
+          gh workflow run docs.yml --ref master ||
+            echo "::warning::could not start the Docs workflow; run it from the Actions page, or the next push to master deploys the documentation of $RELEASE_TAG"
+
+  # A run from the Actions page that did not publish its release (a failed job, or a cancelled
+  # run) removes the tag its first job created, so the version can be released again later.
+  cleanup:
+    name: Remove the tag of an unpublished release
+    needs: [version, publish]
+    if: always() && github.event_name == 'workflow_dispatch' && needs.version.result == 'success' && needs.publish.result != 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # deletes the tag
+    env:
+      RELEASE_TAG: ${{ needs.version.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_REF }}
+          persist-credentials: false
+      - shell: bash
+        run: scripts/release/tag.sh remove "$RELEASE_TAG" "$(git rev-parse HEAD)"
