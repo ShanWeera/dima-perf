@@ -118,12 +118,16 @@ named by `CHROME_PATH`.
    carry the version), then `cargo xtask gen --mode check`: it also lists every hand-written
    version number to update, in the install page, the citing page, the README and the Bioconda
    recipe.
-4. Run the checks of [Before every change](#before-every-change), commit, and push a tag
-   `vX.Y.Z`. The release workflow refuses a tag that does not match the workspace version or
-   has no dated changelog section, runs the full CI suite, builds and checks every package, and
-   publishes the release with its checksums and attestations; the documentation of the new
-   version is then published at `/dima-perf/vX.Y/`. Do not create the release on GitHub's
-   release page: the workflow creates it, and stops if a release for the tag already exists.
+4. Run the checks of [Before every change](#before-every-change), commit, and merge into
+   `master`.
+5. Start the release: on GitHub, open **Actions**, choose **Release**, then **Run workflow** on
+   `master` and enter the version (`X.Y.Z`). Pushing a tag `vX.Y.Z` does the same. The release
+   workflow refuses a version that does not match the workspace version, has no dated changelog
+   section or already has a release, runs the full CI suite, builds and checks every package,
+   and publishes the release with its checksums and attestations; a run started from the
+   Actions page creates the tag `vX.Y.Z` on the newest `master` commit only after every build
+   has passed. The documentation of the new version is then published at `/dima-perf/vX.Y/`.
+   Do not create the release on GitHub's release page: the workflow creates it.
 
 ## Other scripts
 

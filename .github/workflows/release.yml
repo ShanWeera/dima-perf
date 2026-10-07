@@ -1,29 +1,44 @@
 # Release (plan §15; D67, D79, D82, D91, D92, D95, D102).
 #
-# Pushing a tag vX.Y.Z runs the full CI suite, checks that the tag matches the workspace version
-# and that CHANGELOG.md has a dated section for it, builds every archive and package, smoke-tests
-# the Linux builds on old and new distributions, then creates a *draft* release, uploads the
-# assets with SHA256SUMS and build-provenance attestations, and publishes it (immutable
-# releases: nothing is added after publication). No caches are used in release jobs.
+# Started in either of two ways:
+#   * from the Actions page: Release > Run workflow on the default branch, with the version
+#     (X.Y.Z). The newest commit of that branch is released, and the tag vX.Y.Z is created on it
+#     only after every build has passed, so a failed run leaves no tag behind;
+#   * by pushing a tag vX.Y.Z.
+# Either way the workflow checks that the version matches the workspace version, that
+# CHANGELOG.md has a dated section for it and that no release for it exists yet, runs the full CI
+# suite, builds every archive and package, smoke-tests the Linux builds on old and new
+# distributions, then creates a *draft* release, uploads the assets with SHA256SUMS and
+# build-provenance attestations, and publishes it (immutable releases: nothing is added after
+# publication). No caches are used in release jobs.
 
 name: Release
 
 on:
-  # Tag pushes only: the CI gate (a reusable workflow) checks out the triggering commit, which
-  # for a tag push is the tagged commit. A failed release is re-run from the Actions page.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, for example 1.0.0 (the workspace version, with a dated CHANGELOG.md section)"
+        required: true
+        type: string
+  # The CI gate (a reusable workflow) checks out the triggering commit: the tagged commit for a
+  # tag push, the newest commit of the branch for a run started from the Actions page. A failed
+  # release is re-run from the Actions page.
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
 permissions: {}
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release-${{ inputs.version && format('v{0}', inputs.version) || github.ref_name }}
   cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
-  RELEASE_TAG: ${{ github.ref_name }}
+  # What every job checks out: the pushed tag, or the commit a run from the Actions page started
+  # on (fixed for the whole run, even if the branch moves on).
+  RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
   # Release builds link the documentation of their own version (/vX.Y/) in --help, the app and
   # their messages (D113); other builds link /latest/.
   DIMA_RELEASE: "1"
@@ -36,22 +51,48 @@ jobs:
       contents: read
     outputs:
       version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.RELEASE_TAG }}
+          ref: ${{ env.RELEASE_REF }}
           persist-credentials: false
       - id: v
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          version="${RELEASE_TAG#v}"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            if [ "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]; then
+              echo "::error::start the release from the $DEFAULT_BRANCH branch (Run workflow > Use workflow from), not from $GITHUB_REF_NAME"
+              exit 1
+            fi
+            version="${INPUT_VERSION#v}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$version' is not a version of the form X.Y.Z, for example 1.0.0"
+            exit 1
+          fi
+          tag="v$version"
           workspace=$(sed -n '/^\[workspace.package\]/,/^\[/{s/^version = "\(.*\)"/\1/p}' Cargo.toml)
           if [ "$version" != "$workspace" ]; then
-            echo "::error::tag $RELEASE_TAG does not match the workspace version $workspace"
+            echo "::error::version $version does not match the workspace version $workspace"
             exit 1
           fi
           scripts/release/release-notes.sh "$version" > /dev/null
+          # A run from the Actions page creates the tag on this commit later, so an existing tag
+          # must already be on it; a pushed tag is the commit.
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            scripts/release/tag.sh check "$tag" "$GITHUB_SHA"
+          else
+            scripts/release/tag.sh check "$tag"
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
   ci:
     name: Full CI suite
@@ -70,7 +111,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.RELEASE_TAG }}
+          ref: ${{ env.RELEASE_REF }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
         with:
@@ -121,7 +162,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.RELEASE_TAG }}
+          ref: ${{ env.RELEASE_REF }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
         with:
@@ -213,7 +254,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.RELEASE_TAG }}
+          ref: ${{ env.RELEASE_REF }}
           persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -246,7 +287,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.RELEASE_TAG }}
+          ref: ${{ env.RELEASE_REF }}
           persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -309,7 +350,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.RELEASE_TAG }}
+          ref: ${{ env.RELEASE_REF }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
         with:
@@ -391,7 +432,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.RELEASE_TAG }}
+          ref: ${{ env.RELEASE_REF }}
           persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
@@ -429,11 +470,12 @@ jobs:
       actions: write
     env:
       VERSION: ${{ needs.version.outputs.version }}
+      RELEASE_TAG: ${{ needs.version.outputs.tag }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.RELEASE_TAG }}
+          ref: ${{ env.RELEASE_REF }}
           persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -455,6 +497,12 @@ jobs:
         env:
           BUNDLE: ${{ steps.attest.outputs.bundle-path }}
         run: cp "$BUNDLE" "assets/dima-$VERSION.intoto.jsonl"
+      # A run from the Actions page tags the commit it built only now, after every job passed. A
+      # tag created with the workflow token starts no other workflow, so this stays the only run.
+      - name: Create the tag
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: scripts/release/tag.sh create "$RELEASE_TAG" "$GITHUB_SHA"
       - name: Create a draft, upload, publish
         shell: bash
         run: |
