@@ -7,7 +7,8 @@ automatically (da Veiga Leprevost et al. 2017, doi:10.1093/bioinformatics/btx192
 
 ## Submitting a release
 
-1. Tag and publish the release (the release workflow does everything else).
+1. Publish the release with the release workflow ("Making a release" in the contributing
+   guide).
 2. Fill in `version` and `sha256` in `meta.yaml`:
    ```sh
    curl -sL https://github.com/ShanWeera/dima-perf/archive/refs/tags/vX.Y.Z.tar.gz | sha256sum
