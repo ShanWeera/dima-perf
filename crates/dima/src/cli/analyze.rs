@@ -66,6 +66,7 @@ pub fn params(a: &AnalyzeArgs) -> Result<AnalysisParams> {
         kmer_length,
         support_threshold: a.support_threshold,
         estimator: a.estimator.map(estimator),
+        similarity_weighted_entropy: false,
         validation: a.validation.map(validation),
         min_coverage: a.min_coverage,
         query_name: a.query_name.clone(),

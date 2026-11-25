@@ -20,8 +20,8 @@ use crate::config::Percent;
 use crate::diagnostics::{Code, Diagnostic, Tally, agree, plural};
 use crate::error::{DimaError, Result};
 use crate::model::{
-    HcsConfidence, HcsEligibility, HcsMember, HcsParameters, HcsRegion, HcsResults, HcsSource,
-    Motif, Reference, Results, SCHEMA_VERSION, ToolInfo,
+    HCS_SCHEMA_VERSION, HcsConfidence, HcsEligibility, HcsMember, HcsParameters, HcsRegion,
+    HcsResults, HcsSource, Motif, Reference, Results, ToolInfo,
 };
 use crate::numeric::clopper_pearson_lower;
 
@@ -210,7 +210,7 @@ pub fn compute(results: &Results, params: &HcsParams) -> Result<HcsResults> {
         "conserved sequences computed"
     );
     Ok(HcsResults {
-        schema_version: SCHEMA_VERSION.to_owned(),
+        schema_version: HCS_SCHEMA_VERSION.to_owned(),
         tool: ToolInfo {
             name: "dima".to_owned(),
             version: crate::citations::SOFTWARE_VERSION.to_owned(),

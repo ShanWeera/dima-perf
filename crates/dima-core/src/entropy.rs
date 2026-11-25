@@ -67,9 +67,9 @@ impl CountProfile {
         let mut support = 0u64;
         let mut frequencies: Vec<(u64, u64)> = Vec::new();
         for c in &v {
-            support = support
-                .checked_add(*c)
-                .ok_or(DimaError::Overflow { what: "support" })?;
+            support = support.checked_add(*c).ok_or(DimaError::Overflow {
+                what: "the support",
+            })?;
             match frequencies.last_mut() {
                 Some((last, f)) if last == c => *f += 1,
                 _ => frequencies.push((*c, 1)),

@@ -6,6 +6,46 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). The
 "Methodology" group lists every change that can alter a result, with the sources behind it.
 
+## [1.1.0] - Unreleased
+
+### Methodology
+
+- **Similarity-weighted entropy (opt-in)**: Wu J. 2025, "Similarity-weighted entropy for
+  quantifying genetic diversity in viral quasispecies", *Virus Evolution* 11(1):veaf029
+  ([doi:10.1093/ve/veaf029](https://doi.org/10.1093/ve/veaf029)), Section 2.1 and
+  Supplementary File 1. Each variant's entropy term is weighted by its dissimilarity to the rest
+  of the position, the similarity of two k-mers being their proportion of identical residues
+  (Grishin 1995, [doi:10.1007/BF00175826](https://doi.org/10.1007/BF00175826), p. 675). Also the
+  observed and similarity-weighted entropies normalised by log2 of the number of distinct
+  k-mers (the Index included); undefined with one distinct k-mer. Computed exactly from residue
+  counts per site instead of pairs of variants (the column-profile form of sum-of-pairs scores,
+  Gotoh 1994, [doi:10.1093/bioinformatics/10.4.379](https://doi.org/10.1093/bioinformatics/10.4.379),
+  eqs. (1), (4a), (9b)). Without the option nothing is computed and no existing value changes;
+  with it, no existing value changes either.
+
+### Added
+
+- Results: `similarity_weighted_entropy`, `normalised_observed_entropy` and
+  `normalised_similarity_weighted_entropy` per position, `similarity_weighted_entropy_summary`
+  (eligible positions, with their mean observed entropy) and the parameter
+  `run.parameters.similarity_weighted_entropy`; three columns appended to the positions table.
+  Without the option the keys are `null` (`NA` in the table); default results grow by 116 bytes
+  per position (compact JSON and JSONL; 140 indented; 9 per positions-table row).
+
+### Changed
+
+- Results schema 1.1.0 (the conserved-sequences schema stays 1.0.0 and now has its own version
+  constant). Results written by dima 1.0.0 are read as runs without similarity-weighted entropy;
+  `dima view` notes this when it writes values their schema did not record, and keeps its
+  `newer_schema` warning for newer or unrecognised versions.
+
+### Fixed
+
+- The counter-overflow message said "64-bit" for counters that are 32-bit (distinct k-mers at
+  one position, distinct header values); it now reads "… exceeds the range of DiMA's counters".
+- Messages about the schema version of a conserved-sequences file no longer call it a results
+  schema.
+
 ## [1.0.0] - 2026-10-07
 
 First release of the Rust implementation of DiMA (Tharanga et al. 2025, *Briefings in

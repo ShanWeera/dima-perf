@@ -70,6 +70,19 @@ impl Content {
     pub const fn needs_hcs(self) -> bool {
         matches!(self, Self::HcsJson { .. } | Self::Tsv(Table::Hcs))
     }
+
+    /// `true` when the output carries per-position values (the results as JSON or JSONL, or the
+    /// positions table): the only outputs with similarity-weighted entropy. Every kind of output
+    /// must decide, so a new one cannot be forgotten.
+    #[must_use]
+    pub const fn carries_position_values(self) -> bool {
+        match self {
+            Self::Json { .. } | Self::Jsonl | Self::Tsv(Table::Positions) => true,
+            Self::Tsv(Table::Variants | Table::Metadata | Table::Hcs)
+            | Self::HcsJson { .. }
+            | Self::RunReport => false,
+        }
+    }
 }
 
 /// Everything to write, in order.
@@ -89,6 +102,15 @@ impl Plan {
     #[must_use]
     pub fn needs_hcs(&self) -> bool {
         self.outputs.iter().any(|o| o.content.needs_hcs())
+    }
+
+    /// `true` when an output carrying per-position values is planned (results JSON or JSONL,
+    /// or the positions table, including the one `--tsv-dir` writes).
+    #[must_use]
+    pub fn writes_position_values(&self) -> bool {
+        self.outputs
+            .iter()
+            .any(|o| o.content.carries_position_values())
     }
 
     /// `true` when a JSON document (results or conserved regions) is planned, the only outputs

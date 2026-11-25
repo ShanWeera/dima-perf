@@ -119,6 +119,20 @@ pub fn sentence(r: &Results) -> String {
         Cite::new("chao2012").narrative(),
         cited(&["hu2013"]),
     );
+    if p.similarity_weighted_entropy.value {
+        s.push_str(&format!(
+            " Similarity-weighted entropy and the observed and similarity-weighted entropies \
+             normalised by log2 of the number of distinct k-mers were computed as described by \
+             {}, with the similarity of two k-mers taken as their proportion of identical \
+             residues{}.",
+            Cite::new("wu2025").narrative(),
+            if p.alphabet.value.is_nucleotide() {
+                String::new()
+            } else {
+                format!(" {}", cited(&["grishin1995"]))
+            },
+        ));
+    }
     let unknown = r.run.validation.unknown_total;
     if unknown > 0 {
         s.push_str(&format!(

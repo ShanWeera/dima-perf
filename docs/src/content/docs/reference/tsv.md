@@ -25,8 +25,8 @@ replaced by `_`. `dima view` converts existing results the same way.
 - Quoting follows the CSV specification with a tab delimiter [@rfc4180]: a field is quoted with `"` only when
   it contains a tab, a quote or a line break, and quotes inside it are doubled. Header field
   names and values (in the `metadata` table) are the only fields that can need it.
-- **`NA`** marks an undefined value (`null` in JSON). Only the columns marked "or NA" below can
-  hold it.
+- **`NA`** marks an undefined or not requested value (`null` in JSON). Only the columns marked
+  "or NA" below can hold it.
 - Numbers are written in their shortest exact form (for example `75.88235294117646`); booleans as
   `true` and `false`.
 - Files written with `-o` can be compressed by name (`.tsv.gz`, `.tsv.zst`); `--tsv-dir` writes
@@ -55,6 +55,9 @@ have no missing values. Recipes are in [Choose and read outputs](/how-to/outputs
 | `total_variants_incidence` | number or NA | Non-Index sequences per 100 supporting sequences |
 | `sample_coverage` | number or NA | Estimated sample coverage (NA when support < 2) |
 | `below_min_coverage` | `true`, `false` or NA | Coverage below `--min-coverage` (NA without the option) |
+| `similarity_weighted_entropy` | number or NA | [Similarity-weighted entropy](/explanation/entropy/#similarity-weighted-entropy-opt-in) in bits (NA without `--similarity-weighted-entropy` or without support) |
+| `normalised_observed_entropy` | number or NA | Observed entropy divided by $\log_2$ of the number of distinct k-mers, Index included (NA without the option or with fewer than two distinct k-mers) |
+| `normalised_similarity_weighted_entropy` | number or NA | Similarity-weighted entropy divided by the same $\log_2 D$ (NA without the option or with fewer than two distinct k-mers) |
 
 ## variants
 

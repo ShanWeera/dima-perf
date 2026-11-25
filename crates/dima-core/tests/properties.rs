@@ -63,6 +63,7 @@ proptest! {
         k_seed in 0usize..1000,
         threshold in 1u64..12,
         estimator in prop_oneof![Just(Estimator::Dima), Just(Estimator::ChaoWangJost), Just(Estimator::MillerMadow), Just(Estimator::Raw)],
+        similarity_weighted_entropy in any::<bool>(),
     ) {
         let k = 1 + k_seed % width;
         let mut fasta = Vec::new();
@@ -80,9 +81,11 @@ proptest! {
             support_threshold: Some(threshold),
             estimator: Some(estimator),
             validation: Some(ValidationMode::Strict),
+            similarity_weighted_entropy,
             ..AnalysisParams::default()
         };
         let r = analyze(&Source::Path(path), &params, &RunControl::new()).unwrap().results;
+        prop_assert_eq!(r.similarity_weighted_entropy_summary.is_some(), similarity_weighted_entropy);
         prop_assert_eq!(r.sequence_count, rows.len() as u64);
         prop_assert_eq!(r.position_count, (width - k + 1) as u64);
         let mut eligible = 0;
@@ -98,10 +101,26 @@ proptest! {
             };
             prop_assert_eq!(p.low_support, label);
             eligible += u64::from(label.is_none());
+            // The similarity-weighted values are given exactly where they are defined.
+            let d = p.diversity_motifs.len();
+            prop_assert_eq!(p.similarity_weighted_entropy.is_some(), similarity_weighted_entropy && p.support >= 1);
+            prop_assert_eq!(p.normalised_observed_entropy.is_some(), similarity_weighted_entropy && d >= 2);
+            prop_assert_eq!(p.normalised_similarity_weighted_entropy.is_some(), similarity_weighted_entropy && d >= 2);
             if p.support == 0 {
                 prop_assert!(p.entropy.is_none() && p.diversity_motifs.is_empty());
                 prop_assert!(p.total_variants_incidence.is_none());
                 continue;
+            }
+            if let (Some(hs), Some(h)) = (p.similarity_weighted_entropy, p.observed_entropy) {
+                // Bounds: each weight lies in [f_i + (1 − f_i)/k, 1].
+                let lower: f64 = p.diversity_motifs.iter().map(|v| {
+                    let f = v.count as f64 / p.support as f64;
+                    -f * f.log2() * (f + (1.0 - f) / k as f64)
+                }).sum();
+                prop_assert!(hs <= h * (1.0 + 1e-12) && hs >= lower * (1.0 - 1e-12), "{} {} {}", hs, h, lower);
+            }
+            for x in [p.normalised_observed_entropy, p.normalised_similarity_weighted_entropy].into_iter().flatten() {
+                prop_assert!((0.0..=1.0).contains(&x));
             }
             let incidence: f64 = p.diversity_motifs.iter().map(|v| v.incidence).sum();
             prop_assert!((incidence - 100.0).abs() < 1e-9);

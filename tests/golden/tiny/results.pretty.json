@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "query_name": "input",
   "sequence_count": 8,
   "support_threshold": 4,
@@ -46,6 +46,7 @@
     "min_coverage": null,
     "below_min_count": null
   },
+  "similarity_weighted_entropy_summary": null,
   "run": {
     "tool": {
       "name": "dima",
@@ -66,6 +67,10 @@
       },
       "estimator": {
         "value": "dima",
+        "origin": "default"
+      },
+      "similarity_weighted_entropy": {
+        "value": false,
         "origin": "default"
       },
       "validation": {
@@ -437,6 +442,9 @@
       "total_variants_incidence": 0.0,
       "sample_coverage": 1.0,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": [
         {
           "sequence": "MKT",
@@ -474,6 +482,9 @@
       "total_variants_incidence": 0.0,
       "sample_coverage": 1.0,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": [
         {
           "sequence": "KTA",
@@ -511,6 +522,9 @@
       "total_variants_incidence": 0.0,
       "sample_coverage": 1.0,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": [
         {
           "sequence": "TAY",
@@ -547,6 +561,9 @@
       "total_variants_incidence": 42.857142857142854,
       "sample_coverage": 1.0,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": [
         {
           "sequence": "AYL",
@@ -598,6 +615,9 @@
       "total_variants_incidence": 42.857142857142854,
       "sample_coverage": 1.0,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": [
         {
           "sequence": "YLA",
@@ -649,6 +669,9 @@
       "total_variants_incidence": 0.0,
       "sample_coverage": 1.0,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": [
         {
           "sequence": "IAK",
@@ -701,6 +724,9 @@
       "total_variants_incidence": 0.0,
       "sample_coverage": 1.0,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": [
         {
           "sequence": "AKQ",
@@ -738,6 +764,9 @@
       "total_variants_incidence": 0.0,
       "sample_coverage": 1.0,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": [
         {
           "sequence": "KQR",
@@ -775,6 +804,9 @@
       "total_variants_incidence": 0.0,
       "sample_coverage": 1.0,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": [
         {
           "sequence": "QRQ",
@@ -809,6 +841,9 @@
       "total_variants_incidence": 0.0,
       "sample_coverage": 1.0,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": [
         {
           "sequence": "RQI",
@@ -843,6 +878,9 @@
       "total_variants_incidence": 0.0,
       "sample_coverage": 1.0,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": [
         {
           "sequence": "QIS",
@@ -877,6 +915,9 @@
       "total_variants_incidence": 0.0,
       "sample_coverage": 1.0,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": [
         {
           "sequence": "ISF",
@@ -910,6 +951,9 @@
       "total_variants_incidence": 0.0,
       "sample_coverage": 1.0,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": [
         {
           "sequence": "SFV",
@@ -943,6 +987,9 @@
       "total_variants_incidence": 0.0,
       "sample_coverage": 1.0,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": [
         {
           "sequence": "FVK",
@@ -976,6 +1023,9 @@
       "total_variants_incidence": 0.0,
       "sample_coverage": 1.0,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": [
         {
           "sequence": "VKS",
@@ -1009,6 +1059,9 @@
       "total_variants_incidence": null,
       "sample_coverage": null,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": []
     },
     {
@@ -1024,6 +1077,9 @@
       "total_variants_incidence": null,
       "sample_coverage": null,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": []
     },
     {
@@ -1039,6 +1095,9 @@
       "total_variants_incidence": null,
       "sample_coverage": null,
       "below_min_coverage": null,
+      "similarity_weighted_entropy": null,
+      "normalised_observed_entropy": null,
+      "normalised_similarity_weighted_entropy": null,
       "diversity_motifs": []
     }
   ]

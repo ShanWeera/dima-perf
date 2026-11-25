@@ -276,8 +276,9 @@ pub enum DimaError {
     /// The operation was cancelled by the user or a signal.
     #[error("cancelled")]
     Cancelled,
-    /// A 64-bit counter would overflow (exit 4).
-    #[error("{what} exceeds the 64-bit counter range")]
+    /// A counter would overflow (exit 4): 64-bit for sequences and support, 32-bit for the
+    /// distinct k-mers of one position and the distinct header values.
+    #[error("{what} exceeds the range of DiMA's counters")]
     Overflow {
         /// The quantity that overflowed.
         what: &'static str,

@@ -7,10 +7,13 @@
 //!   counted as 0 bits, LS/ELS with their reported entropy: the observed entropy with the
 //!   `dima` and `raw` estimators) for comparison with earlier results.
 //! * The **coverage summary** describes the estimated sample coverage (Chao & Jost 2012).
+//! * The **similarity-weighted summary** (with `--similarity-weighted-entropy`) covers the
+//!   eligible positions' similarity-weighted entropy (Wu 2025) and their mean observed entropy,
+//!   so the two can be compared like for like; the normalised values are not summarised.
 
 use crate::model::{
-    AllPositionsSummary, CoverageSummary, Extremum, PositionResult, SupportLabel,
-    SupportLabelCounts,
+    AllPositionsSummary, CoverageSummary, Extremum, PositionResult, SimilarityWeightedSummary,
+    SupportLabel, SupportLabelCounts,
 };
 use crate::numeric::Neumaier;
 
@@ -99,6 +102,32 @@ pub fn all_positions(positions: &[PositionResult]) -> AllPositionsSummary {
     }
 }
 
+/// The similarity-weighted summary over eligible positions (support > T): mean, lowest and
+/// highest similarity-weighted entropy, and the mean observed entropy of the same positions.
+#[must_use]
+pub fn similarity_weighted(positions: &[PositionResult]) -> SimilarityWeightedSummary {
+    let eligible: Vec<&PositionResult> = positions
+        .iter()
+        .filter(|p| p.low_support.is_none())
+        .collect();
+    let weighted: Vec<(u64, f64)> = eligible
+        .iter()
+        .filter_map(|p| p.similarity_weighted_entropy.map(|e| (p.position, e)))
+        .collect();
+    let (average_entropy, lowest_entropy, highest_entropy) = describe(&weighted);
+    let observed: Vec<(u64, f64)> = eligible
+        .iter()
+        .filter_map(|p| p.observed_entropy.map(|e| (p.position, e)))
+        .collect();
+    SimilarityWeightedSummary {
+        position_count: weighted.len() as u64,
+        average_entropy,
+        lowest_entropy,
+        highest_entropy,
+        average_observed_entropy: describe(&observed).0,
+    }
+}
+
 /// The sample-coverage summary.
 #[must_use]
 pub fn coverage(positions: &[PositionResult], min_coverage: Option<f64>) -> CoverageSummary {
@@ -138,6 +167,9 @@ mod tests {
             total_variants_incidence: None,
             sample_coverage: coverage,
             below_min_coverage: None,
+            similarity_weighted_entropy: entropy.map(|e| e / 2.0),
+            normalised_observed_entropy: None,
+            normalised_similarity_weighted_entropy: None,
             diversity_motifs: Vec::new(),
         }
     }
@@ -200,5 +232,25 @@ mod tests {
         let cov = coverage(&ps, None);
         assert_eq!((cov.evaluated, cov.min, cov.mean), (0, None, None));
         assert_eq!(all_positions(&[]).average_entropy, None);
+    }
+
+    #[test]
+    fn similarity_weighted_summary_covers_eligible_positions_only() {
+        let ps = vec![
+            pos(1, None, Some(1.0), None),
+            pos(2, Some(SupportLabel::Low), Some(3.0), None),
+            pos(3, None, Some(2.0), None),
+            pos(4, Some(SupportLabel::NoSupport), None, None),
+        ];
+        let s = similarity_weighted(&ps);
+        assert_eq!(s.position_count, 2);
+        assert_eq!(s.average_entropy, Some(0.75));
+        assert_eq!(s.lowest_entropy.unwrap().position, 1);
+        assert_eq!(s.highest_entropy.unwrap().entropy, 1.0);
+        assert_eq!(s.average_observed_entropy, Some(1.5));
+        let none = similarity_weighted(&ps[1..2]);
+        assert_eq!(none.position_count, 0);
+        assert_eq!(none.average_entropy, None);
+        assert_eq!(none.average_observed_entropy, None);
     }
 }

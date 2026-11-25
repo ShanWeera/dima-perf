@@ -52,6 +52,9 @@ impl Table {
                 "total_variants_incidence",
                 "sample_coverage",
                 "below_min_coverage",
+                "similarity_weighted_entropy",
+                "normalised_observed_entropy",
+                "normalised_similarity_weighted_entropy",
             ],
             Self::Variants => &[
                 "position",
@@ -193,6 +196,9 @@ fn write_any(
                 row.float(p.total_variants_incidence)?;
                 row.float(p.sample_coverage)?;
                 row.opt_bool(p.below_min_coverage)?;
+                row.float(p.similarity_weighted_entropy)?;
+                row.float(p.normalised_observed_entropy)?;
+                row.float(p.normalised_similarity_weighted_entropy)?;
                 row.end()?;
             }
         }

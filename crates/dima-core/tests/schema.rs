@@ -8,7 +8,7 @@ use dima_core::config::{Alphabet, AnalysisParams, Estimator, ValidationMode};
 use dima_core::control::RunControl;
 use dima_core::hcs::{self, HcsParams};
 use dima_core::input::Source;
-use dima_core::model::SCHEMA_VERSION;
+use dima_core::model::{HCS_SCHEMA_VERSION, SCHEMA_VERSION};
 use serde_json::Value;
 
 fn root() -> PathBuf {
@@ -71,10 +71,13 @@ fn fixture(text: &str, params: AnalysisParams) -> dima_core::model::Results {
 
 #[test]
 fn schema_versions_match_the_code() {
-    for name in ["results.schema.json", "hcs.schema.json"] {
+    for (name, version) in [
+        ("results.schema.json", SCHEMA_VERSION),
+        ("hcs.schema.json", HCS_SCHEMA_VERSION),
+    ] {
         assert_eq!(
             schema(name)["properties"]["schema_version"]["const"],
-            SCHEMA_VERSION,
+            version,
             "{name}"
         );
     }
@@ -137,6 +140,27 @@ fn every_output_validates() {
             ),
         ),
     ];
+    for (what, text) in [
+        (
+            "similarity-weighted, no support and one k-mer",
+            ">a\nACGTAC\n>b\nACGTAC\n>c\nAC-TAC\n",
+        ),
+        (
+            "similarity-weighted, diverse",
+            ">a\nACGTACGT\n>b\nACGAACGT\n>c\nACGTACGA\n",
+        ),
+    ] {
+        cases.push((
+            what,
+            fixture(
+                text,
+                AnalysisParams {
+                    similarity_weighted_entropy: true,
+                    ..dna.clone()
+                },
+            ),
+        ));
+    }
     for estimator in Estimator::ALL {
         cases.push((
             "estimator",
@@ -173,6 +197,41 @@ fn every_output_validates() {
     let mut bad = serde_json::to_value(&cases[0].1).unwrap();
     bad["results"][24]["diversity_motifs"][0]["motif_short"] = Value::from("X");
     assert!(!results.is_valid(&bad));
+    // The presence rules of the similarity-weighted values hold in both directions.
+    let on = serde_json::to_value(&cases[5].1).unwrap();
+    let off = serde_json::to_value(&cases[1].1).unwrap();
+    let multi = on["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .position(|p| p["diversity_motifs"].as_array().unwrap().len() >= 2)
+        .unwrap();
+    type Damage<'a> = (&'a str, &'a Value, fn(&mut Value, usize));
+    let damaged: [Damage<'_>; 5] = [
+        ("off with a value", &off, |v, _| {
+            v["results"][0]["similarity_weighted_entropy"] = Value::from(0.5);
+        }),
+        ("off with a summary", &off, |v, _| {
+            v["similarity_weighted_entropy_summary"] = serde_json::json!({
+                "position_count": 0, "average_entropy": null, "lowest_entropy": null,
+                "highest_entropy": null, "average_observed_entropy": null
+            });
+        }),
+        ("on without a value", &on, |v, i| {
+            v["results"][i]["similarity_weighted_entropy"] = Value::Null;
+        }),
+        ("on without a normalised value", &on, |v, i| {
+            v["results"][i]["normalised_observed_entropy"] = Value::Null;
+        }),
+        ("on without a summary", &on, |v, _| {
+            v["similarity_weighted_entropy_summary"] = Value::Null;
+        }),
+    ];
+    for (what, original, damage) in damaged {
+        let mut bad = original.clone();
+        damage(&mut bad, multi);
+        assert!(!results.is_valid(&bad), "{what}");
+    }
     // … and so are references into the results schema from the HCS schema.
     let h = hcs::compute(&cases[0].1, &HcsParams::default()).unwrap();
     let mut bad = serde_json::to_value(&h).unwrap();

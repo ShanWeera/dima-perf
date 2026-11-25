@@ -306,6 +306,40 @@ positions) the mean over all positions with NS counted as 0 — DiMA v5.0.9's ru
 as `all_positions_summary` for comparison — is 3.443 bits, against 5.350 bits over the eligible
 positions.
 
+## Similarity-weighted entropy (opt-in)
+
+Shannon entropy treats two variants that differ at one residue exactly like two unrelated ones.
+Similarity-weighted entropy [@wu2025, Section 2.1 and Supplementary File 1] weights each
+variant's entropy term by how *dissimilar* it is to the rest of the position, so near-identical
+variants count for less. It is not part of the DiMA method and is computed only on request:
+`dima analyze --similarity-weighted-entropy`, or **Compute similarity-weighted entropy** under
+**Advanced** in the desktop app. Without it, the three values below are `null` (`NA` in the
+tables) and nothing else changes; with it, nothing else changes either.
+
+At a position with support $N$, let variant $i$ (a distinct k-mer, the Index included) be carried
+by $c_i$ sequences, so its frequency is $\hat p_i = c_i/N$. The similarity of two variants is the
+proportion of their $k$ residues that are identical, $s_{ij} = (k - d_{ij})/k$, where $d_{ij}$ is
+the number of residues at which they differ [@wu2025, Section 2.1; @grishin1995, p. 675]. Then
+
+$$
+\begin{equation}
+S_i = \sum_{j \ne i} \hat p_j\, s_{ij}, \qquad
+H_\text{sim} = \sum_i \left(-\hat p_i \log_2 \hat p_i\right)\left(1 - S_i\right) .
+\end{equation}
+$$
+
+The weight $1 - S_i$ lies between $\hat p_i$ and 1, so $H_\text{sim}$ is never more than the
+observed entropy $\hat H$, and equals it when every pair of variants differs at every residue
+(always for $k = 1$). DiMA also reports both entropies normalised by their largest possible value
+for the number of distinct k-mers $D$ at the position (the Index included):
+$H_n = \hat H / \log_2 D$ and $H_\text{nsim} = H_\text{sim} / \log_2 D$, each between 0 and 1
+[@wu2025, Section 2.1]. With a single distinct k-mer ($D = 1$) the maximum is 0, so the
+normalised values are undefined (`null`) while $H_\text{sim} = 0$; without support all three are
+`null`.
+
+DiMA computes exactly Wu's sums, but from the residue counts at each offset of the k-mer instead
+of every pair of variants (see [Numerical accuracy](/explanation/numerical-accuracy/#similarity-weighted-entropy)).
+
 ## Numerical details
 
 Logarithms come from the `libm` library, so they give the same bits on every platform; sums use

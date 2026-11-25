@@ -115,6 +115,29 @@ references:
     doi: "10.1371/journal.pone.0059994"
   - type: article
     authors:
+      - family-names: "Wu"
+        given-names: "Jian"
+    title: "Similarity-weighted entropy for quantifying genetic diversity in viral quasispecies"
+    journal: "Virus Evolution"
+    year: 2025
+    volume: "11"
+    issue: "1"
+    start: "veaf029"
+    doi: "10.1093/ve/veaf029"
+  - type: article
+    authors:
+      - family-names: "Grishin"
+        given-names: "Nick V."
+    title: "Estimation of the number of amino acid substitutions per site when the substitution rate varies among sites"
+    journal: "Journal of Molecular Evolution"
+    year: 1995
+    volume: "41"
+    issue: "5"
+    start: "675"
+    end: "679"
+    doi: "10.1007/BF00175826"
+  - type: article
+    authors:
       - family-names: "Eddy"
         given-names: "Sean R."
     title: "Accelerated Profile HMM Searches"

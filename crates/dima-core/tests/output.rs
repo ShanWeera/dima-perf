@@ -12,6 +12,11 @@ use dima_core::model::Results;
 use dima_core::output::{self, OutputCompression, Sink, Table, Target};
 
 fn results() -> Results {
+    results_with(false)
+}
+
+/// The small test analysis, with or without similarity-weighted entropy.
+fn results_with(similarity_weighted_entropy: bool) -> Results {
     let dir = tempfile::tempdir().unwrap();
     let p = dir.path().join("t.fa");
     let mut fasta = String::new();
@@ -33,6 +38,7 @@ fn results() -> Results {
         support_threshold: Some(3),
         header_format: Some(vec!["Id".into(), "Host".into()]),
         metadata_fields: Some(vec!["Host".into()]),
+        similarity_weighted_entropy,
         ..AnalysisParams::default()
     };
     analyze(&Source::Path(p), &params, &RunControl::new())
@@ -66,7 +72,12 @@ fn text(path: &Path) -> String {
 
 #[test]
 fn json_round_trips_in_every_form() {
-    let r = results();
+    let r = results_with(true);
+    assert!(
+        r.results
+            .iter()
+            .any(|p| p.similarity_weighted_entropy > Some(0.0))
+    );
     let dir = tempfile::tempdir().unwrap();
     for (name, pretty) in [
         ("a.json", false),
@@ -78,11 +89,12 @@ fn json_round_trips_in_every_form() {
         write(&p, |s| output::write_json(&r, pretty, s).unwrap());
         let t = text(&p);
         assert!(t.ends_with('\n') && !t.ends_with("\n\n"), "{name}");
+        let version = dima_core::model::SCHEMA_VERSION;
         assert!(
-            t.starts_with(if pretty {
-                "{\n  \"schema_version\": \"1.0.0\""
+            t.starts_with(&if pretty {
+                format!("{{\n  \"schema_version\": \"{version}\"")
             } else {
-                "{\"schema_version\":\"1.0.0\""
+                format!("{{\"schema_version\":\"{version}\"")
             }),
             "{name}"
         );
@@ -244,6 +256,158 @@ fn inconsistent_results_are_invalid_input() {
     shuffled["results"].as_array_mut().unwrap().reverse();
     std::fs::write(&p, serde_json::to_vec(&shuffled).unwrap()).unwrap();
     assert_eq!(output::read_results(&p).unwrap(), back);
+}
+
+/// The similarity-weighted values must be present exactly where the run computed them: a file
+/// that breaks the rule was edited or damaged (exit 4).
+#[test]
+fn similarity_weighted_values_follow_the_presence_rules() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("r.json");
+    let on = serde_json::to_value(results_with(true)).unwrap();
+    let off = serde_json::to_value(results()).unwrap();
+    // The first position has one distinct k-mer; another has two.
+    let with = |n: usize| {
+        on["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .position(|p| p["diversity_motifs"].as_array().unwrap().len() == n)
+            .unwrap()
+    };
+    let (single, multi) = (with(1), with(2));
+    assert!(on["results"][multi]["normalised_observed_entropy"].is_number());
+    type Damage = (&'static str, bool, Box<dyn Fn(&mut serde_json::Value)>);
+    let damage: Vec<Damage> = vec![
+        (
+            "off, with a value",
+            false,
+            Box::new(|v| {
+                v["results"][0]["similarity_weighted_entropy"] = 0.5.into();
+            }),
+        ),
+        (
+            "off, with a summary",
+            false,
+            Box::new(move |v| {
+                v["similarity_weighted_entropy_summary"] = on_summary();
+            }),
+        ),
+        (
+            "on, value missing",
+            true,
+            Box::new(|v| {
+                v["results"][0]["similarity_weighted_entropy"] = serde_json::Value::Null;
+            }),
+        ),
+        (
+            "on, normalised value at one k-mer",
+            true,
+            Box::new(move |v| {
+                v["results"][single]["normalised_observed_entropy"] = 0.5.into();
+            }),
+        ),
+        (
+            "on, normalised value missing",
+            true,
+            Box::new(move |v| {
+                v["results"][multi]["normalised_similarity_weighted_entropy"] =
+                    serde_json::Value::Null;
+            }),
+        ),
+        (
+            "on, summary missing",
+            true,
+            Box::new(|v| {
+                v["similarity_weighted_entropy_summary"] = serde_json::Value::Null;
+            }),
+        ),
+        (
+            "on, negative value",
+            true,
+            Box::new(|v| {
+                v["results"][0]["similarity_weighted_entropy"] = (-0.1).into();
+            }),
+        ),
+        (
+            "on, normalised above 1",
+            true,
+            Box::new(move |v| {
+                v["results"][multi]["normalised_observed_entropy"] = 1.5.into();
+            }),
+        ),
+    ];
+    for (what, computed, f) in damage {
+        let mut v = if computed { on.clone() } else { off.clone() };
+        f(&mut v);
+        std::fs::write(&p, serde_json::to_vec(&v).unwrap()).unwrap();
+        let e = output::read_results(&p).unwrap_err();
+        assert_eq!(
+            e.class(),
+            dima_core::error::ExitClass::InvalidInput,
+            "{what}: {e}"
+        );
+        assert!(
+            e.hint().unwrap().contains("edited or damaged"),
+            "{what}: {e}"
+        );
+    }
+    for v in [&on, &off] {
+        std::fs::write(&p, serde_json::to_vec(v).unwrap()).unwrap();
+        output::read_results(&p).unwrap();
+    }
+}
+
+fn on_summary() -> serde_json::Value {
+    serde_json::to_value(results_with(true).similarity_weighted_entropy_summary).unwrap()
+}
+
+/// A results file written by dima 1.0.0 (schema 1.0.0, frozen in `tests/data`) is read as a
+/// run without similarity-weighted entropy, and is written again with this version's schema.
+#[test]
+fn schema_1_0_0_files_are_runs_without_the_option() {
+    let frozen =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/results-schema-1.0.0.json.gz");
+    let r = output::read_results(&frozen).unwrap();
+    assert_eq!(r.schema_version, "1.0.0");
+    assert!(!r.run.parameters.similarity_weighted_entropy.value);
+    assert_eq!(
+        r.run.parameters.similarity_weighted_entropy.origin,
+        dima_core::config::Origin::Default
+    );
+    assert!(r.similarity_weighted_entropy_summary.is_none());
+    assert!(r.results.iter().all(|p| {
+        p.similarity_weighted_entropy.is_none()
+            && p.normalised_observed_entropy.is_none()
+            && p.normalised_similarity_weighted_entropy.is_none()
+    }));
+    let dir = tempfile::tempdir().unwrap();
+    let again = dir.path().join("again.json");
+    write(&again, |s| output::write_json(&r, false, s).unwrap());
+    let back = output::read_results(&again).unwrap();
+    assert_eq!(back.schema_version, dima_core::model::SCHEMA_VERSION);
+    assert_eq!(back.results, r.results);
+}
+
+#[test]
+fn schema_versions_parse_exactly() {
+    use dima_core::output::parse_schema_version as parse;
+    assert_eq!(parse("1.1.0"), Some([1, 1, 0]));
+    assert_eq!(parse("0.0.0"), Some([0, 0, 0]));
+    for bad in [
+        "1.1",
+        "1.1.0-dev",
+        "01.1.0",
+        "+1.1.0",
+        "1..0",
+        "1.1.0.0",
+        "",
+        "a.b.c",
+        "1.1.00",
+    ] {
+        assert_eq!(parse(bad), None, "{bad}");
+    }
+    assert!(parse("1.10.0") > parse("1.9.0"));
 }
 
 /// A value this version does not know is refused; in a file of a newer 1.x schema the message

@@ -1447,3 +1447,70 @@ fn ctrl_break_cancels() {
     drop(stdin);
     assert!(!d.path().join("r.json").exists());
 }
+
+/// `dima view` tells how a file of another schema version is written: an older 1.x file gets a
+/// note, only when the outputs carry the values its schema did not record; a newer or
+/// unrecognised version a `newer_schema` warning.
+#[test]
+fn view_reports_older_and_newer_schemas() {
+    let tmp = tmp();
+    let dir = tmp.path();
+    let frozen =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/results-schema-1.0.0.json.gz");
+    let o = run(&["view", "-i", s(&frozen), "-o", "new.json"], dir);
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    let e = stderr(&o);
+    assert!(e.is_ascii(), "{e}");
+    assert!(
+        e.contains(
+            "note: results file written with schema 1.0.0; values that schema did not record \
+             are written as null (NA in the positions table), and options it did not have as off"
+        ),
+        "{e}"
+    );
+    assert!(!e.contains("newer_schema"), "{e}");
+    let written = json(&dir.join("new.json"));
+    assert_eq!(written["schema_version"], dima_core::model::SCHEMA_VERSION);
+    assert_eq!(
+        written["run"]["parameters"]["similarity_weighted_entropy"]["value"],
+        false
+    );
+    assert!(written["results"][0]["similarity_weighted_entropy"].is_null());
+    // The variants table carries none of those values: no note.
+    let o = run(
+        &[
+            "view",
+            "-i",
+            s(&frozen),
+            "-O",
+            "tsv",
+            "--table",
+            "variants",
+            "-o",
+            "-",
+        ],
+        dir,
+    );
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    assert!(!stderr(&o).contains("note:"), "{}", stderr(&o));
+    // The current version: nothing to say. Newer or unrecognised versions: a warning.
+    for (version, expected) in [
+        (dima_core::model::SCHEMA_VERSION, None),
+        ("1.9.0", Some("newer_schema")),
+        ("1.1.0-dev", Some("newer_schema")),
+    ] {
+        let mut v = json(&dir.join("new.json"));
+        v["schema_version"] = version.into();
+        std::fs::write(dir.join("v.json"), serde_json::to_vec(&v).unwrap()).unwrap();
+        let o = run(&["view", "-i", "v.json", "-o", "-"], dir);
+        assert_eq!(code(&o), 0, "{version}: {}", stderr(&o));
+        let e = stderr(&o);
+        match expected {
+            Some(code) => assert!(e.contains(code), "{version}: {e}"),
+            None => assert!(
+                !e.contains("note:") && !e.contains("warning"),
+                "{version}: {e}"
+            ),
+        }
+    }
+}

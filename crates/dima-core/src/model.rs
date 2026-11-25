@@ -1,9 +1,11 @@
 //! Typed analysis results and their JSON representation (`schemas/results.schema.json`).
 //!
 //! Key names follow DiMA (Tharanga et al. 2025) so existing knowledge of the tool carries over;
-//! enumerations serialise to DiMA's strings. Quantities that are undefined are `null`, never a
-//! sentinel: entropy at positions without support, ratios with a zero denominator, extrema of an
-//! empty set. The output is deterministic: no timestamps, no absolute paths, a fixed key order.
+//! enumerations serialise to DiMA's strings. Quantities that are undefined, or not computed
+//! because their option is off, are `null`, never a sentinel: entropy at positions without
+//! support, ratios with a zero denominator, extrema of an empty set, similarity-weighted entropy
+//! of a run without `--similarity-weighted-entropy`. The output is deterministic: no timestamps,
+//! no absolute paths, a fixed key order.
 
 use std::fmt;
 
@@ -11,11 +13,15 @@ use serde::de::{self, MapAccess, Visitor};
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::config::{Alphabet, Estimator, Param, ValidationMode};
+use crate::config::{Alphabet, Estimator, Origin, Param, ValidationMode};
 use crate::diagnostics::Diagnostic;
 
-/// Version of the results and HCS JSON schemas (SemVer: a reader accepts the same major).
-pub const SCHEMA_VERSION: &str = "1.0.0";
+/// Version of the results JSON schema (SemVer: a reader accepts the same major). 1.1.0 added
+/// similarity-weighted entropy (Wu 2025): three per-position values, a summary and a parameter.
+pub const SCHEMA_VERSION: &str = "1.1.0";
+
+/// Version of the conserved-sequences (HCS) JSON schema; it changes only when that schema does.
+pub const HCS_SCHEMA_VERSION: &str = "1.0.0";
 
 // ---------------------------------------------------------------------------------------------
 // Per-position vocabulary
@@ -304,6 +310,15 @@ pub struct PositionResult {
     pub sample_coverage: Option<f64>,
     /// Whether coverage is below `--min-coverage`; `null` when not requested or not estimable.
     pub below_min_coverage: Option<bool>,
+    /// Similarity-weighted entropy H_sim in bits (Wu 2025); `null` when not requested or
+    /// without support.
+    pub similarity_weighted_entropy: Option<f64>,
+    /// Observed entropy divided by log₂ of the number of distinct k-mers, Index included (H_n,
+    /// Wu 2025); `null` when not requested or with fewer than two distinct k-mers.
+    pub normalised_observed_entropy: Option<f64>,
+    /// Similarity-weighted entropy divided by log₂ of the number of distinct k-mers (H_nsim,
+    /// Wu 2025); `null` when not requested or with fewer than two distinct k-mers.
+    pub normalised_similarity_weighted_entropy: Option<f64>,
     /// Variants ordered by count (descending), then sequence.
     pub diversity_motifs: Vec<Variant>,
 }
@@ -355,6 +370,22 @@ pub struct AllPositionsSummary {
     pub highest_entropy: Option<Extremum>,
 }
 
+/// Similarity-weighted entropy summary over eligible positions (support > T), with the mean
+/// observed entropy of the same positions for a like-for-like comparison.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SimilarityWeightedSummary {
+    /// Number of eligible positions.
+    pub position_count: u64,
+    /// Mean similarity-weighted entropy; `null` when no position is eligible.
+    pub average_entropy: Option<f64>,
+    /// Lowest similarity-weighted entropy (first position, tie count).
+    pub lowest_entropy: Option<Extremum>,
+    /// Highest similarity-weighted entropy (first position, tie count).
+    pub highest_entropy: Option<Extremum>,
+    /// Mean observed (plug-in) entropy of the same positions; `null` when none is eligible.
+    pub average_observed_entropy: Option<f64>,
+}
+
 /// Sample-coverage summary (Chao & Jost 2012).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CoverageSummary {
@@ -394,6 +425,10 @@ pub struct Parameters {
     pub support_threshold: Param<u64>,
     /// Entropy estimator.
     pub estimator: Param<Estimator>,
+    /// Whether similarity-weighted entropy was computed (absent from schema 1.0.0 files, which
+    /// are read as runs without it).
+    #[serde(default = "not_requested")]
+    pub similarity_weighted_entropy: Param<bool>,
     /// Validation mode.
     pub validation: Param<ValidationMode>,
     /// Minimum sample coverage, if any.
@@ -406,6 +441,14 @@ pub struct Parameters {
     pub metadata_fields: Param<Option<Vec<String>>>,
     /// Fill value for empty or mismatched header fields.
     pub header_fill: Param<String>,
+}
+
+/// An option a file written before it existed did not have: off, by default.
+const fn not_requested() -> Param<bool> {
+    Param {
+        value: false,
+        origin: Origin::Default,
+    }
 }
 
 /// How the alphabet was determined.
@@ -742,6 +785,8 @@ pub struct Results {
     pub all_positions_summary: AllPositionsSummary,
     /// Sample-coverage summary.
     pub coverage_summary: CoverageSummary,
+    /// Similarity-weighted entropy summary; `null` when it was not requested.
+    pub similarity_weighted_entropy_summary: Option<SimilarityWeightedSummary>,
     /// Provenance.
     pub run: RunInfo,
     /// Per-position results, in position order.
@@ -854,7 +899,7 @@ pub struct HcsRegion {
 /// Historically conserved sequences of a results file.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HcsResults {
-    /// Schema version ([`SCHEMA_VERSION`]).
+    /// Schema version ([`HCS_SCHEMA_VERSION`]).
     pub schema_version: String,
     /// The tool that computed the regions.
     pub tool: ToolInfo,

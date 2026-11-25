@@ -352,7 +352,9 @@ impl<'a> Run<'a> {
             }
             records = records
                 .checked_add(norm.records as u64)
-                .ok_or(DimaError::Overflow { what: "records" })?;
+                .ok_or(DimaError::Overflow {
+                    what: "the number of records",
+                })?;
             control.progress.add_records(norm.records as u64);
             sequence_stats.merge(std::mem::take(&mut norm.sequence_stats));
             let _ = recycle.send(batch);
@@ -408,6 +410,7 @@ impl<'a> Run<'a> {
             threshold: threshold.value,
             estimator: estimator.value,
             min_coverage: params.min_coverage,
+            similarity_weighted_entropy: params.similarity_weighted_entropy,
             fields: &strata_names,
             values: &values,
         };
@@ -492,6 +495,7 @@ impl<'a> Run<'a> {
             },
             support_threshold: threshold.clone(),
             estimator: estimator.clone(),
+            similarity_weighted_entropy: params.similarity_weighted_entropy(),
             validation: validation.clone(),
             min_coverage: Param {
                 value: params.min_coverage,
@@ -542,11 +546,12 @@ impl<'a> Run<'a> {
                 .map(|s| provenance::metadata_info(s, &c.header_stats, c.probe_records)),
             entropy: provenance::entropy_info(estimator.value),
             diagnostics,
-            references: provenance::references(
-                estimator.value,
+            references: provenance::references(provenance::MethodsUsed {
+                estimator: estimator.value,
                 alphabet,
-                c.resolution.method == AlphabetMethod::Detected,
-            ),
+                alphabet_detected: c.resolution.method == AlphabetMethod::Detected,
+                similarity_weighted_entropy: params.similarity_weighted_entropy,
+            }),
         };
         let results = Results {
             schema_version: SCHEMA_VERSION.to_owned(),
@@ -565,6 +570,9 @@ impl<'a> Run<'a> {
             support_label_counts: label_counts,
             all_positions_summary: summary::all_positions(&positions),
             coverage_summary: summary::coverage(&positions, params.min_coverage),
+            similarity_weighted_entropy_summary: params
+                .similarity_weighted_entropy
+                .then(|| summary::similarity_weighted(&positions)),
             run,
             results: positions,
         };

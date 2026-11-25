@@ -153,5 +153,13 @@ depend on them:
 | Code | Raised when |
 |---|---|
 | `flag_has_no_effect` | `--hcs-min-incidence` or `--hcs-eligible-only` without an output of conserved sequences (`--hcs-output`, `--tsv-dir` or `--table hcs`); `--pretty` without JSON output |
+| `newer_schema` | `dima view` read results written with a newer (or unrecognised) results schema version than its own; it writes them with its own version and keeps only the keys it knows. *Fix:* to keep every key, convert the file with the DiMA version that wrote it (its `run.tool.version`) or a newer one |
 | `threads_exceed_cpus` | more threads were requested (`--threads` or `RAYON_NUM_THREADS`) than CPUs are available; they are used anyway |
 | `threads_refused` | the system refused to start some of the worker threads (a limit on processes and threads, such as `ulimit -u` or a container's pids limit, or a lack of memory), so the analysis continued with those it started; the run report records both numbers (`threads.count`, `threads.started`). Results are the same with any number of threads |
+
+`dima view` also prints a `note:` (never counted as a warning) when it writes results of an
+older 1.x schema, and only when its outputs hold per-position values (results JSON or JSONL, or
+the positions table): for example, results written by dima 1.0.0 have no similarity-weighted
+entropy, so those keys are written as `null` (`NA` in the positions table) and the option as
+off. Nothing needs doing; re-run the analysis with `--similarity-weighted-entropy` if you want
+the values.

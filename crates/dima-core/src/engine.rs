@@ -130,7 +130,7 @@ impl PositionState {
             .ok()
             .filter(|&id| id != NONE)
             .ok_or(DimaError::Overflow {
-                what: "distinct k-mers at one position",
+                what: "the number of distinct k-mers at one position",
             })?;
         arena.extend_from_slice(kmer);
         counts.push(0);

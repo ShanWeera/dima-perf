@@ -388,6 +388,9 @@ pub(crate) mod tests {
             total_variants_incidence: if support == 0 { None } else { Some(0.0) },
             sample_coverage: None,
             below_min_coverage: None,
+            similarity_weighted_entropy: None,
+            normalised_observed_entropy: None,
+            normalised_similarity_weighted_entropy: None,
             diversity_motifs: if support == 0 {
                 Vec::new()
             } else {

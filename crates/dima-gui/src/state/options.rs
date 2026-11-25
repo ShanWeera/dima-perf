@@ -174,6 +174,7 @@ impl AnalysisOptions {
             support_threshold: (self.support_threshold != DEFAULT_SUPPORT_THRESHOLD)
                 .then_some(self.support_threshold),
             estimator: (self.estimator != Estimator::default()).then_some(self.estimator),
+            similarity_weighted_entropy: false,
             validation: (self.validation != ValidationMode::default()).then_some(self.validation),
             min_coverage: self.min_coverage,
             query_name: (!query.is_empty()).then(|| query.to_owned()),
