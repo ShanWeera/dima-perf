@@ -82,6 +82,23 @@ about 0.142 bits ($T = 100$) and 0.132 bits ($T = 30$), the gene's about 0.384 b
 HIV-1 *pol* means are unchanged (see
 [the negative-intercept rule](/explanation/entropy/#the-negative-intercept-rule)).
 
+## Similarity-weighted entropy (Wu 2025)
+
+<!-- docs-numbers:tobrfv:start -->
+
+| Quantity | tm-2 | Tm-2² |
+|---|---|---|
+| Reads | 10,833 | 6,969 |
+| Unique sequences ($D$) | 48 | 47 |
+| $H$ | 0.7320 | 0.7785 |
+| $H_n$ | 0.1311 | 0.1402 |
+| $H_\text{sim}$ | 0.0961 | 0.1056 |
+| $H_\text{nsim}$ | 0.0172 | 0.0190 |
+| Mean Hamming distance between unique sequences | 2.12 | 2.80 |
+| Largest Hamming distance between unique sequences | 5 | 10 |
+
+<!-- docs-numbers:tobrfv:end -->
+
 ## References
 
 [^ref]

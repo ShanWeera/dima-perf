@@ -340,6 +340,60 @@ normalised values are undefined (`null`) while $H_\text{sim} = 0$; without suppo
 DiMA computes exactly Wu's sums, but from the residue counts at each offset of the k-mer instead
 of every pair of variants (see [Numerical accuracy](/explanation/numerical-accuracy/#similarity-weighted-entropy)).
 
+### How the values change with the number of sequences
+
+The three values describe the k-mers observed at a position, not the population they were
+sampled from, and none of them is corrected for sample size: with fewer sequences they change,
+and they can be higher or lower. Table 1 shows this at MERS-CoV spike position 25 by averaging
+each value over every subset of $n$ of the position's sequences; its last row is the position
+itself. The observed and similarity-weighted entropies fall as $n$ falls, while the normalised
+values rise.
+
+<!-- docs-numbers:swe-subsets:start -->
+
+**Table 1.** MERS-CoV spike position 25 (170 sequences; its 10 distinct 9-mers are carried by 129,
+14, 9, 6, 4, 4, 1, 1, 1 and 1 of them): the average over all subsets of $n$ of its sequences,
+computed exactly. The normalised values are averaged over the subsets with at least two distinct
+9-mers.
+
+| $n$ | $\hat H$ | $H_\text{sim}$ | $H_n$ | $H_\text{nsim}$ | Distinct 9-mers | Subsets with one 9-mer |
+|---|---|---|---|---|---|---|
+| 10 | 0.9979 | 0.3812 | 0.6494 | 0.2537 | 2.99 | 5.80% |
+| 25 | 1.2126 | 0.4053 | 0.5372 | 0.1812 | 4.83 | 0.05% |
+| 50 | 1.3201 | 0.4164 | 0.4907 | 0.1553 | 6.52 | < 0.01% |
+| 100 | 1.3878 | 0.4236 | 0.4565 | 0.1395 | 8.29 | < 0.01% |
+| 170 | 1.4224 | 0.4275 | 0.4282 | 0.1287 | 10.00 | 0% |
+
+<!-- docs-numbers:swe-subsets:end -->
+
+Table 2 compares the averages with the values of two known populations instead, for samples
+drawn at random with replacement. With the population of Wu's Fig. 1b the normalised values rise
+as $n$ falls; with two equally common 9-mers they fall.
+
+<!-- docs-numbers:swe-populations:start -->
+
+**Table 2.** The values of two populations, and their average over samples of $n$ sequences drawn at
+random with replacement, computed exactly. (a) Quasispecies 2 of Wu's Fig. 1b [@wu2025, Fig. 1b]: a
+master sequence at 90% and four variants at 4%, 4%, 1% and 1% that differ from it at 2, 4, 2 and 4
+sites, no two variants at the same site, as drawn (so $k = 12$, the shortest length that holds
+them). (b) Two 9-mers at 50% each that differ at one site. The normalised values are averaged over
+the samples with at least two distinct k-mers.
+
+| Population | $n$ | $\hat H$ | $H_\text{sim}$ | $H_n$ | $H_\text{nsim}$ | Samples with one k-mer |
+|---|---|---|---|---|---|---|
+| (a) | 10 | 0.4328 | 0.2195 | 0.5474 | 0.2789 | 34.87% |
+| (a) | 25 | 0.5293 | 0.2453 | 0.3777 | 0.1756 | 7.18% |
+| (a) | 50 | 0.5791 | 0.2579 | 0.3214 | 0.1434 | 0.52% |
+| (a) | 100 | 0.6093 | 0.2654 | 0.2954 | 0.1288 | < 0.01% |
+| (a) | population | 0.6412 | 0.2733 | 0.2761 | 0.1177 | — |
+| (b) | 10 | 0.9235 | 0.4970 | 0.9253 | 0.4980 | 0.20% |
+| (b) | 25 | 0.9705 | 0.5318 | 0.9705 | 0.5318 | < 0.01% |
+| (b) | 50 | 0.9854 | 0.5437 | 0.9854 | 0.5437 | < 0.01% |
+| (b) | 100 | 0.9927 | 0.5496 | 0.9927 | 0.5496 | < 0.01% |
+| (b) | population | 1.0000 | 0.5556 | 1.0000 | 0.5556 | — |
+
+<!-- docs-numbers:swe-populations:end -->
+
 ## Numerical details
 
 Logarithms come from the `libm` library, so they give the same bits on every platform; sums use
