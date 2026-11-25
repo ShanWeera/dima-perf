@@ -60,10 +60,11 @@ def read_sheets(path: Path) -> dict[str, list[tuple[str, str, int]]]:
         records = []
         for row in cells(book, "xl/" + target[sheet.get(rel_ns)].lstrip("/").removeprefix("xl/"), shared):
             ident, seq, reads = row.get("A", "").strip(), row.get("B", ""), row.get("C", "")
-            if not re.fullmatch(r"Seq[0-9]+", ident):
-                continue  # the title and header rows
-            if not (re.fullmatch(r"[ACGT]+", seq) and re.fullmatch(r"[0-9]+", reads)):
-                raise ValueError(f"{name}: row {ident} is not a sequence of A, C, G, T with a whole read count")
+            if not row or ident.startswith("Supplementary File") or ident == "IDs":
+                continue  # an empty row, the sheet's title or its header
+            if not (re.fullmatch(r"Seq[0-9]+", ident) and re.fullmatch(r"[ACGT]+", seq)
+                    and re.fullmatch(r"[0-9]+", reads)):
+                raise ValueError(f"{name}: row {ident!r} is not a sequence of A, C, G, T with a whole read count")
             records.append((ident, seq, int(reads)))
         out[name] = records
     return out

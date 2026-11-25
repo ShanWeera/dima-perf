@@ -72,7 +72,8 @@ precision printed.
   the counts of every pair of variants; they come from the Lancaster expansion of the
   trinomial in orthonormal Krawtchouk polynomials (canonical correlations rho^k, rho =
   -sqrt(p_i p_j / ((1 - p_i)(1 - p_j)))), which makes the sum over pairs separable; the series is
-  summed until a Cauchy-Schwarz bound on the rest is below 1e-13 of the variance. Checked
+  summed until a Cauchy-Schwarz bound on the rest is below 1e-13 of the sum of the variants'
+  own variances (at most about 50 times the variance on the bundled data). Checked
   against enumerating every multinomial outcome of toy profiles.
 * v5.0.9's fallback rates at positions with two k-mers: exact, by meet-in-the-middle over the
   independent subsample counts (the probability left out, at most 1e-6, bounds the error; checked
@@ -583,7 +584,8 @@ def plugin_moments(mult: dict[int, int], n_obs: int, n: int, rel: float = 1e-13)
     rho_ij = -r_i r_j, r = sqrt(p / (1 - p)). So Cov = sum_{k >= 1} (-1)^k (r_i r_j)^k a_ik a_jk,
     a_ik = E[g(X_i) Q_ik(X_i)], and the sum over pairs separates per k. The tail beyond k is at
     most sum_{i != j} (r_i r_j)^(k+1) t_i t_j, with t_i^2 = Var(g(X_i)) - sum_{l <= k} a_il^2
-    (Cauchy-Schwarz and Parseval); the series stops when that is below ``rel`` of the variance.
+    (Cauchy-Schwarz and Parseval); the series stops when that is below ``rel`` of the sum of the
+    variances Var(g(X_i)), which bounds the scale of the terms (it can exceed Var(G) itself).
     A variant with p > 1/2 (r > 1) is paired with the others through rho directly, so no power
     overflows. Two variants: G is a function of one count.
     """
@@ -1041,8 +1043,9 @@ def self_test() -> None:
     check_rule_mc()
 
 
-def compute(workers: int) -> dict:
-    """Runs every task (in a pool of ``workers`` processes) and collects the results."""
+def compute(workers: int | None) -> dict:
+    """Runs every task (in a pool of ``workers`` processes; None: the executor's default, all
+    cores within the platform's limit) and collects the results."""
     self_test()
     for n_obs in FALLBACK_N + FEW_POINTS_N + POP_N:
         for threshold in POP_T:
@@ -1537,10 +1540,12 @@ def apply_regions(text: str, path: Path, rendered: dict[str, str], kinds: dict[s
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--check", action="store_true", help="fail if a region is out of date (prints the difference)")
-    parser.add_argument("--workers", type=int, default=os.cpu_count() or 1, help="worker processes (default: all cores)")
+    parser.add_argument("--workers", type=int, default=None, help="worker processes (default: all cores)")
     args = parser.parse_args()
+    if args.workers is not None and args.workers < 1:
+        parser.error("--workers must be at least 1")
     t0 = time.monotonic()
-    summary = summarise(compute(max(1, args.workers)))
+    summary = summarise(compute(args.workers))
     by_file: dict[Path, dict[str, str]] = {}
     kinds: dict[Path, dict[str, str]] = {}
     for path, name, kind, render in REGIONS:

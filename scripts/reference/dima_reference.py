@@ -12,7 +12,7 @@ number at a relative tolerance of 1e-13 (zero exactly). It therefore follows thr
 1. **Simple and obviously correct.** Naive counting (slice every k-mer of every record
    and count it in a dict), one function per rule, the rule stated in the docstring.
    The only optimisations are the ones needed to finish a 3,000 x 3,400 alignment in
-   about a minute, or about two minutes with --similarity-weighted-entropy (caches keyed
+   under half a minute, or about a minute with --similarity-weighted-entropy (caches keyed
    by exact integers, a mode-centred binomial walk that stops only once the remaining
    terms are below 2**-997 of the largest one, and each k-mer converted once to an
    integer, so a pair's identical residues are the zero bytes of their XOR).
@@ -2046,7 +2046,10 @@ def _self_test_similarity(t: _Checker) -> None:
     pool = [(bytes([letter]) * 100 + b"A" * 900, c) for letter, c in zip(b"CDEFGHIKLM", counts)]
     value = h_sim(pool)
     t.check(round(value, 5) == 0.45488, "Supplementary File 1: H_sim 0.45488")
-    t.check(round(value / math.log2(10), 5) == 0.13693, "Supplementary File 1: H_nsim 0.13693")
+    hn_sim = normalised_entropy(similarity_weighted_entropy_decimal(pool, 100), 10)
+    t.check(round(hn_sim, 5) == 0.13693, "Supplementary File 1: H_nsim 0.13693")
+    hn = normalised_entropy(plug_in_entropy_decimal(multiplicities(counts), 100), 10)
+    t.check(round(hn, 5) == 0.53853, "Supplementary File 1: H_n 0.53853")
 
 
 def _expect_error(t: _Checker, what: str, func, error_type=DimaError, fragment: str = "") -> None:
@@ -2144,11 +2147,12 @@ def _self_test_pipeline(t: _Checker) -> None:
     t.check(clean_metadata_value(" ", fill) == fill, "clean: U+2000 stripped")
     t.check(clean_metadata_value("x\x7f", fill) == "x\x7f", "clean: DEL kept")
 
-    # Similarity-weighted entropy through the whole pipeline: an Index tie one site apart
-    # (H_n = 1, H_sim = (k + d)/(2k) = 2/3), positions without support (null), one k-mer
-    # (H_sim 0, normalised null), and the summary over eligible positions only.
-    fasta = b">a\nACG--TTTT\n>b\nACG--TTTA\n>c\nACC--TTTT\n>d\nACC--TTTT\n"
-    result = json.loads(analyse_to_string(fasta, Options(kmer_length=3, threshold=3, alphabet=DNA,
+    # Similarity-weighted entropy through the whole pipeline: an Index tie one site apart at
+    # support T, so not eligible (H_n = 1, H_sim = (k + d)/(2k) = 2/3), positions without
+    # support (null), one k-mer (H_sim 0, normalised null), and the summary over the two
+    # eligible positions only (positions 6 and 7).
+    fasta = b">a\nACG--TTTT\n>b\nACG--TTTA\n>c\nACC--TTTT\n>d\nACC--TTTT\n>e\n-CG--TTTT\n"
+    result = json.loads(analyse_to_string(fasta, Options(kmer_length=3, threshold=4, alphabet=DNA,
                                                           similarity_weighted_entropy=True)))
     pos = result["positions"]
     t.check(pos[0]["normalised_observed_entropy"] == 1.0 and pos[0]["similarity_weighted_entropy"] == 2 / 3,
@@ -2157,8 +2161,10 @@ def _self_test_pipeline(t: _Checker) -> None:
     t.check(pos[5]["similarity_weighted_entropy"] == 0.0 and pos[5]["normalised_similarity_weighted_entropy"] is None,
             "pipeline: one k-mer, 0 and null")
     summary = result["similarity_weighted_entropy_summary"]
-    t.check(summary["position_count"] == 3, "pipeline: summary over the eligible positions")
-    off = json.loads(analyse_to_string(fasta, Options(kmer_length=3, threshold=3, alphabet=DNA)))
+    t.check(summary["position_count"] == 2
+            and summary["average_observed_entropy"] == pos[6]["observed_entropy"] / 2,
+            "pipeline: summary over the eligible positions")
+    off = json.loads(analyse_to_string(fasta, Options(kmer_length=3, threshold=4, alphabet=DNA)))
     t.check(off["similarity_weighted_entropy_summary"] is None
             and all(p["similarity_weighted_entropy"] is None for p in off["positions"]),
             "pipeline: nothing without the option")

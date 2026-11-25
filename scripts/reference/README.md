@@ -307,14 +307,17 @@ Limits of the comparison at large N:
   sequences and 5e-11 at 17.5 million. Chao–Wang–Jost agrees to a few units in the last
   place at any N, because the Rust code evaluates its second term exactly (a hypergeometric
   series or continued fraction) while the oracle sums it in 80-digit `Decimal`; the two
-  share no derivation.
+  share no derivation. Similarity-weighted entropy shares the entropy terms' rounding but
+  is smaller, so its relative difference is larger: up to about 2e-11 at 2.2 million
+  sequences and 3.3e-10 at 17.5 million.
 * **What the tests can detect.** A differential test at that scale could not separate a
   bug smaller than those numbers from rounding. No test runs at that scale. On the
   bundled datasets the Rust values are within about 5e-15 of the oracle's
-  (Chao–Wang–Jost within 4.2e-16).
+  (Chao–Wang–Jost within 4.2e-16; similarity-weighted entropy within 2e-14, 6e-15 on the
+  MERS-CoV spike protein).
 
 The measurements, why the rounding never matters scientifically (it is at least 10^10 times
-smaller than the sampling error), and why the prototyped fix is deferred are in the
+smaller than the sampling error, 3e9 times for similarity-weighted entropy), and why the prototyped fix is deferred are in the
 documentation page "Numerical accuracy" (`docs/src/content/docs/explanation/numerical-accuracy.md`).
 For one differing sequence at N = 2,208,211 (`N − 1` copies of `A` and one `C`, run with
 `-a dna -k 1`), `observed_entropy` differs from the oracle by 2.2e-12 relative and `entropy` by
@@ -328,8 +331,9 @@ For one differing sequence at N = 2,208,211 (`N − 1` copies of `A` and one `C`
 * Floats are printed with `repr` (shortest round-trip), and NaN or infinity raise an
   error.
 * `decimal` (libmpdec), `fractions`, integer arithmetic and `math.fsum` are exact or
-  correctly rounded on every platform. Plug-in, Miller–Madow, CWJ, coverage, incidences,
-  supports and all counts are therefore platform independent.
+  correctly rounded on every platform. Plug-in, Miller–Madow, CWJ, similarity-weighted
+  entropy and both normalised entropies, coverage, incidences, supports and all counts are
+  therefore platform independent.
 * The dima entropy (through `E[H_n]`) and the Clopper–Pearson bound also use
   `math.log`, `math.log1p` and `**`, which come from the platform C library. Their last
   bit may differ between operating systems; that is ~1e-16 and irrelevant at 1e-13.

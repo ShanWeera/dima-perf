@@ -46,7 +46,8 @@ duplicated here.
   reads; the tm-2 sheet nevertheless lists eight with 10 reads (0.092%). All are kept: with all
   48, the tm-2 values of Wu's Fig. 6d are reproduced. Each unique sequence is written once per read, so that a run at $k = 120$ (one
   position) counts the reads; records are named `SeqN_r`. Retrieved from Europe PMC (PMC12079039,
-  supplementary files) on 2026-11-25 and converted with
+  supplementary files) on 2026-11-25 (`Supplementary File 2.xlsx`, SHA-256
+  `4d3e3fb6c0f59925ff56008c795d51b8823f26bd32a9dc5b12d780496190b074`) and converted with
   `python3 scripts/reference/tobrfv_from_supplement.py "Supplementary File 2.xlsx" DIR`,
   then `bzip2 -9`. Used for the similarity-weighted entropy paper test.
 * **`results-schema-1.0.0.json.gz`.** The golden results of the `tiny` test input
