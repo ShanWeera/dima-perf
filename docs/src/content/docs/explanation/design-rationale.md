@@ -3,13 +3,15 @@ title: Design rationale
 description: The engineering and user-experience choices of DiMA's command line, outputs, engine, packaging, desktop app and documentation, each with its sources, ranked by the project's citation policy, and the gaps where no peer-reviewed source exists.
 ---
 
-The methodology pages justify every scientific choice. This page does the same for the
-engineering and user-experience choices. Sources follow the project's citation policy:
-peer-reviewed work in bioinformatics and computational biology first; general human–computer
-interaction, visualisation, statistics, mathematics (including numerical analysis) or
-computer-science sources only where they are the primary source of a number, finding or result,
-marked **[general]**; standards and specifications,
-cited for what they define, marked **[standard]**. Where no peer-reviewed source exists, the page says so (**gap**) and names the
+The methodology pages justify every scientific choice with peer-reviewed sources. This page
+gives the reasons for the engineering and user-experience choices. These need no peer-reviewed
+source (the project's working agreement 9); where one is cited, it follows the project's
+citation policy: peer-reviewed domain work (bioinformatics, computational biology, virology,
+microbiology, ecology and evolution, biostatistics) first; general human–computer interaction,
+visualisation, statistics, mathematics (including numerical analysis) or computer-science
+sources only where they are the primary source of a number, algorithm, theorem, finding or
+experiment, marked **[general]**; standards and specifications, cited for what they define,
+marked **[standard]**. Some rows say where no peer-reviewed source exists (**gap**) and name the
 evidence used instead.
 
 ## Command line

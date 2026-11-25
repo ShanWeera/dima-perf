@@ -103,7 +103,9 @@ fn natural(a: &str, b: &str) -> Ordering {
 
 fn heading(tier: Tier) -> &'static str {
     match tier {
-        Tier::Domain => "Bioinformatics, computational biology and statistics",
+        Tier::Domain => {
+            "Bioinformatics, computational biology, virology, microbiology, ecology and evolution, and biostatistics"
+        }
         Tier::General => "General sources [general]",
         Tier::Standard => "Standards and specifications [standard]",
     }

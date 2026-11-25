@@ -7,7 +7,7 @@ description: Every reference cited by DiMA's help, documentation and desktop app
 
 Every reference cited by `dima`, its help texts, the desktop app and these pages comes from one registry in the source code. References are grouped by the project's citation policy: peer-reviewed work in the field first; general computer-science, statistics or human-computer-interaction sources only where they are the primary source of a method or measurement no domain source provides (marked [general]); and standards and specifications, cited for what they define, such as the symbols a sequence database uses in its files (marked [standard]). See [Citing DiMA](/reference/citing/) for how to cite DiMA itself.
 
-## Bioinformatics, computational biology and statistics
+## Bioinformatics, computational biology, virology, microbiology, ecology and evolution, and biostatistics
 
 - Abd Raman HS, Tan S, August JT, Khan AM. Dynamics of Influenza A (H5N1) virus protein sequence diversity. PeerJ. 2020;7:e7954. [doi:10.7717/peerj.7954](https://doi.org/10.7717/peerj.7954)
 - Böck A, Forchhammer K, Heider J, Leinfelder W, Sawers G, Veprek B, Zinoni F. Selenocysteine: the 21st amino acid. Molecular Microbiology. 1991;5(3):515-520. [doi:10.1111/j.1365-2958.1991.tb00722.x](https://doi.org/10.1111/j.1365-2958.1991.tb00722.x)
