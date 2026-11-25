@@ -1419,6 +1419,21 @@
   "volume": "19",
   "year": 2018
  },
+ "10.1093/bioinformatics/10.4.379": {
+  "authors": [
+   [
+    "Gotoh",
+    "Osamu"
+   ]
+  ],
+  "issue": "4",
+  "key": "gotoh1994",
+  "pages": "379-387",
+  "title": "Further improvement in methods of group-to-group sequence alignment with generalized profile operations",
+  "venue": "Bioinformatics",
+  "volume": "10",
+  "year": 1994
+ },
  "10.1093/bioinformatics/btm270": {
   "authors": [
    [

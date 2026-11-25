@@ -742,6 +742,20 @@ pub(super) static DOI_CITATIONS: &[Citation] = &[
         tier: Tier::General,
     },
     Citation {
+        key: "gotoh1994",
+        authors: &[("Gotoh", "Osamu")],
+        year: 1994,
+        title: "Further improvement in methods of group-to-group sequence alignment with generalized profile operations",
+        venue: "Bioinformatics",
+        volume: Some("10"),
+        issue: Some("4"),
+        pages: Some("379-387"),
+        doi: Some("10.1093/bioinformatics/10.4.379"),
+        url: None,
+        kind: Kind::Article,
+        tier: Tier::Domain,
+    },
+    Citation {
         key: "gruning2018bioconda",
         authors: &[
             ("Grüning", "Björn"),

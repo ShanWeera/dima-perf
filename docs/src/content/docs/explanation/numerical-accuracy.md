@@ -216,6 +216,36 @@ run. Below 64 sequences a position can take up to about 11 µs, at most 0.26 s o
 alignment of 63 sequences with 30,000 positions. Only the last digits of Chao–Wang–Jost results
 depend on this; every other estimator is unaffected.
 
+## Similarity-weighted entropy
+
+Similarity-weighted entropy weights each k-mer's entropy term by $1 - S_i$, where $S_i$ is the
+frequency-weighted similarity of the k-mer to every other k-mer at the position. Summed over
+pairs, that takes time proportional to the square of the number of distinct k-mers $D$: on the
+HIV-1 pol DNA alignment (2,637 sequences, $k = 27$) it is 201,504,198 pairs and
+$5.4 \times 10^9$ site comparisons. DiMA obtains the same sums from residue counts per site, in
+time proportional to $D \cdot k$ ($4.3 \times 10^7$ table operations there). With $c_p(a)$ the
+number of sequences whose k-mer has residue $a$ at offset $p$, the matches of k-mer $i$ with
+every sequence at offset $p$ number $c_p(x_{ip})$: the column-profile form of sum-of-pairs
+scores, with an identity score [@gotoh1994, eqs. (1) and (4a)]. Removing the k-mer's matches
+with its own copies, as for the score of a single group [@gotoh1994, eq. (9b)], gives
+
+$$
+\begin{equation}
+a_i = \sum_p c_p(x_{ip}) - k\,c_i = k \sum_{j \ne i} c_j\, s_{ij} ,
+\qquad 1 - S_i = \frac{kN - a_i}{kN} .
+\end{equation}
+$$
+
+The numerators $kN - a_i$ are exact integers, summed per count class in 128-bit integers. The
+only rounding is one division per class and the compensated sum of the class terms, taken in the
+same order as for observed entropy. So when every weight is 1 ($k = 1$, or every pair of k-mers
+differs at every site) similarity-weighted entropy equals observed entropy bit for bit, as long
+as $f_c \cdot k \cdot N \le 2^{53}$ for every class of $f_c$ k-mers seen $c$ times: integers up to
+$2^{53}$ convert exactly and their quotient is correctly rounded [@goldberg1991, §2.1.4]. Weights
+of 1 need every pair to differ at the first site, so at most 26 distinct k-mers, and the bound
+holds whenever $kN \le 3.46 \times 10^{14}$. The computation needs a table of $26 \times k$
+counts (208·k bytes) for each position being computed.
+
 ## What this means for testing
 
 The differential test against the reference implementation

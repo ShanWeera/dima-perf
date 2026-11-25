@@ -30,6 +30,7 @@ mod pool;
 pub mod position;
 pub mod provenance;
 pub mod run_report;
+pub mod similarity;
 pub mod stats;
 pub mod summary;
 pub mod validation;

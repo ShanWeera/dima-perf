@@ -50,3 +50,7 @@ harness = false
 [[bench]]
 name = "rarefaction"
 harness = false
+
+[[bench]]
+name = "similarity"
+harness = false
