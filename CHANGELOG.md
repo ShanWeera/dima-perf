@@ -49,6 +49,14 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   switch keeps the zoom and the selection and resets the value range (with a note when it had
   been narrowed); no control moves. Every dataset opens showing entropy. Exported figures show
   the metric on screen, with its title, axis title, legend and mean.
+- Desktop app, when the run computed similarity-weighted entropy: a chip "similarity-weighted
+  mean X bits (observed Y)" after the mean chip (0.0363 and 0.1207 bits for the bundled MERS
+  spike sample); a sortable **Similarity-weighted** column right after **Entropy** in the
+  position table; and the selected position's similarity-weighted and normalised entropies in
+  its facts and in the chart's tooltip, the normalised values marked "(low support)" at support
+  ≤ T and reading "— (one variant)" where a single k-mer leaves them undefined.
+- Desktop app: the position table scrolls sideways when its columns do not fit the window, and
+  every sortable header has its "Sort by …" tooltip as its accessibility description.
 
 ### Changed
 
@@ -103,6 +111,8 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
 - The desktop app's chart drew a position that has support but no entropy (possible only in a
   results file edited by hand) as a hatched band labelled "no usable support". The band now
   marks positions with support 0 only; a missing value just breaks the line.
+- The desktop app's position facts cut a long value, such as a method with its fallback
+  ("plug_in; fallback: support at or below threshold"), at the panel's edge; it now wraps.
 - In narrow desktop-app windows the filter bar's position count was drawn over the low-support
   switch, and the chart's "drag: pan" hint over its legend. Both now move to a row of their own
   when their row is full, and the chart's Fit, + and − buttons stay at the top right of the

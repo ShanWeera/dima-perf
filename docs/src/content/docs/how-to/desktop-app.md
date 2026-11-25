@@ -161,6 +161,50 @@ method that produced them, support, incidences, coverage), its motif composition
 The filter bar restricts the view by position range, entropy range (the range of
 similarity-weighted entropy while the chart shows it), motif class and support class.
 
+When the table's columns do not fit the window, the table scrolls sideways: drag its horizontal
+scroll bar, scroll sideways on a touchpad, or hold Shift and turn the mouse wheel over the table.
+The table's own vertical scroll bar is then at its right edge, out of view until you scroll there;
+the mouse wheel scrolls the rows anyway. Moving through the rows with the arrow keys keeps the
+sideways position, and a column header reached with Tab scrolls into view. Column widths you set
+by dragging a header's edge are kept while the app is open, but go back to their defaults once
+when results with a different set of columns are shown, for example the first results with
+similarity-weighted entropy after results without it.
+
+**Similarity-weighted values.** When the run computed similarity-weighted entropy, the Results
+screen also shows:
+
+- a chip right after the *mean* chip, **similarity-weighted mean X bits (observed Y)**: the mean
+  similarity-weighted entropy of the eligible positions and, in parentheses, the mean observed
+  (uncorrected) entropy of the same positions, so the two are compared like for like. The *mean*
+  chip before it is the run's entropy, corrected by the paper's estimator. For the bundled MERS
+  spike sample (`samples/mers_spike_aa.fasta`, default options) the chip reads
+  *similarity-weighted mean 0.0363 bits (observed 0.1207)*, next to *mean 0.1261 bits*: the
+  similarity-weighted mean is about 30% of the observed mean of the same positions. With no
+  eligible position it reads *similarity-weighted mean —*;
+- a **Similarity-weighted** column in the position table, right after **Entropy** and sortable
+  like the others (its tooltip says *Sort by similarity-weighted entropy*). In the exported
+  positions table the column stays at the end, as `dima analyze` writes it;
+- three more facts of the selected position: **Similarity-weighted entropy** (in bits),
+  **Normalised observed entropy** and **Normalised similarity-weighted entropy**. A normalised
+  value is the entropy divided by log₂ of the number of distinct k-mers at the position (the
+  Index included), so it lies between 0 and 1. For MERS spike position 25, the example position
+  of the [methodology page](/explanation/entropy/), they read *0.4275 bits*, *0.4282* and
+  *0.1287*;
+- the same three values in the tooltip of a point of the chart.
+
+Read them with care:
+
+- With a single distinct k-mer the normalised values are undefined and read *— (one variant)*,
+  while similarity-weighted entropy reads *0.0000 bits*. Without support all three read *—*.
+- At positions with support at or below T (LS, ELS) the two normalised values carry the mark
+  *(low support)*. They come from few sequences: they are less reliable and can be higher or
+  lower than they would be with more sequences. In the HIV-1 pol protein data set
+  (`tests/data/HIV1_ALL_2020_pol_PRO.fasta.bz2`), position 3 has support 55 and 17 distinct
+  9-mers; its facts read *0.8301 (low support)* and *0.2503 (low support)*.
+- Where every sequence carries a different k-mer, normalised observed entropy is 1.0000 by
+  arithmetic alone, whatever the sequences: in the same data set, position 29 has 4 sequences
+  with 4 different 9-mers and reads *1.0000 (low support)*.
+
 **Command palette.** Ctrl+K (⌘K on macOS) jumps to a position, finds the positions that carry a
 k-mer, or runs a command. **Help ▸ Keyboard shortcuts** lists the others.
 

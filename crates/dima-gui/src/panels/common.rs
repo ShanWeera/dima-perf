@@ -243,11 +243,66 @@ pub fn with_help(response: egui::Response, text: &str) -> egui::Response {
     response.on_hover_text(text)
 }
 
-/// A muted "key value" pair in a grid row.
-pub fn fact(ui: &mut Ui, t: &DesignTokens, key: &str, value: impl Into<String>) {
-    ui.label(RichText::new(key).color(t.text_secondary));
+/// A muted "key value" pair in a grid row; returns the key's response (for its tooltip).
+pub fn fact(ui: &mut Ui, t: &DesignTokens, key: &str, value: impl Into<String>) -> egui::Response {
+    let key = ui.label(RichText::new(key).color(t.text_secondary));
     ui.label(value.into());
     ui.end_row();
+    key
+}
+
+/// [`fact`] with the key in a cell `key_width` wide, so grids drawn one below another line up
+/// their values; a key with a line break takes two lines.
+pub fn fact_at(
+    ui: &mut Ui,
+    t: &DesignTokens,
+    key: &str,
+    value: impl Into<String>,
+    key_width: f32,
+) -> egui::Response {
+    let key = ui
+        .allocate_ui_with_layout(
+            egui::vec2(key_width, 0.0),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                ui.set_min_width(key_width);
+                ui.label(RichText::new(key).color(t.text_secondary))
+            },
+        )
+        .inner;
+    ui.label(value.into());
+    ui.end_row();
+    key
+}
+
+/// The width of the key column that fits every line of `keys` in the body font.
+#[must_use]
+pub fn key_column_width(ui: &Ui, keys: &[&str]) -> f32 {
+    let font = egui::TextStyle::Body.resolve(ui.style());
+    keys.iter()
+        .flat_map(|k| k.lines())
+        .map(|line| text_width(ui, line, font.clone()))
+        .fold(0.0, f32::max)
+}
+
+/// A normalised entropy as the position facts and the chart's tooltip show it: the value, marked
+/// "(low support)" at support ≤ T (LS, ELS), where it is less reliable; "— (one variant)" where
+/// it is undefined because the position has a single distinct k-mer; "—" without support.
+#[must_use]
+pub fn normalised_value(value: Option<f64>, p: &dima_core::model::PositionResult) -> String {
+    use crate::charts::series::Class;
+    match value {
+        Some(v) => {
+            let shown = dima_core::human::fixed(v, 4);
+            if matches!(Class::of(p), Class::Low | Class::EqualToThreshold) {
+                format!("{shown} (low support)")
+            } else {
+                shown
+            }
+        }
+        None if p.diversity_motifs.len() == 1 => "\u{2014} (one variant)".to_owned(),
+        None => "\u{2014}".to_owned(),
+    }
 }
 
 /// A frame for a card (setup sections, error cards).
@@ -261,11 +316,17 @@ pub fn card(t: &DesignTokens) -> egui::Frame {
 
 /// A sortable column header: a frameless button (reachable with Tab and announced as a button
 /// by screen readers) showing the column name and, when the table is sorted by it, the
-/// direction arrow.
-pub fn sort_header(ui: &mut Ui, name: &str, arrow: &str) -> egui::Response {
-    ui.add(egui::Button::new(RichText::new(format!("{name}{arrow}")).strong()).frame(false))
-        .on_hover_text(format!("Sort by {}", name.to_lowercase()))
-        .on_hover_cursor(egui::CursorIcon::PointingHand)
+/// direction arrow. "Sort by `sort_name`" is its tooltip and its AccessKit description, and a
+/// header that gains the keyboard focus scrolls into view.
+pub fn sort_header(ui: &mut Ui, name: &str, sort_name: &str, arrow: &str) -> egui::Response {
+    let response = ui
+        .add(egui::Button::new(RichText::new(format!("{name}{arrow}")).strong()).frame(false))
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
+    let response = with_help(response, &format!("Sort by {sort_name}"));
+    if response.gained_focus() {
+        response.scroll_to_me(None);
+    }
+    response
 }
 
 #[cfg(test)]

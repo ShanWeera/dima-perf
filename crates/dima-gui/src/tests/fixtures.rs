@@ -62,6 +62,29 @@ pub fn mers_nt() -> Arc<Results> {
     Arc::clone(R.get_or_init(|| analyse(mers_nt_path(), &AnalysisParams::default())))
 }
 
+/// The MERS spike nucleotide results with similarity-weighted entropy (LS positions, some with
+/// one distinct k-mer).
+#[must_use]
+pub fn mers_nt_swe() -> Arc<Results> {
+    static R: OnceLock<Arc<Results>> = OnceLock::new();
+    Arc::clone(R.get_or_init(|| analyse(mers_nt_path(), &with_swe())))
+}
+
+/// `tests/data/HIV1_ALL_2020_pol_PRO.fasta.bz2` (the paper's HIV-1 pol protein data set).
+#[must_use]
+pub fn hiv_pro_path() -> PathBuf {
+    repo().join("tests/data/HIV1_ALL_2020_pol_PRO.fasta.bz2")
+}
+
+/// The HIV-1 pol protein results with similarity-weighted entropy: 162 LS/ELS positions, 41
+/// of them with normalised values (16 where every sequence carries a different k-mer) and 121
+/// with one distinct k-mer, and 551 NS positions.
+#[must_use]
+pub fn hiv_pro_swe() -> Arc<Results> {
+    static R: OnceLock<Arc<Results>> = OnceLock::new();
+    Arc::clone(R.get_or_init(|| analyse(hiv_pro_path(), &with_swe())))
+}
+
 /// A complete results value (from a tiny alignment) whose positions tests replace.
 #[must_use]
 pub fn results(_n: usize) -> Results {

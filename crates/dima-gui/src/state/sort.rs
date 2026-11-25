@@ -80,7 +80,8 @@ fn apply(o: Ordering, d: Direction) -> Ordering {
     }
 }
 
-/// Columns of the position table.
+/// The sort ids of the position table's columns (the panel decides which are shown and in
+/// what order; an id is never reused, so a remembered sort keeps its meaning).
 pub mod position_columns {
     /// Position.
     pub const POSITION: usize = 0;
@@ -94,15 +95,8 @@ pub mod position_columns {
     pub const TOTAL_VARIANTS: usize = 4;
     /// Most common variant.
     pub const TOP_VARIANT: usize = 5;
-    /// Names, in column order.
-    pub const NAMES: [&str; 6] = [
-        "Position",
-        "Entropy",
-        "Support",
-        "Class",
-        "Variants %",
-        "Top variant",
-    ];
+    /// Similarity-weighted entropy (shown right after entropy when computed).
+    pub const SIMILARITY_WEIGHTED: usize = 6;
 }
 
 /// Orders two positions by a column; ties keep position order (stable and deterministic).
@@ -119,6 +113,11 @@ pub fn compare_positions(a: &PositionResult, b: &PositionResult, sort: TableSort
     };
     let o = match sort.column {
         c::ENTROPY => cmp_opt_f64(a.entropy, b.entropy, d),
+        c::SIMILARITY_WEIGHTED => cmp_opt_f64(
+            a.similarity_weighted_entropy,
+            b.similarity_weighted_entropy,
+            d,
+        ),
         c::SUPPORT => apply(a.support.cmp(&b.support), d),
         c::CLASS => apply(class_rank(a).cmp(&class_rank(b)), d),
         c::TOTAL_VARIANTS => cmp_opt_f64(a.total_variants_incidence, b.total_variants_incidence, d),
@@ -206,6 +205,35 @@ mod tests {
             (s.column, s.direction),
             (position_columns::SUPPORT, Direction::Ascending)
         );
+    }
+
+    /// Similarity-weighted entropy sorts like entropy: values in order, missing ones last in
+    /// both directions.
+    #[test]
+    fn positions_by_similarity_weighted_entropy_keep_missing_values_last() {
+        let swe = |pos, v| {
+            let mut p = position(pos, Some(1.0), 200, 100);
+            p.similarity_weighted_entropy = v;
+            p
+        };
+        let ps = [
+            swe(1, Some(0.3)),
+            swe(2, None),
+            swe(3, Some(0.1)),
+            swe(4, Some(0.3)),
+        ];
+        for (direction, want) in [
+            (Direction::Ascending, vec![2, 0, 3, 1]),
+            (Direction::Descending, vec![0, 3, 2, 1]),
+        ] {
+            let sort = TableSort {
+                column: position_columns::SIMILARITY_WEIGHTED,
+                direction,
+            };
+            let mut idx: Vec<usize> = (0..ps.len()).collect();
+            idx.sort_by(|&a, &b| compare_positions(&ps[a], &ps[b], sort));
+            assert_eq!(idx, want, "{direction:?}: ties keep position order");
+        }
     }
 
     /// The Top-variant order as it was computed before it borrowed: from owned copies of the

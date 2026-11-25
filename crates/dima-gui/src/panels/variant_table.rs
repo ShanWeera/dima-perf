@@ -89,7 +89,7 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
                     let arrow = sort
                         .filter(|s| s.column == i)
                         .map_or("", |s| s.direction.arrow());
-                    if super::common::sort_header(ui, name, arrow).clicked() {
+                    if super::common::sort_header(ui, name, &name.to_lowercase(), arrow).clicked() {
                         clicked_col = Some(i);
                     }
                 });

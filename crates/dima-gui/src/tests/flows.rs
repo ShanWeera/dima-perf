@@ -118,6 +118,41 @@ fn load(h: &mut H, results: &Results) {
     h.run_steps(4);
 }
 
+/// Turns the mouse wheel by `delta` points (negative y scrolls down, negative x right) with the
+/// pointer at `at`.
+fn wheel(h: &mut H, at: egui::Pos2, delta: egui::Vec2) {
+    h.hover_at(at);
+    h.event(egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta,
+        phase: egui::TouchPhase::Move,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(3);
+}
+
+/// Turns the mouse wheel over the conserved-region heading (in the results column, outside the
+/// chart and the table) until the column is scrolled to its end, where the position table is
+/// whole in the window.
+fn scroll_column_to_table(h: &mut H) {
+    let header = |h: &H| h.get_by_role_and_label(Role::Button, "Position").rect();
+    for _ in 0..40 {
+        let before = header(h);
+        let at = h.get_by_label("Conserved regions").rect().center();
+        wheel(h, at, egui::vec2(0.0, -60.0));
+        if header(h) == before {
+            let window = h.ctx.content_rect();
+            assert!(
+                header(h).bottom() + 4.0 * 22.0 < window.bottom(),
+                "the table's header and four rows are in the window: {:?}",
+                header(h)
+            );
+            return;
+        }
+    }
+    panic!("the column never reached its end");
+}
+
 /// The rectangles of every label and control above `bottom`, with their names.
 fn controls_above(h: &H, bottom: f32) -> Vec<(String, egui::Rect)> {
     use egui_kittest::kittest::NodeT;
@@ -631,10 +666,9 @@ fn the_workspace_fits_the_smallest_window() {
             assert_eq!(viewport.is_some(), zoomed, "{viewport:?}");
             assert_eq!(h.get_by_label_contains("Entropy chart:").rect(), chart);
         }
-        // The table is below the window until the column scrolls to it.
-        h.get_by_role_and_label(Role::Button, "Position")
-            .scroll_to_me();
-        h.run_steps(4);
+        // The table is below the window until the column scrolls to it, with the wheel
+        // outside the chart.
+        scroll_column_to_table(&mut h);
         let header = h.get_by_role_and_label(Role::Button, "Position").rect();
         assert!(
             header.top() >= 0.0 && header.bottom() < MIN_WINDOW.y,
@@ -768,4 +802,170 @@ fn the_metric_switch_moves_no_control() {
             assert_eq!(h.get_by_label_contains(name).rect(), chart, "{size:?}");
         }
     }
+}
+
+/// With similarity-weighted entropy the results show its chip after the mean, its column after
+/// entropy (sortable, "Sort by similarity-weighted entropy" as tooltip and AccessKit
+/// description) and three facts of the selected position whose values line up with the
+/// others; without it, none of them.
+#[test]
+fn similarity_weighted_values_in_the_chip_the_table_and_the_facts() {
+    use egui_kittest::kittest::NodeT;
+    const FACTS: [&str; 3] = [
+        "Similarity-weighted entropy",
+        "Normalised observed entropy",
+        "Normalised\nsimilarity-weighted entropy",
+    ];
+    let mut h = harness();
+    load(&mut h, &fixtures::mers());
+    assert!(!has_label(&h, "similarity-weighted mean"));
+    assert!(
+        h.query_by_role_and_label(Role::Button, "Similarity-weighted")
+            .is_none()
+    );
+    for key in FACTS {
+        assert!(h.query_by_label(key).is_none(), "{key:?}");
+    }
+    load(&mut h, &fixtures::mers_swe());
+    assert!(has_label(
+        &h,
+        "similarity-weighted mean 0.0363 bits (observed 0.1207)"
+    ));
+    let header = h.get_by_role_and_label(Role::Button, "Similarity-weighted");
+    assert_eq!(
+        header.accesskit_node().description().as_deref(),
+        Some("Sort by similarity-weighted entropy")
+    );
+    let entropy = h.get_by_role_and_label(Role::Button, "Entropy").rect();
+    assert!(
+        (header.rect().left() - entropy.right()) < 60.0 && header.rect().left() > entropy.left(),
+        "right after Entropy: {entropy:?} {:?}",
+        header.rect()
+    );
+    assert_eq!(
+        h.get_by_role_and_label(Role::Button, "Entropy")
+            .accesskit_node()
+            .description()
+            .as_deref(),
+        Some("Sort by entropy"),
+        "every sortable header"
+    );
+    header.click();
+    h.run_steps(2);
+    let sort = h.state().state.session.as_ref().unwrap().sort.unwrap();
+    assert_eq!(
+        sort.column,
+        crate::state::sort::position_columns::SIMILARITY_WEIGHTED
+    );
+    // The facts of position 25, the worked example.
+    h.state_mut().dispatch(
+        Msg::Select(25, crate::state::session::SelectSource::Palette),
+        None,
+    );
+    h.run_steps(3);
+    let mut keys = Vec::new();
+    for key in FACTS {
+        let k = h.get_by_role_and_label(Role::Label, key);
+        assert_eq!(
+            k.accesskit_node().description(),
+            Some(match key {
+                "Similarity-weighted entropy" => {
+                    crate::panels::help_text::similarity_weighted_fact()
+                }
+                "Normalised observed entropy" => {
+                    crate::panels::help_text::normalised_observed_fact()
+                }
+                _ => crate::panels::help_text::normalised_similarity_weighted_fact(),
+            })
+        );
+        keys.push(k.rect());
+    }
+    // One key column for both grids: the values start where the older facts' values start
+    // (the inspector is the rightmost place a value is shown).
+    let value_left = |text: &str| {
+        h.query_all_by_label(text)
+            .map(|n| n.rect().left())
+            .fold(f32::MIN, f32::max)
+    };
+    let observed = h
+        .get_by_role_and_label(Role::Label, "Observed entropy")
+        .rect();
+    assert_eq!(observed.left(), keys[0].left());
+    let support = value_left("170");
+    assert!(support > keys[0].right(), "{support} {:?}", keys[0]);
+    for value in ["0.4275 bits", "0.4282", "0.1287"] {
+        assert_eq!(value_left(value), support, "{value:?}");
+    }
+    assert!(
+        keys[2].height() > keys[0].height() * 1.5,
+        "the two-line key"
+    );
+}
+
+/// At the smallest window, with the coverage and similarity-weighted columns, the table is wider
+/// than its column: it scrolls sideways to the Top variant, a header that gains the keyboard
+/// focus scrolls into view, and moving the selection with the keyboard keeps the sideways
+/// scroll.
+#[test]
+fn the_table_scrolls_sideways_at_the_smallest_window() {
+    let mut results = (*fixtures::mers_swe()).clone();
+    results.coverage_summary.min_coverage = Some(0.95);
+    let mut h = harness_sized(MIN_WINDOW);
+    load(&mut h, &results);
+    scroll_column_to_table(&mut h);
+    let column = h.get_by_label_contains("Entropy chart:").rect().x_range();
+    let top = |h: &H| h.get_by_role_and_label(Role::Button, "Top variant").rect();
+    assert!(
+        top(&h).right() > column.max,
+        "off to the right: {:?}",
+        top(&h)
+    );
+    assert!(has_label(&h, "Coverage"));
+    // The wheel turned sideways over the table (a touchpad, or Shift and the wheel).
+    let sideways = |h: &mut H, dx: f32| {
+        let at = h
+            .get_by_role_and_label(Role::Button, "Support")
+            .rect()
+            .center();
+        wheel(h, at, egui::vec2(dx, 0.0));
+    };
+    for _ in 0..20 {
+        if top(&h).right() <= column.max {
+            break;
+        }
+        sideways(&mut h, -40.0);
+    }
+    let shown = top(&h);
+    assert!(
+        column.contains(shown.left()) && column.contains(shown.right()),
+        "reachable: {shown:?} in {column:?}"
+    );
+    // The keyboard moves the selection and the table to its row, not sideways.
+    let position = h.get_by_role_and_label(Role::Button, "Position").rect();
+    let before = h.state().state.session.as_ref().unwrap().selection.position;
+    for _ in 0..3 {
+        h.key_press(egui::Key::ArrowDown);
+        h.run_steps(2);
+    }
+    assert_ne!(
+        h.state().state.session.as_ref().unwrap().selection.position,
+        before
+    );
+    assert_eq!(
+        h.get_by_role_and_label(Role::Button, "Position").rect(),
+        position,
+        "the sideways scroll is kept"
+    );
+    // Back to the left edge, then the focus on Top variant brings it into view.
+    for _ in 0..20 {
+        sideways(&mut h, 40.0);
+    }
+    assert!(top(&h).right() > column.max);
+    h.get_by_role_and_label(Role::Button, "Top variant").focus();
+    h.run_steps(4);
+    let focused = top(&h);
+    assert!(
+        column.contains(focused.left()) && column.contains(focused.right()),
+        "the focused header scrolled into view: {focused:?} in {column:?}"
+    );
 }

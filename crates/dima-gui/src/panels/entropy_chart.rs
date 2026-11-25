@@ -681,6 +681,13 @@ pub fn point_tooltip(s: &Session, position: u64) -> Option<String> {
             crate::util::opt_coverage(p.sample_coverage, 3)
         ));
     }
+    if ChartMetric::SimilarityWeighted.available(&s.results) {
+        let [similarity, observed, normalised] = super::position_summary::similarity_values(p);
+        text.push_str(&format!(
+            "\nsimilarity-weighted entropy {similarity}\nnormalised observed entropy \
+             {observed}\nnormalised similarity-weighted entropy {normalised}"
+        ));
+    }
     Some(text)
 }
 
@@ -892,6 +899,44 @@ mod tests {
         assert_eq!(y_title_center(plot, full, lengths[0]), plot.center().y);
         // A title longer than the chart keeps its bottom inside, and nothing panics.
         assert_eq!(y_title_center(plot, full, 1000.0), full.bottom() - 500.0);
+    }
+
+    /// With similarity-weighted entropy the tooltip adds its three values, marked like the
+    /// position's facts; without it, nothing.
+    #[test]
+    fn tooltips_add_the_similarity_weighted_values_when_computed() {
+        let s = Session::new(
+            1,
+            crate::tests::fixtures::mers_swe(),
+            Origin::Opened("x".into()),
+        );
+        let text = point_tooltip(&s, 25).unwrap();
+        assert!(
+            text.ends_with(
+                "\nsimilarity-weighted entropy 0.4275 bits\nnormalised observed entropy \
+                 0.4282\nnormalised similarity-weighted entropy 0.1287"
+            ),
+            "{text}"
+        );
+        let off = Session::new(
+            2,
+            crate::tests::fixtures::mers(),
+            Origin::Opened("x".into()),
+        );
+        assert!(!point_tooltip(&off, 25).unwrap().contains("similarity"));
+        let hiv = Session::new(
+            3,
+            crate::tests::fixtures::hiv_pro_swe(),
+            Origin::Opened("x".into()),
+        );
+        let low = hiv
+            .results
+            .results
+            .iter()
+            .find(|p| p.low_support.is_some() && p.diversity_motifs.len() > 1)
+            .unwrap();
+        let text = point_tooltip(&hiv, low.position).unwrap();
+        assert_eq!(text.matches(" (low support)").count(), 2, "{text}");
     }
 
     /// A new load restarts the version, so two sessions showing the same positions at the same

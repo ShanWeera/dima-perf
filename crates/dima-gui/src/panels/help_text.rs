@@ -317,6 +317,60 @@ pub fn chart_metric(metric: ChartMetric) -> String {
     }
 }
 
+/// The sources of a statement about the normalised entropies: their definition, and their
+/// dependence on sample size.
+fn normalised_refs() -> String {
+    let r = &dima_core::similarity::REFERENCES;
+    refs(&[r[0], r[3]])
+}
+
+/// The position fact "Similarity-weighted entropy".
+#[must_use]
+pub fn similarity_weighted_fact() -> String {
+    format!(
+        "Entropy in which each variant counts for less the more it resembles the other variants \
+         at this position, in bits: 0 with one distinct k-mer, and never more than the observed \
+         entropy. Not corrected for sample size.{}",
+        refs(&[dima_core::similarity::REFERENCES[0]])
+    )
+}
+
+/// The position fact "Normalised observed entropy".
+#[must_use]
+pub fn normalised_observed_fact() -> String {
+    format!(
+        "Observed entropy divided by log2 of the number of distinct k-mers here (the Index \
+         included): between 0 and 1, undefined with one distinct k-mer. Values marked (low \
+         support) come from support \u{2264} T: they are less reliable and can be higher or \
+         lower than with more sequences. Where every sequence carries a different k-mer the \
+         value is 1.0000 by arithmetic alone.{}",
+        normalised_refs()
+    )
+}
+
+/// The position fact "Normalised similarity-weighted entropy".
+#[must_use]
+pub fn normalised_similarity_weighted_fact() -> String {
+    format!(
+        "Similarity-weighted entropy divided by log2 of the number of distinct k-mers here (the \
+         Index included): between 0 and 1, undefined with one distinct k-mer. Values marked (low \
+         support) come from support \u{2264} T: they are less reliable and can be higher or \
+         lower than with more sequences.{}",
+        normalised_refs()
+    )
+}
+
+/// The summary chip of similarity-weighted entropy.
+#[must_use]
+pub fn similarity_weighted_mean(eligible: u64) -> String {
+    format!(
+        "Mean similarity-weighted entropy over the {eligible} eligible positions, and in \
+         parentheses the mean observed (uncorrected) entropy of the same positions, for a \
+         like-for-like comparison.{}",
+        refs(&[dima_core::similarity::REFERENCES[0]])
+    )
+}
+
 /// The filter bar's value range, for the metric shown.
 #[must_use]
 pub fn value_range(metric: ChartMetric) -> String {
@@ -348,6 +402,10 @@ mod tests {
             super::chart_encoding(100, Estimator::Raw, ChartMetric::Entropy),
             super::chart_encoding(100, Estimator::Dima, ChartMetric::SimilarityWeighted),
             super::chart_metric(ChartMetric::SimilarityWeighted),
+            super::similarity_weighted_fact(),
+            super::normalised_observed_fact(),
+            super::normalised_similarity_weighted_fact(),
+            super::similarity_weighted_mean(1345),
         ] {
             assert!(text.contains("\n\nRef: "), "{text}");
         }
