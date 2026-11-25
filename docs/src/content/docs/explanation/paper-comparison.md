@@ -37,13 +37,14 @@ All values with the defaults: $T = 100$, $k = 27$ (DNA) or 9 (protein), the `dim
 ## Notes
 
 1. **Mean entropy.** The paper's correction draws random subsamples, so each run gives a
-   slightly different mean; three runs of the published procedure gave 5.350 to 5.353. DiMA
-   reports the exact expectation of the procedure's intercept, 5.3504 (see
-   [The exact expectation](/explanation/entropy/#the-exact-expectation)).
-2. **Range and highest position.** The paper's extremes come from one random run. The expected
-   corrected entropies at positions 2176 and 2177 are 9.4755 and 9.4601 bits, a difference well
-   within the spread of the random procedure at those positions (a standard deviation of about
-   0.07 bits), so either position can come out highest in a single run.
+   slightly different mean; <!-- docs-numbers:hiv-run-mean:start -->
+   the mean of one run of the published procedure has a standard deviation of 0.0020 bits (exact)<!-- docs-numbers:hiv-run-mean:end -->. DiMA reports the exact expectation of the procedure's
+   intercept, 5.3504 (see [The exact expectation](/explanation/entropy/#the-exact-expectation)).
+2. **Range and highest position.** The paper's extremes come from one random run. <!-- docs-numbers:hiv-2176-2177:start -->
+   The expected corrected entropies at positions 2176 and 2177 are 9.4755 and 9.4601 bits, a
+   difference well within the spread of the random procedure at those positions (exact standard
+   deviation 0.0661 bits at both)<!-- docs-numbers:hiv-2176-2177:end -->, so either position can come out highest in a single
+   run.
 3. **Conserved-sequence lengths.** DiMA finds two regions, as the paper does, each four
    nucleotides shorter than the published lengths. DiMA v5.0.9's own conserved-sequence code, applied to the same
    alignment, also gives 32 and 30 nt; the extra four nucleotides cannot be reproduced from the
@@ -55,9 +56,10 @@ All values with the defaults: $T = 100$, $k = 27$ (DNA) or 9 (protein), the `dim
 4. **Stop and frameshift symbols.** The HIV-1 *pol* protein alignment from the Los Alamos
    database contains `*` (stop) and `#` (frameshift). DiMA excludes them like gaps; counted
    as residues, as DiMA v5.0.9 did, they give 1.9125. Both round to the paper's 1.91.
-5. **Fig. 1C.** The figure shows one draw of the random procedure. Its standard deviation at this
-   position is 0.22 bits, and 1.38 lies at about the 39th percentile of its distribution; the
-   expectation is 1.4451 (1.4617 with the default $T = 100$). See
+5. **Fig. 1C.** The figure shows one draw of the random procedure. <!-- docs-numbers:fig1c:start -->
+   Its exact standard deviation at this position is 0.2241 bits, and 1.38 lies 0.29 standard
+   deviations below the expectation, 1.4451 (1.4617 with the default $T = 100$, standard deviation
+   0.3047)<!-- docs-numbers:fig1c:end -->. See
    [Entropy and its correction](/explanation/entropy/#the-exact-expectation).
 
 ## Other datasets
@@ -77,9 +79,10 @@ implementation (`scripts/reference/`) within a relative $10^{-13}$ (see
 | HIV-1 *pol* DNA (27) | 3,364 | 680 / 564 / 0 / 2,120 | 5.3504 | 0.8976 | 9.4755 (2176) |
 
 DiMA v5.0.9 applies the negative-intercept rule to each random run, which raises its average at
-near-conserved positions; averaged over many of its runs, the MERS-CoV spike protein means are
-about 0.142 bits ($T = 100$) and 0.132 bits ($T = 30$), the gene's about 0.384 bits, and the
-HIV-1 *pol* means are unchanged (see
+near-conserved positions; averaged over many of its runs, <!-- docs-numbers:v509-means:start -->
+the MERS-CoV spike protein means are 0.1417 bits ($T = 100$) and 0.1317 bits ($T = 30$) and the
+gene's 0.3842 bits (seeded Monte Carlo of 2,000, 2,000 and 200 runs, 95% intervals ±0.0001), and the
+HIV-1 *pol* means differ from DiMA's by less than 0.00026 bits (DNA) and 0.0011 bits (protein)<!-- docs-numbers:v509-means:end --> (see
 [the negative-intercept rule](/explanation/entropy/#the-negative-intercept-rule)).
 
 ## Similarity-weighted entropy (Wu 2025)

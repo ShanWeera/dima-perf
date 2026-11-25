@@ -155,13 +155,18 @@ the AVANA tool extrapolated from 100 random sub-alignments by default [@khan2017
 
 - Results are reproducible bit for bit; no random seed is involved.
 - On the paper's HIV-1 *pol* dataset the mean corrected entropy is 5.3504 bits; the paper reports
-  about 5.35, and repeated runs of the random procedure give 5.350–5.353 (see
+  about 5.35, <!-- docs-numbers:hiv-run-mean:start -->
+  and the mean of one run of the random procedure has a standard deviation of 0.0020 bits around it<!-- docs-numbers:hiv-run-mean:end --> (see
   [Comparison with the papers](/explanation/paper-comparison/)).
-- **Fig. 1C.** At MERS-CoV spike position 25 the paper shows 1.38 bits ($T = 30$). The exact
-  expectation is 1.4451 bits. A simulation of the paper's random procedure at that position
-  (20,000 runs) has a standard deviation of 0.22 bits, and 1.38 lies at about its 39th
-  percentile: an ordinary draw of the random procedure, not a different method. With $T = 100$
-  the expectation is 1.4617 bits (standard deviation of the random procedure 0.30 bits).
+- **Fig. 1C.** At MERS-CoV spike position 25 the paper shows 1.38 bits ($T = 30$). <!-- docs-numbers:fig1c:start -->
+  The exact expectation is 1.4451 bits, and the intercept of one run of the random procedure has a
+  standard deviation of 0.2241 bits there, so 1.38 lies 0.29 standard deviations below the
+  expectation: an ordinary draw of the random procedure, not a different method. With $T = 100$ the
+  expectation is 1.4617 bits and the standard deviation 0.3047 bits.<!-- docs-numbers:fig1c:end -->
+
+These standard deviations are exact too: the subsamples are drawn independently, so the variance
+of the random intercept is $\sum_j w_j^2 \operatorname{Var}(\hat H_{n_j})$, and each variance
+follows from the multinomial distribution of the subsample counts.
 
 ### The negative-intercept rule
 
@@ -186,20 +191,51 @@ only come from a bug, and it stops the run as an internal error (exit 1) instead
 replaced by another value [@wilson2014, Practice 5a; @hunterzinck2021, Rule 5]. A property test
 confirms the three steps above on random and adversarial count profiles.
 
-DiMA v5.0.9 applies the rule to each random run instead. Where one or a few sequences carry a
-variant other than the Index, a single run's intercept is often negative and is then replaced by
-the larger observed entropy, so v5.0.9's average over many runs is higher there. With the full
-eleven-point grid, about 20% of runs fall back when one sequence differs, raising the average by
-34–41%; 12–15% with two sequences (17–23%); and 3–5% with five (3–6%), on values of a few
-hundredths of a bit. With fewer points ($N$ close to $T$) the effect is larger: one sequence
-differing raises the average by 51% at $N = 171$ and by 107% at $N = 130$ ($T = 100$).
-On the MERS-CoV spike protein ($T = 100$) the eligible mean is 0.1261 bits here and about 0.142
-bits averaged over v5.0.9 runs; on the HIV-1 *pol* datasets the two agree. In simulations of
-two-variant populations with a known entropy ($N$ from 171 to 3,000, minor-variant frequency
-0.05% to 5%), the per-run rule overestimated by up to 19% on average, while the expectation
-underestimated, by up to 27% when less than one minor-variant sequence was expected and by at
-most 3% otherwise, with an error close to that of the Miller–Madow correction; neither had the
-smaller error everywhere.
+DiMA v5.0.9 applies the rule to each random run instead, and rounds the subsample sizes down (see
+[Differences from DiMA v5.0.9](/explanation/differences/#method)). Where one or a few sequences
+carry a variant other than the Index, a single run's intercept is often negative and is then
+replaced by the larger observed entropy, so v5.0.9's average over many runs is higher there. The
+table gives the share of runs that fall back and how far they raise the average above DiMA's
+value, at positions where every other sequence carries the Index:
+
+<!-- docs-numbers:v509-fallbacks:start -->
+
+| Sequences that differ from the Index | Runs that fall back | Average raised by | DiMA's value |
+|---|---|---|---|
+| one | 20.2–21.6% | 34.7–39.2% | 0.0044–0.0469 bits |
+| two, both carrying the same k-mer | 12.7–14.4% | 17.9–21.6% | 0.0082–0.0834 bits |
+| two, carrying two different k-mers | 12.3–14.0% | 17.6–21.1% | 0.0089–0.0937 bits |
+| five, all carrying the same k-mer | 3.0–4.7% | 3.5–5.9% | 0.0180–0.1715 bits |
+| five, all carrying different k-mers | 3.3–4.6% | 3.9–5.7% | 0.0221–0.2341 bits |
+
+Each range is over $N$ = 200, 300, 500, 1,000, 2,000 and 3,000 sequences ($T = 100$), where the grid
+has all eleven points and the subsample sizes need no rounding, so v5.0.9's runs differ from the
+paper's procedure only by the rule. Exact where the differing sequences carry one k-mer; seeded
+Monte Carlo of 100,000 runs per $N$ where they carry different ones (95% intervals within ±0.4
+percentage points).
+
+<!-- docs-numbers:v509-fallbacks:end -->
+
+With fewer points ($N$ close to $T$) the effect is larger: <!-- docs-numbers:v509-few-points:start -->
+one sequence differing raises the average by 50% at $N = 171$ and by 105% at $N = 130$ ($T = 100$;
+exact)<!-- docs-numbers:v509-few-points:end -->.
+On the MERS-CoV spike protein ($T = 100$) the eligible mean is 0.1261 bits here and <!-- docs-numbers:v509-means:start -->
+0.1417 bits averaged over v5.0.9 runs (seeded Monte Carlo of 2,000 runs, 95% interval ±0.0001); on
+the HIV-1 *pol* datasets the two differ by less than 0.00026 bits (DNA) and 0.0011 bits (protein),
+under half the standard deviation of the mean of a single run (0.0020 and 0.0027 bits)<!-- docs-numbers:v509-means:end -->.
+
+<!-- docs-numbers:population-study:start -->
+
+In samples of $N$ = 171, 200, 300, 500, 1,000, 2,000 and 3,000 sequences from two-variant
+populations with a known entropy (minor-variant frequency 0.05, 0.1, 0.2, 0.5, 1, 2 and 5%; $T$ = 30
+and 100), v5.0.9's per-run rule overestimated the entropy by up to 31% on average with $T = 100$ and
+20% with $T = 30$ (seeded Monte Carlo of 100,000 runs per case, 95% intervals within ±0.5 percentage
+points). The exact expectation underestimated it by up to 27% when less than one minor-variant
+sequence was expected and by up to 6.4% otherwise (and overestimated it by at most 0.13%), within
+3.2 percentage points of the error of the Miller–Madow correction. Neither had the smaller error
+everywhere.
+
+<!-- docs-numbers:population-study:end -->
 
 ## Alternative estimators
 
