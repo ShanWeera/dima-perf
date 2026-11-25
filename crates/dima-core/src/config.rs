@@ -383,7 +383,8 @@ impl<'de> Deserialize<'de> for Percent {
     }
 }
 
-/// Parameters of one analysis. `None` means "use the default" (or derive from the data).
+/// Parameters of one analysis. For the optional fields `None` means "use the default" (or
+/// derive from the data); the switches are off by default.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AnalysisParams {
     /// Sequence alphabet; `None` detects it from the data.

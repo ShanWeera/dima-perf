@@ -210,13 +210,13 @@ pub(crate) fn term(count: u64, support: u64) -> f64 {
     -p * libm::log2(p)
 }
 
-/// An entropy normalised by its maximum for the observed number of distinct k-mers D:
+/// An entropy divided by log₂ D, the largest observed entropy possible with D distinct k-mers:
 /// x = H / log₂ D (Wu 2025, Section 2.1, H_n and H_nsim; the form of Pielou's J′ with the
 /// observed D). `None` when D ≤ 1, where the maximum is 0 and the ratio is undefined.
 ///
-/// A ratio that rounding put just above 1 is capped at 1 (Goldberg 1991, §§1.2 and 2.1.4:
-/// each operation is correctly rounded, so a quotient that is 1 in exact arithmetic can be a
-/// few units in the last place above it).
+/// A ratio that rounding put just above 1 is capped at 1: the entropy and log₂ D each carry
+/// rounding (the logarithm is not correctly rounded; Goldberg 1991, §2.1.4), so a quotient that
+/// is 1 in exact arithmetic can be a few units in the last place above it.
 ///
 /// # Errors
 /// [`DimaError::Internal`] if the ratio is not a number in [0, 1 + 10⁻¹²]: the entropies given

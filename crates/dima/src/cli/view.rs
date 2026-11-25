@@ -39,7 +39,7 @@ pub fn run(a: &ViewArgs, ctx: &Context) -> Result<()> {
             (&named, outputs::Opened::open(&named, &ctx.signals.cancel)?)
         }
     };
-    report_schema(&results.schema_version, plan, ctx);
+    report_schema(&results, plan, ctx);
     let hcs = if plan.needs_hcs() {
         Some(hcs::compute(&results, &HcsParams::default())?)
     } else {
@@ -60,9 +60,11 @@ pub fn run(a: &ViewArgs, ctx: &Context) -> Result<()> {
 }
 
 /// Tells how a file of another schema version is written: an older 1.x file gets a note where
-/// the outputs hold values its schema did not record; a newer (or unrecognised) one a warning,
-/// since this version keeps only the fields it knows.
-fn report_schema(version: &str, plan: &outputs::Plan, ctx: &Context) {
+/// the outputs hold values its schema did not record (unless the file holds them anyway, as an
+/// edited one can); a newer (or unrecognised) one a warning, since this version keeps only the
+/// fields it knows.
+fn report_schema(results: &dima_core::model::Results, plan: &outputs::Plan, ctx: &Context) {
+    let version = results.schema_version.as_str();
     let current = dima_core::model::SCHEMA_VERSION;
     if version == current {
         return;
@@ -75,7 +77,9 @@ fn report_schema(version: &str, plan: &outputs::Plan, ctx: &Context) {
         (Some(file), Some(this)) if file < this
     );
     if older {
-        if plan.writes_position_values() {
+        if plan.writes_position_values()
+            && !results.run.parameters.similarity_weighted_entropy.value
+        {
             ui::note(
                 &format!(
                     "results file written with schema {version}; values that schema did not \

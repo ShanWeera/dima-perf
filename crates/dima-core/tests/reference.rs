@@ -85,7 +85,8 @@ fn synthetic(seed: u64, alphabet: Alphabet, n: usize, len: usize) -> Vec<u8> {
                 s[h] = residues[rng.below(residues.len() as u64) as usize];
             }
         }
-        // Gappy tail in a third of the sequences (creates LS/NS positions).
+        // Gappy tail in a third of the sequences: low support there when T is above two
+        // thirds of the sequences.
         if i % 3 == 0 {
             let cut = len - len / 5;
             for c in &mut s[cut..] {
@@ -125,6 +126,8 @@ fn cases() -> Vec<Case> {
         (Alphabet::Dna, 300, 40, 5, 100),
         (Alphabet::Rna, 60, 30, 1, 20),
         (Alphabet::Protein, 12, 15, 4, 2),
+        // T between the gappy tail's support (about 40) and the rest's (about 60).
+        (Alphabet::Protein, 60, 30, 3, 45),
     ]
     .into_iter()
     .enumerate()
@@ -139,6 +142,16 @@ fn cases() -> Vec<Case> {
             hcs: ["100", "70", "90.5"][i % 3],
         });
     }
+    // Positions without support, with low support and with an Index tie (the golden `tiny`).
+    v.push(Case {
+        name: "tiny".into(),
+        fasta: std::fs::read(root().join("tests/golden/tiny/input.fasta")).unwrap(),
+        alphabet: Alphabet::Protein,
+        k: 3,
+        threshold: 4,
+        header: false,
+        hcs: "70",
+    });
     v.push(Case {
         name: "mers".into(),
         fasta: std::fs::read(root().join("samples/mers_spike_aa.fasta")).unwrap(),

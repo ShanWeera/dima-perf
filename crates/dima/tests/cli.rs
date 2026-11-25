@@ -1632,4 +1632,22 @@ fn similarity_weighted_entropy_on_the_command_line() {
     assert!(stdout(&o).contains("Wu (2025)"), "{}", stdout(&o));
     // A protein run also cites the amino-acid identity measure.
     assert!(stdout(&o).contains("(Grishin 1995)"), "{}", stdout(&o));
+    // No eligible position: no summary, so no similarity-weighted group on the line.
+    let o = dima()
+        .args(["analyze", "-i", s(&t), "-o", "none.json", "-s", "100"])
+        .args(TINY)
+        .arg("--similarity-weighted-entropy")
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    let e = stderr(&o);
+    assert!(e.contains("no eligible positions"), "{e}");
+    assert!(!e.contains("similarity-weighted mean"), "{e}");
+    let none = json(&dir.join("none.json"));
+    assert_eq!(
+        none["similarity_weighted_entropy_summary"]["position_count"],
+        0
+    );
+    assert!(none["similarity_weighted_entropy_summary"]["average_entropy"].is_null());
 }

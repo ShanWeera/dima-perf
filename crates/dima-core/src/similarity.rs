@@ -26,12 +26,13 @@
 //! ```
 //!
 //! the column-profile form of sum-of-pairs scores of Gotoh (1994, *Bioinformatics* 10:379,
-//! eqs. (1) and (4a), with the self-pairs removed as in eq. (9b)), taken with an identity score
-//! and one sequence against the whole position. The numerators k·N − a_i are exact integers
-//! (`u128`; k·N < 2¹²⁸), summed exactly per count class, and each class contributes
-//! `term(c, N) · (g_c / (k·N))` to a compensated sum in the same class order as observed
-//! entropy. Time O(D·k), memory 208·k bytes per position being computed (a 26 × k table of
-//! `u64`).
+//! eqs. (1) and (4a)), taken with an identity score and one k-mer against the whole position;
+//! the k·c_i matches of the k-mer's own c_i copies are removed because Wu's sum runs over the
+//! other k-mers (j ≠ i). The numerators k·N − a_i are exact integers (`u128`; k·N < 2¹²⁸),
+//! summed exactly per count class, and each class contributes `term(c, N) · (g_c / (k·N))` to
+//! a compensated sum in the same class order as observed entropy. Time O(D·k). Memory, per
+//! position being computed: about 48 bytes per distinct k-mer and a 26 × min(k, 2,048) table
+//! of `u64` (at most 426 kB), the sites being counted in blocks.
 //!
 //! # Bounds and exactness
 //!
@@ -56,8 +57,8 @@ use crate::numeric::Neumaier;
 pub const DESCRIPTION: &str = "Similarity-weighted entropy (Wu 2025) weights each variant's \
     entropy term by how dissimilar it is to the other variants at the position, so \
     near-identical variants count for less. The similarity of two k-mers is the share of their \
-    positions with the same residue, (k - d)/k when they differ at d positions; every \
-    substitution counts alike. Also reported: observed and similarity-weighted entropy divided \
+    k residues that are the same, (k - d)/k when they differ at d of them; every substitution \
+    counts alike. Also reported: observed and similarity-weighted entropy divided \
     by log2 of the number of distinct k-mers (Index included), between 0 and 1; these \
     normalised values are undefined with one distinct k-mer. All three depend on k and the \
     alphabet.";
@@ -84,7 +85,8 @@ pub fn sample_size() -> String {
     format!(
         "None of the three values is corrected for sample size: observed entropy is lower on \
          average with fewer sequences ({}), similarity-weighted entropy also changes with the \
-         number of sequences (see the methodology page), and normalised entropy also depends on \
+         number of sequences (see the methodology page, Entropy and its correction), and \
+         normalised entropy also depends on \
          sample size ({}).",
         REFERENCES[2].short(),
         REFERENCES[3].short()
@@ -158,18 +160,40 @@ fn validate(variants: &[(&[u8], u64)], k: usize) -> Result<()> {
     Ok(())
 }
 
+/// Sites per block of the residue table: 26 × 2,048 counts of 8 bytes, 426 kB, so the table
+/// stays in the processor's cache however long the k-mers are. Shorter k-mers take one block.
+const BLOCK: usize = 2048;
+
 /// The exact numerators of the weights, summed per count class of `profile` (in its order):
 /// g_c = Σ_{i: c_i = c} (k·N − a_i), with a_i = k · Σ_{j≠i} c_j · s_ij counted per site.
+///
+/// The sites are counted in blocks of [`BLOCK`]: a table of all k sites would cost 208·k bytes
+/// and, for long k-mers, a cache miss at almost every look-up. The integer sums are the same.
 pub(crate) fn class_sums(
     variants: &[(&[u8], u64)],
     k: usize,
     profile: &CountProfile,
 ) -> Result<Vec<u128>> {
-    // Residue counts per site; each entry is at most N, which fits in a u64.
-    let mut table = vec![0u64; LETTERS * k];
-    for &(kmer, count) in variants {
-        for (p, &b) in kmer.iter().enumerate() {
-            table[p * LETTERS + usize::from(b - b'A')] += count;
+    // Residue counts per site of one block; each entry is at most N, which fits in a u64.
+    let mut table = vec![0u64; LETTERS * k.min(BLOCK)];
+    // Identical sites of each k-mer with every sequence at the position, Σ_p c_p(x_ip).
+    let mut identical = vec![0u128; variants.len()];
+    for start in (0..k).step_by(BLOCK) {
+        let end = k.min(start + BLOCK);
+        if start > 0 {
+            table.fill(0);
+        }
+        for &(kmer, count) in variants {
+            for (p, &b) in kmer[start..end].iter().enumerate() {
+                table[p * LETTERS + usize::from(b - b'A')] += count;
+            }
+        }
+        for (sites, &(kmer, _)) in identical.iter_mut().zip(variants) {
+            *sites += kmer[start..end]
+                .iter()
+                .enumerate()
+                .map(|(p, &b)| u128::from(table[p * LETTERS + usize::from(b - b'A')]))
+                .sum::<u128>();
         }
     }
     let n = u128::from(profile.support());
@@ -177,12 +201,7 @@ pub(crate) fn class_sums(
     let kn = k_wide * n;
     let classes = profile.frequencies();
     let mut sums = vec![0u128; classes.len()];
-    for &(kmer, count) in variants {
-        let identical: u128 = kmer
-            .iter()
-            .enumerate()
-            .map(|(p, &b)| u128::from(table[p * LETTERS + usize::from(b - b'A')]))
-            .sum();
+    for (&(_, count), &identical) in variants.iter().zip(&identical) {
         let own = k_wide * u128::from(count);
         if identical < own || identical > kn {
             return Err(DimaError::internal(format!(
@@ -316,6 +335,40 @@ mod tests {
         assert!(h.is_finite() && h > 0.0 && h < h_obs);
     }
 
+    #[test]
+    fn blocks_of_sites_give_the_pairwise_sums() {
+        // k-mers spanning two whole blocks and part of a third, fewer and more numerous than
+        // the letters, differing at scattered sites.
+        let k = 2 * BLOCK + 3;
+        let mut state = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = || {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
+            state >> 33
+        };
+        for d in [2usize, 30] {
+            let base: Vec<u8> = (0..k).map(|_| b"ACDE"[(next() % 4) as usize]).collect();
+            let mut pop = std::collections::BTreeMap::new();
+            while pop.len() < d {
+                let mut kmer = base.clone();
+                for _ in 0..(next() % 50) {
+                    kmer[(next() as usize) % k] = b"ACDEW"[(next() % 5) as usize];
+                }
+                pop.entry(kmer).or_insert(1 + next() % 9);
+            }
+            let pop: Vec<(Vec<u8>, u64)> = pop.into_iter().collect();
+            let view: Vec<(&[u8], u64)> = pop.iter().map(|(s, c)| (s.as_slice(), *c)).collect();
+            let profile = CountProfile::from_counts(view.iter().map(|&(_, c)| c)).unwrap();
+            let got = class_sums(&view, k, &profile).unwrap();
+            let want: Vec<u128> = naive_class_sums(&pop, k)
+                .into_iter()
+                .map(|(_, g)| g)
+                .collect();
+            assert_eq!(got, want, "D = {d}");
+        }
+    }
+
     /// Distinct k-mers over a small alphabet with positive counts.
     fn population() -> impl Strategy<Value = (usize, Vec<(Vec<u8>, u64)>)> {
         (1usize..12).prop_flat_map(|k| {
@@ -360,6 +413,14 @@ mod tests {
                 prop_assert_eq!(c, *wc);
                 prop_assert_eq!(*g, *w);
             }
+            // The result is the pairwise numerators' terms, summed in the class order.
+            let n = profile.support();
+            let denominator = (k as u128 * u128::from(n)) as f64;
+            let mut h = Neumaier::new();
+            for &(c, g) in &want {
+                h.add(term(c, n) * (g as f64 / denominator));
+            }
+            prop_assert_eq!(of(&pop).to_bits(), h.total().to_bits());
         }
 
         #[test]

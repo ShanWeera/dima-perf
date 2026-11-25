@@ -287,6 +287,13 @@ fn similarity_weighted_values_follow_the_presence_rules() {
             }),
         ),
         (
+            "off, with a normalised value",
+            false,
+            Box::new(move |v| {
+                v["results"][multi]["normalised_observed_entropy"] = 0.5.into();
+            }),
+        ),
+        (
             "off, with a summary",
             false,
             Box::new(move |v| {
@@ -356,6 +363,25 @@ fn similarity_weighted_values_follow_the_presence_rules() {
         std::fs::write(&p, serde_json::to_vec(v).unwrap()).unwrap();
         output::read_results(&p).unwrap();
     }
+    // Similarity-weighted entropy is undefined only without support.
+    let fasta = dir.path().join("gaps.fa");
+    std::fs::write(&fasta, ">a\nACG--TTTT\n>b\nACG--TTTA\n>c\nACC--TTTT\n").unwrap();
+    let params = AnalysisParams {
+        alphabet: Some(Alphabet::Dna),
+        kmer_length: Some(3),
+        support_threshold: Some(2),
+        similarity_weighted_entropy: true,
+        ..AnalysisParams::default()
+    };
+    let gaps = analyze(&Source::Path(fasta), &params, &RunControl::new())
+        .unwrap()
+        .results;
+    let mut v = serde_json::to_value(&gaps).unwrap();
+    let unsupported = gaps.results.iter().position(|p| p.support == 0).unwrap();
+    v["results"][unsupported]["similarity_weighted_entropy"] = 0.5.into();
+    std::fs::write(&p, serde_json::to_vec(&v).unwrap()).unwrap();
+    let e = output::read_results(&p).unwrap_err().to_string();
+    assert!(e.contains("is undefined here (no support)"), "{e}");
 }
 
 fn on_summary() -> serde_json::Value {

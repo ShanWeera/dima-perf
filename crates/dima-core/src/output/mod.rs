@@ -321,6 +321,18 @@ impl Kind {
         }
     }
 
+    /// What to do with a file a newer DiMA wrote: the key that names its version differs.
+    const fn newer_hint(self) -> &'static str {
+        match self {
+            Self::Results => {
+                "open it with the DiMA version that wrote it (its run.tool.version) or a newer one"
+            }
+            Self::Hcs => {
+                "open it with the DiMA version that wrote it (its tool.version) or a newer one"
+            }
+        }
+    }
+
     const fn hint(self) -> &'static str {
         match self {
             Self::Results => "give the JSON written by `dima analyze` (optionally .gz or .zst)",
@@ -521,10 +533,7 @@ impl JsonFile<'_> {
                         kind.schema_name()
                     ),
                 )
-                .with_hint(
-                    "open it with the DiMA version that wrote it (its run.tool.version) or a \
-                     newer one",
-                )
+                .with_hint(kind.newer_hint())
             } else {
                 DimaError::input_data(
                     Some(Location::new(name.clone())),
@@ -770,35 +779,41 @@ fn check_consistent(r: &Results, name: &str) -> Result<()> {
 /// there is support, and the normalised values exactly where there are two or more distinct
 /// k-mers.
 fn similarity_presence(p: &PositionResult, computed: bool) -> Option<String> {
+    let normalised = (
+        p.diversity_motifs.len() >= 2,
+        "no support or one distinct k-mer",
+    );
     let values = [
         (
             "similarity_weighted_entropy",
             p.similarity_weighted_entropy,
-            p.support >= 1,
+            (p.support >= 1, "no support"),
         ),
         (
             "normalised_observed_entropy",
             p.normalised_observed_entropy,
-            p.diversity_motifs.len() >= 2,
+            normalised,
         ),
         (
             "normalised_similarity_weighted_entropy",
             p.normalised_similarity_weighted_entropy,
-            p.diversity_motifs.len() >= 2,
+            normalised,
         ),
     ];
-    values.into_iter().find_map(|(field, value, defined)| {
-        match (value.is_some(), computed && defined) {
-            (true, false) if !computed => Some(format!(
-                "{field} is given, but the run did not compute similarity-weighted entropy"
-            )),
-            (true, false) => Some(format!(
-                "{field} is given, but it is undefined here (no support or one distinct k-mer)"
-            )),
-            (false, true) => Some(format!("{field} is missing")),
-            _ => None,
-        }
-    })
+    values
+        .into_iter()
+        .find_map(
+            |(field, value, (defined, why))| match (value.is_some(), computed && defined) {
+                (true, false) if !computed => Some(format!(
+                    "{field} is given, but the run did not compute similarity-weighted entropy"
+                )),
+                (true, false) => Some(format!(
+                    "{field} is given, but it is undefined here ({why})"
+                )),
+                (false, true) => Some(format!("{field} is missing")),
+                _ => None,
+            },
+        )
 }
 
 /// Rejects non-finite numbers in conserved-sequence results.

@@ -662,6 +662,48 @@ mod tests {
         }
     }
 
+    /// Similarity-weighted entropy is computed only when a planned output holds it: the results
+    /// (JSON on stdout or in a file, JSONL) or the positions table, `--tsv-dir`'s included.
+    #[test]
+    fn plans_that_write_position_values() {
+        let dir = Path::new("tables");
+        let writes = |a: &OutputArgs, hcs: Option<&Path>, report: Option<&Path>| {
+            plan(a, hcs, report, "x", false)
+                .unwrap()
+                .writes_position_values()
+        };
+        assert!(writes(&args(None, None, None, None), None, None));
+        assert!(writes(&args(Some("r.json"), None, None, None), None, None));
+        assert!(writes(
+            &args(Some("r.jsonl.gz"), None, None, None),
+            None,
+            None
+        ));
+        assert!(writes(&args(None, None, None, Some(dir)), None, None));
+        assert!(writes(
+            &args(Some("p.tsv"), None, Some(TableArg::Positions), None),
+            None,
+            None
+        ));
+        for table in [TableArg::Variants, TableArg::Metadata, TableArg::Hcs] {
+            assert!(!writes(
+                &args(Some("t.tsv"), None, Some(table), None),
+                None,
+                None
+            ));
+        }
+        assert!(!writes(
+            &args(None, None, None, None),
+            Some(Path::new("hcs.json")),
+            None
+        ));
+        assert!(!writes(
+            &args(Some("v.tsv"), None, Some(TableArg::Variants), None),
+            None,
+            Some(Path::new("report.json"))
+        ));
+    }
+
     #[test]
     fn default_is_json_on_stdout_pretty_on_terminals() {
         let p = plan(&args(None, None, None, None), None, None, "x", true).unwrap();
