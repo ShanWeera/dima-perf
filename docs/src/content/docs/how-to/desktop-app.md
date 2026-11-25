@@ -27,7 +27,9 @@ asks you to review the settings.
 
 If the operating system's file dialog is unavailable or does not respond (for example on a
 remote desktop), the app offers its own file browser; you can choose it permanently in
-**Preferences**, which also sets the size of exported figures.
+**Preferences**, which also sets the size of exported figures: at least 720 × 320 px, so the
+title, legend and axes always fit. A smaller size saved by an earlier version is raised to these
+minimums when this version first starts, with a note saying so.
 
 ## Describe the header fields
 
@@ -106,6 +108,11 @@ The export menu writes:
 | Entropy chart (PNG or SVG), as shown | — |
 | Run report | `dima analyze --run-report` |
 | Methods & references, References (BibTeX) | `dima cite --from` with the results and the conserved regions |
+
+The entropy chart is exported at the size set in **Preferences**, with its text at the same
+size in the PNG and the SVG. Its legend continues on further rows when it is wider than the
+figure, and a title, subtitle or legend label too long for the figure is shortened with "…"
+(the SVG keeps the whole title as its document title).
 
 Every file is written completely or not at all. **Run details** shows how the analysis ran
 (equivalent command, threads, phase times, platform), and **Help ▸ Cite DiMA** gives the citation

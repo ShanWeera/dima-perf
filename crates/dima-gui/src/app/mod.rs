@@ -14,7 +14,7 @@ use self::msg::{Effect, Msg};
 use self::update::update;
 use crate::persist::{ConfigStore, RECENT_FILE, SETTINGS_FILE};
 use crate::state::recent::RecentFiles;
-use crate::state::settings::Settings;
+use crate::state::settings::{Loaded, Settings};
 use crate::state::toasts::Severity;
 use crate::state::{AppState, Purpose};
 use crate::theme::DesignTokens;
@@ -58,19 +58,25 @@ impl DimaApp {
     /// line can be drawn by wgpu.
     #[must_use]
     pub fn new(store: ConfigStore, gpu: bool) -> Self {
-        let (settings, notice) = store.read(SETTINGS_FILE).map_or_else(
-            || (Settings::default(), None),
+        let (settings, loaded) = store.read(SETTINGS_FILE).map_or_else(
+            || (Settings::default(), Loaded::Ok),
             |text| Settings::from_json(&text),
         );
+        // Corrected settings are saved at once, so their notice is shown once.
+        if matches!(loaded, Loaded::Adjusted(_)) {
+            store.write(SETTINGS_FILE, settings.to_json());
+        }
         let recent = store
             .read(RECENT_FILE)
             .map_or_else(RecentFiles::default, |text| RecentFiles::from_json(&text));
         let mut state = AppState::new(settings, recent);
         state.native_dialogs = dialogs::native_available();
-        if let Some(n) = notice {
-            state
+        match loaded {
+            Loaded::Ok => {}
+            Loaded::Adjusted(n) => state.toasts.push(Severity::Info, n, None, Instant::now()),
+            Loaded::Reset(n) => state
                 .toasts
-                .push(Severity::Warning, n, None, Instant::now());
+                .push(Severity::Warning, n, None, Instant::now()),
         }
         Self {
             state,
@@ -522,4 +528,48 @@ pub fn run() -> eframe::Result {
         options,
         Box::new(|cc| Ok(Box::new(DimaApp::from_creation_context(cc)))),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A saved figure size below the minimum is raised, said once and written back once; an
+    /// invalid value still resets everything and leaves the file alone.
+    #[test]
+    fn adjusted_settings_are_saved_once() {
+        let store = ConfigStore::in_memory();
+        store.write(
+            SETTINGS_FILE,
+            r#"{"version": 1, "settings": {"support_threshold": 30, "figure_size": [1800, 150]}}"#
+                .to_owned(),
+        );
+        let app = DimaApp::new(store, false);
+        assert_eq!(app.state.settings.figure_size, (1800, 320));
+        assert_eq!(app.state.settings.support_threshold, 30);
+        let notes: Vec<_> = app.state.toasts.items().iter().collect();
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].severity, Severity::Info);
+        assert!(notes[0].text.ends_with("raised to 1800 \u{d7} 320 px"));
+        let saved = app.store.read(SETTINGS_FILE).unwrap();
+        assert_eq!(saved, app.state.settings.to_json(), "written back");
+        // The next start reads the corrected file: no notice, nothing written.
+        let again = DimaApp::new(app.store, false);
+        assert!(again.state.toasts.items().is_empty());
+        assert_eq!(again.store.read(SETTINGS_FILE).unwrap(), saved);
+        assert_eq!(again.state.settings.figure_size, (1800, 320));
+
+        let store = ConfigStore::in_memory();
+        let bad =
+            r#"{"version": 1, "settings": {"support_threshold": 0, "figure_size": [1800, 150]}}"#;
+        store.write(SETTINGS_FILE, bad.to_owned());
+        let app = DimaApp::new(store, false);
+        assert_eq!(app.state.settings, Settings::default(), "reset");
+        assert_eq!(app.state.toasts.items()[0].severity, Severity::Warning);
+        assert_eq!(
+            app.store.read(SETTINGS_FILE).unwrap(),
+            bad,
+            "not written back"
+        );
+    }
 }

@@ -71,6 +71,13 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   it drew; the line is now computed once per change of the shown positions, zoom or chart
   width, so a frame's cost no longer grows with the number of positions (half a million
   positions: 0.09 ms instead of 5.2 ms per frame).
+- The desktop app's exported PNG figures drew their text about a quarter smaller than the SVG
+  and the screen, and their title in the regular weight; the legend was spaced for that
+  smaller text, so in SVG figures its labels ran into the next entry. Text is now sized alike
+  in both formats, with a SemiBold title. Exported figures are at least 720 × 320 px (a smaller
+  saved size is raised once, with a note), the legend continues on further rows when it is
+  wider than the figure, and a title, subtitle or legend label too long for the figure is
+  shortened with "…".
 
 ## [1.0.0] - 2026-10-07
 

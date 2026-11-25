@@ -41,10 +41,10 @@
   <line x1="1170.64" y1="416.00" x2="1170.64" y2="421.00" stroke="#5A5F69"/>
   <text x="1170.64" y="436.00" font-size="12" fill="#19191E" text-anchor="middle">400</text>
   <line x1="86.00" y1="490.00" x2="108.00" y2="490.00" stroke="#0072B2" stroke-width="1.8"/>
-  <line x1="304.55" y1="490.00" x2="326.55" y2="490.00" stroke="#D55E00" stroke-width="1.8" stroke-dasharray="6 4"/>
-  <rect x="468.63" y="484.00" width="22" height="12" fill="url(#ns-hatch)" stroke="#696E78" stroke-width="0.5"/>
-  <line x1="610.00" y1="490.00" x2="632.00" y2="490.00" stroke="#464A52" stroke-width="1.8" stroke-dasharray="3 3"/>
-  <line x1="726.48" y1="484.00" x2="726.48" y2="496.00" stroke="#CC79A7" stroke-width="1.5"/>
+  <line x1="355.12" y1="490.00" x2="377.12" y2="490.00" stroke="#D55E00" stroke-width="1.8" stroke-dasharray="6 4"/>
+  <rect x="553.42" y="484.00" width="22" height="12" fill="url(#ns-hatch)" stroke="#696E78" stroke-width="0.5"/>
+  <line x1="722.20" y1="490.00" x2="744.20" y2="490.00" stroke="#464A52" stroke-width="1.8" stroke-dasharray="3 3"/>
+  <line x1="855.32" y1="484.00" x2="855.32" y2="496.00" stroke="#CC79A7" stroke-width="1.5"/>
   <text x="86.00" y="28.00" font-size="18" fill="#19191E" text-anchor="start" font-weight="600">test &lt;query&gt; &amp; co — Shannon entropy</text>
   <text x="86.00" y="48.00" font-size="12" fill="#5A5F69" text-anchor="start">k = 9, T = 100, 191 sequences</text>
   <text x="629.00" y="460.00" font-size="13" fill="#19191E" text-anchor="middle">Position (alignment column of the k-mer start)</text>
@@ -52,8 +52,8 @@
   <text x="1168.00" y="307.99" font-size="12" fill="#464A52" text-anchor="end">eligible mean 0.7500</text>
   <text x="709.09" y="86.00" font-size="12" fill="#19191E" text-anchor="middle">no usable support</text>
   <text x="114.00" y="494.00" font-size="12" fill="#19191E" text-anchor="start">support &gt; 100: corrected where possible</text>
-  <text x="332.55" y="494.00" font-size="12" fill="#19191E" text-anchor="start">support ≤ 100: uncorrected</text>
-  <text x="496.63" y="494.00" font-size="12" fill="#19191E" text-anchor="start">NS: no usable support</text>
-  <text x="638.00" y="494.00" font-size="12" fill="#19191E" text-anchor="start">eligible mean</text>
-  <text x="743.48" y="494.00" font-size="12" fill="#19191E" text-anchor="start">sample coverage &lt; 0.95</text>
+  <text x="383.12" y="494.00" font-size="12" fill="#19191E" text-anchor="start">support ≤ 100: uncorrected</text>
+  <text x="581.42" y="494.00" font-size="12" fill="#19191E" text-anchor="start">NS: no usable support</text>
+  <text x="750.20" y="494.00" font-size="12" fill="#19191E" text-anchor="start">eligible mean</text>
+  <text x="872.32" y="494.00" font-size="12" fill="#19191E" text-anchor="start">sample coverage &lt; 0.95</text>
 </svg>

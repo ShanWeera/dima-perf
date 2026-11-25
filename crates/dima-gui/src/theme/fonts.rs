@@ -11,8 +11,9 @@ use std::sync::Arc;
 /// Interface text face; chart exports rasterise their labels with it too (`charts::scene`), so
 /// exported figures match the screen.
 pub const PLEX_SANS: &[u8] = include_bytes!("../../assets/fonts/IBMPlexSans-Regular.ttf");
-/// Heavier face for headings and emphasis.
-const PLEX_SANS_SEMIBOLD: &[u8] = include_bytes!("../../assets/fonts/IBMPlexSans-SemiBold.ttf");
+/// Heavier face for headings and emphasis; the titles of exported PNG figures are drawn in it,
+/// as their SVG twins ask for (`font-weight="600"`).
+pub const PLEX_SANS_SEMIBOLD: &[u8] = include_bytes!("../../assets/fonts/IBMPlexSans-SemiBold.ttf");
 /// Sequence / numeric face.
 const PLEX_MONO: &[u8] = include_bytes!("../../assets/fonts/IBMPlexMono-Regular.ttf");
 

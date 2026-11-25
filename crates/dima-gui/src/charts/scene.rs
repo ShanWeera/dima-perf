@@ -2,10 +2,12 @@
 //!
 //! Both formats are drawn from one [`Layout`], so their geometry, labels and legend agree with
 //! each other (G30), and their text never overlaps (G48): the title and subtitle sit above the
-//! plot, the y-axis title is rotated in the left margin, and the legend has its own row. The
-//! encoding is the on-screen one (D87): solid blue for corrected entropy, dashed vermillion for
-//! uncorrected entropy at support ≤ T, hatched bands for positions without usable support, a
-//! dashed eligible-mean line.
+//! plot, the y-axis title is rotated in the left margin, and the legend has rows of its own
+//! below, as many as it needs (the plot gives up the space). Text is sized per em, as SVG and
+//! the screen size it, and a title, subtitle or legend label too long for the figure is
+//! shortened with "…". The encoding is the on-screen one (D87): solid blue for corrected
+//! entropy, dashed vermillion for uncorrected entropy at support ≤ T, hatched bands for
+//! positions without usable support, a dashed eligible-mean line.
 
 use std::fmt::Write as _;
 
@@ -84,7 +86,17 @@ pub struct ChartScene {
 const MARGIN_LEFT: f32 = 86.0;
 const MARGIN_RIGHT: f32 = 28.0;
 const MARGIN_TOP: f32 = 70.0;
+/// Below the plot: the tick labels, the x-axis title and one legend row; each further legend
+/// row adds [`LEGEND_ROW`].
 const MARGIN_BOTTOM: f32 = 104.0;
+/// Distance between legend rows.
+const LEGEND_ROW: f32 = 20.0;
+/// From a legend swatch's left edge to its label.
+const SWATCH_ADVANCE: f32 = 28.0;
+/// From the end of a legend label to the next swatch.
+const LEGEND_GAP: f32 = 22.0;
+/// Marks a shortened text.
+const ELLIPSIS: &str = "\u{2026}";
 const TITLE_SIZE: f32 = 18.0;
 const SUBTITLE_SIZE: f32 = 12.0;
 const LABEL_SIZE: f32 = 12.0;
@@ -113,6 +125,13 @@ impl Anchor {
     }
 }
 
+/// The weight of a text: regular, or SemiBold for the title.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Weight {
+    Regular,
+    SemiBold,
+}
+
 /// A text item: position of its baseline anchor.
 #[derive(Clone, Debug, PartialEq)]
 struct Text {
@@ -124,6 +143,23 @@ struct Text {
     color: Rgba,
     /// Rotated 90° counter-clockwise about (x, y).
     vertical: bool,
+    weight: Weight,
+}
+
+impl Text {
+    /// A horizontal text in the regular face.
+    fn plain(x: f32, y: f32, size: f32, text: String, anchor: Anchor, color: Rgba) -> Self {
+        Self {
+            x,
+            y,
+            size,
+            text,
+            anchor,
+            color,
+            vertical: false,
+            weight: Weight::Regular,
+        }
+    }
 }
 
 /// One legend entry.
@@ -135,6 +171,15 @@ enum Swatch {
     Tick(Rgba),
 }
 
+/// A legend entry: its swatch's left edge and centre line, and its label.
+#[derive(Clone, Debug, PartialEq)]
+struct LegendEntry {
+    x: f32,
+    y: f32,
+    swatch: Swatch,
+    label: Text,
+}
+
 /// The computed geometry of the figure.
 #[derive(Clone, Debug)]
 struct Layout {
@@ -143,7 +188,33 @@ struct Layout {
     texts: Vec<Text>,
     y_ticks: Vec<(f32, String)>,
     x_ticks: Vec<(f32, String)>,
-    legend: Vec<(f32, f32, Swatch)>,
+    legend: Vec<LegendEntry>,
+}
+
+impl Layout {
+    /// The label of the value tick at screen y `ty`.
+    fn y_tick_label(&self, ty: f32, label: &str, color: Rgba) -> Text {
+        Text::plain(
+            self.x.left - 9.0,
+            ty + 4.0,
+            LABEL_SIZE,
+            label.to_owned(),
+            Anchor::End,
+            color,
+        )
+    }
+
+    /// The label of the position tick at screen x `tx`.
+    fn x_tick_label(&self, tx: f32, label: &str, color: Rgba) -> Text {
+        Text::plain(
+            tx,
+            self.y.bottom + 20.0,
+            LABEL_SIZE,
+            label.to_owned(),
+            Anchor::Middle,
+            color,
+        )
+    }
 }
 
 /// Why a figure cannot be produced.
@@ -164,135 +235,101 @@ impl std::fmt::Display for SceneError {
     }
 }
 
-fn font() -> Result<FontRef<'static>, SceneError> {
-    FontRef::try_from_slice(crate::theme::fonts::PLEX_SANS)
-        .map_err(|e| SceneError::Font(e.to_string()))
+/// The bundled faces: regular, and SemiBold for the title.
+struct Faces {
+    regular: FontRef<'static>,
+    semibold: FontRef<'static>,
 }
 
-/// Width of `text` at `size` with the bundled face.
+impl Faces {
+    fn read() -> Result<Self, SceneError> {
+        let face =
+            |bytes| FontRef::try_from_slice(bytes).map_err(|e| SceneError::Font(e.to_string()));
+        Ok(Self {
+            regular: face(crate::theme::fonts::PLEX_SANS)?,
+            semibold: face(crate::theme::fonts::PLEX_SANS_SEMIBOLD)?,
+        })
+    }
+
+    const fn of(&self, weight: Weight) -> &FontRef<'static> {
+        match weight {
+            Weight::Regular => &self.regular,
+            Weight::SemiBold => &self.semibold,
+        }
+    }
+}
+
+/// The ab_glyph scale that draws `font` at `size` pixels per em, as SVG's `font-size` and the
+/// screen do. ab_glyph's [`PxScale`] is the height from descent to ascent instead (1.3 em for
+/// IBM Plex), so `PxScale::from(size)` would draw the text 1.3 times too small.
+fn px_scale(font: &FontRef<'_>, size: f32) -> PxScale {
+    match font.units_per_em() {
+        Some(em) if em > 0.0 => PxScale::from(size * font.height_unscaled() / em),
+        _ => PxScale::from(size),
+    }
+}
+
+/// Width of `text` at `size` (pixels per em) in `font`.
 fn text_width(font: &FontRef<'_>, size: f32, text: &str) -> f32 {
-    let scaled = font.as_scaled(PxScale::from(size));
+    let scaled = font.as_scaled(px_scale(font, size));
     text.chars()
         .map(|c| scaled.h_advance(scaled.scaled_glyph(c).id))
         .sum()
 }
 
+/// `text`, or as much of it as fits in `max` pixels followed by "…" (nothing when not even
+/// that fits). Cut between characters, never inside one.
+fn fit(font: &FontRef<'_>, size: f32, text: &str, max: f32) -> String {
+    if text_width(font, size, text) <= max {
+        return text.to_owned();
+    }
+    let room = max - text_width(font, size, ELLIPSIS);
+    if room < 0.0 {
+        return String::new();
+    }
+    let scaled = font.as_scaled(px_scale(font, size));
+    let mut width = 0.0;
+    let mut end = 0;
+    for (i, c) in text.char_indices() {
+        width += scaled.h_advance(scaled.scaled_glyph(c).id);
+        if width > room {
+            break;
+        }
+        end = i + c.len_utf8();
+    }
+    format!("{}{ELLIPSIS}", text[..end].trim_end())
+}
+
+/// Places legend entries left to right in rows at most `width` wide: an entry that does not fit
+/// after another starts a new row, and a label too long for a row of its own is shortened
+/// (see [`fit`]). Returns each row's entries with their offsets from the row's left edge.
+fn legend_rows(
+    font: &FontRef<'_>,
+    entries: Vec<(Swatch, String)>,
+    width: f32,
+) -> Vec<Vec<(f32, Swatch, String)>> {
+    let mut rows: Vec<Vec<(f32, Swatch, String)>> = Vec::new();
+    // Where the next entry of the last row would start.
+    let mut next = 0.0;
+    for (swatch, label) in entries {
+        let label = fit(font, LABEL_SIZE, &label, width - SWATCH_ADVANCE);
+        let advance = SWATCH_ADVANCE + text_width(font, LABEL_SIZE, &label);
+        match rows.last_mut() {
+            Some(row) if next + advance <= width => row.push((next, swatch, label)),
+            _ => {
+                next = 0.0;
+                rows.push(vec![(0.0, swatch, label)]);
+            }
+        }
+        next += advance + LEGEND_GAP;
+    }
+    rows
+}
+
 impl ChartScene {
-    fn layout(&self, font: &FontRef<'_>) -> Result<Layout, SceneError> {
-        if self.series.is_empty() {
-            return Err(SceneError::NoData);
-        }
-        #[allow(clippy::cast_precision_loss)]
-        let (w, h) = (self.width as f32, self.height as f32);
-        let left = MARGIN_LEFT.min(w / 2.0);
-        let right = (w - MARGIN_RIGHT).max(left + 1.0);
-        let top = MARGIN_TOP.min(h / 2.0);
-        let bottom = (h - MARGIN_BOTTOM).max(top + 1.0);
-        let x = XMap {
-            lo: self.view.0,
-            hi: self.view.1,
-            left,
-            right,
-        };
-        let y = YMap {
-            max: self.y_max,
-            top,
-            bottom,
-        };
+    /// The legend entries that apply, in order.
+    fn legend_entries(&self) -> Vec<(Swatch, String)> {
         let s = &self.style;
-        let mut texts = vec![
-            Text {
-                x: left,
-                y: 28.0,
-                size: TITLE_SIZE,
-                text: self.title.clone(),
-                anchor: Anchor::Start,
-                color: s.text,
-                vertical: false,
-            },
-            Text {
-                x: left,
-                y: 48.0,
-                size: SUBTITLE_SIZE,
-                text: self.subtitle.clone(),
-                anchor: Anchor::Start,
-                color: s.axis,
-                vertical: false,
-            },
-            Text {
-                x: (left + right) / 2.0,
-                y: bottom + 44.0,
-                size: AXIS_TITLE_SIZE,
-                text: "Position (alignment column of the k-mer start)".to_owned(),
-                anchor: Anchor::Middle,
-                color: s.text,
-                vertical: false,
-            },
-            Text {
-                x: 24.0,
-                y: (top + bottom) / 2.0,
-                size: AXIS_TITLE_SIZE,
-                text: "Shannon entropy (bits)".to_owned(),
-                anchor: Anchor::Middle,
-                color: s.text,
-                vertical: true,
-            },
-        ];
-        if let Some(mean) = self.mean {
-            let my = y.to_screen(mean);
-            if my >= top && my <= bottom {
-                texts.push(Text {
-                    x: right - 4.0,
-                    y: my - 5.0,
-                    size: LABEL_SIZE,
-                    text: format!("eligible mean {mean:.4}"),
-                    anchor: Anchor::End,
-                    color: s.mean,
-                    vertical: false,
-                });
-            }
-        }
-        let label_width = text_width(font, LABEL_SIZE, NS_LABEL);
-        // Bands outside the view are skipped, as on screen (the SVG clips them).
-        for span in self
-            .series
-            .ns_spans
-            .iter()
-            .filter(|s| s.in_view(self.view.0, self.view.1))
-        {
-            #[allow(clippy::cast_precision_loss)]
-            let (a, b) = (
-                x.to_screen(span.first as f64 - 0.5).max(left),
-                x.to_screen(span.last as f64 + 0.5).min(right),
-            );
-            if b - a >= label_width + 8.0 {
-                texts.push(Text {
-                    x: (a + b) / 2.0,
-                    y: top + 16.0,
-                    size: LABEL_SIZE,
-                    text: NS_LABEL.to_owned(),
-                    anchor: Anchor::Middle,
-                    color: s.text,
-                    vertical: false,
-                });
-            }
-        }
-        let (ticks, step) = nice_ticks(0.0, self.y_max, 6);
-        let y_ticks = ticks
-            .iter()
-            .zip(y_tick_labels(&ticks, step))
-            .filter(|(t, _)| **t <= self.y_max)
-            .map(|(&t, label)| (y.to_screen(t), label))
-            .collect();
-        let x_ticks = integer_ticks(self.view.0, self.view.1, 8)
-            .into_iter()
-            .map(|t| {
-                #[allow(clippy::cast_precision_loss)]
-                let sx = x.to_screen(t as f64);
-                (sx, t.to_string())
-            })
-            .collect();
-        // Legend: the entries that apply, left to right, wrapping is not needed at export size.
         let mut entries: Vec<(Swatch, String)> = Vec::new();
         let [solid, dashed] = &self.legend;
         if self.series.has(Style::Eligible) {
@@ -310,21 +347,148 @@ impl ChartScene {
         if let (Some(c), false) = (self.min_coverage, self.series.low_coverage.is_empty()) {
             entries.push((Swatch::Tick(s.coverage), format!("sample coverage < {c}")));
         }
+        entries
+    }
+
+    fn layout(&self, faces: &Faces) -> Result<Layout, SceneError> {
+        if self.series.is_empty() {
+            return Err(SceneError::NoData);
+        }
+        let font = &faces.regular;
+        #[allow(clippy::cast_precision_loss)]
+        let (w, h) = (self.width as f32, self.height as f32);
+        let left = MARGIN_LEFT.min(w / 2.0);
+        let right = (w - MARGIN_RIGHT).max(left + 1.0);
+        // The legend first: each row beyond the first moves the plot's bottom up.
+        let rows = legend_rows(font, self.legend_entries(), right - left);
+        #[allow(clippy::cast_precision_loss)]
+        let extra_rows = rows.len().saturating_sub(1) as f32;
+        let top = MARGIN_TOP.min(h / 2.0);
+        let bottom = (h - MARGIN_BOTTOM - LEGEND_ROW * extra_rows).max(top + 1.0);
+        let x = XMap {
+            lo: self.view.0,
+            hi: self.view.1,
+            left,
+            right,
+        };
+        let y = YMap {
+            max: self.y_max,
+            top,
+            bottom,
+        };
+        let s = &self.style;
+        let mut texts = vec![
+            Text {
+                weight: Weight::SemiBold,
+                ..Text::plain(
+                    left,
+                    28.0,
+                    TITLE_SIZE,
+                    fit(&faces.semibold, TITLE_SIZE, &self.title, right - left),
+                    Anchor::Start,
+                    s.text,
+                )
+            },
+            Text::plain(
+                left,
+                48.0,
+                SUBTITLE_SIZE,
+                fit(font, SUBTITLE_SIZE, &self.subtitle, right - left),
+                Anchor::Start,
+                s.axis,
+            ),
+            Text::plain(
+                (left + right) / 2.0,
+                bottom + 44.0,
+                AXIS_TITLE_SIZE,
+                "Position (alignment column of the k-mer start)".to_owned(),
+                Anchor::Middle,
+                s.text,
+            ),
+            Text {
+                vertical: true,
+                ..Text::plain(
+                    24.0,
+                    (top + bottom) / 2.0,
+                    AXIS_TITLE_SIZE,
+                    "Shannon entropy (bits)".to_owned(),
+                    Anchor::Middle,
+                    s.text,
+                )
+            },
+        ];
+        if let Some(mean) = self.mean {
+            let my = y.to_screen(mean);
+            if my >= top && my <= bottom {
+                texts.push(Text::plain(
+                    right - 4.0,
+                    my - 5.0,
+                    LABEL_SIZE,
+                    format!("eligible mean {mean:.4}"),
+                    Anchor::End,
+                    s.mean,
+                ));
+            }
+        }
+        let label_width = text_width(font, LABEL_SIZE, NS_LABEL);
+        // Bands outside the view are skipped, as on screen (the SVG clips them).
+        for span in self
+            .series
+            .ns_spans
+            .iter()
+            .filter(|s| s.in_view(self.view.0, self.view.1))
+        {
+            #[allow(clippy::cast_precision_loss)]
+            let (a, b) = (
+                x.to_screen(span.first as f64 - 0.5).max(left),
+                x.to_screen(span.last as f64 + 0.5).min(right),
+            );
+            if b - a >= label_width + 8.0 {
+                texts.push(Text::plain(
+                    (a + b) / 2.0,
+                    top + 16.0,
+                    LABEL_SIZE,
+                    NS_LABEL.to_owned(),
+                    Anchor::Middle,
+                    s.text,
+                ));
+            }
+        }
+        let (ticks, step) = nice_ticks(0.0, self.y_max, 6);
+        let y_ticks = ticks
+            .iter()
+            .zip(y_tick_labels(&ticks, step))
+            .filter(|(t, _)| **t <= self.y_max)
+            .map(|(&t, label)| (y.to_screen(t), label))
+            .collect();
+        let x_ticks = integer_ticks(self.view.0, self.view.1, 8)
+            .into_iter()
+            .map(|t| {
+                #[allow(clippy::cast_precision_loss)]
+                let sx = x.to_screen(t as f64);
+                (sx, t.to_string())
+            })
+            .collect();
         let mut legend = Vec::new();
-        let mut lx = left;
-        let ly = bottom + 74.0;
-        for (swatch, label) in entries {
-            legend.push((lx, ly, swatch));
-            texts.push(Text {
-                x: lx + 28.0,
-                y: ly + 4.0,
-                size: LABEL_SIZE,
-                text: label.clone(),
-                anchor: Anchor::Start,
-                color: s.text,
-                vertical: false,
-            });
-            lx += 28.0 + text_width(font, LABEL_SIZE, &label) + 22.0;
+        for (row, entries) in rows.into_iter().enumerate() {
+            #[allow(clippy::cast_precision_loss)]
+            let ly = bottom + 74.0 + LEGEND_ROW * row as f32;
+            for (dx, swatch, label) in entries {
+                let lx = left + dx;
+                legend.push(LegendEntry {
+                    x: lx,
+                    y: ly,
+                    swatch,
+                    label: Text::plain(
+                        lx + SWATCH_ADVANCE,
+                        ly + 4.0,
+                        LABEL_SIZE,
+                        label,
+                        Anchor::Start,
+                        s.text,
+                    ),
+                });
+            }
         }
         Ok(Layout {
             x,
@@ -341,8 +505,8 @@ impl ChartScene {
     /// # Errors
     /// [`SceneError::NoData`] when nothing is shown.
     pub fn to_svg(&self) -> Result<String, SceneError> {
-        let font = font()?;
-        let l = self.layout(&font)?;
+        let faces = Faces::read()?;
+        let l = self.layout(&faces)?;
         let s = &self.style;
         let (left, right, top, bottom) = (l.x.left, l.x.right, l.y.top, l.y.bottom);
         let mut out = String::with_capacity(64 * 1024);
@@ -446,36 +610,37 @@ impl ChartScene {
             rgb(s.axis)
         );
         for (ty, label) in &l.y_ticks {
+            let t = l.y_tick_label(*ty, label, s.text);
             let _ = writeln!(
                 out,
                 r#"  <line x1="{:.2}" y1="{ty:.2}" x2="{left:.2}" y2="{ty:.2}" stroke="{}"/>
   <text x="{:.2}" y="{:.2}" font-size="{LABEL_SIZE}" fill="{}" text-anchor="end">{label}</text>"#,
                 left - 5.0,
                 rgb(s.axis),
-                left - 9.0,
-                ty + 4.0,
-                rgb(s.text)
+                t.x,
+                t.y,
+                rgb(t.color)
             );
         }
         for (tx, label) in &l.x_ticks {
+            let t = l.x_tick_label(*tx, label, s.text);
             let _ = writeln!(
                 out,
                 r#"  <line x1="{tx:.2}" y1="{bottom:.2}" x2="{tx:.2}" y2="{:.2}" stroke="{}"/>
   <text x="{tx:.2}" y="{:.2}" font-size="{LABEL_SIZE}" fill="{}" text-anchor="middle">{label}</text>"#,
                 bottom + 5.0,
                 rgb(s.axis),
-                bottom + 20.0,
-                rgb(s.text)
+                t.y,
+                rgb(t.color)
             );
         }
-        for (x, y, swatch) in &l.legend {
-            out.push_str(&svg_swatch(*x, *y, *swatch, s));
+        for e in &l.legend {
+            out.push_str(&svg_swatch(e.x, e.y, e.swatch, s));
         }
-        for t in &l.texts {
-            let weight = if (t.size - TITLE_SIZE).abs() < f32::EPSILON {
-                r#" font-weight="600""#
-            } else {
-                ""
+        for t in l.texts.iter().chain(l.legend.iter().map(|e| &e.label)) {
+            let weight = match t.weight {
+                Weight::SemiBold => r#" font-weight="600""#,
+                Weight::Regular => "",
             };
             let rotate = if t.vertical {
                 format!(r#" transform="rotate(-90 {:.2} {:.2})""#, t.x, t.y)
@@ -502,8 +667,8 @@ impl ChartScene {
     /// # Errors
     /// [`SceneError`] when nothing is shown, or when encoding fails.
     pub fn to_png(&self) -> Result<Vec<u8>, String> {
-        let font = font().map_err(|e| e.to_string())?;
-        let l = self.layout(&font).map_err(|e| e.to_string())?;
+        let faces = Faces::read().map_err(|e| e.to_string())?;
+        let l = self.layout(&faces).map_err(|e| e.to_string())?;
         let s = &self.style;
         let mut c = Canvas::new(self.width, self.height, s.background);
         let (left, right, top, bottom) = (l.x.left, l.x.right, l.y.top, l.y.bottom);
@@ -563,16 +728,7 @@ impl ChartScene {
         );
         for (ty, label) in &l.y_ticks {
             c.polyline(&[(left - 5.0, *ty), (left, *ty)], 1.0, s.axis, None, full);
-            c.text(
-                &font,
-                left - 9.0,
-                ty + 4.0,
-                LABEL_SIZE,
-                label,
-                s.text,
-                Anchor::End,
-                false,
-            );
+            c.text(&faces, &l.y_tick_label(*ty, label, s.text));
         }
         for (tx, label) in &l.x_ticks {
             c.polyline(
@@ -582,19 +738,13 @@ impl ChartScene {
                 None,
                 full,
             );
-            c.text(
-                &font,
-                *tx,
-                bottom + 20.0,
-                LABEL_SIZE,
-                label,
-                s.text,
-                Anchor::Middle,
-                false,
-            );
+            c.text(&faces, &l.x_tick_label(*tx, label, s.text));
         }
-        for (x, y, swatch) in &l.legend {
-            match *swatch {
+        for LegendEntry {
+            x, y, swatch: sw, ..
+        } in &l.legend
+        {
+            match *sw {
                 Swatch::Solid(col) => {
                     c.polyline(&[(*x, *y), (x + 22.0, *y)], LINE_WIDTH, col, None, full)
                 }
@@ -617,10 +767,8 @@ impl ChartScene {
                 ),
             }
         }
-        for t in &l.texts {
-            c.text(
-                &font, t.x, t.y, t.size, &t.text, t.color, t.anchor, t.vertical,
-            );
+        for t in l.texts.iter().chain(l.legend.iter().map(|e| &e.label)) {
+            c.text(&faces, t);
         }
         c.encode()
     }
@@ -821,21 +969,22 @@ impl Canvas {
         }
     }
 
-    /// Text with the bundled face; `vertical` rotates it 90° counter-clockwise about the anchor
-    /// (rendered upright, then rotated by whole pixels, so glyphs stay crisp).
-    #[allow(clippy::too_many_arguments)]
-    fn text(
-        &mut self,
-        font: &FontRef<'_>,
-        x: f32,
-        y: f32,
-        size: f32,
-        text: &str,
-        color: Rgba,
-        anchor: Anchor,
-        vertical: bool,
-    ) {
-        let scale = PxScale::from(size);
+    /// A text in its bundled face, sized per em; a vertical one is rotated 90°
+    /// counter-clockwise about its anchor (rendered upright, then rotated by whole pixels, so
+    /// glyphs stay crisp).
+    fn text(&mut self, faces: &Faces, t: &Text) {
+        let Text {
+            x,
+            y,
+            size,
+            ref text,
+            color,
+            anchor,
+            vertical,
+            weight,
+        } = *t;
+        let font = faces.of(weight);
+        let scale = px_scale(font, size);
         let scaled = font.as_scaled(scale);
         let width = text_width(font, size, text);
         let offset = match anchor {
@@ -977,6 +1126,184 @@ mod tests {
         s.height = 30;
         assert!(s.to_svg().is_ok());
         assert!(s.to_png().is_ok());
+    }
+
+    /// The box `(left, top, right, bottom)` a text covers: its advance width in its face, and
+    /// the face's ascent and descent (rotated for a vertical text).
+    fn text_box(faces: &Faces, t: &Text) -> (f32, f32, f32, f32) {
+        let font = faces.of(t.weight);
+        let scaled = font.as_scaled(px_scale(font, t.size));
+        let (ascent, descent) = (scaled.ascent(), scaled.descent());
+        let width = text_width(font, t.size, &t.text);
+        let start = match t.anchor {
+            Anchor::Start => 0.0,
+            Anchor::Middle => -width / 2.0,
+            Anchor::End => -width,
+        };
+        if t.vertical {
+            (
+                t.x - ascent,
+                t.y - start - width,
+                t.x - descent,
+                t.y - start,
+            )
+        } else {
+            (
+                t.x + start,
+                t.y - ascent,
+                t.x + start + width,
+                t.y - descent,
+            )
+        }
+    }
+
+    /// Every text of the figure inside the canvas, legend labels ending before the next
+    /// swatch, a plot at least 100 px tall, and room for either value-axis title at 13 px.
+    fn assert_layout_fits(scene: &ChartScene) -> Layout {
+        let faces = Faces::read().unwrap();
+        let l = scene.layout(&faces).unwrap();
+        #[allow(clippy::cast_precision_loss)]
+        let (w, h) = (scene.width as f32, scene.height as f32);
+        let inside = |t: &Text| {
+            let (a, b, c, d) = text_box(&faces, t);
+            assert!(
+                a >= 0.0 && b >= 0.0 && c <= w && d <= h,
+                "{:?} at ({a}, {b})-({c}, {d}) is outside {w} x {h}",
+                t.text
+            );
+        };
+        let s = &scene.style;
+        let ticks: Vec<Text> = l
+            .y_ticks
+            .iter()
+            .map(|(ty, label)| l.y_tick_label(*ty, label, s.text))
+            .chain(
+                l.x_ticks
+                    .iter()
+                    .map(|(tx, label)| l.x_tick_label(*tx, label, s.text)),
+            )
+            .collect();
+        for t in l.texts.iter().chain(l.legend.iter().map(|e| &e.label)) {
+            inside(t);
+        }
+        ticks.iter().for_each(inside);
+        for pair in l.legend.windows(2) {
+            if pair[0].y == pair[1].y {
+                let end = text_box(&faces, &pair[0].label).2;
+                assert!(
+                    end < pair[1].x,
+                    "{:?} ends at {end}, after the next swatch at {}",
+                    pair[0].label.text,
+                    pair[1].x
+                );
+            }
+        }
+        assert!(
+            l.y.bottom - l.y.top >= 100.0,
+            "plot {}",
+            l.y.bottom - l.y.top
+        );
+        for title in [
+            "Shannon entropy (bits)",
+            "Similarity-weighted entropy (bits)",
+        ] {
+            let y_title = l.texts.iter().find(|t| t.vertical).unwrap();
+            inside(&Text {
+                text: title.to_owned(),
+                ..y_title.clone()
+            });
+            assert_eq!(y_title.size, 13.0);
+        }
+        l
+    }
+
+    #[test]
+    fn layouts_fit_from_the_minimum_figure_size() {
+        let (min_w, min_h) = (
+            *crate::state::settings::FIGURE_WIDTH.start(),
+            *crate::state::settings::FIGURE_HEIGHT.start(),
+        );
+        // The smallest figure with the longest legend: T = u64::MAX and coverage marks.
+        let mut small = fixture();
+        (small.width, small.height) = (min_w, min_h);
+        small.legend = crate::charts::series::legend(u64::MAX, dima_core::config::Estimator::Dima);
+        small.subtitle = format!("k = 9, T = {}, 191 sequences", u64::MAX);
+        let l = assert_layout_fits(&small);
+        let rows = l
+            .legend
+            .iter()
+            .map(|e| e.y.to_bits())
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
+        assert_eq!(rows, 3, "the legend wraps");
+        #[allow(clippy::cast_precision_loss)]
+        let expected = small.height as f32 - MARGIN_BOTTOM - 2.0 * LEGEND_ROW;
+        assert_eq!(l.y.bottom, expected, "20 px per extra row");
+        // The default size, a 200-character query name, the golden fixture.
+        let (dw, dh) = crate::state::settings::Settings::default().figure_size;
+        let mut default = fixture();
+        (default.width, default.height) = (dw, dh);
+        assert_layout_fits(&default);
+        let mut long = default.clone();
+        let query: String = "Middle East respiratory syndrome coronavirus spike glycoprotein "
+            .chars()
+            .cycle()
+            .take(200)
+            .collect();
+        long.title = format!("{query} \u{2014} Shannon entropy per k-mer position");
+        let l = assert_layout_fits(&long);
+        assert!(l.texts[0].text.ends_with('\u{2026}'), "{}", l.texts[0].text);
+        assert!(
+            long.title
+                .starts_with(l.texts[0].text.trim_end_matches('\u{2026}'))
+        );
+        let svg = long.to_svg().unwrap();
+        assert!(
+            svg.contains(&format!("<title>{}</title>", xml(&long.title))),
+            "the full title"
+        );
+        let l = assert_layout_fits(&fixture());
+        assert_eq!(l.texts[0].weight, Weight::SemiBold, "the title");
+        assert!(
+            l.legend.iter().all(|e| e.y == l.legend[0].y),
+            "one legend row"
+        );
+    }
+
+    #[test]
+    fn long_texts_are_shortened_between_characters() {
+        let faces = Faces::read().unwrap();
+        let f = &faces.regular;
+        assert_eq!(fit(f, 12.0, "eligible mean", 1000.0), "eligible mean");
+        let short = fit(
+            f,
+            12.0,
+            "\u{3b1}\u{3b2}\u{3b3}\u{3b4}\u{3b5}\u{3b6}\u{3b7} \u{3b8}",
+            40.0,
+        );
+        assert!(
+            short.ends_with('\u{2026}') && text_width(f, 12.0, &short) <= 40.0,
+            "{short}"
+        );
+        assert_eq!(
+            fit(f, 12.0, "anything", 1.0),
+            "",
+            "not even the ellipsis fits"
+        );
+        // Text is sized per em, as SVG and the screen size it: 1.3 times ab_glyph's height scale.
+        let em = text_width(f, 13.0, "Similarity-weighted entropy (bits)");
+        let height_scaled = {
+            let scaled = f.as_scaled(PxScale::from(13.0));
+            "Similarity-weighted entropy (bits)"
+                .chars()
+                .map(|c| scaled.h_advance(scaled.scaled_glyph(c).id))
+                .sum::<f32>()
+        };
+        assert!(
+            (em / height_scaled - 1.3).abs() < 1e-4,
+            "{em} {height_scaled}"
+        );
+        assert!((190.0..200.0).contains(&em), "{em}");
     }
 
     /// The PNG is compared byte for byte with the committed golden image (G48: a layout change
