@@ -81,6 +81,39 @@ window length and the alphabet, and entropy estimates grow with the number of se
 the support and the sample coverage of both analyses, and check that the conclusion holds with
 `--estimator chao-wang-jost`. See [Entropy and its correction](/explanation/entropy/).
 
+The optional similarity-weighted and normalised entropies need the same care, and they are not
+corrected for sample size at all: the observed entropy is lower on average with fewer sequences
+[@zhao2019, Section 3.1], the similarity-weighted entropy also changes with the number of
+sequences, and the normalised entropy also depends on sample size
+[@gregori2014, Sections 2.4 and 3.2]. Compare them only between runs with the same k and
+alphabet, and between positions of similar support.
+
+### What is similarity-weighted entropy and should I use it?
+
+It is an optional measure from Wu [@wu2025, Section 2.1], not part of the DiMA paper's method.
+Shannon entropy counts a variant that differs from the others at one residue as just as different
+as an unrelated one. Similarity-weighted entropy gives each variant less weight the more similar
+it is to the rest of the position, so near-identical variants count for less, and it is never
+more than the observed entropy. DiMA computes it, with both entropies divided by $\log_2$ of the
+number of distinct k-mers (which puts them between 0 and 1), only when you ask:
+`--similarity-weighted-entropy`, or **Compute similarity-weighted entropy (Wu 2025)** under
+**Advanced** in the desktop app.
+
+It can help when it matters how different the variants are, not only how many there are and how
+common. Use it next to the entropy, not instead of it, and with care:
+
+- It was published in 2025, and its source study applied it only to nucleotide sequences of
+  viral populations within one host. Using it on protein k-mers, or on sequences from many hosts
+  as in the MERS-CoV and HIV-1 examples of this documentation, is DiMA's extension.
+- None of its values is corrected for sample size: they change with the number of sequences, so
+  compare them only between positions and datasets of similar support (see the previous
+  question).
+
+[Add similarity-weighted entropy](/how-to/analyse/#add-similarity-weighted-entropy-optional)
+shows an example, and
+[Similarity-weighted entropy](/explanation/entropy/#similarity-weighted-entropy-opt-in) gives
+the formulas.
+
 ### How do I plot entropy along the alignment?
 
 In the desktop app, export the entropy chart as PNG or SVG. From the command line, plot `entropy`

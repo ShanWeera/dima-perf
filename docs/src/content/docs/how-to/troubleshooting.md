@@ -143,16 +143,58 @@ identifier; the output becomes very large. Use the `--metadata-fields` option th
 **`hcs_low_support_regions`** — some conserved regions rest on few sequences; see
 [flagged regions](/how-to/conserved-sequences/#flagged-regions).
 
+**`flag_has_no_effect`: `--similarity-weighted-entropy has no effect without results (JSON,
+JSONL) or the positions table`** — the values of similarity-weighted entropy are written only
+to the results and the positions table, and none of your outputs is one of them (for example,
+only `-o variants.tsv --table variants`, or only `--hcs-output`). DiMA then does not compute
+them and writes the other outputs as usual. Add `-o PATH.json`, or the positions table with
+`-o PATH.tsv --table positions` or `--tsv-dir DIR`. The same code marks other options that do
+nothing with the chosen outputs; see
+[Diagnostics](/reference/diagnostics/#warnings-of-the-command-line).
+
 **`threads_refused`** — the system started fewer worker threads than requested, so the run was
 slower than it could be; the results are unaffected. Ask for fewer threads (`-t`) or raise the
 limit on processes and threads (`ulimit -u`, a container's pids limit).
 
 All diagnostics are explained in [Diagnostics](/reference/diagnostics/).
 
+## Results written by another DiMA version
+
+`dima view`, `dima hcs`, `dima cite --from` and the desktop app read results by their schema
+version (`schema_version`; see [Comparing versions](/how-to/reproducibility/#comparing-versions)).
+Results of another major schema version are refused (`written with results schema …`, above).
+
+**`note: results file written with schema 1.0.0; values that schema did not record are written
+as null (NA in the positions table), and options it did not have as off`** (from `dima view`) —
+the file was written by dima 1.0.0, before similarity-weighted entropy existed. `dima view`
+converts it as a run without that option: the new keys are `null` (`NA` in the positions table)
+and `run.parameters.similarity_weighted_entropy` is `false`. The note appears only when the output
+holds values per position (results JSON or JSONL, or the positions table). Nothing needs doing; to
+get the values, run the analysis again with `--similarity-weighted-entropy`.
+
+**`newer_schema`: `the results were written with schema …; this version writes … and keeps only
+the fields it knows`** (from `dima view`) — a newer DiMA wrote the file, and it holds keys that
+this version does not know, so the converted output leaves them out. To keep every key, convert
+the file with the DiMA version that wrote it (its `run.tool.version`) or a newer one. If the file
+also holds a value this version does not know, such as the name of a new estimator, reading stops
+instead (`written by a newer DiMA … with values this version … does not know`, exit 4), and the fix
+is the same.
+
 ## Other questions
 
 **The results differ from the paper or from DiMA v5.0.9.** See
 [the FAQ](/getting-started/faq/#why-do-my-results-differ-from-the-paper-or-from-dima-cli-5x).
+
+**The similarity-weighted values are `NA` (`null`).** There are three reasons. The run did not
+ask for them: they are computed only with `--similarity-weighted-entropy` (in the desktop app,
+**Compute similarity-weighted entropy (Wu 2025)** under **Advanced**), and
+`run.parameters.similarity_weighted_entropy` is then `false`; results written by dima 1.0.0,
+which predate the option, never have them. Or the position has no support (NS), and all three
+values are undefined. Or, for the two normalised
+values only, the position has a single distinct k-mer (a fully conserved position): its
+similarity-weighted entropy is 0, and the normalised values are undefined because the largest
+entropy possible there is 0. See
+[similarity-weighted entropy](/explanation/entropy/#similarity-weighted-entropy-opt-in).
 
 **The log is full of escape codes or progress lines.** The progress line appears only on
 terminals that can redraw a line (not with `TERM=dumb`), and uses no escape codes; if your

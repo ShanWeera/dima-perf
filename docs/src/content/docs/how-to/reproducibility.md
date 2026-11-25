@@ -99,8 +99,25 @@ See [Citing DiMA](/reference/citing/).
 
 Results of different DiMA versions can differ where a new version fixes or adds something; the
 [changelog](/reference/changelog/) lists every change that can alter a result under
-"Methodology". The schema version (`schema_version`) changes its major number when the meaning of
-existing fields changes, and DiMA refuses to read results of another major version.
+"Methodology". The schema version (`schema_version`) changes its minor number when keys are added
+and its major number when the meaning of existing fields changes, and DiMA refuses to read
+results of another major version.
+
+Results schema 1.1.0 added the keys of
+[similarity-weighted entropy](/explanation/entropy/#similarity-weighted-entropy-opt-in): three
+per position, `similarity_weighted_entropy_summary` and the parameter
+`run.parameters.similarity_weighted_entropy`. Results written by dima 1.0.0 (schema 1.0.0) are
+read as runs without that option: `dima view`, `dima hcs`, `dima cite --from` and the desktop app
+read them as before, and `dima view` writes the new keys as `null` (`NA` in the positions table)
+and the option as off, with a note that says so. To validate a 1.0.0 file, use the 1.0.0 schema:
+`schemas/results.schema.json` of release 1.0.0 (tag `v1.0.0`), the schema the documentation of
+version 1.0 describes. The schema published at the address in its `$id` is now 1.1.0: it
+requires `schema_version` 1.1.0 and the keys 1.1.0 added, so a 1.0.0 file does not validate
+against it.
+
+Results written by a newer 1.x version are read too, keeping only the keys this version knows;
+`dima view` warns about it (`newer_schema`), and a value this version does not know stops the
+reading. See [Troubleshooting](/how-to/troubleshooting/#results-written-by-another-dima-version).
 
 ## References
 

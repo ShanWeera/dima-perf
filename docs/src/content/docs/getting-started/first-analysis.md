@@ -97,6 +97,27 @@ SVKSVCIEV	1	Unique
 - The sample coverage, 0.98, estimates that one more sequence would almost certainly carry a
   variant already seen.
 
+DiMA can also compute **similarity-weighted entropy**, in which variants that differ at few
+residues count for less [@wu2025]. It is not part of the paper's method, so you ask for it:
+
+```sh
+dima analyze -i mers_spike_aa.fasta --similarity-weighted-entropy -o mers.swe.json
+jq '.results[24] | {observed_entropy, similarity_weighted_entropy}' mers.swe.json
+```
+
+```json
+{
+  "observed_entropy": 1.4223886721629135,
+  "similarity_weighted_entropy": 0.42754448388901667
+}
+```
+
+At position 25 almost every variant differs from the Index at a single residue, so the
+similarity-weighted entropy is less than a third of the observed entropy. The one-line summary
+of this run also ends with `similarity-weighted mean 0.0363 bits (observed 0.1207)`. Read
+[Add similarity-weighted entropy](/how-to/analyse/#add-similarity-weighted-entropy-optional)
+before you use it: it explains the other values it adds and when to be careful.
+
 ## 5. Write tables
 
 For R, Python or a spreadsheet, write the same results as four tidy tables:
