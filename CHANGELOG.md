@@ -64,6 +64,9 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   shown entropy was below about 0.024 bits, on screen and in exported figures. Ticks less than
   0.01 bits apart now get three decimals, and the axis is at least 0.005 bits tall (1 bit, as
   before, when every shown value is 0).
+- Sorting the desktop app's position table by Top variant copied both k-mers in every
+  comparison; it now compares them in place, in the same order and more than twice as fast
+  (half a million positions: 0.3–0.4 s instead of 0.8–0.9 s).
 
 ## [1.0.0] - 2026-10-07
 
