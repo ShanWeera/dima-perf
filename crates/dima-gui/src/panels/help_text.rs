@@ -196,6 +196,21 @@ pub fn estimator() -> String {
     )
 }
 
+/// Similarity-weighted entropy: the texts the command-line help shows (shared, so the two never
+/// drift apart), then where the app shows the values.
+#[must_use]
+pub fn similarity_weighted_entropy() -> String {
+    use dima_core::similarity::{DESCRIPTION, EVIDENCE, REFERENCES, sample_size};
+    format!(
+        "{DESCRIPTION}\n\n{EVIDENCE}\n\n{} With this option the chart can show \
+         similarity-weighted entropy (Metric, above the chart), and the position table, the \
+         facts of the selected position, the exported results (JSON, JSON Lines) and the \
+         exported positions table hold the values; without it they are not computed.{}",
+        sample_size(),
+        refs(&REFERENCES)
+    )
+}
+
 /// Validation mode.
 #[must_use]
 pub fn validation() -> String {
@@ -278,6 +293,7 @@ mod tests {
             super::hcs_threshold(),
             super::hcs_eligible_only(),
             super::estimator(),
+            super::similarity_weighted_entropy(),
             super::min_coverage(),
             super::chart_encoding(100, Estimator::Dima),
             super::chart_encoding(100, Estimator::Raw),
@@ -285,6 +301,19 @@ mod tests {
             assert!(text.contains("\n\nRef: "), "{text}");
         }
         assert!(super::support_threshold().contains("Tharanga et al. 2025, Methods"));
+        // The command line's texts, word for word.
+        let swe = super::similarity_weighted_entropy();
+        for shared in [
+            dima_core::similarity::DESCRIPTION.to_owned(),
+            dima_core::similarity::EVIDENCE.to_owned(),
+            dima_core::similarity::sample_size(),
+        ] {
+            assert!(swe.contains(&shared), "{swe}");
+        }
+        assert!(
+            swe.contains("Wu 2025, Section 2.1 and Supplementary File 1"),
+            "{swe}"
+        );
         for kind in crate::workers::export::ExportKind::ALL {
             assert!(!super::export(kind).is_empty());
         }

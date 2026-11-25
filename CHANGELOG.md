@@ -37,6 +37,12 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   `run.parameters.similarity_weighted_entropy`; three columns appended to the positions table.
   Without the option the keys are `null` (`NA` in the table); default results grow by 116 bytes
   per position (compact JSON and JSONL; 140 indented; 9 per positions-table row).
+- Desktop app: **Compute similarity-weighted entropy (Wu 2025)** in the Advanced options, off by
+  default, remembered between sessions and turned off by **Reset to defaults**. The closed
+  Advanced section's title counts the options inside it that differ from their defaults
+  ("Advanced (1 changed)"), and **Run details** says whether similarity-weighted entropy was
+  computed, for analyses run in the app and for results opened from a file. The new setting is
+  saved only when it is on, so default settings stay readable by dima 1.0.0.
 
 ### Changed
 

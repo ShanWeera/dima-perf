@@ -642,3 +642,48 @@ fn the_workspace_fits_the_smallest_window() {
         );
     }
 }
+
+/// Similarity-weighted entropy is an Advanced option: once ticked, the section's title counts it
+/// even when closed, the choice is remembered, the run computes the values and Run details says
+/// so.
+#[test]
+fn the_similarity_weighted_option_is_counted_remembered_and_run() {
+    use egui::accesskit::Toggled;
+    use egui_kittest::kittest::NodeT;
+    const OPTION: &str = "Compute similarity-weighted entropy (Wu 2025)";
+    let mut h = harness();
+    open(&mut h, &fixtures::mers_path());
+    assert!(!has_label(&h, OPTION), "the section starts closed");
+    h.get_by_role_and_label(Role::Button, "Advanced").click();
+    h.run_steps(2);
+    let option = h.get_by_role_and_label(Role::CheckBox, OPTION);
+    assert_eq!(option.accesskit_node().toggled(), Some(Toggled::False));
+    option.click();
+    h.run_steps(2);
+    let option = h.get_by_role_and_label(Role::CheckBox, OPTION);
+    assert_eq!(option.accesskit_node().toggled(), Some(Toggled::True));
+    assert!(
+        h.state().state.settings.similarity_weighted_entropy,
+        "remembered (D73)"
+    );
+    assert!(
+        has_label(&h, "Similarity-weighted changed; default: off"),
+        "its dot"
+    );
+    // Closed again, the title still says that an option inside differs from its default.
+    h.get_by_role_and_label(Role::Button, "Advanced (1 changed)")
+        .click();
+    h.run_steps(2);
+    assert!(!has_label(&h, OPTION));
+    assert!(
+        h.query_by_role_and_label(Role::Button, "Advanced (1 changed)")
+            .is_some()
+    );
+    analyse(&mut h);
+    let s = h.state().state.session.as_ref().expect("results");
+    assert_eq!(*s.results, *fixtures::mers_swe(), "the library's results");
+    h.get_by_label("Run details").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("computed").is_some(), "Run details");
+    assert!(h.query_by_label("not computed").is_none());
+}

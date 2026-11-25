@@ -46,13 +46,43 @@ equivalent command-line option. See [Stratify by header metadata](/how-to/metada
 
 The main options are those of the paper: alphabet, k, the support threshold T, the query name and
 the conserved-region threshold. An **Advanced** section holds the estimator, the validation mode,
-the fill value for empty header fields, the minimum sample coverage and the number of worker
-threads. Every option has a tooltip with its meaning and references. An option that differs from
-its default is marked, and **Reset to defaults** restores them all. The app remembers the
-options that do not depend on the file between sessions.
+the fill value for empty header fields, the minimum sample coverage, similarity-weighted entropy
+and the number of worker threads. Every option has a tooltip with its meaning and references. An
+option that differs from its default is marked with a dot, whose tooltip names the default, and
+**Reset to defaults** restores them all. The Advanced section starts closed; its title counts the
+options inside it that differ from their defaults, for example **Advanced (2 changed)**, so a
+changed option is seen without opening it. The app remembers the options that do not depend on
+the file between sessions.
 
 The worker threads default to all CPUs but one, and run at reduced priority, so the app stays
 responsive during an analysis.
+
+### Similarity-weighted entropy
+
+[Similarity-weighted entropy](/explanation/entropy/#similarity-weighted-entropy-opt-in) is an
+extra measure of diversity that is not part of the DiMA method, so it is off by default. It
+counts two variants that differ at one residue as less diverse than two unrelated variants;
+Shannon entropy counts them alike. To compute it:
+
+1. Click **Advanced** to open the section.
+2. Tick **Compute similarity-weighted entropy (Wu 2025)**. The row's dot appears, and the
+   section's title now reads **Advanced (1 changed)**.
+3. Press **Analyze**.
+
+The run then computes, at every position, the similarity-weighted entropy and the two
+normalised entropies (each entropy divided by its largest possible value at that position). The
+app remembers the choice for the next analyses, also after a restart, until you untick it or
+press **Reset to defaults**. **Run details** says *Similarity-weighted entropy: computed* or *not
+computed*, also for results opened from a file; a file written by dima 1.0.0 reads as *not
+computed*.
+
+Without the option nothing of it is computed and the Results screen shows nothing of it; the
+exported results hold `null` (`NA` in the tables) where the values would be.
+
+dima 1.0.0 cannot read the settings of this version while the option is ticked. If you go back
+to 1.0.0, it starts with its default options and shows *Settings were reset to the defaults (the
+saved values were not valid).* at every start, until you change any setting there, which saves
+its own settings in place of these.
 
 ## Run
 
@@ -124,5 +154,6 @@ figure, and a title, subtitle or legend label too long for the figure is shorten
 (the SVG keeps the whole title as its document title).
 
 Every file is written completely or not at all. **Run details** shows how the analysis ran
-(equivalent command, threads, phase times, platform), and **Help ▸ Cite DiMA** gives the citation
+(equivalent command, threads, phase times, platform, whether similarity-weighted entropy was
+computed), and **Help ▸ Cite DiMA** gives the citation
 of the paper and of this version, with **Copy citation** and **Copy BibTeX**.

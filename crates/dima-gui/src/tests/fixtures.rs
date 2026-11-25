@@ -26,28 +26,40 @@ pub fn mers_nt_path() -> PathBuf {
     repo().join("tests/data/MERS_Spike_nt.fasta.bz2")
 }
 
-fn analyse(path: PathBuf) -> Arc<Results> {
-    let a = dima_core::analyze(
-        &Source::Path(path),
-        &AnalysisParams::default(),
-        &RunControl::new(),
-    )
-    .expect("fixture analysis");
+fn analyse(path: PathBuf, params: &AnalysisParams) -> Arc<Results> {
+    let a = dima_core::analyze(&Source::Path(path), params, &RunControl::new())
+        .expect("fixture analysis");
     Arc::new(a.results)
+}
+
+/// Default parameters with similarity-weighted entropy.
+fn with_swe() -> AnalysisParams {
+    AnalysisParams {
+        similarity_weighted_entropy: true,
+        ..AnalysisParams::default()
+    }
 }
 
 /// The MERS spike protein results with default parameters.
 #[must_use]
 pub fn mers() -> Arc<Results> {
     static R: OnceLock<Arc<Results>> = OnceLock::new();
-    Arc::clone(R.get_or_init(|| analyse(mers_path())))
+    Arc::clone(R.get_or_init(|| analyse(mers_path(), &AnalysisParams::default())))
+}
+
+/// The MERS spike protein results with similarity-weighted entropy (the guide's worked example:
+/// similarity-weighted mean 0.0363 bits, observed 0.1207).
+#[must_use]
+pub fn mers_swe() -> Arc<Results> {
+    static R: OnceLock<Arc<Results>> = OnceLock::new();
+    Arc::clone(R.get_or_init(|| analyse(mers_path(), &with_swe())))
 }
 
 /// The MERS spike nucleotide results with default parameters (LS positions, a flagged region).
 #[must_use]
 pub fn mers_nt() -> Arc<Results> {
     static R: OnceLock<Arc<Results>> = OnceLock::new();
-    Arc::clone(R.get_or_init(|| analyse(mers_nt_path())))
+    Arc::clone(R.get_or_init(|| analyse(mers_nt_path(), &AnalysisParams::default())))
 }
 
 /// A complete results value (from a tiny alignment) whose positions tests replace.

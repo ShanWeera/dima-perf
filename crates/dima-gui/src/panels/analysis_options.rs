@@ -1,8 +1,10 @@
 //! The analysis options (D72): the paper's options on the main panel — alphabet, k, T, query
 //! name, conserved-region threshold — and a collapsed "Advanced" section with the estimator,
-//! validation mode, fill value, minimum coverage and worker threads. Every option has a cited
-//! tooltip (D89); an option that differs from its default carries a dot whose tooltip names
-//! the default, and "Reset to defaults" restores them all (D73). No arbitrary caps (D72).
+//! validation mode, fill value, minimum coverage, similarity-weighted entropy and worker
+//! threads. Every option has a cited tooltip (D89); an option that differs from its default
+//! carries a dot whose tooltip names the default, the collapsed section says how many of its
+//! options do ("Advanced (2 changed)"), and "Reset to defaults" restores them all (D73). No
+//! arbitrary caps (D72).
 
 use egui::{RichText, Ui};
 
@@ -14,7 +16,7 @@ use super::common::{card, heading, option_label};
 use super::help_text as help;
 use crate::app::msg::Msg;
 use crate::state::AppState;
-use crate::state::options::{AlphabetChoice, estimator_label, validation_label};
+use crate::state::options::{AlphabetChoice, AnalysisOptions, estimator_label, validation_label};
 use crate::theme::DesignTokens;
 use crate::workers::analysis::default_threads;
 
@@ -176,11 +178,13 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
             changed = true;
         }
         ui.add_space(t.space_8);
-        egui::CollapsingHeader::new("Advanced")
+        let defaults = AdvancedDefaults::of(&state.setup.options, state.settings.threads);
+        // The salt keeps the open state when the title's count changes.
+        egui::CollapsingHeader::new(advanced_title(defaults.changed()))
             .id_salt("advanced_options")
             .default_open(false)
             .show(ui, |ui| {
-                changed |= advanced(ui, state, t, out);
+                changed |= advanced(ui, state, &defaults, t, out);
             });
     });
     if changed {
@@ -234,7 +238,66 @@ pub fn hcs_controls(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &m
     }
 }
 
-fn advanced(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<Msg>) -> bool {
+/// The default of every Advanced row whose value differs from it, `None` for a row at its
+/// default: the one source of the rows' dots and of the section's "N changed".
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct AdvancedDefaults {
+    estimator: Option<String>,
+    validation: Option<String>,
+    fill: Option<String>,
+    min_coverage: Option<String>,
+    similarity_weighted_entropy: Option<String>,
+    threads: Option<String>,
+}
+
+impl AdvancedDefaults {
+    /// For the form's options and the remembered worker threads (`None` = the default).
+    fn of(o: &AnalysisOptions, threads: Option<usize>) -> Self {
+        Self {
+            estimator: (o.estimator != Estimator::default())
+                .then(|| estimator_label(Estimator::default()).to_owned()),
+            validation: (o.validation != ValidationMode::default())
+                .then(|| validation_label(ValidationMode::default()).to_owned()),
+            fill: (o.fill != DEFAULT_FILL).then(|| DEFAULT_FILL.to_owned()),
+            min_coverage: o.min_coverage.map(|_| "off".to_owned()),
+            similarity_weighted_entropy: o.similarity_weighted_entropy.then(|| "off".to_owned()),
+            threads: threads.map(|_| format!("{} (all CPUs but one)", default_threads().get())),
+        }
+    }
+
+    /// How many rows differ from their default.
+    fn changed(&self) -> usize {
+        [
+            &self.estimator,
+            &self.validation,
+            &self.fill,
+            &self.min_coverage,
+            &self.similarity_weighted_entropy,
+            &self.threads,
+        ]
+        .into_iter()
+        .filter(|d| d.is_some())
+        .count()
+    }
+}
+
+/// "Advanced", or "Advanced (N changed)" when N of its options differ from their defaults, so
+/// a changed option is seen while the section is closed.
+fn advanced_title(changed: usize) -> String {
+    if changed == 0 {
+        "Advanced".to_owned()
+    } else {
+        format!("Advanced ({changed} changed)")
+    }
+}
+
+fn advanced(
+    ui: &mut Ui,
+    state: &mut AppState,
+    defaults: &AdvancedDefaults,
+    t: &DesignTokens,
+    out: &mut Vec<Msg>,
+) -> bool {
     let mut changed = false;
     let metadata = state.setup.header.enabled;
     let o = &mut state.setup.options;
@@ -247,8 +310,7 @@ fn advanced(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                 t,
                 "Entropy estimator",
                 &help::estimator(),
-                (o.estimator != Estimator::default())
-                    .then(|| estimator_label(Estimator::default()).to_owned()),
+                defaults.estimator.clone(),
             );
             egui::ComboBox::from_id_salt("estimator")
                 .selected_text(estimator_label(o.estimator))
@@ -266,8 +328,7 @@ fn advanced(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                 t,
                 "Validation",
                 &help::validation(),
-                (o.validation != ValidationMode::default())
-                    .then(|| validation_label(ValidationMode::default()).to_owned()),
+                defaults.validation.clone(),
             );
             egui::ComboBox::from_id_salt("validation")
                 .selected_text(validation_label(o.validation))
@@ -284,13 +345,7 @@ fn advanced(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                 });
             ui.end_row();
 
-            option_label(
-                ui,
-                t,
-                "Fill value",
-                &help::fill(),
-                (o.fill != DEFAULT_FILL).then(|| DEFAULT_FILL.to_owned()),
-            );
+            option_label(ui, t, "Fill value", &help::fill(), defaults.fill.clone());
             ui.horizontal(|ui| {
                 changed |= ui
                     .add_enabled(
@@ -313,7 +368,7 @@ fn advanced(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                 t,
                 "Minimum coverage",
                 &help::min_coverage(),
-                o.min_coverage.map(|_| "off".to_owned()),
+                defaults.min_coverage.clone(),
             );
             ui.horizontal(|ui| {
                 let mut on = o.min_coverage.is_some();
@@ -338,6 +393,23 @@ fn advanced(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
             });
             ui.end_row();
 
+            let help = help::similarity_weighted_entropy();
+            option_label(
+                ui,
+                t,
+                "Similarity-weighted",
+                &help,
+                defaults.similarity_weighted_entropy.clone(),
+            );
+            changed |= ui
+                .checkbox(
+                    &mut o.similarity_weighted_entropy,
+                    "Compute similarity-weighted entropy (Wu 2025)",
+                )
+                .on_hover_text(help)
+                .changed();
+            ui.end_row();
+
             let cpus = crate::workers::analysis::cpus();
             let default = default_threads().get();
             option_label(
@@ -345,10 +417,7 @@ fn advanced(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                 t,
                 "Worker threads",
                 &help::threads(),
-                state
-                    .settings
-                    .threads
-                    .map(|_| format!("{default} (all CPUs but one)")),
+                defaults.threads.clone(),
             );
             ui.horizontal(|ui| {
                 let mut n =
@@ -371,4 +440,37 @@ fn advanced(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
         );
     }
     changed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The section's title counts the rows whose dot is shown.
+    #[test]
+    fn the_advanced_title_counts_the_changed_options() {
+        let mut o = AnalysisOptions::default();
+        let d = AdvancedDefaults::of(&o, None);
+        assert_eq!(d, AdvancedDefaults::default());
+        assert_eq!(advanced_title(d.changed()), "Advanced");
+        o.similarity_weighted_entropy = true;
+        let d = AdvancedDefaults::of(&o, None);
+        assert_eq!(d.similarity_weighted_entropy.as_deref(), Some("off"));
+        assert_eq!(advanced_title(d.changed()), "Advanced (1 changed)");
+        let d = AdvancedDefaults::of(&o, Some(2));
+        assert!(d.threads.is_some(), "the threads come from the settings");
+        assert_eq!(advanced_title(d.changed()), "Advanced (2 changed)");
+        o.estimator = Estimator::Raw;
+        o.validation = ValidationMode::Report;
+        o.fill = "NA".into();
+        o.min_coverage = Some(0.9);
+        assert_eq!(AdvancedDefaults::of(&o, Some(2)).changed(), 6, "every row");
+        // Options outside the section are not counted.
+        let main = AnalysisOptions {
+            support_threshold: 30,
+            kmer_length: Some(5),
+            ..AnalysisOptions::default()
+        };
+        assert_eq!(AdvancedDefaults::of(&main, None).changed(), 0);
+    }
 }

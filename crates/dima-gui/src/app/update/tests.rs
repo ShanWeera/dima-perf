@@ -844,9 +844,14 @@ fn drops_options_views_and_threads() {
     update(&mut s, Msg::ShowView(View::Workspace));
     assert_eq!(s.view, View::Setup, "no results to show");
     s.setup.options.support_threshold = 7;
+    s.setup.options.similarity_weighted_entropy = true;
+    update(&mut s, Msg::OptionsChanged);
+    assert!(s.settings.similarity_weighted_entropy, "remembered (D73)");
     let effects = update(&mut s, Msg::ResetOptions);
     assert!(matches!(effects.as_slice(), [Effect::SaveSettings(_)]));
     assert_eq!(s.setup.options.support_threshold, 100);
+    assert!(!s.setup.options.similarity_weighted_entropy);
+    assert!(!s.settings.similarity_weighted_entropy);
     update(&mut s, Msg::ThreadsChanged(Some(2)));
     assert_eq!(s.settings.threads, Some(2));
 }

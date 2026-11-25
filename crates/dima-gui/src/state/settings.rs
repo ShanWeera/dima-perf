@@ -3,11 +3,15 @@
 //! choice and the export settings.
 //!
 //! Stored as `{"version": N, "settings": {…}}`. A file written by another version, or one that
-//! cannot be read, is replaced by the defaults and the user is told once (safe reset); nothing
+//! cannot be read, is replaced by the defaults and the user is told at each start until a
+//! setting is saved, so a newer version's file is never overwritten (safe reset); nothing
 //! half-read is ever used. The one exception is a figure size outside its range (such as one
 //! saved before the minimum was raised): it is moved into the range, the user is told, and the
 //! corrected settings are saved at once, so the notice appears once. The alphabet, k and query
 //! name are not remembered: they belong to one file and reset with every new file (G12, G13).
+//!
+//! A key added after 1.0.0 is written only when it differs from its default, so the settings
+//! of someone who never uses it stay readable by 1.0.0, which refuses unknown keys.
 
 use serde::{Deserialize, Serialize};
 
@@ -41,6 +45,10 @@ pub struct Settings {
     pub support_threshold: u64,
     /// Entropy estimator.
     pub estimator: Estimator,
+    /// Also compute similarity-weighted entropy (Wu 2025). Added after 1.0.0: written only
+    /// when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub similarity_weighted_entropy: bool,
     /// Validation mode.
     pub validation: ValidationMode,
     /// Minimum sample coverage to flag, if any.
@@ -64,6 +72,7 @@ impl Default for Settings {
         Self {
             support_threshold: DEFAULT_SUPPORT_THRESHOLD,
             estimator: Estimator::default(),
+            similarity_weighted_entropy: false,
             validation: ValidationMode::default(),
             min_coverage: None,
             fill: DEFAULT_FILL.to_owned(),
@@ -177,6 +186,7 @@ mod tests {
         let s = Settings {
             support_threshold: 30,
             estimator: Estimator::ChaoWangJost,
+            similarity_weighted_entropy: true,
             min_coverage: Some(0.9),
             hcs_threshold: "95.5".into(),
             threads: Some(3),
@@ -185,6 +195,47 @@ mod tests {
         };
         let (back, loaded) = Settings::from_json(&s.to_json());
         assert_eq!(back, s);
+        assert_eq!(loaded, Loaded::Ok);
+        assert!(
+            s.to_json()
+                .contains(r#""similarity_weighted_entropy": true"#)
+        );
+    }
+
+    /// The keys of the stored settings.
+    fn stored_keys(s: &Settings) -> std::collections::BTreeSet<String> {
+        let v: serde_json::Value = serde_json::from_str(&s.to_json()).unwrap();
+        v["settings"].as_object().unwrap().keys().cloned().collect()
+    }
+
+    /// The keys added after 1.0.0 are left out at their defaults, so default settings are
+    /// exactly 1.0.0's (which refuses unknown keys) and a file without them reads as off.
+    #[test]
+    fn default_settings_are_those_of_1_0_0() {
+        const V1_0_0: [&str; 10] = [
+            "support_threshold",
+            "estimator",
+            "validation",
+            "min_coverage",
+            "fill",
+            "hcs_threshold",
+            "hcs_eligible_only",
+            "threads",
+            "dialogs",
+            "figure_size",
+        ];
+        let keys = |names: &[&str]| names.iter().map(|&k| k.to_owned()).collect();
+        assert_eq!(stored_keys(&Settings::default()), keys(&V1_0_0));
+        let on = Settings {
+            similarity_weighted_entropy: true,
+            ..Settings::default()
+        };
+        let mut with = V1_0_0.to_vec();
+        with.push("similarity_weighted_entropy");
+        assert_eq!(stored_keys(&on), keys(&with));
+        let (s, loaded) =
+            Settings::from_json(r#"{"version": 1, "settings": {"support_threshold": 30}}"#);
+        assert!(!s.similarity_weighted_entropy);
         assert_eq!(loaded, Loaded::Ok);
     }
 

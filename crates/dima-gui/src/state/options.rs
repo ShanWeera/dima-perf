@@ -87,6 +87,8 @@ pub struct AnalysisOptions {
     pub support_threshold: u64,
     /// Entropy estimator.
     pub estimator: Estimator,
+    /// Also compute similarity-weighted entropy and the normalised entropies (Wu 2025).
+    pub similarity_weighted_entropy: bool,
     /// Validation mode.
     pub validation: ValidationMode,
     /// Flag positions with sample coverage below this value; `None` = off.
@@ -103,6 +105,7 @@ impl Default for AnalysisOptions {
             query_name: String::new(),
             support_threshold: DEFAULT_SUPPORT_THRESHOLD,
             estimator: Estimator::default(),
+            similarity_weighted_entropy: false,
             validation: ValidationMode::default(),
             min_coverage: None,
             fill: DEFAULT_FILL.to_owned(),
@@ -117,6 +120,7 @@ impl AnalysisOptions {
         Self {
             support_threshold: s.support_threshold,
             estimator: s.estimator,
+            similarity_weighted_entropy: s.similarity_weighted_entropy,
             validation: s.validation,
             min_coverage: s.min_coverage,
             fill: s.fill.clone(),
@@ -128,6 +132,7 @@ impl AnalysisOptions {
     pub fn store(&self, s: &mut Settings) {
         s.support_threshold = self.support_threshold;
         s.estimator = self.estimator;
+        s.similarity_weighted_entropy = self.similarity_weighted_entropy;
         s.validation = self.validation;
         s.min_coverage = self.min_coverage;
         if !self.fill.trim().is_empty() {
@@ -174,7 +179,7 @@ impl AnalysisOptions {
             support_threshold: (self.support_threshold != DEFAULT_SUPPORT_THRESHOLD)
                 .then_some(self.support_threshold),
             estimator: (self.estimator != Estimator::default()).then_some(self.estimator),
-            similarity_weighted_entropy: false,
+            similarity_weighted_entropy: self.similarity_weighted_entropy,
             validation: (self.validation != ValidationMode::default()).then_some(self.validation),
             min_coverage: self.min_coverage,
             query_name: (!query.is_empty()).then(|| query.to_owned()),
@@ -243,6 +248,7 @@ mod tests {
             query_name: "  spike ".into(),
             support_threshold: 30,
             estimator: Estimator::Raw,
+            similarity_weighted_entropy: true,
             validation: ValidationMode::Permissive,
             min_coverage: Some(0.9),
             fill: "NA".into(),
@@ -280,9 +286,29 @@ mod tests {
                 "--metadata-fields",
                 "Host",
                 "--header-fillna",
-                "NA"
+                "NA",
+                "--similarity-weighted-entropy"
             ]
         );
+    }
+
+    /// The option is remembered (D73) and "Reset to defaults" turns it off.
+    #[test]
+    fn similarity_weighted_entropy_is_remembered() {
+        let o = AnalysisOptions {
+            similarity_weighted_entropy: true,
+            ..AnalysisOptions::default()
+        };
+        assert!(o.differs_from_defaults());
+        assert!(
+            o.to_params(&HeaderEditor::default())
+                .similarity_weighted_entropy
+        );
+        let mut s = Settings::default();
+        o.store(&mut s);
+        assert!(s.similarity_weighted_entropy);
+        assert_eq!(AnalysisOptions::from_settings(&s), o);
+        assert!(!AnalysisOptions::default().similarity_weighted_entropy);
     }
 
     #[test]
