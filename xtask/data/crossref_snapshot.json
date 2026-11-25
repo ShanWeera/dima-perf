@@ -136,6 +136,21 @@
   "volume": "9",
   "year": 1966
  },
+ "10.1016/0022-5193(66)90013-0": {
+  "authors": [
+   [
+    "Pielou",
+    "E. C."
+   ]
+  ],
+  "issue": null,
+  "key": "pielou1966",
+  "pages": "131-144",
+  "title": "The measurement of diversity in different types of biological collections",
+  "venue": "Journal of Theoretical Biology",
+  "volume": "13",
+  "year": 1966
+ },
  "10.1016/S0021-9258(18)89400-5": {
   "authors": [
    [
@@ -2107,6 +2122,57 @@
   "volume": "5",
   "year": 2019
  },
+ "10.1099/jgv.0.002306": {
+  "authors": [
+   [
+    "Mo",
+    "Han"
+   ],
+   [
+    "Li",
+    "Hui"
+   ],
+   [
+    "Yi",
+    "Liu"
+   ],
+   [
+    "Qian",
+    "Ke"
+   ],
+   [
+    "Lin",
+    "Juan"
+   ],
+   [
+    "Lin",
+    "Ziqi"
+   ],
+   [
+    "He",
+    "Fenglan"
+   ],
+   [
+    "Zhang",
+    "Xian"
+   ],
+   [
+    "Ni",
+    "Xiansheng"
+   ],
+   [
+    "Zhou",
+    "Xianfeng"
+   ]
+  ],
+  "issue": "7",
+  "key": "mo2026",
+  "pages": "002306",
+  "title": "Evolutionary and molecular characteristics of high-Shannon entropy codons in VP1 of Coxsackievirus A6",
+  "venue": "Journal of General Virology",
+  "volume": "107",
+  "year": 2026
+ },
  "10.1103/PhysRevLett.80.197": {
   "authors": [
    [
@@ -3041,6 +3107,25 @@
   "venue": "Neural Computation",
   "volume": "15",
   "year": 2003
+ },
+ "10.1186/1471-2105-7-415": {
+  "authors": [
+   [
+    "Raghava",
+    "G. P. S."
+   ],
+   [
+    "Barton",
+    "Geoffrey J"
+   ]
+  ],
+  "issue": "1",
+  "key": "raghava2006",
+  "pages": "415",
+  "title": "Quantification of the variation in percentage identity for protein sequence alignments",
+  "venue": "BMC Bioinformatics",
+  "volume": "7",
+  "year": 2006
  },
  "10.1186/1471-2105-9-S1-S18": {
   "authors": [
@@ -4227,6 +4312,25 @@
   "volume": "59",
   "year": 2014
  },
+ "10.1890/10-2402.1": {
+  "authors": [
+   [
+    "Leinster",
+    "Tom"
+   ],
+   [
+    "Cobbold",
+    "Christina A."
+   ]
+  ],
+  "issue": "3",
+  "key": "leinster2012",
+  "pages": "477-489",
+  "title": "Measuring diversity: the importance of species similarity",
+  "venue": "Ecology",
+  "volume": "93",
+  "year": 2012
+ },
  "10.1890/11-1952.1": {
   "authors": [
    [
@@ -4245,6 +4349,21 @@
   "venue": "Ecology",
   "volume": "93",
   "year": 2012
+ },
+ "10.2307/1933900": {
+  "authors": [
+   [
+    "Sheldon",
+    "Andrew L."
+   ]
+  ],
+  "issue": "3",
+  "key": "sheldon1969",
+  "pages": "466-467",
+  "title": "Equitability Indices: Dependence on the Species Count",
+  "venue": "Ecology",
+  "volume": "50",
+  "year": 1969
  },
  "10.2307/1967627": {
   "authors": [
@@ -4275,6 +4394,25 @@
   "venue": "Biometrika",
   "volume": "40",
   "year": 1953
+ },
+ "10.2307/3545749": {
+  "authors": [
+   [
+    "Smith",
+    "Benjamin"
+   ],
+   [
+    "Wilson",
+    "J. Bastow"
+   ]
+  ],
+  "issue": "1",
+  "key": "smith1996",
+  "pages": "70-82",
+  "title": "A Consumer's Guide to Evenness Indices",
+  "venue": "Oikos",
+  "volume": "76",
+  "year": 1996
  },
  "10.32614/RJ-2015-022": {
   "authors": [

@@ -65,6 +65,12 @@ CORRECTIONS = {
     "10.1093/ve/vey041": {"pages": "vey041"},
     # Crossref runs the given name together ("NickV.") and has no pages (Europe PMC: 675-679).
     "10.1007/BF00175826": {"authors": [["Grishin", "Nick V."]], "pages": "675-679"},
+    # Initials run together or without points, and a first page only or no article number
+    # (checked on the articles: J Theor Biol 13:131-144, Oikos 76:70-82, J Gen Virol 002306).
+    "10.1016/0022-5193(66)90013-0": {"authors": [["Pielou", "E. C."]]},
+    "10.2307/3545749": {"pages": "70-82"},
+    "10.1186/1471-2105-7-415": {"authors[0]": ["Raghava", "G. P. S."]},
+    "10.1099/jgv.0.002306": {"pages": "002306"},
     # A group author and the publisher, which Crossref records as the institution only.
     "10.59161/AUEZ1291": {"authors": [["Bureau International des Poids et Mesures", ""]], "venue": "BIPM", "title": "The International System of Units (SI), 9th edition"},
 }

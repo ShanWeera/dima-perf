@@ -64,6 +64,21 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   palette offers "Show similarity-weighted entropy" or "Show entropy", whichever the chart does
   not show, and the keyboard shortcuts list Tab / Shift+Tab, Space, and that Esc gives the arrow
   keys back to the table.
+- Documentation: the methodology of similarity-weighted entropy on "Entropy and its correction"
+  (the definition, the similarity of two k-mers, the weights and their bounds, the normalised
+  values, a worked example at MERS-CoV spike position 25, how the values depend on k, the alphabet
+  and the number of sequences, with two tables of exact averages, what the evidence covers, and
+  where the paper and DiMA differ), a Wu 2025 section on "Comparison with the papers", and the
+  option in the guides, the references, the FAQ, the Glossary and Troubleshooting.
+- Test data: Wu 2025's ToBRFV samples (Supplementary File 2, CC BY 4.0) as
+  `tests/data/tobrfv_tm2.fasta.bz2` and `tobrfv_tm22.fasta.bz2`, written by
+  `scripts/reference/tobrfv_from_supplement.py`. The reference implementation
+  (`scripts/reference/dima_reference.py`) computes similarity-weighted entropy pair by pair, as Wu
+  defines it, with `--similarity-weighted-entropy`.
+- `scripts/reference/docs_numbers.py` computes the documentation's numbers that come from
+  expectations and simulations rather than from a dima run, exactly wherever an exact form exists
+  and otherwise by seeded Monte Carlo, and writes them into the pages and
+  `scripts/validate_paper.sh`; CI fails when they disagree.
 
 ### Changed
 
@@ -75,6 +90,8 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   constant). Results written by dima 1.0.0 are read as runs without similarity-weighted entropy;
   `dima view` notes this when it writes values their schema did not record, and keeps its
   `newer_schema` warning for newer or unrecognised versions.
+- Documentation: "Comparison with the paper" is now "Comparison with the papers" (same address),
+  since it also compares DiMA with Wu 2025.
 
 ### Fixed
 
@@ -128,6 +145,17 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   switch, and the chart's "drag: pan" hint over its legend. Both now move to a row of their own
   when their row is full, and the chart's Fit, + and − buttons stay at the top right of the
   chart.
+- Documentation: the numbers that came from random runs and simulations are now exact wherever
+  an exact form exists, and seeded and stated with their precision otherwise. Among the changes:
+  the paper's 1.38 bits at MERS-CoV spike position 25 lies 0.29 standard deviations below the
+  exact expectation (it said "about its 39th percentile"); the mean of one run of the random
+  procedure on HIV-1 *pol* has a standard deviation of 0.0020 bits (it said "repeated runs give
+  5.350–5.353"); DiMA v5.0.9's rule raises the average by 50% at N = 171 and 105% at N = 130 (it
+  said 51% and 107%); its MERS-CoV spike mean is 0.1417 bits (it said "about 0.142"), and on
+  HIV-1 *pol* it differs from DiMA's by less than 0.00026 bits (DNA) and 0.0011 bits (protein)
+  (it said "the two agree"); in the population study the exact expectation underestimates by up
+  to 6.4% when at least one minor-variant sequence is expected (it said "at most 3%"), and
+  v5.0.9's rule overestimates by up to 31% with T = 100 and 20% with T = 30 (it said 19%).
 
 ## [1.0.0] - 2026-10-07
 

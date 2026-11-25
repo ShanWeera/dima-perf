@@ -207,9 +207,6 @@ or `--progress off`; `DIMA_PROGRESS` sets the default. Colours follow `--color` 
 includes the version and platform), the command, and if possible the input; `RUST_BACKTRACE=1`
 adds a backtrace.
 
-For anything this page does not answer, see the [FAQ](/getting-started/faq/) or ask in
-[GitHub Discussions](https://github.com/ShanWeera/dima-perf/discussions).
-
 **The desktop app does not open** on macOS or Windows — the packages are not code-signed yet; see
 [first launch](/getting-started/install/#desktop-app).
 
@@ -225,3 +222,6 @@ entropy") — you switched the chart's metric after narrowing the value range in
 Each metric has its own scale, so the range starts over at the new metric's full range; narrow
 it again if you need to. See
 [Plot similarity-weighted entropy](/how-to/desktop-app/#explore-the-results).
+
+For anything this page does not answer, see the [FAQ](/getting-started/faq/) or ask in
+[GitHub Discussions](https://github.com/ShanWeera/dima-perf/discussions).
