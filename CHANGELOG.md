@@ -82,6 +82,16 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   and a coverage, incidence or conservation bound just below its maximum as `1.0000` (or
   `100.0%`). Tables, panels, tooltips, chips and exported figures now read `< 0.0001`
   (`< 0.1%`) and `> 0.9999` (`> 99.9%`); sorting and exports keep full precision.
+- In a narrow desktop-app window (980 px, the smallest allowed) the results header broke its
+  fact chips into columns a few characters wide, hundreds of pixels tall, which pushed the
+  chart and the position table out of the window. Each chip now stays on one line and the row
+  wraps between chips. When the chart, the conserved regions and the table still do not all fit,
+  their column scrolls (the mouse wheel over the chart keeps zooming it), and the table keeps at
+  least four rows.
+- In narrow desktop-app windows the filter bar's position count was drawn over the low-support
+  switch, and the chart's "drag: pan" hint over its legend. Both now move to a row of their own
+  when their row is full, and the chart's Fit, + and − buttons stay at the top right of the
+  chart.
 
 ## [1.0.0] - 2026-10-07
 

@@ -123,22 +123,37 @@ pub fn show(ui: &mut Ui, session: &Session, t: &DesignTokens) {
     });
     ui.horizontal_wrapped(|ui| {
         for (text, tip) in chips(r, session) {
-            egui::Frame::new()
-                .fill(t.surface_secondary)
-                .stroke(egui::Stroke::new(1.0, t.border))
-                .corner_radius(10.0)
-                .inner_margin(egui::Margin::symmetric(8, 2))
-                .show(ui, |ui| {
-                    ui.label(
-                        RichText::new(text)
-                            .size(t.font_size_caption)
-                            .color(t.text_secondary),
-                    );
-                })
-                .response
-                .on_hover_text(tip);
+            chip(ui, t, &text).on_hover_text(tip);
         }
     });
+}
+
+/// One chip: its text on a rounded frame, allocated as a single item, so a row that is full
+/// moves the whole chip to the next row instead of wrapping its text into a narrow column.
+fn chip(ui: &mut Ui, t: &DesignTokens, text: &str) -> egui::Response {
+    const MARGIN: egui::Vec2 = egui::vec2(8.0, 2.0);
+    const STROKE: f32 = 1.0;
+    let galley = ui.painter().layout_no_wrap(
+        text.to_owned(),
+        egui::FontId::proportional(t.font_size_caption),
+        t.text_secondary,
+    );
+    let inset = MARGIN + egui::Vec2::splat(STROKE);
+    let (rect, response) =
+        ui.allocate_exact_size(galley.size() + 2.0 * inset, egui::Sense::hover());
+    if ui.is_rect_visible(rect) {
+        let p = ui.painter();
+        p.rect(
+            rect,
+            10.0,
+            t.surface_secondary,
+            egui::Stroke::new(STROKE, t.border),
+            egui::StrokeKind::Inside,
+        );
+        p.galley(rect.min + inset, galley, t.text_secondary);
+    }
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, text));
+    response
 }
 
 #[cfg(test)]

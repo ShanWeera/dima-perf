@@ -66,6 +66,11 @@ The Results screen shows the run's facts across the top — sequences, positions
 lowest and highest entropy over eligible positions, the low-support counts — and a badge with the
 number of warnings, which opens the diagnostics.
 
+In a small window the chart, the conserved regions and the position table do not all fit. The
+column that holds them then scrolls: drag its scroll bar, or turn the mouse wheel anywhere except
+over the chart, where the wheel zooms the chart instead. The table always keeps at least four
+rows.
+
 Values are rounded only for display; sorting and exports keep every digit. A value that is not
 zero never reads 0.0000: it reads "< 0.0001" ("< 0.1%" for a percentage). A coverage or
 incidence just below its maximum reads "> 0.9999" ("> 99.9%") rather than the maximum.

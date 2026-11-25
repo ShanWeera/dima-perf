@@ -208,74 +208,100 @@ pub fn show(
     Some(Shared { x })
 }
 
+/// The heading row: the heading, the legend and the gesture hint, wrapping as the width needs,
+/// with Fit, + and − at its top right. The zoom buttons are laid out first and the rest wraps
+/// in the width left of them, so a long legend can neither run under them nor push them down.
 fn header(ui: &mut Ui, s: &mut Session, series: &Series, t: &DesignTokens, threshold: u64) {
-    ui.horizontal_wrapped(|ui| {
-        heading(ui, t, "Entropy");
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+        zoom_buttons(ui, s);
         ui.add_space(t.space_8);
-        let estimator = s.results.run.parameters.estimator.value;
-        let tip = help_text::chart_encoding(threshold, estimator);
-        let [solid, dashed] = legend(threshold, estimator);
-        if series.has(Style::Eligible) {
-            legend_entry(ui, t, &solid, Swatch::Line(t.series_eligible)).on_hover_text(&tip);
-        }
-        if series.has(Style::Uncorrected) {
-            legend_entry(ui, t, &dashed, Swatch::Dashed(t.series_uncorrected)).on_hover_text(&tip);
-        }
-        if !series.ns_spans.is_empty() {
-            legend_entry(
-                ui,
-                t,
-                &format!("NS: {NS_LABEL}"),
-                Swatch::Hatched(t.ns_band_fill, t.ns_hatch),
-            )
-            .on_hover_text(&tip);
-        }
-        if s.results.average_entropy.is_some() {
-            legend_entry(ui, t, "eligible mean", Swatch::Dashed(t.mean_line)).on_hover_text(
-                "Mean entropy over the eligible positions (support > T), as in the summaries",
+        // As `horizontal_wrapped` does, but left to right inside this right-to-left row: one
+        // row's height to start with, growing by a row whenever an item does not fit.
+        let row = egui::vec2(
+            ui.available_size_before_wrap().x,
+            ui.spacing().interact_size.y,
+        );
+        let wrapping = egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true);
+        ui.allocate_ui_with_layout(row, wrapping, |ui| {
+            heading(ui, t, "Entropy");
+            ui.add_space(t.space_8);
+            legend_entries(ui, s, series, t, threshold);
+            // One item, so it moves to the next row whole rather than wrapping inside.
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new("drag: pan \u{2022} Shift-drag: zoom to region").weak(),
+                )
+                .extend(),
             );
-        }
-        if let (Some(c), false) = (
-            s.results.coverage_summary.min_coverage,
-            series.low_coverage.is_empty(),
-        ) {
-            legend_entry(
-                ui,
-                t,
-                &format!("sample coverage < {c}"),
-                Swatch::Tick(t.coverage_mark),
-            )
-            .on_hover_text(help_text::min_coverage());
-        }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let zoomed = s.viewport.is_some();
-            let full = s.extent();
-            if ui
-                .add_enabled(zoomed, egui::Button::new("Fit").small())
-                .on_hover_text("Show every shown position (or double-click the chart)")
-                .clicked()
-            {
-                s.viewport = None;
-            }
-            if let Some(full) = full {
-                if ui
-                    .small_button("+")
-                    .on_hover_text("Zoom in (or scroll over the chart)")
-                    .clicked()
-                {
-                    s.viewport = viewport::zoom(s.viewport, full, 0.8, 0.5);
-                }
-                if ui
-                    .add_enabled(zoomed, egui::Button::new("\u{2212}").small())
-                    .on_hover_text("Zoom out")
-                    .clicked()
-                {
-                    s.viewport = viewport::zoom(s.viewport, full, 1.25, 0.5);
-                }
-            }
-            ui.weak("drag: pan \u{2022} Shift-drag: zoom to region");
         });
     });
+}
+
+/// The chart's legend: the line styles shown, the no-support bands, the mean and coverage marks.
+fn legend_entries(ui: &mut Ui, s: &Session, series: &Series, t: &DesignTokens, threshold: u64) {
+    let estimator = s.results.run.parameters.estimator.value;
+    let tip = help_text::chart_encoding(threshold, estimator);
+    let [solid, dashed] = legend(threshold, estimator);
+    if series.has(Style::Eligible) {
+        legend_entry(ui, t, &solid, Swatch::Line(t.series_eligible)).on_hover_text(&tip);
+    }
+    if series.has(Style::Uncorrected) {
+        legend_entry(ui, t, &dashed, Swatch::Dashed(t.series_uncorrected)).on_hover_text(&tip);
+    }
+    if !series.ns_spans.is_empty() {
+        legend_entry(
+            ui,
+            t,
+            &format!("NS: {NS_LABEL}"),
+            Swatch::Hatched(t.ns_band_fill, t.ns_hatch),
+        )
+        .on_hover_text(&tip);
+    }
+    if s.results.average_entropy.is_some() {
+        legend_entry(ui, t, "eligible mean", Swatch::Dashed(t.mean_line)).on_hover_text(
+            "Mean entropy over the eligible positions (support > T), as in the summaries",
+        );
+    }
+    if let (Some(c), false) = (
+        s.results.coverage_summary.min_coverage,
+        series.low_coverage.is_empty(),
+    ) {
+        legend_entry(
+            ui,
+            t,
+            &format!("sample coverage < {c}"),
+            Swatch::Tick(t.coverage_mark),
+        )
+        .on_hover_text(help_text::min_coverage());
+    }
+}
+
+/// Fit, + and −, right to left.
+fn zoom_buttons(ui: &mut Ui, s: &mut Session) {
+    let zoomed = s.viewport.is_some();
+    if ui
+        .add_enabled(zoomed, egui::Button::new("Fit").small())
+        .on_hover_text("Show every shown position (or double-click the chart)")
+        .clicked()
+    {
+        s.viewport = None;
+    }
+    if let Some(full) = s.extent() {
+        if ui
+            .small_button("+")
+            .on_hover_text("Zoom in (or scroll over the chart)")
+            .clicked()
+        {
+            s.viewport = viewport::zoom(s.viewport, full, 0.8, 0.5);
+        }
+        if ui
+            .add_enabled(zoomed, egui::Button::new("\u{2212}").small())
+            .on_hover_text("Zoom out")
+            .clicked()
+        {
+            s.viewport = viewport::zoom(s.viewport, full, 1.25, 0.5);
+        }
+    }
 }
 
 fn band_rect(span: NsSpan, x: XMap, plot: Rect) -> Rect {
@@ -643,6 +669,8 @@ fn interact(
         let anchor = f64::from(((pp.x - plot.left()) / plot.width().max(1.0)).clamp(0.0, 1.0));
         let factor = if scroll > 0.0 { 0.85 } else { 1.18 };
         s.viewport = viewport::zoom(s.viewport, full, factor, anchor);
+        // The wheel zoomed the chart; the scrolling column around it must not move as well.
+        ui.ctx().input_mut(|i| i.smooth_scroll_delta.y = 0.0);
     }
     // Shift-drag zooms to a region; a plain drag pans.
     let shift = ui.ctx().input(|i| i.modifiers.shift);

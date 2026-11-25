@@ -10,16 +10,26 @@ use egui::accesskit::Role;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 
+use dima_core::model::Results;
+
 use super::fixtures;
 use crate::app::DimaApp;
-use crate::app::msg::Msg;
+use crate::app::msg::{Effect, Msg};
 use crate::persist::ConfigStore;
 use crate::state::{Purpose, View};
 use crate::workers::export::ExportKind;
+use crate::workers::inspect::Opened;
 
 type H = Harness<'static, DimaApp>;
 
+/// The smallest window the app allows (`app::run`).
+const MIN_WINDOW: egui::Vec2 = egui::vec2(980.0, 620.0);
+
 fn harness() -> H {
+    harness_sized(egui::vec2(1500.0, 1100.0))
+}
+
+fn harness_sized(size: egui::Vec2) -> H {
     let mut app = DimaApp::new(ConfigStore::in_memory(), false);
     app.state.native_dialogs = false;
     // The harness runs a first pass while it is built; the app's fonts and style are installed
@@ -27,7 +37,7 @@ fn harness() -> H {
     // app draws from the next one, when the fonts are bound.
     let mut installed = false;
     let mut h = Harness::builder()
-        .with_size(egui::vec2(1500.0, 1100.0))
+        .with_size(size)
         .with_max_steps(200)
         .build_ui_state(
             move |ui, app: &mut DimaApp| {
@@ -85,6 +95,64 @@ fn open(h: &mut H, path: &Path) {
                 || a.state.session.is_some()
                 || a.state.setup.open_error.is_some())
     });
+}
+
+/// Shows `results` as if they had been opened from a results file (no file is read), without
+/// notifications.
+fn load(h: &mut H, results: &Results) {
+    let path = PathBuf::from("results.json");
+    let effects = crate::app::update::update(&mut h.state_mut().state, Msg::OpenPath(path.clone()));
+    let Some(Effect::Open { generation, .. }) = effects.first() else {
+        panic!("an open effect: {effects:?}");
+    };
+    let generation = *generation;
+    h.state_mut().dispatch(
+        Msg::Opened {
+            generation,
+            path,
+            outcome: Ok(Opened::Results(Box::new(results.clone()))),
+        },
+        None,
+    );
+    h.state_mut().state.toasts = crate::state::toasts::Toasts::default();
+    h.run_steps(4);
+}
+
+/// The rectangles of every label and control above `bottom`, with their names.
+fn controls_above(h: &H, bottom: f32) -> Vec<(String, egui::Rect)> {
+    use egui_kittest::kittest::NodeT;
+    let roles = [
+        Role::Label,
+        Role::Button,
+        Role::CheckBox,
+        Role::RadioButton,
+        Role::SpinButton,
+        Role::ComboBox,
+        Role::TextInput,
+    ];
+    h.root()
+        .children_recursive()
+        .filter(|n| roles.contains(&n.accesskit_node().role()))
+        .map(|n| {
+            let a = n.accesskit_node();
+            let name = a.label().or_else(|| a.value()).unwrap_or_default();
+            (name, n.rect())
+        })
+        .filter(|(_, r)| r.top() < bottom)
+        .collect()
+}
+
+/// Panics naming the first two of `items` whose rectangles overlap.
+fn assert_no_overlap(items: &[(String, egui::Rect)]) {
+    for (i, (a, ra)) in items.iter().enumerate() {
+        for (b, rb) in &items[i + 1..] {
+            let common = ra.intersect(*rb);
+            assert!(
+                common.width() < 0.5 || common.height() < 0.5,
+                "{a:?} {ra:?} overlaps {b:?} {rb:?}"
+            );
+        }
+    }
 }
 
 fn analyse(h: &mut H) {
@@ -528,4 +596,49 @@ fn exports_write_atomically_and_reopen() {
     assert!(matches!(s.origin, crate::state::session::Origin::Opened(_)));
     assert_eq!(*s.results, *fixtures::mers());
     assert!(has_label(&h, "opened from mers.json.zst"));
+}
+
+/// At the smallest window the results header keeps each chip on one line (it used to break
+/// them into columns a few characters wide, which pushed the chart and the table out of the
+/// window), nothing above the chart overlaps anything else, the chart is in the window, and
+/// the table is reached by scrolling the column, whose wheel zooms the chart without scrolling.
+#[test]
+fn the_workspace_fits_the_smallest_window() {
+    for results in [fixtures::mers(), fixtures::mers_nt()] {
+        let mut h = harness_sized(MIN_WINDOW);
+        load(&mut h, &results);
+        let s = h.state().state.session.as_ref().expect("results");
+        for (text, _) in crate::panels::summary::chips(&s.results, s) {
+            let chip = h.get_by_label(&text).rect();
+            assert!(chip.height() < 24.0, "chip {text:?} is {chip:?}");
+            assert!(chip.right() <= MIN_WINDOW.x, "chip {text:?} is {chip:?}");
+        }
+        let chart = h.get_by_label_contains("Entropy chart:").rect();
+        assert!(chart.bottom() < MIN_WINDOW.y, "chart {chart:?}");
+        assert_no_overlap(&controls_above(&h, chart.top()));
+        // The wheel over the chart zooms it (in, then out) and leaves the column where it is,
+        // although the column could scroll down.
+        h.hover_at(chart.center());
+        for (dy, zoomed) in [(120.0, true), (-120.0, false)] {
+            h.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, dy),
+                phase: egui::TouchPhase::Move,
+                modifiers: egui::Modifiers::NONE,
+            });
+            h.run_steps(4);
+            let viewport = h.state().state.session.as_ref().unwrap().viewport;
+            assert_eq!(viewport.is_some(), zoomed, "{viewport:?}");
+            assert_eq!(h.get_by_label_contains("Entropy chart:").rect(), chart);
+        }
+        // The table is below the window until the column scrolls to it.
+        h.get_by_role_and_label(Role::Button, "Position")
+            .scroll_to_me();
+        h.run_steps(4);
+        let header = h.get_by_role_and_label(Role::Button, "Position").rect();
+        assert!(
+            header.top() >= 0.0 && header.bottom() < MIN_WINDOW.y,
+            "table header {header:?}"
+        );
+    }
 }

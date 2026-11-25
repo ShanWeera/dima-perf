@@ -59,15 +59,23 @@ pub fn show(
                 });
         });
     egui::CentralPanel::default().show(ui, |ui| {
-        let Some(session) = state.session.as_mut() else {
-            return;
-        };
-        let shared = entropy_chart::show(ui, session, &mut u.chart, u.gpu, t, out);
-        ui.add_space(t.space_8);
-        hcs_strip::show(ui, state, shared, t, out);
-        ui.add_space(t.space_8);
-        if let Some(session) = state.session.as_mut() {
-            position_explorer::show(ui, session, t, out);
-        }
+        // In a small window the chart, the conserved regions and the table do not all fit: the
+        // column then scrolls, and the table keeps at least four rows (the chart keeps the
+        // wheel for its zoom).
+        egui::ScrollArea::vertical()
+            .id_salt("results_column")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                let Some(session) = state.session.as_mut() else {
+                    return;
+                };
+                let shared = entropy_chart::show(ui, session, &mut u.chart, u.gpu, t, out);
+                ui.add_space(t.space_8);
+                hcs_strip::show(ui, state, shared, t, out);
+                ui.add_space(t.space_8);
+                if let Some(session) = state.session.as_mut() {
+                    position_explorer::show(ui, session, t, out);
+                }
+            });
     });
 }

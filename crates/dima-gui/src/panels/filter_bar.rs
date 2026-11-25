@@ -47,6 +47,13 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
             .checkbox(&mut s.filter.include_low_support, "Low support (NS, LS, ELS)")
             .on_hover_text("Show positions with support \u{2264} T: none (NS), below T (LS) and equal to T (ELS)")
             .changed();
+        let (shown, total) = (s.shown.len(), s.results.results.len());
+        let count = format!("{shown} of {total} positions");
+        // The count and Reset end the last row; a row without room for them would put them
+        // over its controls, so they start a row of their own instead.
+        if ui.available_size_before_wrap().x < right_group_width(ui, &count) {
+            ui.end_row();
+        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui
                 .add_enabled(!s.filter.is_everything(b), egui::Button::new("Reset"))
@@ -55,16 +62,33 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
             {
                 out.push(Msg::ResetFilters);
             }
-            let (shown, total) = (s.shown.len(), s.results.results.len());
-            let text = format!("{shown} of {total} positions");
             if shown == total {
-                ui.weak(text);
+                ui.weak(count);
             } else {
-                ui.label(RichText::new(text).strong().color(t.accent));
+                ui.label(RichText::new(count).strong().color(t.accent));
             }
         });
     });
     if changed {
         out.push(Msg::FiltersEdited);
     }
+}
+
+/// The width the count `text` and the Reset button take at the end of the bar.
+fn right_group_width(ui: &Ui, text: &str) -> f32 {
+    let width = |s: &str, style: egui::TextStyle| {
+        ui.painter()
+            .layout_no_wrap(
+                s.to_owned(),
+                style.resolve(ui.style()),
+                egui::Color32::PLACEHOLDER,
+            )
+            .size()
+            .x
+    };
+    let spacing = ui.spacing();
+    width(text, egui::TextStyle::Body)
+        + width("Reset", egui::TextStyle::Button)
+        + 2.0 * spacing.button_padding.x
+        + 2.0 * spacing.item_spacing.x
 }
