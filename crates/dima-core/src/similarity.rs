@@ -46,9 +46,50 @@
 //! the bound holds whenever k·N ≤ 3.46 × 10¹⁴ (4 × 10¹⁴ for the 22 canonical amino-acid
 //! letters).
 
+use crate::citations::Cite;
 use crate::entropy::{CountProfile, term};
 use crate::error::{DimaError, Result};
 use crate::numeric::Neumaier;
+
+/// What the option computes, in plain ASCII words: the one text behind the command-line help and
+/// the desktop app's tooltips, so the two never drift apart.
+pub const DESCRIPTION: &str = "Similarity-weighted entropy (Wu 2025) weights each variant's \
+    entropy term by how dissimilar it is to the other variants at the position, so \
+    near-identical variants count for less. The similarity of two k-mers is the share of their \
+    positions with the same residue, (k - d)/k when they differ at d positions; every \
+    substitution counts alike. Also reported: observed and similarity-weighted entropy divided \
+    by log2 of the number of distinct k-mers (Index included), between 0 and 1; these \
+    normalised values are undefined with one distinct k-mer. All three depend on k and the \
+    alphabet.";
+
+/// The evidence behind the method, stated so that it stays true (shared like
+/// [`DESCRIPTION`]).
+pub const EVIDENCE: &str = "Published in 2025 and applied in its source study only to \
+    nucleotide sequences of viral populations within one host (simulated ones, a viroid mutant \
+    pool and one plant-virus dataset); its use on amino-acid k-mers and on sequences from many \
+    hosts is dima's extension.";
+
+/// The sources behind the option's behaviour, cited by the help and the tooltips.
+pub const REFERENCES: [Cite; 4] = [
+    Cite::new("wu2025").at("Section 2.1 and Supplementary File 1"),
+    Cite::new("grishin1995").at("p. 675"),
+    Cite::new("zhao2019").at("Section 3.1"),
+    Cite::new("gregori2014").at("Sections 2.4 and 3.2"),
+];
+
+/// That the values are not corrected for sample size, with the sources (shared like
+/// [`DESCRIPTION`]).
+#[must_use]
+pub fn sample_size() -> String {
+    format!(
+        "None of the three values is corrected for sample size: observed entropy is lower on \
+         average with fewer sequences ({}), similarity-weighted entropy also changes with the \
+         number of sequences (see the methodology page), and normalised entropy also depends on \
+         sample size ({}).",
+        REFERENCES[2].short(),
+        REFERENCES[3].short()
+    )
+}
 
 /// Letters a canonical k-mer can hold: `A`–`Z`.
 const LETTERS: usize = 26;
@@ -161,6 +202,14 @@ pub(crate) fn class_sums(
 #[cfg(test)]
 mod tests {
     use proptest::prelude::*;
+
+    #[test]
+    fn shared_texts_are_plain_ascii() {
+        for text in [DESCRIPTION, EVIDENCE, &sample_size()] {
+            assert!(text.is_ascii() && !text.contains("  "), "{text}");
+        }
+        assert!(sample_size().contains("Zhao & Illingworth 2019, Section 3.1"));
+    }
 
     use super::*;
     use crate::entropy::plug_in;

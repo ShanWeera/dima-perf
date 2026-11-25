@@ -27,6 +27,7 @@ Every reference cited by `dima`, its help texts, the desktop app and these pages
 - Falk K, Rötzschke O, Stevanović S, Jung G, Rammensee HG. Allele-specific motifs revealed by sequencing of self-peptides eluted from MHC molecules. Nature. 1991;351(6324):290-296. [doi:10.1038/351290a0](https://doi.org/10.1038/351290a0)
 - Goecks J, Nekrutenko A, Taylor J, Galaxy Team. Galaxy: a comprehensive approach for supporting accessible, reproducible, and transparent computational research in the life sciences. Genome Biology. 2010;11(8):R86. [doi:10.1186/gb-2010-11-8-r86](https://doi.org/10.1186/gb-2010-11-8-r86)
 - Gotoh O. Further improvement in methods of group-to-group sequence alignment with generalized profile operations. Bioinformatics. 1994;10(4):379-387. [doi:10.1093/bioinformatics/10.4.379](https://doi.org/10.1093/bioinformatics/10.4.379)
+- Gregori J, Salicrú M, Domingo E, Sanchez A, Esteban JI, Rodríguez-Frías F, Quer J. Inference with viral quasispecies diversity indices: clonal and NGS approaches. Bioinformatics. 2014;30(8):1104-1111. [doi:10.1093/bioinformatics/btt768](https://doi.org/10.1093/bioinformatics/btt768)
 - Grishin NV. Estimation of the number of amino acid substitutions per site when the substitution rate varies among sites. Journal of Molecular Evolution. 1995;41(5):675-679. [doi:10.1007/BF00175826](https://doi.org/10.1007/BF00175826)
 - Grüning B, Chilton J, Köster J, Dale R, Soranzo N, van den Beek M, Goecks J, Backofen R, Nekrutenko A, Taylor J. Practical Computational Reproducibility in the Life Sciences. Cell Systems. 2018;6(6):631-635. [doi:10.1016/j.cels.2018.03.014](https://doi.org/10.1016/j.cels.2018.03.014)
 - Grüning B, Dale R, Sjödin A, Chapman BA, Rowe J, Tomkins-Tinch CH, Valieris R, Köster J, Bioconda Team. Bioconda: sustainable and comprehensive software distribution for the life sciences. Nature Methods. 2018;15(7):475-476. [doi:10.1038/s41592-018-0046-7](https://doi.org/10.1038/s41592-018-0046-7)
@@ -73,6 +74,7 @@ Every reference cited by `dima`, its help texts, the desktop app and these pages
 - Wilson G, Aruliah DA, Brown CT, Chue Hong NP, Davis M, Guy RT, Haddock SHD, Huff KD, Mitchell IM, Plumbley MD, Waugh B, White EP, Wilson P. Best Practices for Scientific Computing. PLoS Biology. 2014;12(1):e1001745. [doi:10.1371/journal.pbio.1001745](https://doi.org/10.1371/journal.pbio.1001745)
 - Wong B. Points of view: Color blindness. Nature Methods. 2011;8(6):441-441. [doi:10.1038/nmeth.1618](https://doi.org/10.1038/nmeth.1618)
 - Wu J. Similarity-weighted entropy for quantifying genetic diversity in viral quasispecies. Virus Evolution. 2025;11(1):veaf029. [doi:10.1093/ve/veaf029](https://doi.org/10.1093/ve/veaf029)
+- Zhao L, Illingworth CJR. Measurements of intrahost viral diversity require an unbiased diversity metric. Virus Evolution. 2019;5(1):vey041. [doi:10.1093/ve/vey041](https://doi.org/10.1093/ve/vey041)
 
 ## General sources \[general\]
 

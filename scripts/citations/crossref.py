@@ -61,6 +61,8 @@ CORRECTIONS = {
     # Crossref splits one name as "Thomas August, J." and gives some initials without points.
     "10.1186/s12920-017-0301-2": {"authors[8]": ["August", "J. Thomas"]},
     "10.1186/1471-2105-9-S1-S18": {"authors[1]": ["Heiny", "A. T."], "authors[3]": ["August", "J. Thomas"]},
+    # An article number Crossref does not record (the journal's page shows vey041).
+    "10.1093/ve/vey041": {"pages": "vey041"},
     # Crossref runs the given name together ("NickV.") and has no pages (Europe PMC: 675-679).
     "10.1007/BF00175826": {"authors": [["Grishin", "Nick V."]], "pages": "675-679"},
     # A group author and the publisher, which Crossref records as the institution only.

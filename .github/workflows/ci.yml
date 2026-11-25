@@ -96,6 +96,9 @@ jobs:
           target/debug/dima analyze -i samples/mers_spike_aa.fasta -q -o "$RUNNER_TEMP/r.json"
           target/debug/dima view -i "$RUNNER_TEMP/r.json" -q -o "$RUNNER_TEMP/back.json"
           cmp "$RUNNER_TEMP/r.json" "$RUNNER_TEMP/back.json"
+          target/debug/dima analyze -i samples/mers_spike_aa.fasta -q --similarity-weighted-entropy -o "$RUNNER_TEMP/s.json"
+          target/debug/dima view -i "$RUNNER_TEMP/s.json" -q -o "$RUNNER_TEMP/s-back.json"
+          cmp "$RUNNER_TEMP/s.json" "$RUNNER_TEMP/s-back.json"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         if: runner.os == 'Windows'
         with:

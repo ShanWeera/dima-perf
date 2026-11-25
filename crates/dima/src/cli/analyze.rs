@@ -66,7 +66,7 @@ pub fn params(a: &AnalyzeArgs) -> Result<AnalysisParams> {
         kmer_length,
         support_threshold: a.support_threshold,
         estimator: a.estimator.map(estimator),
-        similarity_weighted_entropy: false,
+        similarity_weighted_entropy: a.similarity_weighted_entropy,
         validation: a.validation.map(validation),
         min_coverage: a.min_coverage,
         query_name: a.query_name.clone(),
@@ -316,7 +316,7 @@ fn execute(
     let start = Instant::now();
     // Everything that can be checked before reading the input is checked first.
     let source = source_of(a)?;
-    let params = params(a)?;
+    let mut params = params(a)?;
     params.validate()?;
     if let Some(format) = &params.header_format {
         HeaderSpec::new(
@@ -349,6 +349,9 @@ fn execute(
     outputs::check_collisions(&plan, &input_paths)?;
     // Warnings raised here count in the summary line too (D104).
     let mut cli_warnings = warn_unused_flags(a, &plan, v);
+    // Nothing would carry the similarity-weighted values (warned above): do not compute them.
+    // The run report still records the command as typed.
+    params.similarity_weighted_entropy &= plan.writes_position_values();
 
     let available = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
     let host = threads::hostname();
@@ -515,7 +518,22 @@ fn warn_unused_flags(a: &AnalyzeArgs, plan: &Plan, v: Verbosity) -> u64 {
         ui::warning(
             "flag_has_no_effect",
             "--hcs-min-incidence/--hcs-eligible-only have no effect without an HCS output",
-            Some("add --hcs-output PATH, --tsv-dir DIR or --table hcs"),
+            Some(
+                "add --hcs-output PATH or --tsv-dir DIR, or write the table with -o PATH.tsv --table hcs",
+            ),
+            v,
+        );
+    }
+    if a.similarity_weighted_entropy && !plan.writes_position_values() {
+        count += 1;
+        ui::warning(
+            "flag_has_no_effect",
+            "--similarity-weighted-entropy has no effect without results (JSON, JSONL) or the \
+             positions table",
+            Some(
+                "write the results (-o PATH.json) or the positions table (-o PATH.tsv --table \
+                 positions, or --tsv-dir DIR)",
+            ),
             v,
         );
     }
@@ -545,7 +563,10 @@ fn print_character_table(r: &Results, v: Verbosity) {
 
 /// The end-of-run line (D104): the run's results as the paper reports them (eligible
 /// positions, entropy mean, minimum and maximum; Tharanga et al. 2025, Results) and the wall
-/// time; conserved regions when computed; the warning count only when there were warnings.
+/// time; with `--similarity-weighted-entropy`, its mean next to the observed entropy of the
+/// same positions; conserved regions when computed; the warning count only when there were
+/// warnings. Values use `human::fixed`, as the desktop app does, so a tiny positive value never
+/// reads 0.0000.
 fn summary(
     r: &Results,
     hcs: Option<&HcsResults>,
@@ -564,10 +585,24 @@ fn summary(
     line.push_str(GROUP);
     match (r.average_entropy, r.lowest_entropy, r.highest_entropy) {
         (Some(mean), Some(lo), Some(hi)) => line.push_str(&format!(
-            "entropy mean {mean:.4}, min {:.4}, max {:.4} bits",
-            lo.entropy, hi.entropy
+            "entropy mean {}, min {}, max {} bits",
+            human::fixed(mean, 4),
+            human::fixed(lo.entropy, 4),
+            human::fixed(hi.entropy, 4)
         )),
         _ => line.push_str("no entropy summary (no eligible positions)"),
+    }
+    if let Some((mean, observed)) = r
+        .similarity_weighted_entropy_summary
+        .as_ref()
+        .and_then(|s| s.average_entropy.zip(s.average_observed_entropy))
+    {
+        line.push_str(GROUP);
+        line.push_str(&format!(
+            "similarity-weighted mean {} bits (observed {})",
+            human::fixed(mean, 4),
+            human::fixed(observed, 4)
+        ));
     }
     if let Some(h) = hcs {
         line.push_str(GROUP);

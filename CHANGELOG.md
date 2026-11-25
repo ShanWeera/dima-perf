@@ -25,6 +25,12 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 
+- `dima analyze --similarity-weighted-entropy` computes similarity-weighted entropy and the two
+  normalised entropies (see "Methodology"); the end-of-run line then adds
+  `similarity-weighted mean X bits (observed Y)`, the mean observed entropy of the same eligible
+  positions for a like-for-like comparison. Without an output that holds the values (results
+  JSON or JSONL, or the positions table) the option warns (`flag_has_no_effect`) and is not
+  computed.
 - Results: `similarity_weighted_entropy`, `normalised_observed_entropy` and
   `normalised_similarity_weighted_entropy` per position, `similarity_weighted_entropy_summary`
   (eligible positions, with their mean observed entropy) and the parameter
@@ -41,6 +47,11 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
 
 ### Fixed
 
+- The end-of-run line showed a positive mean or minimum below 0.00005 bits as `0.0000`; it now
+  reads `< 0.0001`, as the desktop app will.
+- The hint of the `--hcs-min-incidence`/`--hcs-eligible-only` warning suggested `--table hcs`
+  alone, which also needs `-o PATH.tsv`; it now reads "add --hcs-output PATH or --tsv-dir DIR,
+  or write the table with -o PATH.tsv --table hcs".
 - The counter-overflow message said "64-bit" for counters that are 32-bit (distinct k-mers at
   one position, distinct header values); it now reads "… exceeds the range of DiMA's counters".
 - Messages about the schema version of a conserved-sequences file no longer call it a results

@@ -1624,6 +1624,45 @@
   "volume": "27",
   "year": 2011
  },
+ "10.1093/bioinformatics/btt768": {
+  "authors": [
+   [
+    "Gregori",
+    "Josep"
+   ],
+   [
+    "Salicrú",
+    "Miquel"
+   ],
+   [
+    "Domingo",
+    "Esteban"
+   ],
+   [
+    "Sanchez",
+    "Alex"
+   ],
+   [
+    "Esteban",
+    "Juan I."
+   ],
+   [
+    "Rodríguez-Frías",
+    "Francisco"
+   ],
+   [
+    "Quer",
+    "Josep"
+   ]
+  ],
+  "issue": "8",
+  "key": "gregori2014",
+  "pages": "1104-1111",
+  "title": "Inference with viral quasispecies diversity indices: clonal and NGS approaches",
+  "venue": "Bioinformatics",
+  "volume": "30",
+  "year": 2014
+ },
  "10.1093/bioinformatics/btw354": {
   "authors": [
    [
@@ -2048,6 +2087,25 @@
   "venue": "Virus Evolution",
   "volume": "11",
   "year": 2025
+ },
+ "10.1093/ve/vey041": {
+  "authors": [
+   [
+    "Zhao",
+    "Lei"
+   ],
+   [
+    "Illingworth",
+    "Christopher J R"
+   ]
+  ],
+  "issue": "1",
+  "key": "zhao2019",
+  "pages": "vey041",
+  "title": "Measurements of intrahost viral diversity require an unbiased diversity metric",
+  "venue": "Virus Evolution",
+  "volume": "5",
+  "year": 2019
  },
  "10.1103/PhysRevLett.80.197": {
   "authors": [
