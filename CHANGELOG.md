@@ -67,6 +67,10 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+- Desktop app: dragging a value of the filter bar's range moves it by 1/200 of the range per
+  pixel (the whole range in 200 pixels), whatever the metric's scale; it moved 0.01 bits per
+  pixel before, too coarse for similarity-weighted entropy, which is often a small fraction of a
+  bit.
 - Results schema 1.1.0 (the conserved-sequences schema stays 1.0.0 and now has its own version
   constant). Results written by dima 1.0.0 are read as runs without similarity-weighted entropy;
   `dima view` notes this when it writes values their schema did not record, and keeps its

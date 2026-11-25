@@ -65,8 +65,10 @@ counts two variants that differ at one residue as less diverse than two unrelate
 Shannon entropy counts them alike. To compute it:
 
 1. Click **Advanced** to open the section.
-2. Tick **Compute similarity-weighted entropy (Wu 2025)**. The row's dot appears, and the
-   section's title now reads **Advanced (1 changed)**.
+2. Tick **Compute similarity-weighted entropy (Wu 2025)**, in the row named
+   **Similarity-weighted**. A dot appears after the row's name (its tooltip: *Changed from the
+   default (default: off)*), and the section's title reads **Advanced (1 changed)** from then
+   on, also when it is closed.
 3. Press **Analyze**.
 
 The run then computes, at every position, the similarity-weighted entropy and the two
@@ -79,10 +81,11 @@ computed*.
 Without the option nothing of it is computed and the Results screen shows nothing of it; the
 exported results hold `null` (`NA` in the tables) where the values would be.
 
-dima 1.0.0 cannot read the settings of this version while the option is ticked. If you go back
-to 1.0.0, it starts with its default options and shows *Settings were reset to the defaults (the
-saved values were not valid).* at every start, until you change any setting there, which saves
-its own settings in place of these.
+The app saves this choice in its settings only while the option is ticked, so the settings of
+anyone who never ticks it stay readable by dima 1.0.0. If you go back to dima 1.0.0 with the
+option ticked, 1.0.0 cannot read the saved settings: it starts with its default options and shows
+*Settings were reset to the defaults (the saved values were not valid).* at every start, until
+you change any setting in it, which saves its own settings in place of these.
 
 ## Run
 
@@ -93,8 +96,9 @@ character — and that no results were written; **Copy details** copies it for a
 ## Explore the results
 
 The Results screen shows the run's facts across the top — sequences, positions, k, T, the mean,
-lowest and highest entropy over eligible positions, the low-support counts — and a badge with the
-number of warnings, which opens the diagnostics.
+lowest and highest entropy over eligible positions, the low-support counts and, when the run
+computed it, the similarity-weighted mean — and a badge with the number of warnings, which opens
+the diagnostics.
 
 In a small window the chart, the conserved regions and the position table do not all fit. The
 column that holds them then scrolls: drag its scroll bar, or turn the mouse wheel anywhere except

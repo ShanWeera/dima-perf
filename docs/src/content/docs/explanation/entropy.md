@@ -312,8 +312,8 @@ Shannon entropy treats two variants that differ at one residue exactly like two 
 Similarity-weighted entropy [@wu2025, Section 2.1 and Supplementary File 1] weights each
 variant's entropy term by how *dissimilar* it is to the rest of the position, so near-identical
 variants count for less. It is not part of the DiMA method and is computed only on request:
-`dima analyze --similarity-weighted-entropy`, or **Compute similarity-weighted entropy** under
-**Advanced** in the desktop app. Without it, the three values below are `null` (`NA` in the
+`dima analyze --similarity-weighted-entropy`, or **Compute similarity-weighted entropy (Wu 2025)**
+under **Advanced** in the [desktop app](/how-to/desktop-app/#similarity-weighted-entropy). Without it, the three values below are `null` (`NA` in the
 tables) and nothing else changes; with it, nothing else changes either.
 
 At a position with support $N$, let variant $i$ (a distinct k-mer, the Index included) be carried
