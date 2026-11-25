@@ -903,6 +903,27 @@ fn similarity_weighted_values_in_the_chip_the_table_and_the_facts() {
         keys[2].height() > keys[0].height() * 1.5,
         "the two-line key"
     );
+    // Each key is level with its value, in both grids.
+    let value_rect = |text: &str| {
+        h.query_all_by_label(text)
+            .map(|n| n.rect())
+            .max_by(|a, b| a.left().total_cmp(&b.left()))
+            .unwrap()
+    };
+    for (key, value) in [
+        (keys[0], value_rect("0.4275 bits")),
+        (keys[1], value_rect("0.4282")),
+        (keys[2], value_rect("0.1287")),
+        (
+            h.get_by_role_and_label(Role::Label, "Support").rect(),
+            value_rect("170"),
+        ),
+    ] {
+        assert!(
+            (key.center().y - value.center().y).abs() < 1.5,
+            "{key:?} and {value:?}"
+        );
+    }
 }
 
 /// At the smallest window, with the coverage and similarity-weighted columns, the table is wider

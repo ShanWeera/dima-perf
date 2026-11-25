@@ -252,7 +252,8 @@ pub fn fact(ui: &mut Ui, t: &DesignTokens, key: &str, value: impl Into<String>) 
 }
 
 /// [`fact`] with the key in a cell `key_width` wide, so grids drawn one below another line up
-/// their values; a key with a line break takes two lines.
+/// their values; a key with a line break takes two lines. The cell is exactly as tall as its
+/// text, so the grid centres it in the row like any other label.
 pub fn fact_at(
     ui: &mut Ui,
     t: &DesignTokens,
@@ -260,19 +261,19 @@ pub fn fact_at(
     value: impl Into<String>,
     key_width: f32,
 ) -> egui::Response {
-    let key = ui
-        .allocate_ui_with_layout(
-            egui::vec2(key_width, 0.0),
-            egui::Layout::top_down(egui::Align::Min),
-            |ui| {
-                ui.set_min_width(key_width);
-                ui.label(RichText::new(key).color(t.text_secondary))
-            },
-        )
-        .inner;
+    let galley = ui.painter().layout(
+        key.to_owned(),
+        egui::TextStyle::Body.resolve(ui.style()),
+        t.text_secondary,
+        f32::INFINITY,
+    );
+    let size = egui::vec2(key_width.max(galley.size().x), galley.size().y);
+    let (rect, key_response) = ui.allocate_exact_size(size, egui::Sense::hover());
+    ui.painter().galley(rect.min, galley, t.text_secondary);
+    key_response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, key));
     ui.label(value.into());
     ui.end_row();
-    key
+    key_response
 }
 
 /// The width of the key column that fits every line of `keys` in the body font.
