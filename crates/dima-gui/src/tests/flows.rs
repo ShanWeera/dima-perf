@@ -432,7 +432,7 @@ fn low_support_segments_on_mers_nucleotides() {
     assert_eq!(*s.results, *fixtures::mers_nt());
     assert_eq!(s.results.support_label_counts.low, 29);
     assert_eq!(
-        s.series.uncorrected_count(),
+        s.series.count(crate::charts::series::Style::LowSupport),
         29,
         "29 LS positions drawn dashed"
     );
@@ -604,7 +604,7 @@ fn exports_write_atomically_and_reopen() {
 /// the table is reached by scrolling the column, whose wheel zooms the chart without scrolling.
 #[test]
 fn the_workspace_fits_the_smallest_window() {
-    for results in [fixtures::mers(), fixtures::mers_nt()] {
+    for results in [fixtures::mers(), fixtures::mers_nt(), fixtures::mers_swe()] {
         let mut h = harness_sized(MIN_WINDOW);
         load(&mut h, &results);
         let s = h.state().state.session.as_ref().expect("results");
@@ -686,4 +686,86 @@ fn the_similarity_weighted_option_is_counted_remembered_and_run() {
     h.run_steps(3);
     assert!(h.query_by_label("computed").is_some(), "Run details");
     assert!(h.query_by_label("not computed").is_none());
+}
+
+/// The chart's metric switch: shown only when the run computed similarity-weighted entropy, as
+/// a radio group named by its visible "Metric:" label, with radio buttons that carry their
+/// state and their tooltip as AccessKit description. A switch re-plots the chart under its new
+/// name and moves neither the switch nor Fit, + and −, nor the chart, at the smallest window,
+/// at a common one, and at a width where the filter bar fits one row only with the shorter
+/// metric name (so its label must keep the longer one's width).
+#[test]
+fn the_metric_switch_moves_no_control() {
+    use crate::charts::metric::ChartMetric;
+    use egui::accesskit::Toggled;
+    use egui_kittest::kittest::NodeT;
+    for size in [
+        MIN_WINDOW,
+        egui::vec2(1300.0, 800.0),
+        egui::vec2(1200.0, 800.0),
+    ] {
+        let mut h = harness_sized(size);
+        load(&mut h, &fixtures::mers());
+        assert!(
+            h.query_by_role(Role::RadioGroup).is_none(),
+            "not computed: no switch"
+        );
+        assert!(!has_label(&h, "Metric:"));
+        load(&mut h, &fixtures::mers_swe());
+        let group = h.get_by_role_and_label(Role::RadioGroup, "Metric:");
+        let radios: Vec<String> = group
+            .children()
+            .filter(|n| n.accesskit_node().role() == Role::RadioButton)
+            .filter_map(|n| n.accesskit_node().label())
+            .collect();
+        assert_eq!(radios, ["Entropy", "Similarity-weighted entropy"]);
+        let state = |h: &H, m: ChartMetric| {
+            h.get_by_role_and_label(Role::RadioButton, m.name())
+                .accesskit_node()
+                .toggled()
+        };
+        assert_eq!(state(&h, ChartMetric::Entropy), Some(Toggled::True));
+        assert_eq!(
+            state(&h, ChartMetric::SimilarityWeighted),
+            Some(Toggled::False)
+        );
+        for m in ChartMetric::ALL {
+            let radio = h.get_by_role_and_label(Role::RadioButton, m.name());
+            assert_eq!(
+                radio.accesskit_node().description(),
+                Some(crate::panels::help_text::chart_metric(m))
+            );
+        }
+        let controls = |h: &H| {
+            [
+                h.get_by_role_and_label(Role::RadioButton, "Entropy").rect(),
+                h.get_by_role_and_label(Role::RadioButton, "Similarity-weighted entropy")
+                    .rect(),
+                h.get_by_role_and_label(Role::Button, "Fit").rect(),
+                h.get_by_role_and_label(Role::Button, "+").rect(),
+                h.get_by_role_and_label(Role::Button, "\u{2212}").rect(),
+            ]
+        };
+        let before = controls(&h);
+        let chart = h.get_by_label_contains("Entropy chart:").rect();
+        for (to, name) in [
+            (
+                ChartMetric::SimilarityWeighted,
+                "Similarity-weighted entropy chart:",
+            ),
+            (ChartMetric::Entropy, "Entropy chart:"),
+        ] {
+            h.get_by_role_and_label(Role::RadioButton, to.name())
+                .click();
+            h.run_steps(3);
+            assert_eq!(h.state().state.session.as_ref().unwrap().metric, to);
+            assert_eq!(state(&h, to), Some(Toggled::True));
+            assert_eq!(
+                controls(&h),
+                before,
+                "{size:?}: nothing moved switching to {to:?}"
+            );
+            assert_eq!(h.get_by_label_contains(name).rect(), chart, "{size:?}");
+        }
+    }
 }

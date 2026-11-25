@@ -73,7 +73,8 @@ impl XMap {
     }
 }
 
-/// Maps entropy (bits) to screen y: 0 at the bottom, `max` at the top.
+/// Maps the plotted value (bits of entropy or similarity-weighted entropy) to screen y: 0 at
+/// the bottom, `max` at the top.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct YMap {
     /// Value at the top edge (> 0).

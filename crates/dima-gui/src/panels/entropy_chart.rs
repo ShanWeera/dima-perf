@@ -1,8 +1,13 @@
 //! The entropy chart (D87): one line per run of shown positions — solid Okabe–Ito blue where
-//! support > T (corrected entropy), dashed vermillion where support ≤ T (uncorrected) — with
-//! hatched full-height bands labelled "no usable support" over positions without support
-//! (never drawn as 0), the eligible-mean line, coverage marks, a legend and per-point
+//! support > T (corrected entropy with the paper's estimator), dashed vermillion where support
+//! ≤ T — with hatched full-height bands labelled "no usable support" over positions without
+//! support (never drawn as 0), the eligible-mean line, coverage marks, a legend and per-point
 //! tooltips. Long ranges are M4-downsampled per pixel column, keeping class boundaries.
+//!
+//! When the run computed similarity-weighted entropy, a "Metric:" switch on its own row above
+//! the heading plots it instead, with its own value axis, mean line and legend; the heading and
+//! the legend entries that change with the metric keep the width of the longer text, so no
+//! control moves on a switch.
 //!
 //! Gestures: scroll zooms about the cursor, drag pans, Shift-drag zooms to a region,
 //! double-click resets, click selects; the hovered position is mirrored in the table.
@@ -12,11 +17,15 @@ use std::sync::Arc;
 use dima_core::human;
 use egui::{Color32, Pos2, Rect, Stroke, Ui};
 
-use super::common::{Swatch, hatch_rect, heading, legend_entry};
+use super::common::{
+    Swatch, fixed_width_slot, hatch_rect, heading, legend_entry, legend_entry_at_least,
+    legend_entry_width, text_width, with_help,
+};
 use super::help_text;
 use crate::app::msg::Msg;
 use crate::charts::axis::{integer_ticks, nice_ticks, y_tick_labels};
 use crate::charts::gpu_line::{LineCallback, LineUniforms, SegmentVertex, segment_vertices};
+use crate::charts::metric::ChartMetric;
 use crate::charts::series::{
     ChartKey, Class, NsSpan, Point, Series, Stroke as DataStroke, Style, chart_cache_key, legend,
     nearest_point, ns_span_at, strokes,
@@ -121,7 +130,12 @@ pub fn show(
 ) -> Option<Shared> {
     let threshold = s.results.support_threshold;
     let series = Arc::clone(&s.series);
-    header(ui, s, &series, t, threshold);
+    let metric = s.metric;
+    let switchable = ChartMetric::SimilarityWeighted.available(&s.results);
+    if switchable {
+        metric_switch(ui, metric, out);
+    }
+    header(ui, s, &series, t, threshold, switchable);
     let height = (ui.ctx().content_rect().height() * 0.28).clamp(150.0, 380.0);
     let (full_rect, response) = ui.allocate_exact_size(
         egui::vec2(ui.available_width(), height + BOTTOM_MARGIN + TOP_MARGIN),
@@ -144,13 +158,8 @@ pub fn show(
             egui::FontId::proportional(t.font_size_body),
             t.text_muted,
         );
-        response.widget_info(|| {
-            egui::WidgetInfo::labeled(
-                egui::WidgetType::Other,
-                true,
-                "Entropy chart: no positions shown",
-            )
-        });
+        let label = format!("{} chart: no positions shown", metric.name());
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, &label));
         return None;
     };
     let view = s.viewport.unwrap_or(full);
@@ -168,7 +177,7 @@ pub fn show(
     let plot_painter = ui.painter_at(plot);
 
     draw_ns_bands(&plot_painter, &series, x, plot, t);
-    draw_mean(&plot_painter, s.results.average_entropy, y, plot, t);
+    draw_mean(&plot_painter, metric.mean(&s.results), y, plot, t);
     draw_lines(
         ui,
         &plot_painter,
@@ -183,7 +192,7 @@ pub fn show(
         t,
     );
     draw_coverage(&plot_painter, &series, x, plot, t);
-    draw_axes(&painter, x, y, plot, full_rect, t);
+    draw_axes(&painter, x, y, plot, full_rect, metric, t);
     if let Some(sel) = s.selection.position {
         #[allow(clippy::cast_precision_loss)]
         let sx = x.to_screen(sel as f64);
@@ -197,9 +206,10 @@ pub fn show(
 
     // Accessibility: the chart is painted, so it describes itself (AccessKit).
     let description = format!(
-        "Entropy chart: {} positions shown, {} with support \u{2264} {threshold}, {} spans with {NS_LABEL}",
+        "{} chart: {} positions shown, {} with support \u{2264} {threshold}, {} spans with {NS_LABEL}",
+        metric.name(),
         s.shown.len(),
-        series.uncorrected_count(),
+        series.count(Style::LowSupport),
         series.ns_spans.len()
     );
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, &description));
@@ -208,10 +218,38 @@ pub fn show(
     Some(Shared { x })
 }
 
+/// "Metric:" and its options, on a left-aligned row of their own above the heading row. The
+/// row is one AccessKit radio group named by its visible label; a click asks `update`, which
+/// refuses a metric the results lack.
+fn metric_switch(ui: &mut Ui, current: ChartMetric, out: &mut Vec<Msg>) {
+    ui.horizontal(|ui| {
+        let label = ui.label("Metric:");
+        ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+            node.set_role(egui::accesskit::Role::RadioGroup);
+            node.push_labelled_by(label.id.accesskit_id());
+        });
+        for metric in ChartMetric::ALL {
+            let radio = ui.radio(current == metric, metric.name());
+            if with_help(radio, &help_text::chart_metric(metric)).clicked() {
+                out.push(Msg::ChartMetric(metric));
+            }
+        }
+    });
+}
+
 /// The heading row: the heading, the legend and the gesture hint, wrapping as the width needs,
 /// with Fit, + and − at its top right. The zoom buttons are laid out first and the rest wraps
 /// in the width left of them, so a long legend can neither run under them nor push them down.
-fn header(ui: &mut Ui, s: &mut Session, series: &Series, t: &DesignTokens, threshold: u64) {
+/// When the metric can be switched, the heading and the legend entries whose text depends on it
+/// keep the width of the longer of their two texts, so the row wraps alike for both metrics.
+fn header(
+    ui: &mut Ui,
+    s: &mut Session,
+    series: &Series,
+    t: &DesignTokens,
+    threshold: u64,
+    switchable: bool,
+) {
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
         zoom_buttons(ui, s);
         ui.add_space(t.space_8);
@@ -223,9 +261,19 @@ fn header(ui: &mut Ui, s: &mut Session, series: &Series, t: &DesignTokens, thres
         );
         let wrapping = egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true);
         ui.allocate_ui_with_layout(row, wrapping, |ui| {
-            heading(ui, t, "Entropy");
+            if switchable {
+                let font = egui::FontId::new(
+                    t.font_size_heading,
+                    egui::FontFamily::Name(crate::theme::fonts::SEMIBOLD.into()),
+                );
+                let width =
+                    widest(ChartMetric::ALL.map(|m| text_width(ui, m.name(), font.clone())));
+                fixed_width_slot(ui, width, |ui| heading(ui, t, s.metric.name()));
+            } else {
+                heading(ui, t, s.metric.name());
+            }
             ui.add_space(t.space_8);
-            legend_entries(ui, s, series, t, threshold);
+            legend_entries(ui, s, series, t, threshold, switchable);
             // One item, so it moves to the next row whole rather than wrapping inside.
             ui.add(
                 egui::Label::new(
@@ -237,16 +285,41 @@ fn header(ui: &mut Ui, s: &mut Session, series: &Series, t: &DesignTokens, thres
     });
 }
 
+/// The larger of two widths.
+fn widest(widths: [f32; 2]) -> f32 {
+    widths[0].max(widths[1])
+}
+
 /// The chart's legend: the line styles shown, the no-support bands, the mean and coverage marks.
-fn legend_entries(ui: &mut Ui, s: &Session, series: &Series, t: &DesignTokens, threshold: u64) {
+/// The line styles' captions depend on the metric; when it can be switched, each is given the
+/// width of its longer caption.
+fn legend_entries(
+    ui: &mut Ui,
+    s: &Session,
+    series: &Series,
+    t: &DesignTokens,
+    threshold: u64,
+    switchable: bool,
+) {
     let estimator = s.results.run.parameters.estimator.value;
-    let tip = help_text::chart_encoding(threshold, estimator);
-    let [solid, dashed] = legend(threshold, estimator);
+    let tip = help_text::chart_encoding(threshold, estimator, s.metric);
+    let [solid, dashed] = legend(threshold, estimator, s.metric);
+    let slots = if switchable {
+        let [a, b] = ChartMetric::ALL.map(|m| legend(threshold, estimator, m));
+        [
+            widest([&a[0], &b[0]].map(|c| legend_entry_width(ui, t, c))),
+            widest([&a[1], &b[1]].map(|c| legend_entry_width(ui, t, c))),
+        ]
+    } else {
+        [0.0; 2]
+    };
     if series.has(Style::Eligible) {
-        legend_entry(ui, t, &solid, Swatch::Line(t.series_eligible)).on_hover_text(&tip);
+        let swatch = Swatch::Line(t.series_eligible);
+        legend_entry_at_least(ui, t, &solid, swatch, slots[0]).on_hover_text(&tip);
     }
-    if series.has(Style::Uncorrected) {
-        legend_entry(ui, t, &dashed, Swatch::Dashed(t.series_uncorrected)).on_hover_text(&tip);
+    if series.has(Style::LowSupport) {
+        let swatch = Swatch::Dashed(t.series_uncorrected);
+        legend_entry_at_least(ui, t, &dashed, swatch, slots[1]).on_hover_text(&tip);
     }
     if !series.ns_spans.is_empty() {
         legend_entry(
@@ -257,10 +330,11 @@ fn legend_entries(ui: &mut Ui, s: &Session, series: &Series, t: &DesignTokens, t
         )
         .on_hover_text(&tip);
     }
-    if s.results.average_entropy.is_some() {
-        legend_entry(ui, t, "eligible mean", Swatch::Dashed(t.mean_line)).on_hover_text(
-            "Mean entropy over the eligible positions (support > T), as in the summaries",
-        );
+    if s.metric.mean(&s.results).is_some() {
+        legend_entry(ui, t, "eligible mean", Swatch::Dashed(t.mean_line)).on_hover_text(format!(
+            "Mean {} over the eligible positions (support > T), as in the summaries",
+            s.metric.in_sentence()
+        ));
     }
     if let (Some(c), false) = (
         s.results.coverage_summary.min_coverage,
@@ -408,7 +482,7 @@ fn draw_lines(
     for st in &lines.strokes {
         let color = match st.style {
             Style::Eligible => t.series_fill,
-            Style::Uncorrected => {
+            Style::LowSupport => {
                 let [r, g, b, _] = t.series_uncorrected.to_srgba_unmultiplied();
                 Color32::from_rgba_unmultiplied(r, g, b, 22)
             }
@@ -437,7 +511,7 @@ fn draw_lines(
                     Stroke::new(LINE_WIDTH, t.series_eligible),
                 ));
             }
-            Style::Uncorrected => {
+            Style::LowSupport => {
                 p.extend(egui::Shape::dashed_line(
                     &screen(&st.points),
                     Stroke::new(LINE_WIDTH, t.series_uncorrected),
@@ -470,7 +544,7 @@ fn draw_lines(
     for m in &lines.markers {
         let color = match m.style {
             Style::Eligible => t.series_eligible,
-            Style::Uncorrected => t.series_uncorrected,
+            Style::LowSupport => t.series_uncorrected,
         };
         p.circle_filled(egui::pos2(x.to_screen(m.x), y.to_screen(m.y)), 3.0, color);
     }
@@ -489,7 +563,15 @@ fn draw_coverage(p: &egui::Painter, series: &Series, x: XMap, plot: Rect, t: &De
     }
 }
 
-fn draw_axes(p: &egui::Painter, x: XMap, y: YMap, plot: Rect, full: Rect, t: &DesignTokens) {
+fn draw_axes(
+    p: &egui::Painter,
+    x: XMap,
+    y: YMap,
+    plot: Rect,
+    full: Rect,
+    metric: ChartMetric,
+    t: &DesignTokens,
+) {
     let stroke = Stroke::new(1.0, t.chart_axis);
     let font = egui::FontId::proportional(t.font_size_caption);
     p.line_segment([plot.left_top(), plot.left_bottom()], stroke);
@@ -542,12 +624,25 @@ fn draw_axes(p: &egui::Painter, x: XMap, y: YMap, plot: Rect, full: Rect, t: &De
         font.clone(),
         t.chart_axis,
     );
-    let galley = p.layout_no_wrap("Entropy (bits)".to_owned(), font, t.chart_axis);
-    let pos = egui::pos2(full.left() + 2.0, plot.center().y + galley.size().x / 2.0);
+    let galley = p.layout_no_wrap(metric.axis_title().to_owned(), font, t.chart_axis);
+    // Rotated, the title runs upwards from its anchor, `galley.size().x` long.
+    let center = y_title_center(plot, full, galley.size().x);
+    let pos = egui::pos2(full.left() + 2.0, center + galley.size().x / 2.0);
     p.add(
         egui::epaint::TextShape::new(pos, galley, t.chart_axis)
             .with_angle(-std::f32::consts::FRAC_PI_2),
     );
+}
+
+/// The centre of the rotated value-axis title, `length` long: the plot's middle, moved just
+/// enough to keep the whole title inside the chart (a long title on a short plot would reach
+/// into the heading row); when the chart is shorter than the title, its bottom stays inside.
+/// `max` then `min`, never `clamp`, which panics when the bounds cross.
+fn y_title_center(plot: Rect, full: Rect, length: f32) -> f32 {
+    plot.center()
+        .y
+        .max(full.top() + length / 2.0)
+        .min(full.bottom() - length / 2.0)
 }
 
 /// The tooltip text of a hovered position (pure, for tests).
@@ -757,6 +852,48 @@ mod tests {
         );
     }
 
+    /// Both value-axis titles fit whole inside the chart at its smallest plot height (150 px)
+    /// with the bundled fonts, and the entropy title stays centred on the plot, as before.
+    #[test]
+    fn both_axis_titles_fit_the_smallest_chart() {
+        let ctx = egui::Context::default();
+        crate::theme::fonts::install(&ctx);
+        let t = DesignTokens::light();
+        let mut lengths = Vec::new();
+        // Fonts set in one pass are used from the next.
+        for _ in 0..2 {
+            lengths.clear();
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                let font = egui::FontId::proportional(t.font_size_caption);
+                for m in ChartMetric::ALL {
+                    lengths.push(text_width(ui, m.axis_title(), font.clone()));
+                }
+            });
+            out.textures_delta.clear();
+        }
+        let full = Rect::from_min_size(
+            egui::pos2(16.0, 200.0),
+            egui::vec2(588.0, 150.0 + TOP_MARGIN + BOTTOM_MARGIN),
+        );
+        let plot = Rect::from_min_max(
+            egui::pos2(full.left() + LEFT_MARGIN, full.top() + TOP_MARGIN),
+            egui::pos2(full.right() - RIGHT_MARGIN, full.bottom() - BOTTOM_MARGIN),
+        );
+        assert_eq!(plot.height(), 150.0);
+        for (m, &length) in ChartMetric::ALL.iter().zip(&lengths) {
+            assert!(length > 60.0, "{m:?}: measured with the bundled font");
+            let c = y_title_center(plot, full, length);
+            assert!(
+                c - length / 2.0 >= full.top() && c + length / 2.0 <= full.bottom(),
+                "{m:?}: {length} px centred at {c} in {full:?}"
+            );
+        }
+        assert!(lengths[1] > plot.height(), "longer than the plot: it moves");
+        assert_eq!(y_title_center(plot, full, lengths[0]), plot.center().y);
+        // A title longer than the chart keeps its bottom inside, and nothing panics.
+        assert_eq!(y_title_center(plot, full, 1000.0), full.bottom() - 500.0);
+    }
+
     /// A new load restarts the version, so two sessions showing the same positions at the same
     /// zoom differ only in their id: the line of one must never be drawn for the other.
     #[test]
@@ -784,7 +921,7 @@ mod tests {
     fn lines_are_computed_once_per_key() {
         let series = |e: f64| {
             let r = results_of((1..=50).map(|p| position(p, Some(e), 200, 100)).collect());
-            Series::build(&r, &(0..50).collect::<Vec<_>>())
+            Series::build(&r, &(0..50).collect::<Vec<_>>(), ChartMetric::Entropy)
         };
         let (a, b) = (series(0.5), series(0.25));
         let view = (0.5, 50.5);

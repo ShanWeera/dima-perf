@@ -4,7 +4,7 @@
 //! change, never per frame (P5). The table order survives filter changes (G47), keyboard
 //! navigation follows it (G11), and every selection change scrolls the table to the selected
 //! row unless the table itself made it (G46). All per-dataset view state lives here, so a new
-//! dataset starts clean (G26).
+//! dataset starts clean (G26): every load shows entropy, the chart's metric switch included.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -16,6 +16,7 @@ use dima_core::run_report::FileRecord;
 use super::filter::{Bounds, FilterState};
 use super::metadata::MetadataView;
 use super::sort::{TableSort, compare_positions, compare_variants};
+use crate::charts::metric::ChartMetric;
 use crate::charts::series::Series;
 use crate::charts::transform::position_extent;
 use crate::charts::viewport;
@@ -110,11 +111,14 @@ pub struct Session {
     pub filter: FilterState,
     /// A filter control changed; applied when the pointer is released (debounce).
     pub filter_dirty: bool,
+    /// What the chart plots and the value filter applies to; entropy on every load (G26).
+    /// Changed only by [`Session::set_metric`].
+    pub metric: ChartMetric,
     /// Shown positions (indices into `results.results`), in position order.
     pub shown: Arc<Vec<usize>>,
-    /// The chart model of the shown positions.
+    /// The chart model of the shown positions, for `metric`.
     pub series: Arc<Series>,
-    /// Incremented whenever `shown` changes.
+    /// Incremented whenever `shown` or `series` is recomputed (filters, metric).
     pub version: u64,
     /// Position-table sort.
     pub sort: Option<TableSort>,
@@ -163,8 +167,9 @@ impl Session {
             exports: Vec::new(),
             fields,
             bounds,
-            filter: FilterState::all(bounds),
+            filter: FilterState::all(bounds, ChartMetric::Entropy),
             filter_dirty: false,
+            metric: ChartMetric::Entropy,
             shown: Arc::new(Vec::new()),
             series: Arc::new(Series::default()),
             version: 0,
@@ -322,8 +327,27 @@ impl Session {
 
     /// Resets the filters to show everything and applies them.
     pub fn reset_filters(&mut self) {
-        self.filter = FilterState::all(self.bounds);
+        self.filter = FilterState::all(self.bounds, self.metric);
         self.apply_filters();
+    }
+
+    /// Plots `metric`: its value range becomes the full range (each metric has its own), the
+    /// shown positions and the chart are recomputed, the zoom is kept (moved into the new
+    /// extent if that changed), and the selection too when it is still shown. Returns whether
+    /// the user had narrowed the value range, which is now lost (the caller says so).
+    pub fn set_metric(&mut self, metric: ChartMetric) -> bool {
+        let narrowed = self.filter.value_range != (0.0, self.bounds.max_for(self.metric));
+        self.metric = metric;
+        self.filter.value_range = (0.0, self.bounds.max_for(metric));
+        self.refresh_shown();
+        self.viewport = self
+            .viewport
+            .zip(self.extent())
+            .and_then(|(v, full)| viewport::normalise(v, full));
+        if !self.selection.position.is_some_and(|p| self.is_shown(p)) {
+            self.select_first(SelectSource::Auto);
+        }
+        narrowed
     }
 
     /// Sorts the table by a column (header click).
@@ -338,9 +362,10 @@ impl Session {
         self.variants.sort = Some(TableSort::clicked(self.variants.sort, column));
     }
 
+    /// The one path that recomputes what is shown and drawn.
     fn refresh_shown(&mut self) {
-        let shown = self.filter.apply(&self.results);
-        self.series = Arc::new(Series::build(&self.results, &shown));
+        let shown = self.filter.apply(&self.results, self.metric);
+        self.series = Arc::new(Series::build(&self.results, &shown, self.metric));
         self.shown = Arc::new(shown);
         self.version = self.version.wrapping_add(1);
         self.refresh_rows();

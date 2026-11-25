@@ -51,16 +51,44 @@ pub fn option_label(
     });
 }
 
+/// Width of a legend swatch.
+const SWATCH_WIDTH: f32 = 22.0;
+/// From a swatch to its caption.
+const SWATCH_GAP: f32 = 6.0;
+
 /// A small coloured swatch followed by a caption, as one item (so wrapping never separates
 /// them). `kind` draws the swatch.
 pub fn legend_entry(ui: &mut Ui, t: &DesignTokens, caption: &str, kind: Swatch) -> egui::Response {
-    const W: f32 = 22.0;
+    legend_entry_at_least(ui, t, caption, kind, 0.0)
+}
+
+/// The width [`legend_entry`] takes for `caption`.
+#[must_use]
+pub fn legend_entry_width(ui: &Ui, t: &DesignTokens, caption: &str) -> f32 {
+    SWATCH_WIDTH
+        + SWATCH_GAP
+        + text_width(ui, caption, egui::FontId::proportional(t.font_size_caption))
+}
+
+/// [`legend_entry`] in a slot at least `width` wide (the caption left-aligned in it), so what
+/// follows keeps its place when the caption changes.
+pub fn legend_entry_at_least(
+    ui: &mut Ui,
+    t: &DesignTokens,
+    caption: &str,
+    kind: Swatch,
+    width: f32,
+) -> egui::Response {
+    const W: f32 = SWATCH_WIDTH;
     let galley = ui.painter().layout_no_wrap(
         caption.to_owned(),
         egui::FontId::proportional(t.font_size_caption),
         t.text_secondary,
     );
-    let size = egui::vec2(W + 6.0 + galley.size().x, galley.size().y.max(12.0));
+    let size = egui::vec2(
+        (W + SWATCH_GAP + galley.size().x).max(width),
+        galley.size().y.max(12.0),
+    );
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
     let p = ui.painter();
     let mid = rect.center().y;
@@ -98,7 +126,7 @@ pub fn legend_entry(ui: &mut Ui, t: &DesignTokens, caption: &str, kind: Swatch) 
         }
     }
     p.galley(
-        egui::pos2(sw.right() + 6.0, mid - galley.size().y / 2.0),
+        egui::pos2(sw.right() + SWATCH_GAP, mid - galley.size().y / 2.0),
         galley,
         t.text_secondary,
     );
@@ -179,6 +207,40 @@ pub fn disclosure(painter: &egui::Painter, rect: egui::Rect, open: bool, color: 
         color,
         egui::Stroke::NONE,
     ));
+}
+
+/// The width of `text` laid out on one line in `font`.
+#[must_use]
+pub fn text_width(ui: &Ui, text: &str, font: egui::FontId) -> f32 {
+    ui.painter()
+        .layout_no_wrap(text.to_owned(), font, Color32::PLACEHOLDER)
+        .size()
+        .x
+}
+
+/// Lays out `add_contents` left-aligned in a slot `width` wide and one row high (taller if the
+/// contents are), as one item of the row, so whatever follows keeps its place when the
+/// contents change.
+pub fn fixed_width_slot<R>(ui: &mut Ui, width: f32, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
+    let size = egui::vec2(width, ui.spacing().interact_size.y);
+    ui.allocate_ui_with_layout(
+        size,
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            ui.set_min_width(width);
+            add_contents(ui)
+        },
+    )
+    .inner
+}
+
+/// Gives a control its hover text and, from the same text, its AccessKit description, so a
+/// screen reader says what the tooltip shows.
+pub fn with_help(response: egui::Response, text: &str) -> egui::Response {
+    response
+        .ctx
+        .accesskit_node_builder(response.id, |node| node.set_description(text));
+    response.on_hover_text(text)
 }
 
 /// A muted "key value" pair in a grid row.

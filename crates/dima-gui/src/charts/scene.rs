@@ -1,13 +1,15 @@
-//! The entropy figure as a file: SVG (vector, every point) and PNG (raster, M4-downsampled).
+//! The entropy chart as a file: SVG (vector, every point) and PNG (raster, M4-downsampled), of
+//! the metric the chart shows (entropy, or similarity-weighted entropy; the texts come with the
+//! scene).
 //!
 //! Both formats are drawn from one [`Layout`], so their geometry, labels and legend agree with
 //! each other (G30), and their text never overlaps (G48): the title and subtitle sit above the
 //! plot, the y-axis title is rotated in the left margin, and the legend has rows of its own
 //! below, as many as it needs (the plot gives up the space). Text is sized per em, as SVG and
 //! the screen size it, and a title, subtitle or legend label too long for the figure is
-//! shortened with "…". The encoding is the on-screen one (D87): solid blue for corrected
-//! entropy, dashed vermillion for uncorrected entropy at support ≤ T, hatched bands for
-//! positions without usable support, a dashed eligible-mean line.
+//! shortened with "…". The encoding is the on-screen one (D87): solid blue at support > T
+//! (corrected entropy with the paper's estimator), dashed vermillion at support ≤ T, hatched
+//! bands for positions without usable support, a dashed eligible-mean line.
 
 use std::fmt::Write as _;
 
@@ -62,6 +64,8 @@ pub struct ChartScene {
     pub title: String,
     /// One line of run facts under the title.
     pub subtitle: String,
+    /// Title of the value axis (e.g. "Shannon entropy (bits)").
+    pub y_title: String,
     /// Width in pixels (SVG user units).
     pub width: u32,
     /// Height in pixels.
@@ -72,7 +76,7 @@ pub struct ChartScene {
     pub view: (f64, f64),
     /// Value at the top of the y axis.
     pub y_max: f64,
-    /// The eligible mean (`average_entropy`), if any.
+    /// The plotted metric's mean over eligible positions, if any.
     pub mean: Option<f64>,
     /// Legend text of the solid and the dashed line ([`super::series::legend`]).
     pub legend: [String; 2],
@@ -335,7 +339,7 @@ impl ChartScene {
         if self.series.has(Style::Eligible) {
             entries.push((Swatch::Solid(s.eligible), solid.clone()));
         }
-        if self.series.has(Style::Uncorrected) {
+        if self.series.has(Style::LowSupport) {
             entries.push((Swatch::Dashed(s.uncorrected, (6, 4)), dashed.clone()));
         }
         if !self.series.ns_spans.is_empty() {
@@ -411,7 +415,7 @@ impl ChartScene {
                     24.0,
                     (top + bottom) / 2.0,
                     AXIS_TITLE_SIZE,
-                    "Shannon entropy (bits)".to_owned(),
+                    self.y_title.clone(),
                     Anchor::Middle,
                     s.text,
                 )
@@ -568,7 +572,7 @@ impl ChartScene {
                 .collect();
             let (color, dash) = match stroke.style {
                 Style::Eligible => (s.eligible, String::new()),
-                Style::Uncorrected => (
+                Style::LowSupport => (
                     s.uncorrected,
                     format!(r#" stroke-dasharray="{} {}""#, DASH.0, DASH.1),
                 ),
@@ -583,7 +587,7 @@ impl ChartScene {
         for m in &markers {
             let color = match m.style {
                 Style::Eligible => s.eligible,
-                Style::Uncorrected => s.uncorrected,
+                Style::LowSupport => s.uncorrected,
             };
             let _ = writeln!(
                 out,
@@ -703,13 +707,13 @@ impl ChartScene {
                 .collect();
             match stroke.style {
                 Style::Eligible => c.polyline(&pts, LINE_WIDTH, s.eligible, None, clip),
-                Style::Uncorrected => c.polyline(&pts, LINE_WIDTH, s.uncorrected, Some(DASH), clip),
+                Style::LowSupport => c.polyline(&pts, LINE_WIDTH, s.uncorrected, Some(DASH), clip),
             }
         }
         for m in &markers {
             let color = match m.style {
                 Style::Eligible => s.eligible,
-                Style::Uncorrected => s.uncorrected,
+                Style::LowSupport => s.uncorrected,
             };
             c.disc(l.x.to_screen(m.x), l.y.to_screen(m.y), 3.0, color, clip);
         }
@@ -1035,6 +1039,7 @@ impl Canvas {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::charts::metric::ChartMetric;
     use crate::charts::series::tests::{position, results_of};
     use crate::charts::transform::position_extent;
 
@@ -1061,17 +1066,22 @@ mod tests {
         let shown: Vec<usize> = (0..400)
             .filter(|&i| !(330..340).contains(&i) && i != 341)
             .collect();
-        let series = Series::build(&r, &shown);
+        let series = Series::build(&r, &shown, ChartMetric::Entropy);
         ChartScene {
             title: "test <query> & co \u{2014} Shannon entropy".to_owned(),
             subtitle: "k = 9, T = 100, 191 sequences".to_owned(),
+            y_title: "Shannon entropy (bits)".to_owned(),
             width: 1200,
             height: 520,
             view: position_extent(1, 400),
             y_max: crate::charts::transform::y_axis_max(series.y_max),
             series,
             mean: Some(0.75),
-            legend: crate::charts::series::legend(100, dima_core::config::Estimator::Dima),
+            legend: crate::charts::series::legend(
+                100,
+                dima_core::config::Estimator::Dima,
+                ChartMetric::Entropy,
+            ),
             min_coverage: Some(0.95),
             style: SceneStyle::publication(),
         }
@@ -1226,7 +1236,11 @@ mod tests {
         // The smallest figure with the longest legend: T = u64::MAX and coverage marks.
         let mut small = fixture();
         (small.width, small.height) = (min_w, min_h);
-        small.legend = crate::charts::series::legend(u64::MAX, dima_core::config::Estimator::Dima);
+        small.legend = crate::charts::series::legend(
+            u64::MAX,
+            dima_core::config::Estimator::Dima,
+            ChartMetric::Entropy,
+        );
         small.subtitle = format!("k = 9, T = {}, 191 sequences", u64::MAX);
         let l = assert_layout_fits(&small);
         let rows = l

@@ -1,4 +1,4 @@
-//! The solid (eligible) part of the entropy line, drawn by wgpu through an egui paint callback.
+//! The solid (eligible) part of the chart's line, drawn by wgpu through an egui paint callback.
 //!
 //! Each segment is expanded in the vertex shader into a quad of the requested pixel width, so
 //! the GPU line matches the CPU fallback (used when no wgpu device is available, e.g. in tests).
@@ -32,7 +32,7 @@ pub struct LineUniforms {
     pub x_min: f32,
     /// Data span of the view.
     pub x_range: f32,
-    /// Entropy at the top edge.
+    /// The plotted value at the top edge, in bits.
     pub y_max: f32,
     /// Half the line width, in physical pixels.
     pub half_width: f32,

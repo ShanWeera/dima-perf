@@ -43,6 +43,12 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   ("Advanced (1 changed)"), and **Run details** says whether similarity-weighted entropy was
   computed, for analyses run in the app and for results opened from a file. The new setting is
   saved only when it is on, so default settings stay readable by dima 1.0.0.
+- Desktop app: when the run computed similarity-weighted entropy, a **Metric:** switch above the
+  chart plots **Entropy** or **Similarity-weighted entropy**. Each has its own value axis,
+  heading, legend and mean line, and the filter bar's value range applies to the metric shown. A
+  switch keeps the zoom and the selection and resets the value range (with a note when it had
+  been narrowed); no control moves. Every dataset opens showing entropy. Exported figures show
+  the metric on screen, with its title, axis title, legend and mean.
 
 ### Changed
 
@@ -94,6 +100,9 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   wraps between chips. When the chart, the conserved regions and the table still do not all fit,
   their column scrolls (the mouse wheel over the chart keeps zooming it), and the table keeps at
   least four rows.
+- The desktop app's chart drew a position that has support but no entropy (possible only in a
+  results file edited by hand) as a hatched band labelled "no usable support". The band now
+  marks positions with support 0 only; a missing value just breaks the line.
 - In narrow desktop-app windows the filter bar's position count was drawn over the low-support
   switch, and the chart's "drag: pan" hint over its legend. Both now move to a row of their own
   when their row is full, and the chart's Fit, + and − buttons stay at the top right of the

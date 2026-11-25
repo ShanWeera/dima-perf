@@ -1,30 +1,35 @@
-//! What the entropy chart draws (D87), derived once per dataset and filter change.
+//! What the entropy chart draws (D87) for the metric it plots (entropy, or similarity-weighted
+//! entropy when the run computed it), derived once per dataset, filter and metric change.
 //!
 //! * **Eligible** positions (support > T): solid Okabe–Ito blue; with the paper's estimator
 //!   their entropy is corrected.
 //! * **LS/ELS** positions (0 < support ≤ T): dashed vermillion; with the paper's estimator they
 //!   carry the *uncorrected* (observed) entropy and are labelled "uncorrected, support ≤ T"
-//!   (other estimators treat every position alike, so only the support differs). ELS is
-//!   grouped with LS (G43).
-//! * **NS** positions (support 0) have no entropy at all (D34/D56): they become hatched
+//!   (other estimators treat every position alike, so only the support differs; no
+//!   similarity-weighted value is corrected, and the label says that they are not in its
+//!   summary). ELS is grouped with LS (G43).
+//! * **NS** positions (support 0) have no value of either metric (D34/D56): they become hatched
 //!   full-height bands labelled "no usable support", never a value of 0 (Kent 2010; Kerpedjiev
-//!   2018: missing values are not zeros).
+//!   2018: missing values are not zeros). The band means support 0 and nothing else: a
+//!   supported position without a value (only in an edited file) just breaks the line.
 //!
-//! The line is one polyline per run of consecutive shown positions; it breaks at NS positions
-//! and wherever filtering removed positions in between (G45), so it never bridges a gap.
+//! The line is one polyline per run of consecutive shown positions with a value; it breaks at
+//! positions without one and wherever filtering removed positions in between (G45), so it never
+//! bridges a gap.
 
 use dima_core::config::Estimator;
 use dima_core::model::{EntropyMethod, PositionResult, Results, SupportLabel};
 
 use super::m4::m4_indices;
+use super::metric::ChartMetric;
 
 /// Line style of a point (and of the segments touching it).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Style {
-    /// Support > T: corrected entropy, solid.
+    /// Support > T: solid (corrected entropy with the paper's estimator).
     Eligible,
-    /// Support ≤ T (LS or ELS): observed entropy, dashed.
-    Uncorrected,
+    /// Support ≤ T (LS or ELS): dashed (observed entropy with the paper's estimator).
+    LowSupport,
 }
 
 /// Class of a position for display (D87, G43).
@@ -85,7 +90,7 @@ impl Class {
     pub const fn style(self) -> Option<Style> {
         match self {
             Self::Eligible => Some(Style::Eligible),
-            Self::Low | Self::EqualToThreshold => Some(Style::Uncorrected),
+            Self::Low | Self::EqualToThreshold => Some(Style::LowSupport),
             Self::NoSupport => None,
         }
     }
@@ -107,14 +112,23 @@ const fn entropy_kinds(estimator: Estimator) -> (&'static str, &'static str) {
 }
 
 /// Legend text of the solid and the dashed line (D87), shared by the screen and the exports.
+/// Similarity-weighted entropy is never corrected, so its legend names only the support and
+/// that low-support positions are left out of its summary.
 #[must_use]
-pub fn legend(t: u64, estimator: Estimator) -> [String; 2] {
-    match estimator {
-        Estimator::Dima => [
+pub fn legend(t: u64, estimator: Estimator, metric: ChartMetric) -> [String; 2] {
+    match (metric, estimator) {
+        (ChartMetric::SimilarityWeighted, _) => [
+            format!("support > {t}"),
+            format!("support \u{2264} {t}, not in the summary"),
+        ],
+        (ChartMetric::Entropy, Estimator::Dima) => [
             format!("support > {t}: corrected where possible"),
             format!("support \u{2264} {t}: uncorrected"),
         ],
-        Estimator::ChaoWangJost | Estimator::MillerMadow | Estimator::Raw => [
+        (
+            ChartMetric::Entropy,
+            Estimator::ChaoWangJost | Estimator::MillerMadow | Estimator::Raw,
+        ) => [
             format!("support > {t}: eligible"),
             format!("support \u{2264} {t}: low support"),
         ],
@@ -126,7 +140,7 @@ pub fn legend(t: u64, estimator: Estimator) -> [String; 2] {
 pub struct Point {
     /// Position.
     pub x: f64,
-    /// Entropy in bits.
+    /// The plotted value, in bits.
     pub y: f64,
     /// Line style.
     pub style: Style,
@@ -134,7 +148,8 @@ pub struct Point {
     pub index: usize,
 }
 
-/// Consecutive shown positions with entropy (no NS, no filtered-out gap inside).
+/// Consecutive shown positions with a value (no position without one and no filtered-out gap
+/// inside).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Path {
     /// Points in position order.
@@ -160,7 +175,7 @@ impl NsSpan {
     }
 }
 
-/// Everything the chart shows for one dataset and filter state.
+/// Everything the chart shows for one dataset, filter state and metric.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Series {
     /// Line paths.
@@ -169,22 +184,22 @@ pub struct Series {
     pub ns_spans: Vec<NsSpan>,
     /// Shown positions whose sample coverage is below the run's `--min-coverage`.
     pub low_coverage: Vec<u64>,
-    /// Largest shown entropy.
+    /// Largest shown value of the metric.
     pub y_max: Option<f64>,
     /// First and last shown position.
     pub extent: Option<(u64, u64)>,
     /// Eligible points, counted once by [`Series::build`] (the legends and the chart's
     /// description read the counts every frame).
     eligible_points: usize,
-    /// Uncorrected points, counted alike.
-    uncorrected_points: usize,
+    /// Low-support points, counted alike.
+    low_support_points: usize,
 }
 
 impl Series {
-    /// Builds the series from the shown positions (`shown` indexes `results.results`, in
-    /// position order).
+    /// Builds the series of `metric` from the shown positions (`shown` indexes
+    /// `results.results`, in position order).
     #[must_use]
-    pub fn build(results: &Results, shown: &[usize]) -> Self {
+    pub fn build(results: &Results, shown: &[usize], metric: ChartMetric) -> Self {
         let mut s = Self::default();
         let mut path = Path::default();
         let mut previous: Option<u64> = None;
@@ -201,9 +216,8 @@ impl Series {
             if p.below_min_coverage == Some(true) {
                 s.low_coverage.push(p.position);
             }
-            let class = Class::of(p);
-            let (Some(style), Some(y)) = (class.style(), p.entropy) else {
-                // NS (or, defensively, any position without entropy): a band, and a break.
+            let Some(style) = Class::of(p).style() else {
+                // NS: a band, and a break.
                 match s.ns_spans.last_mut() {
                     Some(span) if contiguous && span.last.checked_add(1) == Some(p.position) => {
                         span.last = p.position;
@@ -218,13 +232,21 @@ impl Series {
                 }
                 continue;
             };
+            let Some(y) = metric.value(p) else {
+                // Supported but without a value (an edited file): a break, not a band, which
+                // would say "no usable support".
+                if !path.points.is_empty() {
+                    s.paths.push(std::mem::take(&mut path));
+                }
+                continue;
+            };
             if !contiguous && !path.points.is_empty() {
                 s.paths.push(std::mem::take(&mut path));
             }
             s.y_max = Some(s.y_max.map_or(y, |m: f64| m.max(y)));
             match style {
                 Style::Eligible => s.eligible_points += 1,
-                Style::Uncorrected => s.uncorrected_points += 1,
+                Style::LowSupport => s.low_support_points += 1,
             }
             #[allow(clippy::cast_precision_loss)]
             path.points.push(Point {
@@ -251,7 +273,7 @@ impl Series {
     pub const fn count(&self, style: Style) -> usize {
         match style {
             Style::Eligible => self.eligible_points,
-            Style::Uncorrected => self.uncorrected_points,
+            Style::LowSupport => self.low_support_points,
         }
     }
 
@@ -259,12 +281,6 @@ impl Series {
     #[must_use]
     pub const fn has(&self, style: Style) -> bool {
         self.count(style) > 0
-    }
-
-    /// Number of shown points with an uncorrected value.
-    #[must_use]
-    pub const fn uncorrected_count(&self) -> usize {
-        self.uncorrected_points
     }
 }
 
@@ -280,9 +296,9 @@ pub struct Stroke {
 /// What to draw for the view `[lo, hi]` at `columns` pixels: the strokes (M4-reduced unless
 /// `columns` is `None`) and the isolated single points (G29: drawn as markers).
 ///
-/// A segment is solid only when both its ends are eligible; any segment touching an
-/// uncorrected value is dashed. Strokes of different styles share their boundary point, so the
-/// line is continuous and the class boundaries survive downsampling.
+/// A segment is solid only when both its ends are eligible; any segment touching a low-support
+/// value is dashed. Strokes of different styles share their boundary point, so the line is
+/// continuous and the class boundaries survive downsampling.
 #[must_use]
 pub fn strokes(
     series: &Series,
@@ -333,7 +349,7 @@ fn segment_style(a: Point, b: Point) -> Style {
     if a.style == Style::Eligible && b.style == Style::Eligible {
         Style::Eligible
     } else {
-        Style::Uncorrected
+        Style::LowSupport
     }
 }
 
@@ -497,17 +513,17 @@ pub(crate) mod tests {
             position(7, Some(0.7), 200, 100),
             position(8, Some(0.8), 100, 100),
         ]);
-        let s = Series::build(&r, &[0, 1, 2, 3, 4, 5, 7]);
+        let s = Series::build(&r, &[0, 1, 2, 3, 4, 5, 7], ChartMetric::Entropy);
         assert_eq!(s.ns_spans, vec![NsSpan { first: 4, last: 4 }]);
         assert_eq!(s.paths.len(), 3, "breaks at NS and at the filtered gap");
         assert_eq!(s.paths[0].points.len(), 3);
         assert_eq!(
             s.paths[2].points[0].style,
-            Style::Uncorrected,
-            "ELS is uncorrected"
+            Style::LowSupport,
+            "ELS is low support"
         );
         assert_eq!(s.extent, Some((1, 8)));
-        assert_eq!(s.uncorrected_count(), 2);
+        assert_eq!(s.count(Style::LowSupport), 2);
         assert!((s.y_max.unwrap() - 0.8).abs() < 1e-12);
 
         let (strokes, markers) = strokes(&s, 0.5, 8.5, None);
@@ -515,7 +531,7 @@ pub(crate) mod tests {
         assert_eq!(strokes.len(), 3);
         assert_eq!(strokes[0].style, Style::Eligible);
         assert_eq!(strokes[0].points, vec![(1.0, 0.1), (2.0, 0.2)]);
-        assert_eq!(strokes[1].style, Style::Uncorrected);
+        assert_eq!(strokes[1].style, Style::LowSupport);
         assert_eq!(
             strokes[1].points[0],
             (2.0, 0.2),
@@ -541,13 +557,87 @@ pub(crate) mod tests {
                     .collect(),
             );
             let shown: Vec<usize> = (0..supports.len()).filter(|&i| !hidden[i]).collect();
-            let s = Series::build(&r, &shown);
-            for style in [Style::Eligible, Style::Uncorrected] {
+            let s = Series::build(&r, &shown, ChartMetric::Entropy);
+            for style in [Style::Eligible, Style::LowSupport] {
                 let scan = s.paths.iter().flat_map(|p| &p.points).filter(|p| p.style == style).count();
                 proptest::prop_assert_eq!(s.count(style), scan);
                 proptest::prop_assert_eq!(s.has(style), scan > 0);
             }
-            proptest::prop_assert_eq!(s.uncorrected_count(), s.count(Style::Uncorrected));
+        }
+    }
+
+    /// The band means support 0, for either metric: a supported position without a value
+    /// (an edited file's `null`) breaks the line but is no band, and a position without
+    /// support is a band whatever its values say.
+    #[test]
+    fn bands_mark_no_support_and_missing_values_only_break_the_line() {
+        let swe = |p: PositionResult, v: Option<f64>| {
+            let mut p = p;
+            p.similarity_weighted_entropy = v;
+            p
+        };
+        let r = results_of(vec![
+            swe(position(1, Some(0.4), 200, 100), Some(0.2)),
+            // Supported, but its values were removed.
+            swe(position(2, None, 200, 100), None),
+            swe(position(3, Some(0.6), 40, 100), Some(0.3)),
+            swe(position(4, None, 0, 100), None),
+            swe(position(5, Some(0.8), 200, 100), Some(0.1)),
+        ]);
+        for metric in ChartMetric::ALL {
+            let s = Series::build(&r, &[0, 1, 2, 3, 4], metric);
+            assert_eq!(s.ns_spans, vec![NsSpan { first: 4, last: 4 }], "{metric:?}");
+            let paths: Vec<Vec<f64>> = s
+                .paths
+                .iter()
+                .map(|p| p.points.iter().map(|q| q.x).collect())
+                .collect();
+            assert_eq!(paths, [vec![1.0], vec![3.0], vec![5.0]], "{metric:?}");
+            assert_eq!(s.extent, Some((1, 5)));
+            assert_eq!(
+                (s.count(Style::Eligible), s.count(Style::LowSupport)),
+                (2, 1)
+            );
+        }
+        // Each metric plots its own values, and its own maximum.
+        let e = Series::build(&r, &[0, 2, 4], ChartMetric::Entropy);
+        let w = Series::build(&r, &[0, 2, 4], ChartMetric::SimilarityWeighted);
+        assert_eq!(e.paths[0].points[0].y, 0.4);
+        assert_eq!(w.paths[0].points[0].y, 0.2);
+        assert_eq!((e.y_max, w.y_max), (Some(0.8), Some(0.3)));
+        // Not computed: no line at all, but the band stays.
+        let off = results_of(vec![
+            position(1, Some(0.4), 200, 100),
+            position(2, None, 0, 100),
+        ]);
+        let s = Series::build(&off, &[0, 1], ChartMetric::SimilarityWeighted);
+        assert!(s.paths.is_empty() && s.y_max.is_none());
+        assert_eq!(s.ns_spans.len(), 1);
+    }
+
+    #[test]
+    fn legends_follow_the_estimator_and_the_metric() {
+        use ChartMetric::{Entropy, SimilarityWeighted};
+        assert_eq!(
+            legend(100, Estimator::Dima, Entropy),
+            [
+                "support > 100: corrected where possible",
+                "support \u{2264} 100: uncorrected"
+            ]
+        );
+        assert_eq!(
+            legend(100, Estimator::Raw, Entropy),
+            [
+                "support > 100: eligible",
+                "support \u{2264} 100: low support"
+            ]
+        );
+        for e in Estimator::ALL {
+            assert_eq!(
+                legend(30, e, SimilarityWeighted),
+                ["support > 30", "support \u{2264} 30, not in the summary"],
+                "never corrected, whatever the estimator"
+            );
         }
     }
 
@@ -559,7 +649,7 @@ pub(crate) mod tests {
             position(3, Some(0.0), 300, 100),
             position(4, None, 0, 100),
         ]);
-        let s = Series::build(&r, &[0, 1, 2, 3]);
+        let s = Series::build(&r, &[0, 1, 2, 3], ChartMetric::Entropy);
         assert_eq!(
             s.ns_spans,
             vec![NsSpan { first: 1, last: 2 }, NsSpan { first: 4, last: 4 }]
@@ -572,7 +662,7 @@ pub(crate) mod tests {
         assert_eq!(ns_span_at(&s, 3.0), None);
         assert_eq!(ns_span_at(&s, 4.4), Some(NsSpan { first: 4, last: 4 }));
         // NS separated by a filtered-out position are separate bands.
-        let s = Series::build(&r, &[0, 3]);
+        let s = Series::build(&r, &[0, 3], ChartMetric::Entropy);
         assert_eq!(s.ns_spans.len(), 2);
     }
 
@@ -584,7 +674,7 @@ pub(crate) mod tests {
                 .collect(),
         );
         let all: Vec<usize> = (0..100).collect();
-        let s = Series::build(&r, &all);
+        let s = Series::build(&r, &all, ChartMetric::Entropy);
         assert_eq!(nearest_point(&s, 41.4).unwrap().x, 41.0);
         assert_eq!(
             nearest_point(&s, 41.5).unwrap().x,

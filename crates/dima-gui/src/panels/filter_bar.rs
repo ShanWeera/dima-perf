@@ -1,10 +1,15 @@
-//! The filter bar: position range, entropy range, motif classes and the low-support switch,
-//! with the shown/total count and "Reset". Changes are applied when the pointer is released
-//! (a drag does not refilter on every tick).
+//! The filter bar: position range, the value range of the metric the chart plots (entropy, or
+//! similarity-weighted entropy), motif classes and the low-support switch, with the shown/total
+//! count and "Reset". Changes are applied when the pointer is released (a drag does not
+//! refilter on every tick). When the metric can be switched, its label keeps the width of the
+//! longer name, so the bar does not rearrange on a switch.
 
 use egui::{RichText, Ui};
 
+use super::common::{fixed_width_slot, text_width};
+use super::help_text;
 use crate::app::msg::Msg;
+use crate::charts::metric::ChartMetric;
 use crate::state::filter::MOTIFS;
 use crate::state::session::Session;
 use crate::theme::DesignTokens;
@@ -24,17 +29,29 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
             .add(egui::DragValue::new(&mut r.1).prefix("to ").range(b.positions.0..=b.positions.1))
             .changed();
         ui.add_space(t.space_12);
-        ui.label("Entropy").on_hover_text(
-            "Show positions whose entropy is in this range (bits). Positions without usable \
-             support have no entropy and are not affected.",
-        );
-        let e = &mut s.filter.entropy_range;
-        let max = b.max_entropy.max(0.0);
+        let metric = s.metric;
+        let label = |ui: &mut Ui| {
+            ui.label(metric.name())
+                .on_hover_text(help_text::value_range(metric));
+        };
+        if ChartMetric::SimilarityWeighted.available(&s.results) {
+            let font = egui::TextStyle::Body.resolve(ui.style());
+            let width = ChartMetric::ALL
+                .map(|m| text_width(ui, m.name(), font.clone()))
+                .into_iter()
+                .fold(0.0, f32::max);
+            fixed_width_slot(ui, width, label);
+        } else {
+            label(ui);
+        }
+        let v = &mut s.filter.value_range;
+        let max = b.max_for(metric).max(0.0);
+        let speed = drag_speed(max);
         changed |= ui
-            .add(egui::DragValue::new(&mut e.0).prefix("min ").speed(0.01).range(0.0..=max).max_decimals(4))
+            .add(egui::DragValue::new(&mut v.0).prefix("min ").speed(speed).range(0.0..=max).max_decimals(4))
             .changed();
         changed |= ui
-            .add(egui::DragValue::new(&mut e.1).prefix("max ").speed(0.01).range(0.0..=max).max_decimals(4))
+            .add(egui::DragValue::new(&mut v.1).prefix("max ").speed(speed).range(0.0..=max).max_decimals(4))
             .changed();
         ui.add_space(t.space_12);
         ui.label("Motifs")
@@ -56,7 +73,7 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui
-                .add_enabled(!s.filter.is_everything(b), egui::Button::new("Reset"))
+                .add_enabled(!s.filter.is_everything(b, metric), egui::Button::new("Reset"))
                 .on_hover_text("Show every position")
                 .clicked()
             {
@@ -72,6 +89,12 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
     if changed {
         out.push(Msg::FiltersEdited);
     }
+}
+
+/// Value change per pixel dragged on a range of `0..=max` bits: the full range in 200 pixels,
+/// whatever the metric's scale (similarity-weighted entropy is often a small fraction of a bit).
+fn drag_speed(max: f64) -> f64 {
+    (max / 200.0).max(1e-4)
 }
 
 /// The width the count `text` and the Reset button take at the end of the bar.
@@ -91,4 +114,18 @@ fn right_group_width(ui: &Ui, text: &str) -> f32 {
         + width("Reset", egui::TextStyle::Button)
         + 2.0 * spacing.button_padding.x
         + 2.0 * spacing.item_spacing.x
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn dragging_crosses_the_range_in_200_pixels() {
+        assert!((super::drag_speed(1.6) - 0.008).abs() < 1e-12);
+        assert!((super::drag_speed(0.02) - 0.0001).abs() < 1e-12);
+        assert_eq!(
+            super::drag_speed(0.0),
+            1e-4,
+            "an all-zero range still moves"
+        );
+    }
 }

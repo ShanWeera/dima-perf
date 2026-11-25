@@ -112,12 +112,42 @@ colour alone:
 - **dashed vermillion**: positions with support at or below T (LS, ELS), which the paper's
   estimator reports uncorrected (the observed entropy). With another estimator every position is
   estimated the same way, and the legend says "eligible" and "low support" instead;
-- **hatched bands**: positions without usable support, which have no entropy — never drawn as 0;
+- **hatched bands**: positions without usable support, which have no entropy — never drawn as 0.
+  A position that has support but no value (possible only in a results file edited by hand)
+  breaks the line instead;
 - a horizontal line at the mean entropy of eligible positions.
+
+The value axis runs from 0 to 5% above the largest value shown, and is at least 0.005 bits tall
+(1 bit when every value shown is 0).
 
 Scroll to zoom about the pointer, drag to pan, Shift-drag to zoom to a region, double-click to
 show everything; hovering a point shows its position, entropy, support and class, and clicking
 selects it. Long alignments are drawn with M4 downsampling, which keeps every peak and trough.
+
+**Plot similarity-weighted entropy.** When the run computed
+[similarity-weighted entropy](/explanation/entropy/#similarity-weighted-entropy-opt-in) (see
+[Similarity-weighted entropy](#similarity-weighted-entropy) above), a **Metric:** row above the
+chart offers **Entropy** and **Similarity-weighted entropy**; without it there is no such row. To
+switch:
+
+1. Click **Similarity-weighted entropy** in the **Metric:** row.
+2. The chart redraws the same positions with similarity-weighted entropy. Its heading and value
+   axis read *Similarity-weighted entropy* and *Similarity-weighted entropy (bits)*, and the axis
+   follows the largest similarity-weighted value shown (the same rule as above). The dashed
+   horizontal line is now the mean similarity-weighted entropy of eligible positions. The legend
+   reads *support > T* for the solid line and *support ≤ T, not in the summary* for the dashed
+   one: no similarity-weighted value is corrected, and positions with support at or below T are
+   left out of its summary.
+3. The zoom and the selected position stay as they were. The value range of the filter bar now
+   applies to similarity-weighted entropy and starts at its full range. If you had narrowed the
+   entropy range, a note says *Value range reset to the full range of similarity-weighted
+   entropy*.
+
+Click **Entropy** to go back (the note then names entropy). Every dataset you open or analyse
+starts with entropy. Nothing you can click moves when you switch, so you can switch back and
+forth in one place to compare the two lines. Each metric has its own value axis, so compare their
+shapes, not their heights: similarity-weighted entropy is never more than the observed entropy
+and is often much smaller.
 
 **Conserved regions** appear as a strip under the chart, aligned with it at every zoom. The
 threshold and the "eligible positions only" switch recompute them at once; flagged regions
@@ -128,8 +158,8 @@ tooltip shows the minimum incidence, minimum support and 95% lower bound.
 any column; the panels on the right describe the selected position (class, entropies and the
 method that produced them, support, incidences, coverage), its motif composition, its variants
 (searchable, filterable by incidence) and, for the selected variant, its counts per header value.
-The filter bar restricts the view by position range, entropy range, motif class and support
-class.
+The filter bar restricts the view by position range, entropy range (the range of
+similarity-weighted entropy while the chart shows it), motif class and support class.
 
 **Command palette.** Ctrl+K (⌘K on macOS) jumps to a position, finds the positions that carry a
 k-mer, or runs a command. **Help ▸ Keyboard shortcuts** lists the others.

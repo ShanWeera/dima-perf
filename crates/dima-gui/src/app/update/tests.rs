@@ -38,6 +38,11 @@ fn opened_alignment(state: &mut AppState) -> Vec<Effect> {
 }
 
 fn with_session(state: &mut AppState) {
+    with_results(state, &fixtures::mers());
+}
+
+/// Opens `results` as if read from a results file.
+fn with_results(state: &mut AppState, results: &dima_core::model::Results) {
     let effects = update(state, Msg::OpenPath(PathBuf::from("results.json")));
     let Some(Effect::Open { generation, .. }) = effects.first() else {
         panic!("an open effect");
@@ -47,7 +52,7 @@ fn with_session(state: &mut AppState) {
         Msg::Opened {
             generation: *generation,
             path: PathBuf::from("results.json"),
-            outcome: Ok(Opened::Results(Box::new((*fixtures::mers()).clone()))),
+            outcome: Ok(Opened::Results(Box::new(results.clone()))),
         },
     );
 }
@@ -967,4 +972,140 @@ fn an_appended_extension_never_replaces_a_file_unasked() {
         },
     );
     assert!(matches!(effects.as_slice(), [Effect::Export { .. }]));
+}
+
+/// The chart's metric: entropy on every load; a metric the results lack is refused, the metric
+/// shown is a no-op; a switch keeps the zoom and the selection, resets the value range to the
+/// new metric's full range, and says so only when the user had narrowed it.
+#[test]
+fn the_chart_metric_switch() {
+    use crate::charts::metric::ChartMetric::{Entropy, SimilarityWeighted};
+    let mut s = state();
+    with_session(&mut s);
+    assert!(update(&mut s, Msg::ChartMetric(SimilarityWeighted)).is_empty());
+    assert_eq!(
+        s.session.as_ref().unwrap().metric,
+        Entropy,
+        "not computed: refused"
+    );
+    with_results(&mut s, &fixtures::mers_swe());
+    s.toasts = crate::state::toasts::Toasts::default();
+    let session = s.session.as_mut().unwrap();
+    assert_eq!(
+        session.metric, Entropy,
+        "every load starts with entropy (G26)"
+    );
+    session.filter.value_range = (0.0, 1.0);
+    session.apply_filters();
+    session.viewport = Some((100.5, 200.5));
+    session.select(150, SelectSource::Chart);
+    let (shown, version) = (session.shown.len(), session.version);
+    assert!(shown < 1345, "a narrowed range");
+    // The metric shown: nothing changes.
+    assert!(update(&mut s, Msg::ChartMetric(Entropy)).is_empty());
+    let session = s.session.as_ref().unwrap();
+    assert_eq!(
+        (session.version, session.filter.value_range),
+        (version, (0.0, 1.0))
+    );
+    assert!(s.toasts.is_empty());
+    // A switch after narrowing: the new metric's full range, with a note.
+    update(&mut s, Msg::ChartMetric(SimilarityWeighted));
+    let session = s.session.as_ref().unwrap();
+    assert_eq!(session.metric, SimilarityWeighted);
+    let max = session.bounds.max_similarity_weighted;
+    assert!((max - 0.4548).abs() < 5e-5, "{max}");
+    assert_eq!(session.filter.value_range, (0.0, max));
+    assert_eq!(session.shown.len(), 1345);
+    assert_eq!(session.viewport, Some((100.5, 200.5)), "the zoom is kept");
+    assert_eq!(
+        session.selection.position,
+        Some(150),
+        "the selection is kept"
+    );
+    assert_ne!(session.version, version, "the chart's lines are recomputed");
+    assert_eq!(session.series.y_max, Some(max), "its own axis");
+    let notes: Vec<_> = s.toasts.items().iter().collect();
+    assert_eq!(notes.len(), 1);
+    assert_eq!(notes[0].severity, Severity::Info);
+    assert_eq!(
+        notes[0].text,
+        "Value range reset to the full range of similarity-weighted entropy"
+    );
+    // Back without narrowing: no note.
+    s.toasts = crate::state::toasts::Toasts::default();
+    update(&mut s, Msg::ChartMetric(Entropy));
+    let session = s.session.as_ref().unwrap();
+    assert_eq!(session.metric, Entropy);
+    assert_eq!(
+        session.filter.value_range,
+        (0.0, session.bounds.max_entropy)
+    );
+    assert_eq!(session.viewport, Some((100.5, 200.5)));
+    assert!(s.toasts.is_empty());
+    // Entropy narrowed, then switched to similarity-weighted entropy and back: only the
+    // narrowed range is told.
+    let session = s.session.as_mut().unwrap();
+    session.filter.value_range = (0.5, session.bounds.max_entropy);
+    session.apply_filters();
+    update(&mut s, Msg::ChartMetric(SimilarityWeighted));
+    update(&mut s, Msg::ChartMetric(Entropy));
+    assert_eq!(s.toasts.items().len(), 1, "only the narrowed range is told");
+    // A new load starts with entropy again.
+    update(&mut s, Msg::ChartMetric(SimilarityWeighted));
+    with_results(&mut s, &fixtures::mers_swe());
+    assert_eq!(s.session.as_ref().unwrap().metric, Entropy);
+}
+
+/// The figure of similarity-weighted entropy: its own title, value axis, legend (never
+/// "corrected") and mean, and no estimator in the subtitle; entropy's is unchanged.
+#[test]
+fn the_figure_follows_the_metric() {
+    use crate::charts::metric::ChartMetric::SimilarityWeighted;
+    let mut s = state();
+    with_results(&mut s, &fixtures::mers_swe());
+    let entropy = chart_scene(&s).unwrap();
+    assert_eq!(
+        entropy.title,
+        "mers_spike_aa \u{2014} Shannon entropy per k-mer position"
+    );
+    assert_eq!(entropy.y_title, "Shannon entropy (bits)");
+    assert_eq!(
+        entropy.mean,
+        s.session.as_ref().unwrap().results.average_entropy
+    );
+    assert!(entropy.subtitle.contains("estimator dima"));
+    assert_eq!(entropy.legend[0], "support > 100: corrected where possible");
+    update(&mut s, Msg::ChartMetric(SimilarityWeighted));
+    let scene = chart_scene(&s).unwrap();
+    assert_eq!(
+        scene.title,
+        "mers_spike_aa \u{2014} Similarity-weighted entropy per k-mer position"
+    );
+    assert_eq!(scene.y_title, "Similarity-weighted entropy (bits)");
+    assert!(
+        scene.legend.iter().all(|l| !l.contains("corrected")),
+        "{:?}",
+        scene.legend
+    );
+    assert_eq!(scene.legend[0], "support > 100");
+    let mean = scene.mean.unwrap();
+    assert!((mean - 0.0363).abs() < 5e-5, "{mean}");
+    assert!(!scene.subtitle.contains("estimator"), "{}", scene.subtitle);
+    assert!(
+        scene
+            .subtitle
+            .starts_with("191 sequences, k = 9, T = 100; 1345 of 1345")
+    );
+    let max = scene.series.y_max.unwrap();
+    assert!(
+        (max - 0.4548).abs() < 5e-5,
+        "the similarity-weighted values: {max}"
+    );
+    let svg = scene.to_svg().unwrap();
+    assert!(svg.contains(">Similarity-weighted entropy (bits)</text>"));
+    assert!(svg.contains(&format!(
+        "eligible mean {}",
+        dima_core::human::fixed(mean, 4)
+    )));
 }
