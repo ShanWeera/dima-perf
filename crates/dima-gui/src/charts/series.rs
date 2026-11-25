@@ -173,6 +173,11 @@ pub struct Series {
     pub y_max: Option<f64>,
     /// First and last shown position.
     pub extent: Option<(u64, u64)>,
+    /// Eligible points, counted once by [`Series::build`] (the legends and the chart's
+    /// description read the counts every frame).
+    eligible_points: usize,
+    /// Uncorrected points, counted alike.
+    uncorrected_points: usize,
 }
 
 impl Series {
@@ -217,6 +222,10 @@ impl Series {
                 s.paths.push(std::mem::take(&mut path));
             }
             s.y_max = Some(s.y_max.map_or(y, |m: f64| m.max(y)));
+            match style {
+                Style::Eligible => s.eligible_points += 1,
+                Style::Uncorrected => s.uncorrected_points += 1,
+            }
             #[allow(clippy::cast_precision_loss)]
             path.points.push(Point {
                 x: p.position as f64,
@@ -237,14 +246,25 @@ impl Series {
         self.paths.is_empty() && self.ns_spans.is_empty()
     }
 
+    /// Number of shown points of a style.
+    #[must_use]
+    pub const fn count(&self, style: Style) -> usize {
+        match style {
+            Style::Eligible => self.eligible_points,
+            Style::Uncorrected => self.uncorrected_points,
+        }
+    }
+
+    /// `true` when some shown point has the style (its legend entry applies).
+    #[must_use]
+    pub const fn has(&self, style: Style) -> bool {
+        self.count(style) > 0
+    }
+
     /// Number of shown points with an uncorrected value.
     #[must_use]
-    pub fn uncorrected_count(&self) -> usize {
-        self.paths
-            .iter()
-            .flat_map(|p| &p.points)
-            .filter(|p| p.style == Style::Uncorrected)
-            .count()
+    pub const fn uncorrected_count(&self) -> usize {
+        self.uncorrected_points
     }
 }
 
@@ -503,6 +523,32 @@ pub(crate) mod tests {
         );
         assert_eq!(markers.len(), 1);
         assert_eq!(markers[0].x, 8.0);
+    }
+
+    proptest::proptest! {
+        /// The per-style counts that `build` stores equal a scan of every shown point.
+        #[test]
+        fn stored_counts_equal_a_full_scan(
+            supports in proptest::collection::vec(0u64..4, 0..120),
+            hidden in proptest::collection::vec(proptest::bool::weighted(0.2), 120),
+        ) {
+            // Support 0 is NS, 1 LS, 2 ELS (T = 2) and 3 eligible.
+            let r = results_of(
+                supports
+                    .iter()
+                    .zip(1u64..)
+                    .map(|(&s, p)| position(p, (s > 0).then_some(0.5), s, 2))
+                    .collect(),
+            );
+            let shown: Vec<usize> = (0..supports.len()).filter(|&i| !hidden[i]).collect();
+            let s = Series::build(&r, &shown);
+            for style in [Style::Eligible, Style::Uncorrected] {
+                let scan = s.paths.iter().flat_map(|p| &p.points).filter(|p| p.style == style).count();
+                proptest::prop_assert_eq!(s.count(style), scan);
+                proptest::prop_assert_eq!(s.has(style), scan > 0);
+            }
+            proptest::prop_assert_eq!(s.uncorrected_count(), s.count(Style::Uncorrected));
+        }
     }
 
     #[test]

@@ -17,8 +17,8 @@ use crate::app::msg::Msg;
 use crate::charts::axis::{integer_ticks, nice_ticks, y_tick_labels};
 use crate::charts::gpu_line::{LineCallback, LineUniforms, SegmentVertex, segment_vertices};
 use crate::charts::series::{
-    ChartKey, Class, NsSpan, Series, Style, chart_cache_key, legend, nearest_point, ns_span_at,
-    strokes,
+    ChartKey, Class, NsSpan, Point, Series, Stroke as DataStroke, Style, chart_cache_key, legend,
+    nearest_point, ns_span_at, strokes,
 };
 use crate::charts::transform::{XMap, YMap, y_axis_max};
 use crate::charts::viewport;
@@ -39,8 +39,67 @@ const NS_LABEL: &str = "no usable support";
 pub struct ChartUi {
     /// Screen x where a Shift-drag began.
     pub drag_origin: Option<f32>,
-    /// Vertices on the GPU: their key and data.
-    gpu: Option<(ChartKey, Arc<Vec<SegmentVertex>>)>,
+    /// The lines last drawn, with their key.
+    lines: Option<Lines>,
+}
+
+/// The lines of one [`ChartKey`], computed when the key changes, not per frame (P5): the
+/// strokes and markers in data units and, when the GPU draws the solid line, its vertices.
+struct Lines {
+    key: ChartKey,
+    strokes: Vec<DataStroke>,
+    markers: Vec<Point>,
+    /// The solid strokes as GPU quads, x relative to the view's left edge.
+    vertices: Option<Arc<Vec<SegmentVertex>>>,
+}
+
+impl ChartUi {
+    /// The lines of `series` in `view`, reduced to `columns`: from the cache when `key` (which
+    /// identifies all of them, see [`chart_cache_key`]) has not changed. The GPU vertices are
+    /// built only when `gpu`.
+    fn lines(
+        &mut self,
+        key: ChartKey,
+        series: &Series,
+        view: (f64, f64),
+        columns: usize,
+        gpu: bool,
+    ) -> &Lines {
+        let lines = match self.lines.take() {
+            Some(l) if l.key == key => l,
+            _ => {
+                let (strokes, markers) = strokes(series, view.0, view.1, Some(columns));
+                Lines {
+                    key,
+                    strokes,
+                    markers,
+                    vertices: None,
+                }
+            }
+        };
+        let lines = self.lines.insert(lines);
+        if gpu && lines.vertices.is_none() {
+            lines.vertices = Some(Arc::new(solid_vertices(&lines.strokes, view.0)));
+        }
+        lines
+    }
+}
+
+/// The GPU quads of the solid strokes, with x relative to the view's left edge `lo` (so `f32`
+/// keeps sub-pixel precision at any position, G58).
+fn solid_vertices(strokes: &[DataStroke], lo: f64) -> Vec<SegmentVertex> {
+    #[allow(clippy::cast_possible_truncation)]
+    let lines: Vec<Vec<[f32; 2]>> = strokes
+        .iter()
+        .filter(|st| st.style == Style::Eligible)
+        .map(|st| {
+            st.points
+                .iter()
+                .map(|&(px, py)| [(px - lo) as f32, py as f32])
+                .collect()
+        })
+        .collect();
+    segment_vertices(&lines)
 }
 
 /// What the chart reports to the strip below it.
@@ -152,20 +211,13 @@ fn header(ui: &mut Ui, s: &mut Session, series: &Series, t: &DesignTokens, thres
     ui.horizontal_wrapped(|ui| {
         heading(ui, t, "Entropy");
         ui.add_space(t.space_8);
-        let has = |st: Style| {
-            series
-                .paths
-                .iter()
-                .flat_map(|p| &p.points)
-                .any(|p| p.style == st)
-        };
         let estimator = s.results.run.parameters.estimator.value;
         let tip = help_text::chart_encoding(threshold, estimator);
         let [solid, dashed] = legend(threshold, estimator);
-        if has(Style::Eligible) {
+        if series.has(Style::Eligible) {
             legend_entry(ui, t, &solid, Swatch::Line(t.series_eligible)).on_hover_text(&tip);
         }
-        if has(Style::Uncorrected) {
+        if series.has(Style::Uncorrected) {
             legend_entry(ui, t, &dashed, Swatch::Dashed(t.series_uncorrected)).on_hover_text(&tip);
         }
         if !series.ns_spans.is_empty() {
@@ -318,14 +370,15 @@ fn draw_lines(
     // M4 per physical pixel column (G4: fills and lines are drawn once per stroke).
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let columns = (plot.width() * ppp).ceil().max(1.0) as usize;
-    let (strokes, markers) = strokes(series, x.lo, x.hi, Some(columns));
+    let key = chart_cache_key(session, version, (x.lo, x.hi), columns);
+    let lines = chart.lines(key, series, (x.lo, x.hi), columns, gpu);
     let screen = |pts: &[(f64, f64)]| -> Vec<Pos2> {
         pts.iter()
             .map(|&(px, py)| egui::pos2(x.to_screen(px), y.to_screen(py)))
             .collect()
     };
     // Fills under the line, one mesh per stroke.
-    for st in &strokes {
+    for st in &lines.strokes {
         let color = match st.style {
             Style::Eligible => t.series_fill,
             Style::Uncorrected => {
@@ -347,18 +400,10 @@ fn draw_lines(
         }
         p.add(egui::Shape::mesh(mesh));
     }
-    let mut gpu_lines: Vec<Vec<[f32; 2]>> = Vec::new();
-    for st in &strokes {
+    for st in &lines.strokes {
         match st.style {
-            Style::Eligible if gpu => {
-                #[allow(clippy::cast_possible_truncation)]
-                gpu_lines.push(
-                    st.points
-                        .iter()
-                        .map(|&(px, py)| [(px - x.lo) as f32, py as f32])
-                        .collect(),
-                );
-            }
+            // Drawn below from the cached vertices.
+            Style::Eligible if gpu => {}
             Style::Eligible => {
                 p.add(egui::Shape::line(
                     screen(&st.points),
@@ -375,16 +420,7 @@ fn draw_lines(
             }
         }
     }
-    if gpu && !gpu_lines.is_empty() {
-        let key = chart_cache_key(session, version, (x.lo, x.hi), columns);
-        let vertices = match &chart.gpu {
-            Some((k, v)) if *k == key => Arc::clone(v),
-            _ => {
-                let v = Arc::new(segment_vertices(&gpu_lines));
-                chart.gpu = Some((key, Arc::clone(&v)));
-                v
-            }
-        };
+    if gpu && let Some(vertices) = lines.vertices.as_ref().filter(|v| !v.is_empty()) {
         #[allow(clippy::cast_possible_truncation)]
         let uniforms = LineUniforms {
             x_min: 0.0,
@@ -400,11 +436,11 @@ fn draw_lines(
             LineCallback {
                 uniforms,
                 key,
-                vertices,
+                vertices: Arc::clone(vertices),
             },
         ));
     }
-    for m in markers {
+    for m in &lines.markers {
         let color = match m.style {
             Style::Eligible => t.series_eligible,
             Style::Uncorrected => t.series_uncorrected,
@@ -679,5 +715,37 @@ mod tests {
         assert_ne!(key(&a), chart_cache_key(1, a.version + 1, view, columns));
         assert_ne!(key(&a), chart_cache_key(1, a.version, (0.5, 2.0), columns));
         assert_ne!(key(&a), chart_cache_key(1, a.version, view, columns + 1));
+    }
+
+    /// Strokes, markers and GPU vertices are one cache entry: a frame with the same key
+    /// recomputes nothing (here: the cache answers even for other data), a new key recomputes.
+    #[test]
+    fn lines_are_computed_once_per_key() {
+        let series = |e: f64| {
+            let r = results_of((1..=50).map(|p| position(p, Some(e), 200, 100)).collect());
+            Series::build(&r, &(0..50).collect::<Vec<_>>())
+        };
+        let (a, b) = (series(0.5), series(0.25));
+        let view = (0.5, 50.5);
+        let key = chart_cache_key(1, 1, view, 20);
+        let mut chart = ChartUi::default();
+        let first = chart.lines(key, &a, view, 20, true);
+        let (strokes, vertices) = (
+            first.strokes.clone(),
+            Arc::clone(first.vertices.as_ref().unwrap()),
+        );
+        assert!(!strokes.is_empty() && !vertices.is_empty());
+        let hit = chart.lines(key, &b, view, 20, true);
+        assert_eq!(hit.strokes, strokes, "served from the cache");
+        assert!(Arc::ptr_eq(hit.vertices.as_ref().unwrap(), &vertices));
+        let miss = chart.lines(chart_cache_key(2, 1, view, 20), &b, view, 20, true);
+        assert_ne!(miss.strokes, strokes, "a new key recomputes");
+        assert!(!Arc::ptr_eq(miss.vertices.as_ref().unwrap(), &vertices));
+        // Without the GPU no vertices are built.
+        let cpu = ChartUi::default()
+            .lines(key, &a, view, 20, false)
+            .vertices
+            .is_none();
+        assert!(cpu);
     }
 }

@@ -294,18 +294,11 @@ impl ChartScene {
             .collect();
         // Legend: the entries that apply, left to right, wrapping is not needed at export size.
         let mut entries: Vec<(Swatch, String)> = Vec::new();
-        let has_style = |st: Style| {
-            self.series
-                .paths
-                .iter()
-                .flat_map(|p| &p.points)
-                .any(|p| p.style == st)
-        };
         let [solid, dashed] = &self.legend;
-        if has_style(Style::Eligible) {
+        if self.series.has(Style::Eligible) {
             entries.push((Swatch::Solid(s.eligible), solid.clone()));
         }
-        if has_style(Style::Uncorrected) {
+        if self.series.has(Style::Uncorrected) {
             entries.push((Swatch::Dashed(s.uncorrected, (6, 4)), dashed.clone()));
         }
         if !self.series.ns_spans.is_empty() {
