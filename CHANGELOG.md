@@ -156,6 +156,8 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   (it said "the two agree"); in the population study the exact expectation underestimates by up
   to 6.4% when at least one minor-variant sequence is expected (it said "at most 3%"), and
   v5.0.9's rule overestimates by up to 31% with T = 100 and 20% with T = 30 (it said 19%).
+- Documentation: some rows of "Design rationale" cited sources for more than those sources say;
+  each now cites the rule, section or table that supports it and states the rest in plain words.
 
 ## [1.0.0] - 2026-10-07
 
