@@ -161,7 +161,7 @@ fn value_row(ui: &mut Ui, t: &DesignTokens, value: &str, count: u64, total: u64)
     let pct = p.text(
         egui::pos2(rect.right(), rect.top() + 8.0),
         egui::Align2::RIGHT_CENTER,
-        format!("{:.1}% ({count})", share * 100.0),
+        format!("{} ({count})", dima_core::human::percent(share * 100.0, 1)),
         egui::FontId::proportional(t.font_size_caption),
         t.text_secondary,
     );

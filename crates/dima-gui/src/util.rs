@@ -1,8 +1,12 @@
 //! Small display helpers shared by the panels. Pure functions, unit-tested without egui.
-//! Durations, sizes and counts in messages come from `dima_core::human`, shared with the CLI
-//! (D104); numbers in interface text are plain digits without thousands separators.
+//! Durations, sizes, counts and values in messages come from `dima_core::human`, shared with
+//! the CLI (D104): a value that is not zero never reads as zero (`< 0.0001`), and a coverage or
+//! incidence below its maximum never reads as the maximum (`> 0.9999`, `> 99.9%`). Numbers in
+//! interface text are plain digits without thousands separators.
 
 use std::path::{Path, PathBuf};
+
+use dima_core::human;
 
 /// `s` cut to at most `max_chars` characters (never bytes) with `...` appended when cut.
 ///
@@ -127,16 +131,31 @@ pub fn shell_words(args: &[String]) -> String {
         .join(" ")
 }
 
-/// An optional ratio shown with a fixed number of decimals, or `—` when undefined (D42).
+/// An optional value shown with a fixed number of decimals (`1.4224`, `< 0.0001`; see
+/// [`dima_core::human::fixed`]), or `—` when undefined (D42).
 #[must_use]
 pub fn opt_f64(v: Option<f64>, decimals: usize) -> String {
-    v.map_or_else(|| "\u{2014}".to_owned(), |x| format!("{x:.decimals$}"))
+    v.map_or_else(|| "\u{2014}".to_owned(), |x| human::fixed(x, decimals))
 }
 
-/// An optional percentage: `21.95%` or `—`.
+/// An optional sample coverage (at most 1): as [`opt_f64`], and `> 0.9999` rather than
+/// `1.0000` below 1.
+#[must_use]
+pub fn opt_coverage(v: Option<f64>, decimals: usize) -> String {
+    v.map_or_else(
+        || "\u{2014}".to_owned(),
+        |x| human::fixed_bounded(x, decimals, 1.0),
+    )
+}
+
+/// An optional incidence (a percentage of the supporting sequences, at most 100%): `21.95%`,
+/// `< 0.01%`, `> 99.99%` rather than `100.00%` below 100, or `—`.
 #[must_use]
 pub fn opt_percent(v: Option<f64>, decimals: usize) -> String {
-    v.map_or_else(|| "\u{2014}".to_owned(), |x| format!("{x:.decimals$}%"))
+    v.map_or_else(
+        || "\u{2014}".to_owned(),
+        |x| human::percent_bounded(x, decimals),
+    )
 }
 
 /// The panic payload of a caught panic as text.
@@ -257,7 +276,26 @@ mod tests {
         );
         assert_eq!(opt_f64(None, 3), "\u{2014}");
         assert_eq!(opt_f64(Some(1.23456), 3), "1.235");
+        assert_eq!(opt_f64(Some(0.0), 4), "0.0000");
+        assert_eq!(
+            opt_f64(Some(3.288e-5), 4),
+            "< 0.0001",
+            "never a misleading zero"
+        );
+        assert_eq!(
+            opt_f64(Some(0.99996), 4),
+            "1.0000",
+            "entropies have no bound"
+        );
+        assert_eq!(opt_coverage(None, 3), "\u{2014}");
+        assert_eq!(opt_coverage(Some(0.9884), 4), "0.9884");
+        assert_eq!(opt_coverage(Some(0.99996), 4), "> 0.9999");
+        assert_eq!(opt_coverage(Some(1.0), 3), "1.000");
         assert_eq!(opt_percent(Some(21.951), 2), "21.95%");
+        assert_eq!(opt_percent(Some(0.004), 2), "< 0.01%");
+        assert_eq!(opt_percent(Some(99.996), 2), "> 99.99%");
+        assert_eq!(opt_percent(Some(100.0), 1), "100.0%");
+        assert_eq!(opt_percent(None, 1), "\u{2014}");
         let payload: Box<dyn std::any::Any + Send> = Box::new("boom");
         assert_eq!(panic_message(payload.as_ref()), "boom");
         let payload: Box<dyn std::any::Any + Send> = Box::new(String::from("bang"));

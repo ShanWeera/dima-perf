@@ -48,7 +48,7 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
 ### Fixed
 
 - The end-of-run line showed a positive mean or minimum below 0.00005 bits as `0.0000`; it now
-  reads `< 0.0001`, as the desktop app will.
+  reads `< 0.0001`, as in the desktop app.
 - The hint of the `--hcs-min-incidence`/`--hcs-eligible-only` warning suggested `--table hcs`
   alone, which also needs `-o PATH.tsv`; it now reads "add --hcs-output PATH or --tsv-dir DIR,
   or write the table with -o PATH.tsv --table hcs".
@@ -78,6 +78,10 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   saved size is raised once, with a note), the legend continues on further rows when it is
   wider than the figure, and a title, subtitle or legend label too long for the figure is
   shortened with "…".
+- The desktop app showed a positive value too small for its decimals as `0.0000` (or `0.0%`),
+  and a coverage, incidence or conservation bound just below its maximum as `1.0000` (or
+  `100.0%`). Tables, panels, tooltips, chips and exported figures now read `< 0.0001`
+  (`< 0.1%`) and `> 0.9999` (`> 99.9%`); sorting and exports keep full precision.
 
 ## [1.0.0] - 2026-10-07
 

@@ -9,7 +9,7 @@ use crate::charts::series::Class;
 use crate::state::session::{SelectSource, Session};
 use crate::state::sort::position_columns as col;
 use crate::theme::DesignTokens;
-use crate::util::{opt_f64, opt_percent};
+use crate::util::{opt_coverage, opt_f64, opt_percent};
 
 /// Draws the table.
 pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) {
@@ -125,7 +125,7 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
                 });
                 if coverage {
                     row.col(|ui| {
-                        let text = opt_f64(p.sample_coverage, 3);
+                        let text = opt_coverage(p.sample_coverage, 3);
                         if p.below_min_coverage == Some(true) {
                             // The marker's shape is the cue: the chart's purple fails text
                             // contrast on light and selected rows (WCAG 2.2 SC 1.4.3).
@@ -139,9 +139,13 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
                 row.col(|ui| {
                     if let Some(v) = p.diversity_motifs.first() {
                         ui.label(
-                            RichText::new(format!("{}  {:.1}%", v.sequence, v.incidence))
-                                .monospace()
-                                .size(t.font_size_mono),
+                            RichText::new(format!(
+                                "{}  {}",
+                                v.sequence,
+                                dima_core::human::percent_bounded(v.incidence, 1)
+                            ))
+                            .monospace()
+                            .size(t.font_size_mono),
                         );
                     }
                 });

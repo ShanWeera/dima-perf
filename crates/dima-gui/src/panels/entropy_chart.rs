@@ -9,6 +9,7 @@
 
 use std::sync::Arc;
 
+use dima_core::human;
 use egui::{Color32, Pos2, Rect, Stroke, Ui};
 
 use super::common::{Swatch, hatch_rect, heading, legend_entry};
@@ -346,7 +347,7 @@ fn draw_mean(p: &egui::Painter, mean: Option<f64>, y: YMap, plot: Rect, t: &Desi
     p.text(
         egui::pos2(plot.right() - 4.0, sy - 2.0),
         egui::Align2::RIGHT_BOTTOM,
-        format!("eligible mean {mean:.4}"),
+        format!("eligible mean {}", human::fixed(mean, 4)),
         egui::FontId::proportional(t.font_size_caption),
         t.mean_line,
     );
@@ -533,11 +534,12 @@ pub fn point_tooltip(s: &Session, position: u64) -> Option<String> {
     match p.entropy {
         Some(e) => {
             text.push_str(&format!(
-                "entropy {e:.4} bits ({})",
+                "entropy {} bits ({})",
+                human::fixed(e, 4),
                 p.entropy_method.as_str()
             ));
             if let Some(o) = p.observed_entropy {
-                text.push_str(&format!(", observed {o:.4}"));
+                text.push_str(&format!(", observed {}", human::fixed(o, 4)));
             }
             text.push('\n');
         }
@@ -555,7 +557,7 @@ pub fn point_tooltip(s: &Session, position: u64) -> Option<String> {
     if p.below_min_coverage == Some(true) {
         text.push_str(&format!(
             "\nsample coverage {} below the minimum",
-            crate::util::opt_f64(p.sample_coverage, 3)
+            crate::util::opt_coverage(p.sample_coverage, 3)
         ));
     }
     Some(text)
@@ -690,9 +692,40 @@ mod tests {
         assert!(c.contains("LS") && c.contains("uncorrected"), "{c}");
         let b = point_tooltip(&s, 2).unwrap();
         assert!(b.contains("no entropy") && !b.contains("0.0000"), "{b}");
+        assert!(
+            a.contains("entropy 0.5000 bits (dima), observed 0.5000"),
+            "{a}"
+        );
         assert_eq!(
             band_tooltip(NsSpan { first: 4, last: 9 }),
             "Positions 4\u{2013}9: no usable support (support 0, no entropy)"
+        );
+    }
+
+    /// A value that is not zero never reads 0.0000, and a coverage below 1 never reads 1.000.
+    #[test]
+    fn tooltips_never_round_a_value_to_zero_or_to_its_bound() {
+        let mut tiny = position(1, Some(3.288e-5), 200, 100);
+        tiny.observed_entropy = Some(4.9e-5);
+        tiny.below_min_coverage = Some(true);
+        tiny.sample_coverage = Some(0.99996);
+        let mut zero = position(2, Some(0.0), 200, 100);
+        zero.observed_entropy = Some(-0.0);
+        let r = results_of(vec![tiny, zero]);
+        let s = Session::new(1, Arc::new(r), Origin::Opened("x.json".into()));
+        let a = point_tooltip(&s, 1).unwrap();
+        assert!(
+            a.contains("entropy < 0.0001 bits (dima), observed < 0.0001"),
+            "{a}"
+        );
+        assert!(
+            a.contains("sample coverage > 0.999 below the minimum"),
+            "{a}"
+        );
+        let b = point_tooltip(&s, 2).unwrap();
+        assert!(
+            b.contains("entropy 0.0000 bits (dima), observed 0.0000"),
+            "an exact zero is zero: {b}"
         );
     }
 

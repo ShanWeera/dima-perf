@@ -6,6 +6,7 @@
 
 use egui::{RichText, Stroke, Ui};
 
+use dima_core::human::percent_bounded;
 use dima_core::model::{HcsRegion, HcsResults};
 
 use super::analysis_options::hcs_controls;
@@ -23,15 +24,15 @@ const STRIP_HEIGHT: f32 = 22.0;
 #[must_use]
 pub fn region_tooltip(r: &HcsRegion, t: u64) -> String {
     let mut s = format!(
-        "Region {}: columns {}\u{2013}{} ({} columns)\n{}\nminimum Index incidence {:.2}%\nminimum support {}\n95% lower bound of conservation {:.1}% (Clopper\u{2013}Pearson)",
+        "Region {}: columns {}\u{2013}{} ({} columns)\n{}\nminimum Index incidence {}\nminimum support {}\n95% lower bound of conservation {} (Clopper\u{2013}Pearson)",
         r.id,
         r.start_column,
         r.end_column,
         r.length,
         truncate_display(&r.sequence, 60),
-        r.min_incidence,
+        percent_bounded(r.min_incidence, 2),
         r.min_support,
-        r.conservation_lower_bound_95 * 100.0
+        percent_bounded(r.conservation_lower_bound_95 * 100.0, 1)
     );
     if r.flagged {
         let shown: Vec<String> = r
@@ -222,5 +223,17 @@ mod tests {
         assert!(text.contains("lower bound of conservation 15.8%"), "{text}");
         assert!(text.contains("* flagged: 29 positions"), "{text}");
         assert!(text.contains("and 17 more"), "{text}");
+        // An incidence or a bound below 100% never reads as 100%.
+        let near = HcsRegion {
+            min_incidence: 99.996,
+            conservation_lower_bound_95: 0.99996,
+            ..flagged.clone()
+        };
+        let text = region_tooltip(&near, results.support_threshold);
+        assert!(text.contains("minimum Index incidence > 99.99%"), "{text}");
+        assert!(
+            text.contains("lower bound of conservation > 99.9%"),
+            "{text}"
+        );
     }
 }

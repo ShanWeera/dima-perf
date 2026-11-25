@@ -10,7 +10,7 @@ use dima_core::model::PositionResult;
 use super::common::{fact, heading};
 use crate::charts::series::Class;
 use crate::theme::DesignTokens;
-use crate::util::{opt_f64, opt_percent};
+use crate::util::{opt_coverage, opt_f64, opt_percent};
 
 /// Draws the facts.
 pub fn show(
@@ -68,8 +68,8 @@ pub fn show(
                 opt_percent(p.total_variants_incidence, 2),
             );
             let coverage = match p.below_min_coverage {
-                Some(true) => format!("{} (below the minimum)", opt_f64(p.sample_coverage, 4)),
-                _ => opt_f64(p.sample_coverage, 4),
+                Some(true) => format!("{} (below the minimum)", opt_coverage(p.sample_coverage, 4)),
+                _ => opt_coverage(p.sample_coverage, 4),
             };
             fact(ui, t, "Sample coverage", coverage);
         });

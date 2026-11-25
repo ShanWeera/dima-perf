@@ -20,7 +20,11 @@ fn extremum(e: Option<Extremum>) -> String {
             } else {
                 String::new()
             };
-            format!("{:.4} at position {}{ties}", e.entropy, e.position)
+            format!(
+                "{} at position {}{ties}",
+                dima_core::human::fixed(e.entropy, 4),
+                e.position
+            )
         },
     )
 }
@@ -51,8 +55,10 @@ pub fn chips(r: &Results, session: &Session) -> Vec<(String, String)> {
         (
             format!(
                 "mean {}",
-                r.average_entropy
-                    .map_or_else(|| "\u{2014}".to_owned(), |m| format!("{m:.4} bits"))
+                r.average_entropy.map_or_else(
+                    || "\u{2014}".to_owned(),
+                    |m| format!("{} bits", dima_core::human::fixed(m, 4))
+                )
             ),
             format!(
                 "Mean entropy over the {} eligible positions",
@@ -133,4 +139,62 @@ pub fn show(ui: &mut Ui, session: &Session, t: &DesignTokens) {
                 .on_hover_text(tip);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::charts::series::tests::{position, results_of};
+    use crate::state::session::Origin;
+
+    fn texts(r: Results) -> Vec<String> {
+        let s = Session::new(1, Arc::new(r), Origin::Opened("x.json".into()));
+        chips(&s.results, &s)
+            .into_iter()
+            .map(|(text, _)| text)
+            .collect()
+    }
+
+    /// A value that is not zero never reads 0.0000, an exact zero does, and an incidence below
+    /// 100% never reads 100.00%.
+    #[test]
+    fn chips_never_round_a_value_to_zero_or_to_its_bound() {
+        let mut p = position(1, Some(3.288e-5), 200, 100);
+        p.total_variants_incidence = Some(99.996);
+        let mut r = results_of(vec![p]);
+        r.average_entropy = Some(4.9e-5);
+        r.lowest_entropy = Some(Extremum {
+            position: 7,
+            entropy: 0.0,
+            tied_position_count: 455,
+        });
+        r.highest_entropy = Some(Extremum {
+            position: 26,
+            entropy: 3.288e-5,
+            tied_position_count: 1,
+        });
+        let chips = texts(r);
+        for expected in [
+            "mean < 0.0001 bits",
+            "lowest 0.0000 at position 7, 455 positions tied",
+            "highest < 0.0001 at position 26",
+            "total variants at 1: > 99.99%",
+        ] {
+            assert!(
+                chips.iter().any(|c| c == expected),
+                "{expected:?} in {chips:?}"
+            );
+        }
+        // Ordinary values read as before.
+        let mut r = results_of(vec![position(1, Some(0.5), 200, 100)]);
+        r.average_entropy = Some(0.126_084_5);
+        let chips = texts(r);
+        assert!(chips.iter().any(|c| c == "mean 0.1261 bits"), "{chips:?}");
+        assert!(
+            chips.iter().any(|c| c == "total variants at 1: 0.00%"),
+            "{chips:?}"
+        );
+    }
 }

@@ -66,6 +66,10 @@ The Results screen shows the run's facts across the top — sequences, positions
 lowest and highest entropy over eligible positions, the low-support counts — and a badge with the
 number of warnings, which opens the diagnostics.
 
+Values are rounded only for display; sorting and exports keep every digit. A value that is not
+zero never reads 0.0000: it reads "< 0.0001" ("< 0.1%" for a percentage). A coverage or
+incidence just below its maximum reads "> 0.9999" ("> 99.9%") rather than the maximum.
+
 **Entropy chart.** One line along the alignment, encoded so that the meaning never depends on
 colour alone:
 

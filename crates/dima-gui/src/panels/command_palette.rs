@@ -251,7 +251,11 @@ fn build(query: &str, session: Option<&Session>, view: View) -> Vec<Entry> {
                         truncate_display(&v.sequence, 24),
                         p.position
                     ),
-                    detail: format!("{}, {:.1}%", v.motif.long(), v.incidence),
+                    detail: format!(
+                        "{}, {}",
+                        v.motif.long(),
+                        dima_core::human::percent_bounded(v.incidence, 1)
+                    ),
                 });
             }
         }

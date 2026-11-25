@@ -104,7 +104,7 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
                     ui.label(v.count.to_string());
                 });
                 row.col(|ui| {
-                    ui.label(format!("{:.2}%", v.incidence));
+                    ui.label(dima_core::human::percent_bounded(v.incidence, 2));
                 });
                 row.col(|ui| {
                     ui.label(v.motif.long());

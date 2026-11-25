@@ -424,7 +424,7 @@ impl ChartScene {
                     right - 4.0,
                     my - 5.0,
                     LABEL_SIZE,
-                    format!("eligible mean {mean:.4}"),
+                    format!("eligible mean {}", dima_core::human::fixed(mean, 4)),
                     Anchor::End,
                     s.mean,
                 ));
