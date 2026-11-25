@@ -12,7 +12,7 @@ use dima_core::config::{
     DEFAULT_FILL, DEFAULT_SUPPORT_THRESHOLD, Estimator, Percent, ValidationMode,
 };
 
-use super::common::{card, heading, option_label};
+use super::common::{card, heading, option_label, with_help};
 use super::help_text as help;
 use crate::app::msg::Msg;
 use crate::state::AppState;
@@ -401,13 +401,11 @@ fn advanced(
                 &help,
                 defaults.similarity_weighted_entropy.clone(),
             );
-            changed |= ui
-                .checkbox(
-                    &mut o.similarity_weighted_entropy,
-                    "Compute similarity-weighted entropy (Wu 2025)",
-                )
-                .on_hover_text(help)
-                .changed();
+            let checkbox = ui.checkbox(
+                &mut o.similarity_weighted_entropy,
+                "Compute similarity-weighted entropy (Wu 2025)",
+            );
+            changed |= with_help(checkbox, &help).changed();
             ui.end_row();
 
             let cpus = crate::workers::analysis::cpus();

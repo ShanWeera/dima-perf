@@ -47,7 +47,8 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   chart plots **Entropy** or **Similarity-weighted entropy**. Each has its own value axis,
   heading, legend and mean line, and the filter bar's value range applies to the metric shown. A
   switch keeps the zoom and the selection and resets the value range (with a note when it had
-  been narrowed); no control moves. Every dataset opens showing entropy. Exported figures show
+  been narrowed); no control moves (the filter bar's value fields show four decimals for either
+  metric). Every dataset opens showing entropy. Exported figures show
   the metric on screen, with its title, axis title, legend and mean.
 - Desktop app, when the run computed similarity-weighted entropy: a chip "similarity-weighted
   mean X bits (observed Y)" after the mean chip (0.0363 and 0.1207 bits for the bundled MERS
@@ -118,19 +119,24 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   (half a million positions: 0.3–0.4 s instead of 0.8–0.9 s).
 - The desktop app reduced the chart's line and scanned every shown position on every frame
   it drew; the line is now computed once per change of the shown positions, zoom or chart
-  width, so a frame's cost no longer grows with the number of positions (half a million
-  positions: 0.09 ms instead of 5.2 ms per frame).
+  width, so drawing a frame no longer goes through every shown position (half a million
+  positions: 0.09 ms instead of 5.2 ms per frame). As in 1.0.0, each frame still goes through
+  every separate piece of the line, every no-support band and every coverage mark, so a chart
+  with many of them still takes longer to draw.
 - The desktop app's exported PNG figures drew their text about a quarter smaller than the SVG
   and the screen, and their title in the regular weight; the legend was spaced for that
   smaller text, so in SVG figures its labels ran into the next entry. Text is now sized alike
-  in both formats, with a SemiBold title. Exported figures are at least 720 × 320 px (a smaller
-  saved size is raised once, with a note), the legend continues on further rows when it is
+  in both formats, with a SemiBold title. Exported figures are at least 720 × 320 px and at most
+  20,000 × 20,000 px (a saved size outside that range is moved into it once, with a note, where
+  a size above the maximum used to reset every setting), the legend continues on further rows when it is
   wider than the figure, and a title, subtitle or legend label too long for the figure is
   shortened with "…".
 - The desktop app showed a positive value too small for its decimals as `0.0000` (or `0.0%`),
-  and a coverage, incidence or conservation bound just below its maximum as `1.0000` (or
-  `100.0%`). Tables, panels, tooltips, chips and exported figures now read `< 0.0001`
-  (`< 0.1%`) and `> 0.9999` (`> 99.9%`); sorting and exports keep full precision.
+  and a coverage, incidence, conservation bound or share of a variant's sequences just below
+  its maximum as `1.0000` (or `100.0%`). Tables (the metadata table included), panels,
+  tooltips, chips and exported figures now read less or more than the smallest step they
+  show, for example `< 0.0001`, `< 0.01%`, `> 0.9999` and `> 99.9%`; sorting and exports keep
+  full precision.
 - In a narrow desktop-app window (980 px, the smallest allowed) the results header broke its
   fact chips into columns a few characters wide, hundreds of pixels tall, which pushed the
   chart and the position table out of the window. Each chip now stays on one line and the row

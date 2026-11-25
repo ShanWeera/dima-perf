@@ -1,8 +1,10 @@
 //! The filter bar: position range, the value range of the metric the chart plots (entropy, or
 //! similarity-weighted entropy), motif classes and the low-support switch, with the shown/total
 //! count and "Reset". Changes are applied when the pointer is released (a drag does not
-//! refilter on every tick). When the metric can be switched, its label keeps the width of the
-//! longer name, so the bar does not rearrange on a switch.
+//! refilter on every tick). When the metric can be switched, the bar does not rearrange on a
+//! switch: the value label keeps the width of the longer name, and the two value fields show
+//! four decimals in slots as wide as the wider of the two metrics' maxima (a drag value
+//! otherwise picks its decimals from its speed and the screen's pixel size).
 
 use egui::{RichText, Ui};
 
@@ -47,12 +49,32 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
         let v = &mut s.filter.value_range;
         let max = b.max_for(metric).max(0.0);
         let speed = drag_speed(max);
-        changed |= ui
-            .add(egui::DragValue::new(&mut v.0).prefix("min ").speed(speed).range(0.0..=max).max_decimals(4))
-            .changed();
-        changed |= ui
-            .add(egui::DragValue::new(&mut v.1).prefix("max ").speed(speed).range(0.0..=max).max_decimals(4))
-            .changed();
+        if ChartMetric::SimilarityWeighted.available(&s.results) {
+            let widths = ["min ", "max "].map(|prefix| {
+                ChartMetric::ALL
+                    .map(|m| value_field_width(ui, prefix, b.max_for(m).max(0.0)))
+                    .into_iter()
+                    .fold(0.0, f32::max)
+            });
+            for ((value, prefix), width) in [(&mut v.0, "min "), (&mut v.1, "max ")]
+                .into_iter()
+                .zip(widths)
+            {
+                let field = egui::DragValue::new(value)
+                    .prefix(prefix)
+                    .speed(speed)
+                    .range(0.0..=max)
+                    .fixed_decimals(VALUE_DECIMALS);
+                changed |= fixed_width_slot(ui, width, |ui| ui.add(field)).changed();
+            }
+        } else {
+            changed |= ui
+                .add(egui::DragValue::new(&mut v.0).prefix("min ").speed(speed).range(0.0..=max).max_decimals(VALUE_DECIMALS))
+                .changed();
+            changed |= ui
+                .add(egui::DragValue::new(&mut v.1).prefix("max ").speed(speed).range(0.0..=max).max_decimals(VALUE_DECIMALS))
+                .changed();
+        }
         ui.add_space(t.space_12);
         ui.label("Motifs")
             .on_hover_text("Show positions with at least one variant of a checked motif");
@@ -89,6 +111,23 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
     if changed {
         out.push(Msg::FiltersEdited);
     }
+}
+
+/// Decimals of the value fields: at most this many, exactly this many when the metric can be
+/// switched.
+const VALUE_DECIMALS: usize = 4;
+
+/// The width of a value field showing `prefix` and `max` with [`VALUE_DECIMALS`] decimals: its
+/// text in the drag-value style, the button's padding on both sides, and one digit to spare
+/// for measuring the text whole rather than in its two parts.
+fn value_field_width(ui: &Ui, prefix: &str, max: f64) -> f32 {
+    let font = ui.style().drag_value_text_style.resolve(ui.style());
+    let spacing = ui.spacing();
+    let text = format!("{prefix}{max:.VALUE_DECIMALS$}");
+    let width = text_width(ui, &text, font.clone())
+        + 2.0 * spacing.button_padding.x
+        + text_width(ui, "0", font);
+    width.max(spacing.interact_size.x)
 }
 
 /// Value change per pixel dragged on a range of `0..=max` bits: the full range in 200 pixels,

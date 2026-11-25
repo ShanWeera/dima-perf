@@ -1120,8 +1120,8 @@ fn the_figure_follows_the_metric() {
 
 /// A figure is named and saved for the metric shown when it was chosen: the dialog proposes
 /// `<stem>.similarity-weighted-entropy.png`, and if the chart was switched while the dialog was
-/// open nothing is saved (a data export is unaffected); the success and failure messages name
-/// the figure by its metric.
+/// open nothing is saved (a data export is unaffected). Otherwise the export job carries that
+/// metric and its figure, and a failed export's message names the figure by it.
 #[test]
 fn figures_are_saved_only_for_the_metric_they_were_chosen_for() {
     use crate::charts::metric::ChartMetric::{Entropy, SimilarityWeighted};

@@ -30,6 +30,11 @@ fn harness() -> H {
 }
 
 fn harness_sized(size: egui::Vec2) -> H {
+    harness_with(size, 1.0)
+}
+
+/// A harness of `size` points on a screen of `ppp` physical pixels per point.
+fn harness_with(size: egui::Vec2, ppp: f32) -> H {
     let mut app = DimaApp::new(ConfigStore::in_memory(), false);
     app.state.native_dialogs = false;
     // The harness runs a first pass while it is built; the app's fonts and style are installed
@@ -38,6 +43,7 @@ fn harness_sized(size: egui::Vec2) -> H {
     let mut installed = false;
     let mut h = Harness::builder()
         .with_size(size)
+        .with_pixels_per_point(ppp)
         .with_max_steps(200)
         .build_ui_state(
             move |ui, app: &mut DimaApp| {
@@ -174,6 +180,26 @@ fn controls_above(h: &H, bottom: f32) -> Vec<(String, egui::Rect)> {
             (name, n.rect())
         })
         .filter(|(_, r)| r.top() < bottom)
+        .collect()
+}
+
+/// Where every label and control above `bottom` is, in tree order: its role, its top-left
+/// corner and, for a control whose text never names a metric (a button, check box or radio
+/// button), its whole rectangle. A label or a value field may change its text; none may move.
+fn places_above(h: &H, bottom: f32) -> Vec<(Role, egui::Pos2, Option<egui::Rect>)> {
+    use egui_kittest::kittest::NodeT;
+    h.root()
+        .children_recursive()
+        .filter_map(|n| {
+            let role = n.accesskit_node().role();
+            let whole = match role {
+                Role::Button | Role::CheckBox | Role::RadioButton | Role::ComboBox => true,
+                Role::Label | Role::SpinButton | Role::TextInput => false,
+                _ => return None,
+            };
+            let r = n.rect();
+            (r.top() < bottom).then_some((role, r.min, whole.then_some(r)))
+        })
         .collect()
 }
 
@@ -695,6 +721,11 @@ fn the_similarity_weighted_option_is_counted_remembered_and_run() {
     h.run_steps(2);
     let option = h.get_by_role_and_label(Role::CheckBox, OPTION);
     assert_eq!(option.accesskit_node().toggled(), Some(Toggled::False));
+    assert_eq!(
+        option.accesskit_node().description(),
+        Some(crate::panels::help_text::similarity_weighted_entropy()),
+        "its tooltip, for screen readers too"
+    );
     option.click();
     h.run_steps(2);
     let option = h.get_by_role_and_label(Role::CheckBox, OPTION);
@@ -728,20 +759,23 @@ fn the_similarity_weighted_option_is_counted_remembered_and_run() {
 /// The chart's metric switch: shown only when the run computed similarity-weighted entropy, as
 /// a radio group named by its visible "Metric:" label, with radio buttons that carry their
 /// state and their tooltip as AccessKit description. A switch re-plots the chart under its new
-/// name and moves neither the switch nor Fit, + and −, nor the chart, at the smallest window,
-/// at a common one, and at a width where the filter bar fits one row only with the shorter
-/// metric name (so its label must keep the longer one's width).
+/// name and moves no label or control above it, nor the chart: at the smallest window, at a
+/// common one, at a width where the filter bar fits one row only with the shorter metric name,
+/// and on screens of 2 and 1.5 pixels per point, where a value field would otherwise show
+/// another number of decimals for each metric.
 #[test]
 fn the_metric_switch_moves_no_control() {
     use crate::charts::metric::ChartMetric;
     use egui::accesskit::Toggled;
     use egui_kittest::kittest::NodeT;
-    for size in [
-        MIN_WINDOW,
-        egui::vec2(1300.0, 800.0),
-        egui::vec2(1200.0, 800.0),
+    for (size, ppp) in [
+        (MIN_WINDOW, 1.0),
+        (egui::vec2(1300.0, 800.0), 1.0),
+        (egui::vec2(1200.0, 800.0), 1.0),
+        (MIN_WINDOW, 2.0),
+        (egui::vec2(1300.0, 800.0), 1.5),
     ] {
-        let mut h = harness_sized(size);
+        let mut h = harness_with(size, ppp);
         load(&mut h, &fixtures::mers());
         assert!(
             h.query_by_role(Role::RadioGroup).is_none(),
@@ -773,18 +807,20 @@ fn the_metric_switch_moves_no_control() {
                 Some(crate::panels::help_text::chart_metric(m))
             );
         }
-        let controls = |h: &H| {
-            [
-                h.get_by_role_and_label(Role::RadioButton, "Entropy").rect(),
-                h.get_by_role_and_label(Role::RadioButton, "Similarity-weighted entropy")
-                    .rect(),
-                h.get_by_role_and_label(Role::Button, "Fit").rect(),
-                h.get_by_role_and_label(Role::Button, "+").rect(),
-                h.get_by_role_and_label(Role::Button, "\u{2212}").rect(),
-            ]
-        };
-        let before = controls(&h);
-        let chart = h.get_by_label_contains("Entropy chart:").rect();
+        // No tooltip in the way: the pointer leaves the window before each look.
+        h.event(egui::Event::PointerGone);
+        h.run_steps(2);
+        let chart = h.get_by_label_contains("chart: ").rect();
+        let before = places_above(&h, chart.top());
+        assert!(
+            before.len() > 30
+                && before
+                    .iter()
+                    .filter(|(role, ..)| *role == Role::SpinButton)
+                    .count()
+                    == 4,
+            "the filter bar's fields are compared: {before:?}"
+        );
         for (to, name) in [
             (
                 ChartMetric::SimilarityWeighted,
@@ -794,15 +830,21 @@ fn the_metric_switch_moves_no_control() {
         ] {
             h.get_by_role_and_label(Role::RadioButton, to.name())
                 .click();
+            h.run_steps(1);
+            h.event(egui::Event::PointerGone);
             h.run_steps(3);
             assert_eq!(h.state().state.session.as_ref().unwrap().metric, to);
             assert_eq!(state(&h, to), Some(Toggled::True));
             assert_eq!(
-                controls(&h),
+                places_above(&h, chart.top()),
                 before,
-                "{size:?}: nothing moved switching to {to:?}"
+                "{size:?} at {ppp} pixels per point: nothing moved switching to {to:?}"
             );
-            assert_eq!(h.get_by_label_contains(name).rect(), chart, "{size:?}");
+            assert_eq!(
+                h.get_by_label_contains(name).rect(),
+                chart,
+                "{size:?} at {ppp}"
+            );
         }
     }
 }

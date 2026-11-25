@@ -28,8 +28,10 @@ asks you to review the settings.
 If the operating system's file dialog is unavailable or does not respond (for example on a
 remote desktop), the app offers its own file browser; you can choose it permanently in
 **Preferences**, which also sets the size of exported figures: at least 720 × 320 px, so the
-title, legend and axes always fit. A smaller size saved by an earlier version is raised to these
-minimums when this version first starts, with a note saying so.
+title, legend and axes always fit, and at most 20,000 × 20,000 px. A smaller size saved by an
+earlier version is raised to these minimums when this version first starts, with a note saying
+so; a size above the maximum, possible only in a settings file edited by hand, is lowered to it
+in the same way.
 
 ## Describe the header fields
 
@@ -49,10 +51,11 @@ the conserved-region threshold. An **Advanced** section holds the estimator, the
 the fill value for empty header fields, the minimum sample coverage, similarity-weighted entropy
 and the number of worker threads. Every option has a tooltip with its meaning and references. An
 option that differs from its default is marked with a dot, whose tooltip names the default, and
-**Reset to defaults** restores them all. The Advanced section starts closed; its title counts the
-options inside it that differ from their defaults, for example **Advanced (2 changed)**, so a
-changed option is seen without opening it. The app remembers the options that do not depend on
-the file between sessions.
+**Reset to defaults** restores them all. The Advanced section starts closed, and the app
+remembers whether you left it open, also after a restart. Its title counts the options inside it
+that differ from their defaults, for example **Advanced (2 changed)**, so a changed option is
+seen without opening it. The app remembers the options that do not depend on the file between
+sessions.
 
 The worker threads default to all CPUs but one, and run at reduced priority, so the app stays
 responsive during an analysis.
@@ -72,11 +75,12 @@ Shannon entropy counts them alike. To compute it:
 3. Press **Analyze**.
 
 The run then computes, at every position, the similarity-weighted entropy and the two
-normalised entropies (each entropy divided by its largest possible value at that position). The
-app remembers the choice for the next analyses, also after a restart, until you untick it or
-press **Reset to defaults**. **Run details** says *Similarity-weighted entropy: computed* or *not
-computed*, also for results opened from a file; a file written by dima 1.0.0 reads as *not
-computed*.
+[normalised entropies](/reference/glossary/#normalised-entropy-h_n-and-h_nsim): each entropy
+divided by log₂ D, the largest observed entropy possible with the position's D
+[distinct k-mers](/reference/glossary/#distinct-k-mers-d). The app remembers the choice for the
+next analyses, also after a restart, until you untick it or press **Reset to defaults**. **Run
+details** says *Similarity-weighted entropy: computed* or *not computed*, also for results opened
+from a file; a file written by dima 1.0.0 reads as *not computed*.
 
 Without the option nothing of it is computed and the Results screen shows nothing of it; the
 exported results hold `null` (`NA` in the tables) where the values would be.
@@ -101,13 +105,17 @@ computed it, the similarity-weighted mean — and a badge with the number of war
 the diagnostics.
 
 In a small window the chart, the conserved regions and the position table do not all fit. The
-column that holds them then scrolls: drag its scroll bar, or turn the mouse wheel anywhere except
-over the chart, where the wheel zooms the chart instead. The table always keeps at least four
-rows.
+column that holds them then scrolls: drag the scroll bar at its right edge, or turn the mouse
+wheel over the conserved regions. Over the chart the wheel zooms the chart instead, and over the
+table it scrolls the table's rows; it scrolls the column there only once the rows can scroll no
+further. The table always keeps at least four rows.
 
 Values are rounded only for display; sorting and exports keep every digit. A value that is not
-zero never reads 0.0000: it reads "< 0.0001" ("< 0.1%" for a percentage). A coverage or
-incidence just below its maximum reads "> 0.9999" ("> 99.9%") rather than the maximum.
+zero never reads as zero: when it is smaller than the smallest step the display shows, it reads
+as less than that step, for example "< 0.0001" for an entropy or "< 0.01%" for an incidence.
+Likewise, a coverage or incidence just below its maximum never reads as the maximum, for example
+"> 99.99%" for an incidence. Some places show fewer decimals than others, so the same coverage
+can read "> 0.9999" among the facts of the selected position and "> 0.999" in the table.
 
 **Entropy chart.** One line along the alignment, encoded so that the meaning never depends on
 colour alone:
@@ -152,8 +160,9 @@ button of the **Metric:** row has the focus (Tab / Shift+Tab: move between contr
 Space to select it (Space: press or select). While a control has the focus, the arrow keys move
 between controls instead of along the position table; press Esc to give them back to the table.
 The command palette (below) offers the switch too. Every dataset you open or analyse starts with
-entropy. Nothing you can click moves when you switch, so you can switch back and
-forth in one place to compare the two lines. Each metric has its own value axis, so compare their
+entropy. Nothing you can click moves when you switch, so you can switch back and forth in one
+place to compare the two lines: the filter bar's two value fields, for example, keep their width
+and show four decimals for either metric. Each metric has its own value axis, so compare their
 shapes, not their heights: similarity-weighted entropy is never more than the observed entropy
 and is often much smaller.
 
@@ -174,9 +183,11 @@ scroll bar, scroll sideways on a touchpad, or hold Shift and turn the mouse whee
 The table's own vertical scroll bar is then at its right edge, out of view until you scroll there;
 the mouse wheel scrolls the rows anyway. Moving through the rows with the arrow keys keeps the
 sideways position, and a column header reached with Tab scrolls into view. Column widths you set
-by dragging a header's edge are kept while the app is open, but go back to their defaults once
-when results with a different set of columns are shown, for example the first results with
-similarity-weighted entropy after results without it.
+by dragging a header's edge are kept until you close the app, separately for each set of
+columns. The set depends on the run: the **Similarity-weighted** column appears only when it
+computed similarity-weighted entropy, and the **Coverage** column only when it set a minimum
+sample coverage. Results with another set of columns show the widths you set for that set, or
+its default widths the first time.
 
 **Similarity-weighted values.** When the run computed similarity-weighted entropy, the Results
 screen also shows:
@@ -195,8 +206,9 @@ screen also shows:
 - three more facts of the selected position: **Similarity-weighted entropy** (in bits),
   **Normalised observed entropy** and **Normalised similarity-weighted entropy**. A normalised
   value is the entropy divided by log₂ of the number of distinct k-mers at the position (the
-  Index included), so it lies between 0 and 1. For MERS spike position 25, the example position
-  of the [methodology page](/explanation/entropy/), they read *0.4275 bits*, *0.4282* and
+  [Index](/reference/glossary/#index-major-minor-and-unique) included), so it lies between
+  0 and 1. For MERS spike position 25, the position of the methodology page's
+  [worked example](/explanation/entropy/#worked-example), they read *0.4275 bits*, *0.4282* and
   *0.1287*;
 - the same three values in the tooltip of a point of the chart.
 

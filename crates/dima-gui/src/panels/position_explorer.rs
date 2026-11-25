@@ -3,7 +3,8 @@
 //! Only visible rows are laid out. When the run computed it, similarity-weighted entropy has
 //! its column right after entropy. The table scrolls sideways when its columns do not fit; a
 //! header that gains the keyboard focus scrolls into view, sideways and in the column around
-//! the table.
+//! the table. Each set of columns is its own table for egui, so widths dragged for one set
+//! are kept for it and never applied to the columns of another.
 
 use egui::{RichText, Ui};
 
@@ -17,7 +18,7 @@ use crate::theme::DesignTokens;
 use crate::util::{opt_coverage, opt_f64, opt_percent};
 
 /// A column of the table.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Column {
     Position,
     Entropy,
@@ -121,7 +122,7 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
             let row_height = 22.0;
             let height = ui.available_height().max(row_height * 4.0);
             let mut builder = egui_extras::TableBuilder::new(ui)
-                .id_salt("positions")
+                .id_salt(table_salt(&columns))
                 .striped(true)
                 .resizable(true)
                 .auto_shrink([false, false])
@@ -196,6 +197,13 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
     if let Some(p) = clicked_row {
         out.push(Msg::Select(p, SelectSource::Table));
     }
+}
+
+/// The id salt of the table showing `columns`: egui keeps dragged column widths per table and
+/// discards them only when the number of columns changes, so two sets of as many columns (with
+/// similarity-weighted entropy, or with coverage) would otherwise share their widths.
+fn table_salt(columns: &[Column]) -> (&'static str, &[Column]) {
+    ("positions", columns)
 }
 
 /// One cell; `hovered` italicises the position of a row the chart hovers.
@@ -296,5 +304,21 @@ mod tests {
             }
         }
         assert_eq!(TopVariant.sort(), Some(("top variant", col::TOP_VARIANT)));
+    }
+
+    /// Two sets of seven columns are two tables, each with its own widths; a set is always the
+    /// same table.
+    #[test]
+    fn each_set_of_columns_is_its_own_table() {
+        let id = |similarity, coverage| {
+            egui::Id::new(super::table_salt(&Column::shown(similarity, coverage)))
+        };
+        assert_eq!(
+            Column::shown(true, false).len(),
+            Column::shown(false, true).len()
+        );
+        assert_ne!(id(true, false), id(false, true));
+        assert_ne!(id(false, false), id(true, true));
+        assert_eq!(id(true, true), id(true, true));
     }
 }
