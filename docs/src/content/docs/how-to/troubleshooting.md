@@ -126,9 +126,9 @@ or accept the mismatches with `--validation permissive` (they get the fill value
 `--validation permissive` to replace invalid bytes.
 
 **`written with results schema …`** (or **`written with conserved-sequences schema …`**; from
-`dima view`, `dima hcs` or `dima cite --from`) — the file's schema version does not start with
-`1.`: it was written by a DiMA version with another major schema version, or its version is not a
-plain number such as `01.1.0`. Re-run the analysis, or use the version that wrote the file.
+`dima view`, `dima hcs` or `dima cite --from`) — the major number of the file's schema version
+(before the first dot) is not `1`: it was written by a DiMA version with another major schema
+version, or its version is not a plain number, such as `01.1.0`. Re-run the analysis, or use the version that wrote the file.
 
 **`position N: … is given, but …`**, **`… is missing`** or another message with the hint `the
 file was edited or damaged` (exit 4, from `dima view`, `dima hcs` or `dima cite --from`) — the

@@ -1571,8 +1571,9 @@ fn similarity_weighted_entropy_on_the_command_line() {
         .unwrap();
     assert_eq!(code(&o), 0, "{}", stderr(&o));
     let line = stderr(&o);
+    // The means of tests/golden/tiny_similarity/results.json: 0.1794… and observed 0.2700….
     assert!(
-        line.contains("; similarity-weighted mean ") && line.contains(" bits (observed "),
+        line.contains("; similarity-weighted mean 0.1795 bits (observed 0.2700)"),
         "{line}"
     );
     let r = json(&dir.join("r.json"));

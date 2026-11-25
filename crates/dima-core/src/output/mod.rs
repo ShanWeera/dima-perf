@@ -759,6 +759,9 @@ fn check_consistent(r: &Results, name: &str) -> Result<()> {
             return Err(invalid(format!("position {}: {problem}", p.position)));
         }
     }
+    if let Some(problem) = summary_problem(r) {
+        return Err(invalid(problem));
+    }
     match (computed, r.similarity_weighted_entropy_summary.is_some()) {
         (true, false) => Err(invalid(
             "similarity_weighted_entropy_summary is missing, but the run computed \
@@ -772,6 +775,76 @@ fn check_consistent(r: &Results, name: &str) -> Result<()> {
         )),
         _ => Ok(()),
     }
+}
+
+/// The first value of the summaries outside the range the schema gives it, if any: means and
+/// extremes of entropies at least 0, coverages between 0 and 1, an extreme's position and tie
+/// count at least 1.
+fn summary_problem(r: &Results) -> Option<String> {
+    let all = &r.all_positions_summary;
+    let cov = &r.coverage_summary;
+    let swe = r.similarity_weighted_entropy_summary.as_ref();
+    let mut extremes = vec![
+        ("lowest_entropy", r.lowest_entropy.as_ref()),
+        ("highest_entropy", r.highest_entropy.as_ref()),
+        (
+            "all_positions_summary.lowest_entropy",
+            all.lowest_entropy.as_ref(),
+        ),
+        (
+            "all_positions_summary.highest_entropy",
+            all.highest_entropy.as_ref(),
+        ),
+    ];
+    let mut values = vec![
+        ("average_entropy", r.average_entropy, 0.0, f64::INFINITY),
+        (
+            "all_positions_summary.average_entropy",
+            all.average_entropy,
+            0.0,
+            f64::INFINITY,
+        ),
+        ("coverage_summary.min", cov.min, 0.0, 1.0),
+        ("coverage_summary.mean", cov.mean, 0.0, 1.0),
+        ("coverage_summary.min_coverage", cov.min_coverage, 0.0, 1.0),
+    ];
+    if let Some(s) = swe {
+        extremes.push((
+            "similarity_weighted_entropy_summary.lowest_entropy",
+            s.lowest_entropy.as_ref(),
+        ));
+        extremes.push((
+            "similarity_weighted_entropy_summary.highest_entropy",
+            s.highest_entropy.as_ref(),
+        ));
+        values.push((
+            "similarity_weighted_entropy_summary.average_entropy",
+            s.average_entropy,
+            0.0,
+            f64::INFINITY,
+        ));
+        values.push((
+            "similarity_weighted_entropy_summary.average_observed_entropy",
+            s.average_observed_entropy,
+            0.0,
+            f64::INFINITY,
+        ));
+    }
+    for (field, e) in extremes {
+        if let Some(e) = e {
+            values.push((field, Some(e.entropy), 0.0, f64::INFINITY));
+            if e.position == 0 || e.tied_position_count == 0 {
+                return Some(format!(
+                    "{field} has a position or tie count of 0, not at least 1"
+                ));
+            }
+        }
+    }
+    values.into_iter().find_map(|(field, value, low, high)| {
+        value
+            .filter(|v| !(low..=high).contains(v))
+            .map(|v| format!("{field} is {v}, outside {low} to {high}"))
+    })
 }
 
 /// What is wrong with the similarity-weighted values of a position, if anything: with

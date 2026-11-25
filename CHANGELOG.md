@@ -103,6 +103,10 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   or write the table with -o PATH.tsv --table hcs".
 - The counter-overflow message said "64-bit" for counters that are 32-bit (distinct k-mers at
   one position, distinct header values); it now reads "… exceeds the range of DiMA's counters".
+- `dima view`, `dima hcs` and `dima cite --from` checked the ranges of every value of a position
+  but not of the summaries, so a results file edited to hold, for example, a negative mean or a
+  coverage above 1 was read and written on. Such a file is now refused as edited or damaged
+  (exit 4), like one with an impossible value at a position.
 - Messages about the schema version of a conserved-sequences file no longer call it a results
   schema, and the hint for one written by a newer DiMA names its `tool.version` (results files
   have `run.tool.version`).

@@ -464,6 +464,82 @@ fn unknown_values_in_newer_files_are_named() {
         assert!(e.to_string().contains(expected), "{version}: {e}");
         assert!(e.to_string().contains("from_the_future"), "{version}: {e}");
     }
+    // Conserved-sequences files: their own schema name, and the key that holds their version.
+    // Serialised in DiMA's own key order, which tells the reader the kind of file.
+    let h = hcs::compute(&results(), &HcsParams::default()).unwrap();
+    let text = serde_json::to_string(&h).unwrap();
+    let eligibility = format!(
+        "\"eligibility\":{}",
+        serde_json::to_string(&h.parameters.eligibility).unwrap()
+    );
+    assert!(text.contains(&eligibility));
+    let text = text.replace(&eligibility, "\"eligibility\":\"from_the_future\"");
+    let current = format!(
+        "\"schema_version\":\"{}\"",
+        dima_core::model::HCS_SCHEMA_VERSION
+    );
+    assert!(text.starts_with(&format!("{{{current}")));
+    for (version, expected) in [
+        (
+            "1.9.0",
+            "written by a newer DiMA (conserved-sequences schema 1.9.0)",
+        ),
+        ("2.0.0", "written with conserved-sequences schema 2.0.0"),
+    ] {
+        let text = text.replacen(&current, &format!("\"schema_version\":\"{version}\""), 1);
+        std::fs::write(&p, text).unwrap();
+        let e = output::read_hcs(&p).unwrap_err();
+        assert_eq!(e.class(), dima_core::error::ExitClass::InvalidInput, "{e}");
+        assert!(e.to_string().contains(expected), "{version}: {e}");
+        if version == "1.9.0" {
+            let hint = e.hint().unwrap();
+            assert!(
+                hint.contains("its tool.version") && !hint.contains("run."),
+                "{hint}"
+            );
+        }
+    }
+}
+
+/// Summaries are refused with values outside their ranges, as the values of a position are, so
+/// an edited file is never written on (exit 4).
+#[test]
+fn summaries_outside_their_ranges_are_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("r.json");
+    let on = serde_json::to_value(results_with(true)).unwrap();
+    type Damage = (&'static str, fn(&mut serde_json::Value));
+    let damage: [Damage; 5] = [
+        ("average_entropy", |v| v["average_entropy"] = (-1.0).into()),
+        ("coverage_summary.mean", |v| {
+            v["coverage_summary"]["mean"] = 1.5.into()
+        }),
+        ("highest_entropy", |v| {
+            v["highest_entropy"]["position"] = 0.into()
+        }),
+        ("similarity_weighted_entropy_summary.average_entropy", |v| {
+            v["similarity_weighted_entropy_summary"]["average_entropy"] = (-1.0).into();
+        }),
+        ("similarity_weighted_entropy_summary.lowest_entropy", |v| {
+            v["similarity_weighted_entropy_summary"]["lowest_entropy"]["entropy"] = (-1.0).into();
+        }),
+    ];
+    for (field, f) in damage {
+        let mut v = on.clone();
+        f(&mut v);
+        std::fs::write(&p, serde_json::to_vec(&v).unwrap()).unwrap();
+        let e = output::read_results(&p).unwrap_err();
+        assert_eq!(
+            e.class(),
+            dima_core::error::ExitClass::InvalidInput,
+            "{field}: {e}"
+        );
+        assert!(e.to_string().contains(field), "{field}: {e}");
+        assert!(
+            e.hint().unwrap().contains("edited or damaged"),
+            "{field}: {e}"
+        );
+    }
 }
 
 /// Damaged compressed results are invalid input (exit 4) with a hint naming the test command;
