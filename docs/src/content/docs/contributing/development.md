@@ -136,7 +136,7 @@ named by `CHROME_PATH`.
 
 | Script | Purpose |
 |---|---|
-| `scripts/validate_paper.sh` | Prints the comparison with the paper's published values ([Comparison with the paper](/explanation/paper-comparison/)) |
+| `scripts/validate_paper.sh` | Prints the comparison with the paper's published values ([Comparison with the papers](/explanation/paper-comparison/)) |
 | `scripts/bench/run.sh` | Regenerates `BENCHMARK.md` ([Benchmarks](/explanation/benchmarks/)) |
 | `scripts/reference/dima_reference.py` | The independent reference implementation ([Testing](/contributing/testing/)) |
 | `scripts/release/check-windows-crt.py` | Checks that Windows programs need no Visual C++ runtime DLL, by reading their import tables; CI and the release workflow run it on every Windows program |

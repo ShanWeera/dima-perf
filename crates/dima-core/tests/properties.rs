@@ -1,6 +1,8 @@
 //! Property-based tests (Claessen & Hughes 2000): the streaming counter equals a naive counter
 //! for every k, thread count and batch split, and every analysis satisfies the definitional
-//! invariants of support, motifs and incidences.
+//! invariants of support, motifs and incidences. Metamorphic relations check similarity-weighted
+//! entropy against transformed inputs whose correct values are known from the untransformed run,
+//! so an error the library and the reference implementation shared would still be caught.
 
 use std::collections::BTreeMap;
 use std::sync::atomic::AtomicBool;
@@ -141,4 +143,76 @@ proptest! {
         }
         prop_assert_eq!(r.eligible_position_count, eligible);
     }
+
+    #[test]
+    fn similarity_weighted_entropy_metamorphic_relations((width, rows) in rows(), k_seed in 0usize..1000) {
+        let k = 1 + k_seed % width;
+        let base = similarity_values(&rows, k);
+        // Records in reverse order: the same values at every position.
+        let reversed: Vec<Vec<u8>> = rows.iter().rev().cloned().collect();
+        prop_assert_eq!(&similarity_values(&reversed, k), &base);
+        // Every record twice: the frequencies, and so every value, are unchanged.
+        let doubled: Vec<Vec<u8>> = rows.iter().flat_map(|r| [r.clone(), r.clone()]).collect();
+        prop_assert_eq!(&similarity_values(&doubled, k), &base);
+        // A fixed relabelling of the letters: identity never looks at what a letter is.
+        let relabelled: Vec<Vec<u8>> = rows.iter().map(|r| r.iter().map(|&b| match b {
+            b'A' => b'G', b'C' => b'T', b'G' => b'C', b'T' => b'A', other => other,
+        }).collect()).collect();
+        prop_assert_eq!(&similarity_values(&relabelled, k), &base);
+        // Each record read right to left: position p becomes position L - k + 2 - p (1-based),
+        // and its k-mers are reversed, which keeps every distance and count.
+        let mirrored: Vec<Vec<u8>> = rows.iter().map(|r| r.iter().rev().copied().collect()).collect();
+        let mut m = similarity_values(&mirrored, k);
+        m.reverse();
+        prop_assert_eq!(&m, &base);
+        // k = 1: every pair of distinct residues differs everywhere, so every weight is 1.
+        let single = analyse_rows(&rows, 1);
+        for p in &single.results {
+            prop_assert_eq!(p.similarity_weighted_entropy.map(f64::to_bits), p.observed_entropy.map(f64::to_bits));
+            prop_assert_eq!(
+                p.normalised_similarity_weighted_entropy.map(f64::to_bits),
+                p.normalised_observed_entropy.map(f64::to_bits)
+            );
+        }
+    }
+}
+
+/// The analysis of `rows` (0 = an excluded column) with similarity-weighted entropy, DNA, k.
+fn analyse_rows(rows: &[Vec<u8>], k: usize) -> dima_core::model::Results {
+    let mut fasta = Vec::new();
+    for (i, row) in rows.iter().enumerate() {
+        fasta.extend_from_slice(format!(">s{i}\n").as_bytes());
+        fasta.extend(row.iter().map(|&b| if b == 0 { b'-' } else { b }));
+        fasta.push(b'\n');
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("m.fa");
+    std::fs::write(&path, &fasta).unwrap();
+    let params = AnalysisParams {
+        alphabet: Some(Alphabet::Dna),
+        kmer_length: Some(k),
+        support_threshold: Some(1),
+        validation: Some(ValidationMode::Strict),
+        similarity_weighted_entropy: true,
+        ..AnalysisParams::default()
+    };
+    analyze(&Source::Path(path), &params, &RunControl::new())
+        .unwrap()
+        .results
+}
+
+/// The bits of the three similarity-weighted values at every position.
+fn similarity_values(rows: &[Vec<u8>], k: usize) -> Vec<[Option<u64>; 3]> {
+    analyse_rows(rows, k)
+        .results
+        .iter()
+        .map(|p| {
+            [
+                p.similarity_weighted_entropy,
+                p.normalised_observed_entropy,
+                p.normalised_similarity_weighted_entropy,
+            ]
+            .map(|v| v.map(f64::to_bits))
+        })
+        .collect()
 }

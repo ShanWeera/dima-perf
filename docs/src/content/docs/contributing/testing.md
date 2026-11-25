@@ -29,13 +29,23 @@ differences up to $5 \times 10^{-11}$ are expected there (see
 The tests need `python3` 3.10 or newer; `DIMA_SKIP_REFERENCE=1` skips them where Python is
 unavailable (never in CI).
 
+The reference computes similarity-weighted entropy (`--similarity-weighted-entropy`) **pairwise**,
+as Wu defines it: every unordered pair of distinct k-mers once, counting their identical residues.
+The library instead counts residues per site, which gives the same sums much faster; comparing the
+two is what checks that shortcut. Each k-mer is converted once to an integer, so a pair's identical
+residues are the zero bytes of their bitwise XOR; the self-test checks that against counting equal
+positions directly.
+
 ## The paper's datasets
 
 `crates/dima-core/tests/paper.rs` analyses the four committed datasets (`tests/data/`, with their
 sources and checksums in its README) and checks the values of
-[Comparison with the paper](/explanation/paper-comparison/): position counts, support classes,
+[Comparison with the papers](/explanation/paper-comparison/): position counts, support classes,
 means, extrema with their positions and ties, the MERS-CoV position 25 of Fig. 1C, and the
-conserved regions with their flags and bounds. Its numbers are compared with the same rule as
+conserved regions with their flags and bounds. With similarity-weighted entropy it also checks Wu
+2025's two ToBRFV samples (committed from the paper's Supplementary File 2), the saturated pools of
+Wu's Figs 4 and 5c, whose values are exact fractions, and the populations of Wu's Supplementary
+File 1 against its printed values. Its numbers are compared with the same rule as
 the differential tests (a relative $10^{-13}$), defined once in
 `crates/dima-core/tests/common/mod.rs`. The entropies it expects are the reference
 implementation's output on those datasets, written to `crates/dima-core/tests/paper_expected/`
@@ -43,7 +53,7 @@ by a script and never edited by hand; continuous integration checks that they ar
 
 ```sh
 python3 scripts/reference/paper_values.py           # regenerate after changing the reference
-python3 scripts/reference/paper_values.py --check   # what CI runs (about 45 s)
+python3 scripts/reference/paper_values.py --check   # what CI runs (about a minute)
 ```
 
 ## Golden files
@@ -67,7 +77,16 @@ git diff tests/golden/
 - `properties.rs`: property-based tests [@claessen2000] generate random alignments and check that
   the streaming counter equals a naive counter for every k, thread count and batch split, and that
   every result satisfies the definitions (counts add up to the support, incidences to 100%,
-  motif rules).
+  motif rules, the presence and bounds of the similarity-weighted values).
+- **Metamorphic relations.** When the right value is not known, the right *relation* between
+  two runs often is. For similarity-weighted entropy, `properties.rs` checks on random alignments
+  that the values are identical, bit for bit, when the records are put in reverse order, when
+  every record is given twice, and when the letters are relabelled; that reading every record
+  right to left mirrors the positions; and that at $k = 1$ the value equals the observed entropy
+  (every pair of different residues differs everywhere). `similarity.rs` checks that two
+  equally common k-mers at distance $d$ give exactly $(k + d)/(2k)$. These relations hold
+  whatever the implementation, so they would catch an error that the library and the reference
+  implementation shared.
 - Unit tests next to the code check the edge cases of each rule: support labels at $T - 1$, $T$
   and $T + 1$, every entropy fallback, the expected subsample entropy against brute-force
   enumeration of all multinomial outcomes, every byte of every alphabet, header cleaning,

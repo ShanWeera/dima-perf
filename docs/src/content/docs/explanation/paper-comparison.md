@@ -1,6 +1,6 @@
 ---
-title: Comparison with the paper
-description: DiMA's results on the datasets of the DiMA paper (HIV-1 pol, MERS-CoV spike) next to the published values, with the reason for every difference.
+title: Comparison with the papers
+description: DiMA's results next to the published values of its methods' source papers — the DiMA paper's HIV-1 pol and MERS-CoV spike datasets and Wu 2025's similarity-weighted entropy — with the reason for every difference.
 ---
 
 The DiMA paper reports results for an HIV-1 *pol* gene alignment and for the MERS-CoV spike

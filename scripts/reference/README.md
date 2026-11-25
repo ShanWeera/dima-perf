@@ -1,7 +1,7 @@
 # DiMA reference implementation (test oracle)
 
 `dima_reference.py` is an independent, standard-library-only Python implementation of
-DiMA 1.0.0, the Rust re-implementation of
+DiMA, the Rust re-implementation of
 
 > Tharanga S, Ünlü ES, Hu Y, Sjaugi MF, Çelik MA, Hekimoğlu H, Miotto O, Öncel MM, Khan AM.
 > DiMA: sequence diversity dynamics analyser for viruses. *Brief Bioinform*
@@ -28,13 +28,13 @@ python3 scripts/reference/dima_reference.py --self-test
 ```
 
 The paper test (`crates/dima-core/tests/paper.rs`) compares the library with this oracle's
-output on the four bundled datasets without running Python: `paper_values.py` (in this
-directory) runs the oracle and writes those numbers to
+output on the four bundled datasets and Wu 2025's two ToBRFV samples without running Python:
+`paper_values.py` (in this directory) runs the oracle and writes those numbers to
 `crates/dima-core/tests/paper_expected/mod.rs`, and CI fails when they are out of date:
 
 ```bash
 python3 scripts/reference/paper_values.py           # after any change to the oracle's output
-python3 scripts/reference/paper_values.py --check   # CI; about 45 s on four cores
+python3 scripts/reference/paper_values.py --check   # CI; about a minute on four cores
 ```
 
 ## Running it
@@ -45,7 +45,8 @@ on CPython 3.10, 3.11, 3.12 and 3.13, which produce byte-identical output.
 ```bash
 python3 scripts/reference/dima_reference.py analyze -i FILE [-k K] [-s T] [-a auto|protein|dna|rna]
     [--validation strict|permissive|report] [--header-format A|B|C] [--metadata-fields A|B]
-    [--header-fillna Unknown] [--hcs-min-incidence 100] [--hcs-eligible-only] [-o out.json]
+    [--header-fillna Unknown] [--hcs-min-incidence 100] [--hcs-eligible-only]
+    [--similarity-weighted-entropy] [-o out.json]
 python3 scripts/reference/dima_reference.py --self-test
 ```
 
@@ -58,17 +59,18 @@ python3 scripts/reference/dima_reference.py --self-test
   (including `k` outside `1..L`); 3 I/O error (a file that cannot be read); 4 invalid input
   data (including corrupt, truncated or trailing data in a compressed stream).
 
-Measured on a 4-core Linux container with CPython 3.11, single-threaded:
+Measured on a 4-core Linux container with CPython 3.13, single-threaded:
 
-| Dataset | Sequences × columns | k | Wall time |
-|---|---|---|---|
-| `samples/mers_spike_aa.fasta` | 191 × 1,353 | 9 | 0.4 s |
-| `tests/data/MERS_Spike_nt.fasta.bz2` | 499 × 4,065 | 27 | 4 s |
-| `tests/data/HIV1_ALL_2020_pol_PRO.fasta.bz2` | 3,756 × 1,197 | 9 | 18 s |
-| `tests/data/HIV1_FLT_2022_pol_DNA.fasta.bz2` | 2,637 × 3,390 | 27 | 33 s |
+| Dataset | Sequences × columns | k | Wall time | With `--similarity-weighted-entropy` |
+|---|---|---|---|---|
+| `samples/mers_spike_aa.fasta` | 191 × 1,353 | 9 | 0.3 s | 0.3 s |
+| `tests/data/MERS_Spike_nt.fasta.bz2` | 499 × 4,065 | 27 | 2.4 s | 2.4 s |
+| `tests/data/HIV1_ALL_2020_pol_PRO.fasta.bz2` | 3,756 × 1,197 | 9 | 11 s | 12 s |
+| `tests/data/HIV1_FLT_2022_pol_DNA.fasta.bz2` | 2,637 × 3,390 | 27 | 19 s | 62 s |
 
 Almost all of the time goes into the exact binomial expectations of the DiMA estimator
-(see below). The self-test takes under a second.
+(see below); with the flag on HIV-1 pol DNA, about two thirds goes into its 2.0×10⁸ pairwise
+comparisons of 27-mers. The self-test takes under a second.
 
 ## Specification summary
 
@@ -183,6 +185,17 @@ Notation: `c_i` are the counts, `f_c` the number of distinct k-mers with count `
   N = 0 gives `null`.
 * **sample_coverage**: Chao & Jost 2012, *Ecology* 93:2533, doi:10.1890/11-1952.1, with
   the `f2 = 0` form from the specification. N < 2 gives `null`.
+* **similarity_weighted_entropy** (with `--similarity-weighted-entropy`; otherwise `null`,
+  like the two values below): Wu 2025, *Virus Evol* 11:veaf029, doi:10.1093/ve/veaf029,
+  Section 2.1: `Σ_i (−f_i log2 f_i)(1 − S_i)` with `f_i = c_i/N`,
+  `S_i = Σ_{j≠i} f_j s_ij` and `s_ij = m_ij/k`, where `m_ij` is the number of identical
+  residues of k-mers `i` and `j`. Computed **pairwise**, as Wu defines it (every unordered
+  pair once; `m_ij` from the zero bytes of the XOR of the k-mers' big-endian integers), with
+  exact rational weights and 80-digit terms; never with the Rust library's per-site counts.
+  0 with one distinct k-mer; `null` when N = 0.
+* **normalised_observed_entropy**, **normalised_similarity_weighted_entropy**: the plug-in
+  and similarity-weighted entropies divided by `log2 D` (D includes the Index), capped at 1;
+  `null` when D ≤ 1.
 
 ### Summaries
 
@@ -194,6 +207,9 @@ Notation: `c_i` are the counts, `f_c` the number of distinct k-mers with count `
 * `all_positions_summary` covers every position, counting NS as 0.0.
 * `support_label_counts` gives the count for each label;
   `low_support_count = NS + LS + ELS`.
+* `similarity_weighted_entropy_summary` (with the flag; otherwise `null`): `position_count`,
+  `average_entropy`, `lowest_entropy`, `highest_entropy` of the similarity-weighted entropy
+  and `average_observed_entropy` of the plug-in entropy, all over the eligible positions.
 
 ### HCS (historically conserved sequences)
 
@@ -234,7 +250,7 @@ newline. Top-level key order:
 `reference_version`, `sequence_count`, `alignment_length`, `kmer_length`,
 `support_threshold`, `alphabet`, `support_label_counts`, `low_support_count`,
 `average_entropy`, `lowest_entropy`, `highest_entropy`, `eligible_position_count`,
-`all_positions_summary`, `positions`, `hcs`.
+`all_positions_summary`, `similarity_weighted_entropy_summary`, `positions`, `hcs`.
 
 Positions are written to a temporary file one at a time and spliced in, so large
 alignments never hold all motif lists in memory. `--self-test` checks that the result is

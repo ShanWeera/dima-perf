@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent reference implementation of DiMA 1.0.0 (a test oracle).
+"""Independent reference implementation of DiMA (a test oracle).
 
 DiMA is described in: Tharanga S, Unlu ES, Hu Y, Sjaugi MF, Celik MA, Hekimoglu H,
 Miotto O, Oncel MM, Khan AM. "DiMA: sequence diversity dynamics analyser for viruses".
@@ -12,8 +12,10 @@ number at a relative tolerance of 1e-13 (zero exactly). It therefore follows thr
 1. **Simple and obviously correct.** Naive counting (slice every k-mer of every record
    and count it in a dict), one function per rule, the rule stated in the docstring.
    The only optimisations are the ones needed to finish a 3,000 x 3,400 alignment in
-   about a minute (caches keyed by exact integers, a mode-centred binomial walk that
-   stops only once the remaining terms are below 2**-997 of the largest one).
+   about a minute, or about two minutes with --similarity-weighted-entropy (caches keyed
+   by exact integers, a mode-centred binomial walk that stops only once the remaining
+   terms are below 2**-997 of the largest one, and each k-mer converted once to an
+   integer, so a pair's identical residues are the zero bytes of their XOR).
 2. **More accurate than the tolerance it is used with.** Every floating-point result is
    either correctly rounded from exact or 60-80 digit decimal arithmetic, or carries a
    short error analysis next to the code showing it is accurate to a few units in the
@@ -31,7 +33,7 @@ Usage::
     python3 dima_reference.py analyze -i FILE [-k K] [-s T] [-a auto|protein|dna|rna]
         [--validation strict|permissive|report] [--header-format A|B|C]
         [--metadata-fields A|B] [--header-fillna Unknown] [--hcs-min-incidence 100]
-        [--hcs-eligible-only] [-o out.json]
+        [--hcs-eligible-only] [--similarity-weighted-entropy] [-o out.json]
     python3 dima_reference.py --self-test
 
 Exit codes: 0 success, 1 internal error or self-test failure, 2 usage error, 3 I/O error
@@ -64,7 +66,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 
-REFERENCE_VERSION = 1
+REFERENCE_VERSION = 2
 
 EXIT_OK = 0
 EXIT_INTERNAL = 1
@@ -800,6 +802,64 @@ def miller_madow(mult: dict[int, int], n_obs: int) -> float | None:
     return _clean_float(value)
 
 
+def matches(x: int, y: int, k: int) -> int:
+    """Number of identical residues of two k-mers of length k, given as the big-endian
+    integers of their bytes: the zero bytes of their XOR (the self-test checks it against
+    counting equal positions directly)."""
+    return (x ^ y).to_bytes(k, "big").count(0)
+
+
+def similarity_numerators(variants: list[tuple[bytes, int]]) -> list[int]:
+    """Wu 2025 (Virus Evol 11:veaf029), Section 2.1: for each variant i, the exact integer
+    k*N - A_i with A_i = sum_{j != i} c_j * m_ij, where m_ij is the number of identical
+    residues of k-mers i and j, so that the similarity is s_ij = m_ij / k and the weight is
+    1 - S_i = (k*N - A_i) / (k*N). Every unordered pair of distinct k-mers is compared once,
+    as Wu defines it (never the per-site counting of the Rust library)."""
+    k = len(variants[0][0])
+    n_obs = sum(c for _, c in variants)
+    ints = [int.from_bytes(kmer, "big") for kmer, _ in variants]
+    a = [0] * len(variants)
+    for i in range(len(variants)):
+        ci = variants[i][1]
+        xi = ints[i]
+        for j in range(i + 1, len(variants)):
+            m = matches(xi, ints[j], k)
+            a[i] += variants[j][1] * m
+            a[j] += ci * m
+    return [k * n_obs - ai for ai in a]
+
+
+def similarity_weighted_entropy_decimal(variants: list[tuple[bytes, int]], n_obs: int) -> decimal.Decimal:
+    """Similarity-weighted entropy H_sim = sum_i (-f_i log2 f_i)(1 - S_i) in bits (Wu 2025,
+    Section 2.1 and Supplementary File 1) as an 80-digit Decimal; f_i = c_i / N and the
+    weights are exact rationals (``similarity_numerators``). Requires N >= 1; one distinct
+    k-mer gives exactly 0."""
+    assert n_obs >= 1
+    if len(variants) == 1:
+        return decimal.Decimal(0)
+    k = len(variants[0][0])
+    numerators = similarity_numerators(variants)
+    with decimal.localcontext(_HP80):
+        ln_n = _ln_int(n_obs)
+        total = decimal.Decimal(0)
+        for (_, c), num in zip(variants, numerators, strict=True):
+            weight = Fraction(num, k * n_obs)
+            total += decimal.Decimal(c) * (ln_n - _ln_int(c)) * decimal.Decimal(weight.numerator) / decimal.Decimal(
+                weight.denominator
+            )
+        return total / (decimal.Decimal(n_obs) * _LN2_DEC)
+
+
+def normalised_entropy(value: decimal.Decimal, distinct: int) -> float | None:
+    """value / log2(D), capped at 1 (Wu 2025, Section 2.1: H_n and H_nsim, D the number of
+    distinct k-mers, Index included); None when D <= 1."""
+    if distinct <= 1:
+        return None
+    with decimal.localcontext(_HP80):
+        x = value * _LN2_DEC / _ln_int(distinct)
+    return _clean_float(min(x, decimal.Decimal(1)))
+
+
 def chao_coverage_a(n_obs: int, f1: int, f2: int) -> Fraction:
     """The A parameter of Chao, Wang & Jost (2013), as an exact rational.
 
@@ -1171,6 +1231,7 @@ class Options:
     hcs_percent_text: str = "100"
     hcs_percent: Fraction = Fraction(100)
     hcs_eligible_only: bool = False
+    similarity_weighted_entropy: bool = False
 
 
 @dataclass
@@ -1182,6 +1243,8 @@ class PositionSummary:
     entropy: float | None
     top_kmer: str | None
     top_count: int
+    similarity_weighted_entropy: float | None = None
+    observed_entropy: float | None = None
 
 
 def parse_hcs_percent(text: str) -> tuple[str, Fraction]:
@@ -1241,6 +1304,7 @@ def analyse_position(
     threshold: int,
     metadata: list[tuple[str, ...]] | None,
     fields: list[str] | None,
+    similarity: bool = False,
 ) -> tuple[dict, PositionSummary]:
     """Count the k-mers starting at 0-based column p and compute every per-position value.
 
@@ -1249,7 +1313,10 @@ def analyse_position(
     non-Index variants; total_variants_incidence = 100 (sum of non-Index counts) /
     support (None when support == 0); distinct_variants_incidence = 100
     distinct_variants_count / (sum of non-Index counts) (None when that sum is 0).
-    Integer quotients use Python's correctly rounded int / int division.
+    Integer quotients use Python's correctly rounded int / int division. With
+    ``similarity``, also similarity-weighted entropy and the observed and similarity-weighted
+    entropies normalised by log2 of the number of distinct k-mers (None without support;
+    the normalised values None with one distinct k-mer); without it the three keys are None.
     """
     if metadata is None:
         kmers = [s[p:p + k] for s, v in zip(seqs, valids, strict=True) if v[p]]
@@ -1277,6 +1344,12 @@ def analyse_position(
     mult = multiplicities(counts)
     observed = plug_in_entropy(mult, support)
     entropy, method, fallback = dima_entropy(mult, support, threshold, observed)
+    weighted = normalised_observed = normalised_weighted = None
+    if similarity and support > 0:
+        weighted_dec = similarity_weighted_entropy_decimal(variants, support)
+        weighted = _clean_float(weighted_dec)
+        normalised_observed = normalised_entropy(plug_in_entropy_decimal(mult, support), len(variants))
+        normalised_weighted = normalised_entropy(weighted_dec, len(variants))
 
     motifs = []
     for (kmer, count), code in zip(variants, codes, strict=True):
@@ -1305,11 +1378,16 @@ def analyse_position(
         "miller_madow": miller_madow(mult, support),
         "chao_wang_jost": chao_wang_jost(mult, support),
         "sample_coverage": sample_coverage(mult, support),
+        "similarity_weighted_entropy": weighted,
+        "normalised_observed_entropy": normalised_observed,
+        "normalised_similarity_weighted_entropy": normalised_weighted,
         "diversity_motifs": motifs,
     }
     top_kmer = variants[0][0].decode("ascii") if variants else None
     top_count = variants[0][1] if variants else 0
-    return obj, PositionSummary(support, label, entropy, top_kmer, top_count)
+    return obj, PositionSummary(
+        support, label, entropy, top_kmer, top_count, similarity_weighted_entropy=weighted, observed_entropy=observed
+    )
 
 
 def find_hcs(
@@ -1477,7 +1555,9 @@ def analyse(data: bytes, options: Options, out, log=None) -> None:
     summaries: list[PositionSummary] = []
     with tempfile.TemporaryFile() as spool:
         for p in range(positions):
-            obj, summary = analyse_position(p, seqs, valids, k, threshold, metadata, fields)
+            obj, summary = analyse_position(
+                p, seqs, valids, k, threshold, metadata, fields, options.similarity_weighted_entropy
+            )
             if p:
                 spool.write(b",")
             spool.write(_dumps(obj).encode("ascii"))
@@ -1496,6 +1576,18 @@ def analyse(data: bytes, options: Options, out, log=None) -> None:
         average, lowest, highest = entropy_summary(eligible)
         everything = [(p + 1, 0.0 if s.entropy is None else s.entropy) for p, s in enumerate(summaries)]
         all_average, all_lowest, all_highest = entropy_summary(everything)
+        similarity_summary = None
+        if options.similarity_weighted_entropy:
+            weighted = [(p + 1, s.similarity_weighted_entropy) for p, s in enumerate(summaries) if s.label is None]
+            observed = [(p + 1, s.observed_entropy) for p, s in enumerate(summaries) if s.label is None]
+            w_average, w_lowest, w_highest = entropy_summary(weighted)
+            similarity_summary = {
+                "position_count": len(weighted),
+                "average_entropy": w_average,
+                "lowest_entropy": w_lowest,
+                "highest_entropy": w_highest,
+                "average_observed_entropy": entropy_summary(observed)[0],
+            }
 
         head = {
             "reference_version": REFERENCE_VERSION,
@@ -1516,6 +1608,7 @@ def analyse(data: bytes, options: Options, out, log=None) -> None:
                 "lowest_entropy": all_lowest,
                 "highest_entropy": all_highest,
             },
+            "similarity_weighted_entropy_summary": similarity_summary,
         }
         hcs = find_hcs(
             summaries, k, threshold, options.hcs_percent_text, options.hcs_percent, options.hcs_eligible_only
@@ -1550,7 +1643,7 @@ def analyse_to_string(data: bytes, options: Options) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=PROG,
-        description="Independent stdlib-only reference implementation of DiMA 1.0.0 (test oracle).",
+        description="Independent stdlib-only reference implementation of DiMA (test oracle).",
     )
     parser.add_argument("--self-test", action="store_true", help="run the built-in checks and exit")
     sub = parser.add_subparsers(dest="command")
@@ -1565,6 +1658,11 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--header-fillna", default="Unknown", help="fill value for missing metadata (default Unknown)")
     a.add_argument("--hcs-min-incidence", default="100", help="HCS index incidence threshold P, 50 < P <= 100")
     a.add_argument("--hcs-eligible-only", action="store_true", help="HCS only from positions with support > T")
+    a.add_argument(
+        "--similarity-weighted-entropy",
+        action="store_true",
+        help="also similarity-weighted entropy and the normalised entropies (Wu 2025)",
+    )
     a.add_argument("-o", "--output", default=None, help="write JSON here (atomically) instead of stdout")
     return parser
 
@@ -1598,6 +1696,7 @@ def options_from_args(args: argparse.Namespace) -> Options:
         hcs_percent_text=percent_text,
         hcs_percent=percent,
         hcs_eligible_only=args.hcs_eligible_only,
+        similarity_weighted_entropy=args.similarity_weighted_entropy,
     )
 
 
@@ -1879,6 +1978,9 @@ def self_test() -> int:
     t.check(classify_motifs([6, 1, 1]) == ["I", "U", "U"], "motifs: index + uniques, no major")
     t.check(classify_motifs([]) == [], "motifs: empty")
 
+    # 6. Similarity-weighted entropy (Wu 2025).
+    _self_test_similarity(t)
+
     # Parsing, alphabet, symbols, metadata, HCS and the JSON assembly.
     _self_test_pipeline(t)
 
@@ -1888,6 +1990,51 @@ def self_test() -> int:
         return EXIT_INTERNAL
     print(f"{PROG}: self-test passed: {t.count} checks ({elapsed:.1f} s)", file=sys.stderr)
     return EXIT_OK
+
+
+def _self_test_similarity(t: _Checker) -> None:
+    """Similarity-weighted entropy against direct counting and closed forms."""
+    # matches() (zero bytes of the XOR) == counting equal positions directly.
+    pairs = [
+        (b"A", b"A"), (b"A", b"C"), (b"ACGT", b"ACGT"), (b"ACGT", b"TGCA"), (b"ACGT", b"ACGA"),
+        (b"MKTAYIAKQR", b"MKTAYLAKQR"), (b"A" * 1000, b"A" * 999 + b"C"), (b"AC" * 500, b"CA" * 500),
+    ]
+    for x, y in pairs:
+        k = len(x)
+        direct = sum(a == b for a, b in zip(x, y, strict=True))
+        t.check(matches(int.from_bytes(x, "big"), int.from_bytes(y, "big"), k) == direct, f"matches {x[:8]!r}..")
+
+    def h_sim(variants):
+        return _clean_float(similarity_weighted_entropy_decimal(variants, sum(c for _, c in variants)))
+
+    # Saturated pools (Wu 2025, Figs 4 and 5c): m free sites of k at equal frequencies give
+    # weights 4^-m + 3m/(4k) and H = 2m bits, so H_sim = 2m (4^-m + 3m/(4k)).
+    def saturated(m, k, letters):
+        return [
+            (bytes(letters[(x // len(letters) ** s) % len(letters)] for s in range(m)) + letters[0:1] * (k - m), 1)
+            for x in range(len(letters) ** m)
+        ]
+
+    for k in range(1, 6):
+        want = 2 * k * (Fraction(1, 4 ** k) + Fraction(3, 4))
+        t.check(h_sim(saturated(k, k, b"ACGT")) == float(want), f"saturated pool k={k}")
+    t.check(h_sim(saturated(4, 6, b"ACGU")) == 129 / 32, "Wu Fig. 5c pool: 129/32")
+    # k = 1: every weight is 1, so H_sim equals the plug-in entropy.
+    singles = [(b"A", 5), (b"C", 3), (b"G", 1)]
+    t.check(h_sim(singles) == plug_in_entropy(multiplicities([5, 3, 1]), 9), "k = 1 gives plug-in entropy")
+    # One distinct k-mer: 0, and the normalised values are undefined.
+    t.check(h_sim([(b"ACG", 7)]) == 0.0, "one k-mer gives 0")
+    t.check(normalised_entropy(decimal.Decimal(0), 1) is None, "normalised undefined at D = 1")
+    # Two equal-count variants at distance d: (k + d) / (2k).
+    for k, d, c in [(3, 1, 4), (9, 2, 7), (27, 27, 1), (10, 5, 1000)]:
+        x = b"A" * k
+        y = b"C" * d + b"A" * (k - d)
+        t.check(h_sim([(x, c), (y, c)]) == (k + d) / (2 * k), f"two variants k={k} d={d}")
+    # A uniform population: H_n is exactly 1 (capped), H_nsim below 1 when similar.
+    uniform = [(b"AA", 1), (b"AC", 1), (b"CA", 1), (b"CC", 1)]
+    t.check(normalised_entropy(plug_in_entropy_decimal(multiplicities([1, 1, 1, 1]), 4), 4) == 1.0, "H_n = 1")
+    hn_sim = normalised_entropy(similarity_weighted_entropy_decimal(uniform, 4), 4)
+    t.check(hn_sim is not None and 0 < hn_sim < 1, "H_nsim below 1")
 
 
 def _expect_error(t: _Checker, what: str, func, error_type=DimaError, fragment: str = "") -> None:

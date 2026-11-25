@@ -1,7 +1,8 @@
 # Test datasets
 
-All files are stored bzip2-compressed (`bzip2 -9`; DiMA and the Python reference both read
-`.bz2` directly, so the tests also exercise decompression). They were recompressed from the
+The alignments are stored bzip2-compressed (`bzip2 -9`; DiMA and the Python reference both read
+`.bz2` directly, so the tests also exercise decompression); the one results file is
+gzip-compressed, because DiMA reads results JSON plain, gzip or Zstandard, not bzip2. They were recompressed from the
 earlier xz copies when DiMA stopped reading xz (D116); the decompressed bytes are unchanged.
 They are committed byte-exact: `.gitattributes` marks this directory `-text`. Checksums are
 SHA-256 of the **decompressed** bytes.
@@ -12,6 +13,9 @@ SHA-256 of the **decompressed** bytes.
 | `MERS_Spike_nt.fasta.bz2` (MERS-CoV spike gene, lower-case) | 499 × 4,065 | `b1d1880e2546504b57d93e7b9343ff80edfb312e19886220d5e2f1a437253243` | 2,120,534 |
 | `HIV1_ALL_2020_pol_PRO.fasta.bz2` (HIV-1 pol protein, LANL alignment, CRLF) | 3,756 × 1,197 | `281f1fcd266d00865b910f7467dddf63fe4acd86e1e9c5c53596fe4e4d154af4` | 4,754,950 |
 | `HIV1_FLT_2022_pol_DNA.fasta.bz2` (HIV-1 group M pol gene; the paper's HIV dataset) | 2,637 × 3,390 | `45878c9e55703c148105139332346a8b3152bac0ac85d26cb122c2a9172895a2` | 9,194,803 |
+| `tobrfv_tm2.fasta.bz2` (ToBRFV 5'-120nts reads, tm-2 plants; Wu 2025) | 10,833 × 120 | `2665bb5348c260475aa66008cb8c79e674b465c41b82720acf88fb201c88ffd4` | 1,427,535 |
+| `tobrfv_tm22.fasta.bz2` (ToBRFV 5'-120nts reads, Tm-2² plants; Wu 2025) | 6,969 × 120 | `d44eb59de3f4697a335d0b567dbfe6611bd4d8b6aec108c43fa03a248cda424d` | 917,725 |
+| `results-schema-1.0.0.json.gz` (results written by dima 1.0.0, schema 1.0.0) | — | `4ee511590ca0fb53f95126e078ee155693f7264ab7f1d232c7870adc365faff9` | 15,400 |
 
 The MERS amino-acid dataset is byte-identical to `samples/mers_spike_aa.fasta` and is not
 duplicated here.
@@ -30,6 +34,21 @@ duplicated here.
   (stop, 3,625 times) and `#` (frameshift, 192 times). Cite the Los Alamos HIV Sequence Database and the
   HIV Sequence Compendium as requested on <https://www.hiv.lanl.gov>.
 * All four files were supplied by the DiMA maintainer (retrieved 2026-10-04) for validation.
+* **ToBRFV (tm-2 and Tm-2²).** From the supplementary data of Wu J. Similarity-weighted entropy
+  for quantifying genetic diversity in viral quasispecies. *Virus Evol* 2025;11(1):veaf029,
+  doi:10.1093/ve/veaf029, published under the Creative Commons Attribution 4.0 licence (CC BY
+  4.0): Supplementary File 2 lists the unique 120-nt sequences of the 5'-120nts region of tomato
+  brown rugose fruit virus in tm-2 and Tm-2² tomato plants with their read counts (48 sequences
+  and 10,833 reads; 47 and 6,969; sequences below 0.1% of the reads were excluded by the
+  author). Each unique sequence is written once per read, so that a run at $k = 120$ (one
+  position) counts the reads; records are named `SeqN_r`. Retrieved from Europe PMC (PMC12079039,
+  supplementary files) on 2026-11-25 and converted with
+  `python3 scripts/reference/tobrfv_from_supplement.py "Supplementary File 2.xlsx" DIR`,
+  then `bzip2 -9`. Used for the similarity-weighted entropy paper test.
+* **`results-schema-1.0.0.json.gz`.** The golden results of the `tiny` test input
+  (`tests/golden/tiny/results.json`) as dima 1.0.0 wrote them, before schema 1.1.0, frozen to
+  test that older results are read as runs without the options their schema did not have
+  (`gzip -9 -n`).
 
 ## `dima-v5.0.9/` — reference implementation fixtures
 

@@ -156,7 +156,7 @@ the AVANA tool extrapolated from 100 random sub-alignments by default [@khan2017
 - Results are reproducible bit for bit; no random seed is involved.
 - On the paper's HIV-1 *pol* dataset the mean corrected entropy is 5.3504 bits; the paper reports
   about 5.35, and repeated runs of the random procedure give 5.350–5.353 (see
-  [Comparison with the paper](/explanation/paper-comparison/)).
+  [Comparison with the papers](/explanation/paper-comparison/)).
 - **Fig. 1C.** At MERS-CoV spike position 25 the paper shows 1.38 bits ($T = 30$). The exact
   expectation is 1.4451 bits. A simulation of the paper's random procedure at that position
   (20,000 runs) has a standard deviation of 0.22 bits, and 1.38 lies at about its 39th

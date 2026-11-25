@@ -105,6 +105,7 @@ evidence used instead.
 |---|---|
 | An independent reference implementation as test oracle, golden files compared byte for byte, and the paper's datasets in the test suite | The oracle problem in scientific software [@kanewala2014] [general]; [@wilson2014; @hunterzinck2021]. |
 | Property-based tests (for example: results do not depend on line wrapping, case, compression, threads or batch size) | [@claessen2000] [general]. |
+| Similarity-weighted entropy is checked against a reference that forms every pair of k-mers, as Wu defines it, against Wu's published data and printed values, and by metamorphic relations (record order, duplicated records, relabelled letters, mirrored records, $k = 1$) | The library's per-site counting is a different computation of the same sums, so comparing it with the pairwise definition tests the shortcut itself. The relations state what the result must be for a transformed input, so they also catch an error the two implementations could share. |
 | Reproducible benchmarks with the exact commands, hardware and versions | [@weber2019; @mangul2019bench]. |
 
 ## References

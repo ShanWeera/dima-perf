@@ -12,7 +12,7 @@ in the [Glossary](/reference/glossary/).
 ### Is this the DiMA of the paper?
 
 Yes. `dima` implements the method of the DiMA paper [@tharanga2025] and reproduces its published
-results ([Comparison with the paper](/explanation/paper-comparison/)). It replaces `dima-cli` 5.x,
+results ([Comparison with the papers](/explanation/paper-comparison/)). It replaces `dima-cli` 5.x,
 which stays installable from PyPI but is no longer developed, and the web server.
 
 ### I used dima-cli 5.x. What changed?
@@ -111,7 +111,7 @@ command-line tool and the desktop app are built on.
 
 ### Why do my results differ from the paper or from dima-cli 5.x?
 
-[Comparison with the paper](/explanation/paper-comparison/) reproduces the paper's results, and
+[Comparison with the papers](/explanation/paper-comparison/) reproduces the paper's results, and
 [Differences from DiMA v5.0.9](/explanation/differences/) lists every deliberate difference from
 5.x with its reason. For example, the default support threshold is 100, as in the paper, where
 5.x used 30.

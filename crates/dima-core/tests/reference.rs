@@ -161,7 +161,8 @@ fn reference(case: &Case, path: &Path) -> Value {
         .arg(path)
         .args(["-k", &case.k.to_string(), "-s", &case.threshold.to_string()])
         .args(["-a", case.alphabet.as_str(), "--validation", "permissive"])
-        .args(["--hcs-min-incidence", case.hcs]);
+        .args(["--hcs-min-incidence", case.hcs])
+        .arg("--similarity-weighted-entropy");
     if case.header {
         cmd.args(["--header-format", FORMAT]);
     }
@@ -177,12 +178,13 @@ fn reference(case: &Case, path: &Path) -> Value {
     serde_json::from_slice(&out.stdout).unwrap()
 }
 
-fn ours(case: &Case, path: &Path, estimator: Estimator) -> Results {
+fn ours(case: &Case, path: &Path, estimator: Estimator, similarity: bool) -> Results {
     let params = AnalysisParams {
         alphabet: Some(case.alphabet),
         kmer_length: Some(case.k),
         support_threshold: Some(case.threshold),
         estimator: Some(estimator),
+        similarity_weighted_entropy: similarity,
         validation: Some(ValidationMode::Permissive),
         header_format: case
             .header
@@ -234,10 +236,41 @@ fn agrees_with_the_python_reference() {
         let path = dir.path().join(format!("{}.fasta", case.name));
         std::fs::write(&path, &case.fasta).unwrap();
         let r = reference(&case, &path);
-        let d = ours(&case, &path, Estimator::Dima);
-        let mm = ours(&case, &path, Estimator::MillerMadow);
-        let cwj = ours(&case, &path, Estimator::ChaoWangJost);
+        // Similarity-weighted entropy with two estimators (it must not depend on them), not with
+        // the third (it must then be absent).
+        let d = ours(&case, &path, Estimator::Dima, true);
+        let mm = ours(&case, &path, Estimator::MillerMadow, false);
+        let cwj = ours(&case, &path, Estimator::ChaoWangJost, true);
         let n = &case.name;
+        let s = d.similarity_weighted_entropy_summary.as_ref().unwrap();
+        let rs = &r["similarity_weighted_entropy_summary"];
+        assert_eq!(Some(s.position_count), rs["position_count"].as_u64(), "{n}");
+        num(
+            &format!("{n} weighted mean"),
+            s.average_entropy,
+            &rs["average_entropy"],
+        );
+        ext(
+            &format!("{n} weighted lowest"),
+            s.lowest_entropy,
+            &rs["lowest_entropy"],
+        );
+        ext(
+            &format!("{n} weighted highest"),
+            s.highest_entropy,
+            &rs["highest_entropy"],
+        );
+        num(
+            &format!("{n} weighted observed mean"),
+            s.average_observed_entropy,
+            &rs["average_observed_entropy"],
+        );
+        assert_eq!(
+            cwj.similarity_weighted_entropy_summary.as_ref(),
+            Some(s),
+            "{n}"
+        );
+        assert!(mm.similarity_weighted_entropy_summary.is_none(), "{n}");
         assert_eq!(Some(d.sequence_count), r["sequence_count"].as_u64(), "{n}");
         assert_eq!(
             Some(d.run.alignment_length),
@@ -295,6 +328,29 @@ fn agrees_with_the_python_reference() {
         for (i, rp) in positions.iter().enumerate() {
             let (p, m, c) = (&d.results[i], &mm.results[i], &cwj.results[i]);
             let w = format!("{n} position {}", p.position);
+            let similarity = |q: &dima_core::model::PositionResult| {
+                [
+                    q.similarity_weighted_entropy,
+                    q.normalised_observed_entropy,
+                    q.normalised_similarity_weighted_entropy,
+                ]
+            };
+            for (key, got) in [
+                "similarity_weighted_entropy",
+                "normalised_observed_entropy",
+                "normalised_similarity_weighted_entropy",
+            ]
+            .into_iter()
+            .zip(similarity(p))
+            {
+                num(&format!("{w} {key}"), got, &rp[key]);
+            }
+            assert_eq!(
+                similarity(c).map(|x| x.map(f64::to_bits)),
+                similarity(p).map(|x| x.map(f64::to_bits)),
+                "{w}: the estimator changed similarity-weighted entropy"
+            );
+            assert_eq!(similarity(m), [None; 3], "{w}");
             assert_eq!(Some(p.position), rp["position"].as_u64(), "{w}");
             assert_eq!(
                 serde_json::to_value(p.low_support).unwrap(),
