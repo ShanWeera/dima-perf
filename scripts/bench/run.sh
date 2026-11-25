@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Reproducible benchmarks (D81): wall time with hyperfine (≥ 10 runs) and peak memory with
 # GNU time, on the committed datasets, synthetic scale-ups, every input compression and a
-# thread-scaling series, optionally against DiMA v5.0.9 (`pip install dima-cli`). Writes
-# BENCHMARK.md with the hardware, software versions and exact commands.
+# thread-scaling series, the largest and the most diverse alignment also with
+# --similarity-weighted-entropy, optionally against DiMA v5.0.9 (`pip install dima-cli`).
+# Writes BENCHMARK.md with the hardware, software versions and exact commands.
 #
 # Usage: scripts/bench/run.sh [--quick] [--dima PATH] [--v509 PATH] [--out FILE]
 #   --quick   fewer runs (3) and smaller scale-ups, for constrained machines; marked as such
@@ -98,8 +99,12 @@ bench "HIV-1 pol DNA (.gz)" "$data/hiv_pol_dna.fasta.gz"
 bench "HIV-1 pol DNA (.bz2)" "$data/hiv_pol_dna.fasta.bz2"
 bench "HIV-1 pol DNA (.zst)" "$data/hiv_pol_dna.fasta.zst"
 bench "HIV-1 pol DNA ×$factor (.zst)" "$data/hiv_x$factor.fasta.zst"
+# Similarity-weighted entropy takes time in proportion to each position's distinct k-mers × k,
+# so the largest and the most diverse alignment are measured again with it.
+bench "HIV-1 pol DNA ×$factor (.zst), similarity-weighted" "$data/hiv_x$factor.fasta.zst" --similarity-weighted-entropy
 bench "30 kb genome" "$data/genome30kb.fasta" -a dna
 bench "High-diversity protein" "$data/diverse_protein.fasta"
+bench "High-diversity protein, similarity-weighted" "$data/diverse_protein.fasta" --similarity-weighted-entropy
 # LANL headers are '.'-separated, so metadata stratification is measured on the synthetic
 # genome alignment, whose headers are 'Id|Host|Year'.
 bench "30 kb genome, metadata" "$data/genome30kb.fasta" -a dna --header-format 'Id|Host|Year' --metadata-fields 'Host|Year'
@@ -193,7 +198,8 @@ os=$( (. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME") || uname -s)
   echo "scripts/bench/run.sh$([ "$quick" = 1 ] && echo ' --quick')"
   echo '```'
   echo
-  echo "Micro-benchmarks of the reader, the k-mer engine and the entropy estimators:"
+  echo "Micro-benchmarks of the reader, the k-mer engine, the entropy estimators and"
+  echo "similarity-weighted entropy:"
   echo "\`cargo bench -p dima-core\`."
 } > "$out"
 echo "wrote $out" >&2

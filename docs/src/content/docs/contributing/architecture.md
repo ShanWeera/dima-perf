@@ -37,7 +37,8 @@ The modules are layered: each uses only modules of the layers above it.
 | | `header` | Header formats, value cleaning, interning, metadata diagnostics |
 | | `normalise` | Parallel conversion of raw records into fixed-width rows of canonical residues |
 | | `validation` | The first-batch probe shared by the analysis and the desktop app's pre-check |
-| statistics | `entropy` | Plug-in, DiMA, Miller–Madow and Chao–Wang–Jost estimators; sample coverage |
+| statistics | `entropy` | Plug-in, DiMA, Miller–Madow and Chao–Wang–Jost estimators; sample coverage; normalised entropy |
+| | `similarity` | Similarity-weighted entropy of one position: pure, in O(D·k) time for D distinct k-mers of length k, from the residue counts at each offset (never pairs of k-mers); and the texts that describe the option, shared by the help and the desktop app |
 | | `stats` | Support labels, motif classes and incidences |
 | | `position` | One position's result from its counts |
 | | `summary` | Run summaries |
@@ -66,8 +67,9 @@ The modules are layered: each uses only modules of the layers above it.
    position in O(1); a per-position hash table, verified byte by byte, assigns exact k-mer
    identifiers and counts them, with header-value counts alongside. Nothing proportional to
    sequences × positions is stored.
-5. **Finalise** (`position`, `entropy`, `stats`). Positions are finalised in parallel from their
-   counts: support class, entropies, coverage, motifs, incidences, metadata.
+5. **Finalise** (`position`, `entropy`, `stats`, `similarity`). Positions are finalised in
+   parallel from their counts: support class, entropies, coverage, motifs, incidences, metadata
+   and, when requested, similarity-weighted entropy, which also reads the k-mers.
 6. **Summarise** (`summary`, `provenance`). Summaries are reduced in position order, and the
    provenance and diagnostics are assembled.
 7. **Write** (`output`, `hcs`). The front end writes the requested outputs through the atomic
@@ -76,6 +78,29 @@ The modules are layered: each uses only modules of the layers above it.
 Determinism comes from this structure: no randomness, logarithms from `libm`, compensated sums in
 a fixed order, variants sorted by count and bytes, and k-mer identifiers that never leave the
 engine. Thread count and batch size change only the speed.
+
+### How an option flows
+
+An optional method follows the same path from end to end; similarity-weighted entropy
+(`--similarity-weighted-entropy`) is an example:
+
+1. **Parameter** (`config`). `AnalysisParams.similarity_weighted_entropy`, with its origin
+   (default or user) and its command-line form for the run report.
+2. **Computation** (`analysis`, `position`, `similarity`, `entropy`). `analyze()` hands the flag
+   to the `Finaliser`; for each position with support, it calls
+   `similarity::similarity_weighted_entropy` and `entropy::normalised`. With the flag off,
+   nothing is computed.
+3. **Results** (`model`, `summary`, `provenance`, `methods`). Three fields of `PositionResult`,
+   `null` when off; the summary over eligible positions; the parameter and the references in
+   `run`; a sentence in the methods paragraph of `dima cite --from`.
+4. **Outputs** (`output`, `schemas/`). The JSON, JSON Lines and positions-table writers; the
+   results schema (1.1.0), whose rules say where the values must be present; and the reader,
+   which checks the same rules and reads results of schema 1.0.0 as runs without the option.
+
+The command line decides only whether the option has any effect: when no planned output holds
+the values, it warns and turns the flag off before the analysis starts. The independent
+reference implementation in `scripts/reference/` computes the same values pairwise, as Wu
+defines them, so the library's per-offset counting is tested against a different method.
 
 ## The command line
 

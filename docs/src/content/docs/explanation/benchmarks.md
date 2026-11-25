@@ -15,8 +15,12 @@ scripts/bench/run.sh --quick    # fewer repetitions and smaller data, marked as 
 The script measures wall time with `hyperfine` and peak memory with GNU `time` on the datasets
 committed to the repository, on synthetic scale-ups (millions of sequences, a long genome, a
 highly diverse alignment), on every input compression format, and across thread counts; it can
-also run DiMA v5.0.9 (`--v509`) for comparison. It writes `BENCHMARK.md` at the root of the
-repository with the hardware, operating system, software versions and the exact commands.
+also run DiMA v5.0.9 (`--v509`) for comparison. The largest and the most diverse alignment are
+measured a second time with `--similarity-weighted-entropy` (rows "…, similarity-weighted"),
+because that option takes time in proportion to the number of distinct k-mers at each position
+times $k$ (see [Analyse large alignments](/how-to/large-alignments/#similarity-weighted-entropy)).
+It writes `BENCHMARK.md` at the root of the repository with the hardware, operating system,
+software versions and the exact commands.
 
 :::note[Where the numbers are]
 The current measurements are in
