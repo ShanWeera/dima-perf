@@ -478,10 +478,10 @@ becomes a statement about the k-mers sampled across hosts. These uses are DiMA's
 untested.
 
 As of 25 November 2026, searches of OpenAlex, Semantic Scholar, OpenCitations and Europe PMC
-(including full text) found no published application or evaluation of the metric by other
-authors; the works that cite it are reviews, and Crossref's citation count agrees. Wu's
-ToBRFV reads are published, and with them DiMA reproduces his values for one plant but not for
-the other (see [Comparison with the papers](/explanation/paper-comparison/#similarity-weighted-entropy-wu-2025)).
+(including full text; Crossref's citation count agrees) found no published application or
+evaluation of the metric by other authors; the works that cite it are reviews. Wu's ToBRFV data
+(the unique sequences with their read counts) are published, and with them DiMA reproduces his
+values for one plant but not for the other (see [Comparison with the papers](/explanation/paper-comparison/#similarity-weighted-entropy-wu-2025)).
 
 ### How the values change with the number of sequences
 
