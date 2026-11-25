@@ -13,6 +13,10 @@ nucleotide alignment it:
 - counts the k-mers and their support, and labels positions without enough data (NS, LS, ELS);
 - estimates Shannon entropy with the paper's sample-size correction (or an alternative
   estimator), and the sample coverage;
+- optionally computes similarity-weighted entropy, in which near-identical variants count for
+  less (Wu 2025, *Virus Evolution* 11(1):veaf029,
+  [doi:10.1093/ve/veaf029](https://doi.org/10.1093/ve/veaf029)), an addition to the paper's
+  method;
 - classifies variants as Index, Major, Minor and Unique motifs with their incidences;
 - optionally counts variants per value of FASTA header fields (host, country, year, …);
 - finds historically conserved sequences, with a confidence bound for each.

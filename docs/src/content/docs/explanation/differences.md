@@ -7,6 +7,8 @@ DiMA v5.0.9 (`dima-cli`, tag `v5.0.9` of the original repository, MIT licence) i
 implementation published with the paper [@tharanga2025]. The paper's method is the specification
 of this implementation; it departs from v5.0.9 only where v5.0.9 departs from the paper, where a
 result was undefined or unstable, or where an engineering change leaves results unchanged.
+The optional methods that are in neither v5.0.9 nor the paper, the alternative estimators and
+similarity-weighted entropy, change nothing unless they are requested.
 Results of v5.0.9 can be compared with DiMA's at a relative tolerance of about $10^{-5}$ for
 incidences (v5.0.9 stores them in single precision) and statistically for entropies (v5.0.9's
 correction is random).
@@ -26,6 +28,7 @@ correction is random).
 | Default support threshold | 30 | 100 | the paper's text: "default is 100 sequences, arbitrarily defined", repeated in its HIV-1 application (its Fig. 2 shows 30, v5.0.9's default) |
 | Default k | 9 for every alphabet | 9 for proteins, 27 for nucleotides | 27 nucleotides encode a 9-mer |
 | Estimators | the correction only | the correction (default), Chao–Wang–Jost, Miller–Madow, raw, and the sample coverage | [@chao2013; @miller1955; @chao2012] |
+| Similarity-weighted entropy | not computed | on request (`--similarity-weighted-entropy`), similarity-weighted entropy and the observed and similarity-weighted entropies divided by $\log_2$ of the number of distinct k-mers; off by default, and every other value is the same with or without it | an addition from Wu, not part of the paper or of v5.0.9 [@wu2025]; see [similarity-weighted entropy](/explanation/entropy/#similarity-weighted-entropy-opt-in) |
 
 ## Conserved sequences
 
@@ -80,7 +83,9 @@ The JSON keys of v5.0.9 are kept (`query_name`, `support_threshold`, `low_suppor
 New keys add what v5.0.9 left implicit: positions are 1-based, the method and fallback of each
 entropy, the observed entropy, the sample coverage, the summaries described above, and the full
 provenance of the run (`run`: parameters with their origin, input checksum, alphabet decision,
-validation, diagnostics and references). See [JSON outputs](/reference/json/).
+validation, diagnostics and references). With `--similarity-weighted-entropy`, each position also
+carries its similarity-weighted and normalised entropies and the results a summary of them;
+without it, these keys are `null`. See [JSON outputs](/reference/json/).
 
 ## References
 

@@ -121,9 +121,18 @@ the rule. It is not the paper's summary; see
 at least 2), its minimum and mean, and with `--min-coverage` the threshold and the number of
 positions below it.
 
+**Similarity-weighted entropy summary** (`similarity_weighted_entropy_summary`). Only with
+`--similarity-weighted-entropy`, and `null` otherwise: the mean, lowest and highest
+[similarity-weighted entropy](/explanation/entropy/#similarity-weighted-entropy-opt-in)
+[@wu2025] over the eligible positions, and the mean *observed* entropy of the same positions, so
+that the two can be compared like for like. The normalised values are not summarised.
+
 For the MERS-CoV spike protein with the defaults: 1,345 positions, all eligible; mean entropy
 0.1261 bits; lowest 0 bits (first at position 7, 455 positions tied); highest 1.5878 bits at
-position 26.
+position 26. With `--similarity-weighted-entropy`, the mean similarity-weighted entropy is
+0.0363 bits, against a mean observed entropy of 0.1207 bits over the same positions; the lowest
+is 0 bits (first at position 7, the same 455 positions tied, each with a single variant) and the
+highest 0.4548 bits, again at position 26.
 
 ## References
 

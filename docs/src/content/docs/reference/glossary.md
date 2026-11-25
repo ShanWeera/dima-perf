@@ -36,6 +36,13 @@ at that position. See [valid k-mers and support](/explanation/method/#valid-k-me
 
 A distinct valid k-mer at a position, with the number of sequences that carry it.
 
+### Distinct k-mers (D)
+
+The number D of different valid k-mers at a position, the Index included: 1 at a fully conserved
+position, 0 without support. `distinct_variants_count` is a different number: it leaves out the
+Index variant (or variants, when several are tied), so at MERS-CoV spike position 25 D is 10 and
+`distinct_variants_count` is 9.
+
 ## Support
 
 ### Support
@@ -87,6 +94,30 @@ Why a position's entropy was computed with another method than the one requested
 The estimated probability that one more sequence would carry a k-mer already seen at that position
 (`sample_coverage`). Low coverage means that much of the diversity there has probably not been
 sampled. See [sample coverage](/explanation/entropy/#sample-coverage).
+
+### Similarity-weighted entropy
+
+An optional entropy, in bits, computed only on request (`--similarity-weighted-entropy`;
+`similarity_weighted_entropy`). Each variant's part of the observed entropy is weighted by how
+different the variant is from the rest of the position, so variants that differ at only a few
+residues count for less than unrelated ones. It is never more than the observed
+entropy, and it is 0 at a position with a single variant. It is not part of the paper's method.
+See [similarity-weighted entropy](/explanation/entropy/#similarity-weighted-entropy-opt-in).
+
+### Similarity of two k-mers
+
+The proportion of their k residues that are the same: (k − d)/k when two k-mers differ at d
+residues. Every substitution counts alike, whatever the residues. Similarity-weighted entropy
+uses it.
+
+### Normalised entropy (H_n and H_nsim)
+
+An entropy divided by log₂ D, the largest observed entropy possible with D distinct k-mers, which
+puts it between 0 and 1: `normalised_observed_entropy` (H_n) for the observed entropy and
+`normalised_similarity_weighted_entropy` (H_nsim) for the similarity-weighted entropy. Both are
+computed only with `--similarity-weighted-entropy`, and are undefined (`null`, `NA`) at a
+position with fewer than two distinct k-mers. See
+[similarity-weighted entropy](/explanation/entropy/#similarity-weighted-entropy-opt-in).
 
 ## Diversity motifs
 
@@ -177,5 +208,6 @@ memory, platform and exit status, without user or host names. See
 
 ### Schema version
 
-The version of a JSON output's format (`schema_version`). Its major number changes when the
+The version of a JSON output's format (`schema_version`). Its minor number changes when keys are
+added (results schema 1.1.0 added similarity-weighted entropy), its major number when the
 meaning of existing fields changes. See [JSON outputs](/reference/json/).

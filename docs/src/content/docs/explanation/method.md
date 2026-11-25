@@ -42,7 +42,8 @@ in the window makes the k-mer invalid, and that sequence does not contribute at 
 The **support** $N$ of a position is the number of sequences with a valid k-mer there. The
 distinct valid k-mers are the position's **variants**; if variant $i$ occurs $c_i$ times, then
 $c_1 + c_2 + \dots + c_D = N$, where $D$ is the number of distinct variants. Every other measure
-of a position is computed from these counts alone.
+of a position is computed from these counts alone, except the optional similarity-weighted
+entropy, which also compares the variants residue by residue.
 
 ## The support threshold and the low-support labels
 
@@ -70,6 +71,11 @@ nothing to measure — where the paper assigns them a pseudo-entropy of 0 (see
 - **Shannon entropy** of the variant distribution, corrected for sample size, and the observed
   (plug-in) value; the estimated **sample coverage**
   ([Entropy and its correction](/explanation/entropy/)).
+- Optionally (`--similarity-weighted-entropy`), the **similarity-weighted entropy**, in which
+  variants that differ at few residues count for less, and the observed and similarity-weighted
+  entropies divided by $\log_2 D$, which puts them between 0 and 1: an addition to the paper's
+  method [@wu2025]
+  ([Similarity-weighted entropy](/explanation/entropy/#similarity-weighted-entropy-opt-in)).
 - **Diversity motifs**: each variant is classified as Index, Major, Minor or Unique, with its
   incidence; the incidence of all non-Index (total) variants and of the distinct non-Index
   variants ([Diversity motifs and summaries](/explanation/motifs/)).
@@ -102,11 +108,11 @@ following pages show how each of these numbers is obtained.
 
 ## Determinism
 
-Every quantity above is computed exactly from the counts: DiMA uses no random numbers, so the
-same alignment and options always give the same results, on every operating system and with any
-number of threads (see [Make results reproducible](/how-to/reproducibility/)). Where the paper's
-procedure is random — the entropy correction — DiMA computes the exact expected value of its
-regression intercept instead of one random draw (see
+Every quantity above is computed exactly from the variants and their counts: DiMA uses no random
+numbers, so the same alignment and options always give the same results, on every operating
+system and with any number of threads (see [Make results reproducible](/how-to/reproducibility/)).
+Where the paper's procedure is random — the entropy correction — DiMA computes the exact expected
+value of its regression intercept instead of one random draw (see
 [The exact expectation](/explanation/entropy/#the-exact-expectation)).
 
 ## References

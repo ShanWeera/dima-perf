@@ -31,10 +31,10 @@ can use.
 ## The methods of a run
 
 A DiMA analysis can use several methods, each with its own sources: the entropy estimator, the
-sample coverage, the motif definitions, alphabet detection, nucleotide ambiguity codes. Every
-results file lists the references of the methods that run actually used, in `run.references`.
-`dima cite --from` turns them into a methods paragraph and a numbered reference list, ready to
-adapt for a manuscript:
+sample coverage, the motif definitions, alphabet detection, nucleotide ambiguity codes and, when
+requested, similarity-weighted entropy. Every results file lists the references of the methods
+that run actually used, in `run.references`. `dima cite --from` turns them into a methods
+paragraph and a numbered reference list, ready to adapt for a manuscript:
 
 ```sh
 dima cite --from results.json            # methods paragraph and references, plain text
@@ -56,6 +56,20 @@ For the MERS-CoV spike sample with the defaults, the paragraph reads:
 > expectation (Rao 1945; Blackwell 1947), and sample coverage after Chao & Jost (2012). Variants
 > were classified as Index, Major, Minor and Unique motifs (Hu et al. 2013).
 
+Similarity-weighted entropy is not part of the DiMA paper's method, so a run that computed it
+(`--similarity-weighted-entropy`) also cites the paper that defines it [@wu2025, Section 2.1]
+and, for a protein alignment, the source of its similarity measure, the fraction of identical
+residues of two aligned protein sequences [@grishin1995, p. 675]. `dima cite --from` adds both
+to the reference list, and this sentence to the paragraph (MERS-CoV spike sample, run with the
+option):
+
+> Similarity-weighted entropy and the observed and similarity-weighted entropies normalised by
+> log2 of the number of distinct k-mers were computed as described by Wu (2025), with the
+> similarity of two k-mers taken as their proportion of identical residues (Grishin 1995).
+
+For a nucleotide alignment the sentence ends at "identical residues", and only Wu (2025) is
+added.
+
 The desktop app offers the same as **Methods & references** and **References (BibTeX)** exports,
 which include the conserved sequences at the threshold shown, and **Cite DiMA** in its Help menu.
 
@@ -63,9 +77,10 @@ which include the conserved sequences at the threshold shown, and **Cite DiMA** 
 
 Every reference cited by DiMA's help, desktop app and these pages comes from one registry in the
 source code and is listed in the [bibliography](/reference/bibliography/). If your analysis
-relies on a specific method — for example the Chao–Wang–Jost estimator, or the Clopper–Pearson
-bounds of conserved sequences — cite its original source too; `dima cite --from` includes it
-when the run used it (for conserved sequences, when their file is given too).
+relies on a specific method — for example the Chao–Wang–Jost estimator, similarity-weighted
+entropy, or the Clopper–Pearson bounds of conserved sequences — cite its original source too;
+`dima cite --from` includes it when the run used it (for conserved sequences, when their file is
+given too).
 
 ## References
 
