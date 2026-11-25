@@ -10,6 +10,8 @@ use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
 
+use super::series::ChartKey;
+
 /// One corner of a segment quad.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Pod, Zeroable)]
@@ -81,7 +83,7 @@ pub struct LineResources {
     bind_group: wgpu::BindGroup,
     vertex_count: u32,
     /// Key of the vertex data in the buffer.
-    uploaded_key: Option<u64>,
+    uploaded_key: Option<ChartKey>,
 }
 
 /// One frame's request: the uniforms, and the vertex data with its key.
@@ -89,7 +91,7 @@ pub struct LineCallback {
     /// Mapping, width and colour.
     pub uniforms: LineUniforms,
     /// Identifies `vertices`; a different key triggers an upload.
-    pub key: u64,
+    pub key: ChartKey,
     /// The quads (shared, so a frame that does not upload copies nothing).
     pub vertices: Arc<Vec<SegmentVertex>>,
 }

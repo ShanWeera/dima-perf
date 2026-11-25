@@ -17,7 +17,8 @@ use crate::app::msg::Msg;
 use crate::charts::axis::{integer_ticks, nice_ticks};
 use crate::charts::gpu_line::{LineCallback, LineUniforms, SegmentVertex, segment_vertices};
 use crate::charts::series::{
-    Class, NsSpan, Series, Style, legend, nearest_point, ns_span_at, strokes,
+    ChartKey, Class, NsSpan, Series, Style, chart_cache_key, legend, nearest_point, ns_span_at,
+    strokes,
 };
 use crate::charts::transform::{XMap, YMap, y_axis_max};
 use crate::charts::viewport;
@@ -39,7 +40,7 @@ pub struct ChartUi {
     /// Screen x where a Shift-drag began.
     pub drag_origin: Option<f32>,
     /// Vertices on the GPU: their key and data.
-    gpu: Option<(u64, Arc<Vec<SegmentVertex>>)>,
+    gpu: Option<(ChartKey, Arc<Vec<SegmentVertex>>)>,
 }
 
 /// What the chart reports to the strip below it.
@@ -117,6 +118,7 @@ pub fn show(
         plot,
         chart,
         gpu,
+        s.id,
         s.version,
         t,
     );
@@ -308,6 +310,7 @@ fn draw_lines(
     plot: Rect,
     chart: &mut ChartUi,
     gpu: bool,
+    session: u64,
     version: u64,
     t: &DesignTokens,
 ) {
@@ -373,19 +376,7 @@ fn draw_lines(
         }
     }
     if gpu && !gpu_lines.is_empty() {
-        let key = {
-            use std::hash::{Hash, Hasher};
-            let mut h = std::collections::hash_map::DefaultHasher::new();
-            (
-                version,
-                x.lo.to_bits(),
-                x.hi.to_bits(),
-                y.max.to_bits(),
-                columns,
-            )
-                .hash(&mut h);
-            h.finish()
-        };
+        let key = chart_cache_key(session, version, (x.lo, x.hi), columns);
         let vertices = match &chart.gpu {
             Some((k, v)) if *k == key => Arc::clone(v),
             _ => {
@@ -666,5 +657,26 @@ mod tests {
             band_tooltip(NsSpan { first: 4, last: 9 }),
             "Positions 4\u{2013}9: no usable support (support 0, no entropy)"
         );
+    }
+
+    /// A new load restarts the version, so two sessions showing the same positions at the same
+    /// zoom differ only in their id: the line of one must never be drawn for the other.
+    #[test]
+    fn lines_of_two_sessions_never_share_a_key() {
+        let r = Arc::new(results_of(vec![
+            position(1, Some(0.5), 200, 100),
+            position(2, Some(0.25), 40, 100),
+        ]));
+        let a = Session::new(1, Arc::clone(&r), Origin::Opened("a.json".into()));
+        let b = Session::new(2, r, Origin::Opened("b.json".into()));
+        assert_eq!(a.version, b.version);
+        let (view, columns) = (a.extent().unwrap(), 900);
+        let key = |s: &Session| chart_cache_key(s.id, s.version, view, columns);
+        assert_ne!(key(&a), key(&b));
+        assert_eq!(key(&a), chart_cache_key(1, a.version, view, columns));
+        // Every input is part of the key.
+        assert_ne!(key(&a), chart_cache_key(1, a.version + 1, view, columns));
+        assert_ne!(key(&a), chart_cache_key(1, a.version, (0.5, 2.0), columns));
+        assert_ne!(key(&a), chart_cache_key(1, a.version, view, columns + 1));
     }
 }

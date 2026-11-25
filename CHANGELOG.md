@@ -56,6 +56,10 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   one position, distinct header values); it now reads "… exceeds the range of DiMA's counters".
 - Messages about the schema version of a conserved-sequences file no longer call it a results
   schema.
+- The desktop app's entropy chart could keep drawing the solid line of the previous results
+  when new results showed the same positions, zoom and highest entropy (for example the same
+  alignment analysed again with the raw estimator and another support threshold); the line is
+  now redrawn for every new set of results.
 
 ## [1.0.0] - 2026-10-07
 

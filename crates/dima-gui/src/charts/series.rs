@@ -317,6 +317,31 @@ fn segment_style(a: Point, b: Point) -> Style {
     }
 }
 
+/// Identifies the lines the chart draws: what [`strokes`] returns, and the GPU vertices built
+/// from it. Compared exactly (no hash), so lines are never reused for other data.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ChartKey {
+    session: u64,
+    version: u64,
+    view: (u64, u64),
+    columns: usize,
+}
+
+/// The key of the lines of a session's series: the session id (unique per load, G23; a new
+/// load restarts the version, so the version alone cannot tell two results apart), the
+/// session's version (bumped whenever the shown positions change), the view `(lo, hi)` and the
+/// pixel columns the lines are reduced to. The value range is not part of it: strokes and
+/// vertices are in data units, and the axis maximum is only a uniform of the line shader.
+#[must_use]
+pub fn chart_cache_key(session: u64, version: u64, view: (f64, f64), columns: usize) -> ChartKey {
+    ChartKey {
+        session,
+        version,
+        view: (view.0.to_bits(), view.1.to_bits()),
+        columns,
+    }
+}
+
 /// The point nearest to data x among the shown points (ties: the lower position).
 #[must_use]
 pub fn nearest_point(series: &Series, x: f64) -> Option<Point> {
