@@ -125,9 +125,18 @@ or accept the mismatches with `--validation permissive` (they get the fill value
 **`header is not valid UTF-8`** — convert the file to UTF-8 (`iconv -f LATIN1 -t UTF-8`), or use
 `--validation permissive` to replace invalid bytes.
 
-**`written with results schema …`** (from `dima view`, `dima hcs` or `dima cite --from`) — the
-results were written by a DiMA version with another major schema version. Re-run the analysis, or
-use the version that wrote them.
+**`written with results schema …`** (or **`written with conserved-sequences schema …`**; from
+`dima view`, `dima hcs` or `dima cite --from`) — the file's schema version does not start with
+`1.`: it was written by a DiMA version with another major schema version, or its version is not a
+plain number such as `01.1.0`. Re-run the analysis, or use the version that wrote the file.
+
+**`position N: … is given, but …`**, **`… is missing`** or another message with the hint `the
+file was edited or damaged` (exit 4, from `dima view`, `dima hcs` or `dima cite --from`) — the
+results contradict themselves, for example a similarity-weighted value at a position without
+support, or no such value where the run computed them (`run.parameters.similarity_weighted_entropy`
+says whether it did). DiMA never writes such a file; it was changed after `dima analyze` wrote
+it. Run the analysis again; if you edit results by hand, keep the rules of the
+[results reference](/reference/json/).
 
 ## Warnings worth acting on
 
@@ -173,8 +182,9 @@ holds values per position (results JSON or JSONL, or the positions table). Nothi
 get the values, run the analysis again with `--similarity-weighted-entropy`.
 
 **`newer_schema`: `the results were written with schema …; this version writes … and keeps only
-the fields it knows`** (from `dima view`) — a newer DiMA wrote the file, and it holds keys that
-this version does not know, so the converted output leaves them out. To keep every key, convert
+the fields it knows`** (from `dima view`) — a newer DiMA wrote the file, or its 1.x version is
+one this DiMA does not recognise (such as `1.1` or `1.1.0-dev`), so it may hold keys that this
+version does not know, and the converted output leaves them out. To keep every key, convert
 the file with the DiMA version that wrote it (its `run.tool.version`) or a newer one. If the file
 also holds a value this version does not know, such as the name of a new estimator, reading stops
 instead (`written by a newer DiMA … with values this version … does not know`, exit 4), and the fix
@@ -222,6 +232,13 @@ entropy") — you switched the chart's metric after narrowing the value range in
 Each metric has its own scale, so the range starts over at the new metric's full range; narrow
 it again if you need to. See
 [Plot similarity-weighted entropy](/how-to/desktop-app/#explore-the-results).
+
+**Desktop app: "Exported figures are now at least 720 × 320 px so the title, legend and axes
+fit; yours was raised to W × H px"** (or "Exported figures are between 720 × 320 and 20000 ×
+20000 px; yours was changed to W × H px") — the figure size saved in the settings, by an earlier
+version or by hand, was outside the sizes exported figures can have. The app moved it into that
+range once and saved it; nothing else changed. Nothing needs doing; to choose another size, set it
+in **Preferences**. See [Open an alignment](/how-to/desktop-app/#open-an-alignment).
 
 For anything this page does not answer, see the [FAQ](/getting-started/faq/) or ask in
 [GitHub Discussions](https://github.com/ShanWeera/dima-perf/discussions).

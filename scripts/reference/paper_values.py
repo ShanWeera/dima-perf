@@ -8,8 +8,7 @@ crates/dima-core/tests/paper_expected/mod.rs, a generated file that is never edi
 Every run but the T = 30 one computes similarity-weighted entropy (pairwise, as Wu defines it),
 so the unchanged values also show that the option changes nothing else. `--check` fails if that
 file is out of date (CI), and prints the difference. Standard library only; the seven runs take
-about two minutes on four cores, almost all of it in the HIV-1 datasets; about 250 MB of
-memory.
+about a minute on four cores, almost all of it in the HIV-1 datasets; about 250 MB of memory.
 
 The dima entropy (and so every mean and extreme) uses the platform's `math.log`, whose last bit
 may differ between operating systems (README.md, "Determinism"); the committed file is the

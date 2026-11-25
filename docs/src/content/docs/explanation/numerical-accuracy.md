@@ -14,15 +14,19 @@ scientific software [@darriba2018; @eddy2011].
 - **Always present, always negligible.** Every result carries some rounding error, as in any
   floating-point program. It grows with the number of sequences $N$ at a position, most at
   highly conserved positions (one dominant k-mer), which are most positions of a viral alignment.
-- **Bundled datasets** (up to 2,637 sequences): every value is within about $5 \times 10^{-15}$
-  of the exact result, relative to its size. That is the last one or two of the 17 significant
-  digits written to the JSON.
+- **Bundled datasets** (the paper's four datasets, up to 3,756 sequences): every entropy is
+  within about $5 \times 10^{-15}$ of the exact result, relative to its size. That is the last one
+  or two of the 17 significant digits written to the JSON. The optional similarity-weighted
+  entropy is within $2 \times 10^{-14}$ (see
+  [Similarity-weighted entropy](#similarity-weighted-entropy)).
 - **The DiMA paper's SARS-CoV-2 scale** (about 2.2 million sequences per position): a default
   run (the `dima` estimate and the observed entropy) is within $2.2 \times 10^{-12}$. At
   17.5 million sequences it is within $5.1 \times 10^{-11}$ (from the 11th significant digit
   on). The opt-in Chao–Wang–Jost estimator, whose second term is evaluated exactly (see
   [Chao–Wang–Jost's second term](#chaowangjosts-second-term)), stays within a few units in the
-  last place at any size. In absolute terms no error reaches $10^{-14}$ bits.
+  last place at any size. Similarity-weighted entropy, which is smaller than the observed entropy
+  but has the same absolute error, is within $2.2 \times 10^{-11}$ (at 17.5 million sequences
+  $3.3 \times 10^{-10}$). In absolute terms no error reaches $10^{-14}$ bits.
 - **Far below the sampling error.** The rounding error is $10^{10}$ to $10^{12}$ times smaller
   than the standard deviation of the entropy estimate itself. The paper reports entropies to two
   decimals.
@@ -140,7 +144,8 @@ singleton. An error of $10^{-9}$, for example, needs a coverage below $10^{-7}$,
 ### The bundled datasets
 
 At the sizes of the bundled datasets the current code is within about $5 \times 10^{-15}$ of
-the exact values, and Chao–Wang–Jost within $4.2 \times 10^{-16}$ (at most 3 units in the last
+the exact values of every entropy (similarity-weighted entropy within $1.9 \times 10^{-14}$, see
+[Similarity-weighted entropy](#similarity-weighted-entropy)), and Chao–Wang–Jost within $4.2 \times 10^{-16}$ (at most 3 units in the last
 place).
 
 One position of the small test alignment in `tests/golden/tiny/` splits seven sequences 4 to 3. Its exact plug-in
@@ -226,8 +231,8 @@ $5.4 \times 10^9$ site comparisons. DiMA obtains the same sums from residue coun
 time proportional to $D \cdot k$ ($4.3 \times 10^7$ table operations there). With $c_p(a)$ the
 number of sequences whose k-mer has residue $a$ at offset $p$, the matches of k-mer $i$ with
 every sequence at offset $p$ number $c_p(x_{ip})$: the column-profile form of sum-of-pairs
-scores, with an identity score [@gotoh1994, eqs. (1) and (4a)]. Removing the k-mer's matches
-with its own copies, as for the score of a single group [@gotoh1994, eq. (9b)], gives
+scores, with an identity score [@gotoh1994, eqs. (1) and (4a)]. Wu's sum runs over the other
+k-mers ($j \ne i$), so the $k\,c_i$ matches with the k-mer's own $c_i$ copies are removed:
 
 $$
 \begin{equation}
@@ -236,15 +241,46 @@ a_i = \sum_p c_p(x_{ip}) - k\,c_i = k \sum_{j \ne i} c_j\, s_{ij} ,
 \end{equation}
 $$
 
-The numerators $kN - a_i$ are exact integers, summed per count class in 128-bit integers. The
-only rounding is one division per class and the compensated sum of the class terms, taken in the
-same order as for observed entropy. So when every weight is 1 ($k = 1$, or every pair of k-mers
-differs at every site) similarity-weighted entropy equals observed entropy bit for bit, as long
-as $f_c \cdot k \cdot N \le 2^{53}$ for every class of $f_c$ k-mers seen $c$ times: integers up to
-$2^{53}$ convert exactly and their quotient is correctly rounded [@goldberg1991, §2.1.4]. Weights
-of 1 need every pair to differ at the first site, so at most 26 distinct k-mers, and the bound
-holds whenever $kN \le 3.46 \times 10^{14}$. The computation needs a table of $26 \times k$
-counts (208·k bytes) for each position being computed.
+The numerators $kN - a_i$ are exact integers, summed per count class in 128-bit integers.
+Besides the entropy terms $-\hat p \log_2 \hat p$, which are those of observed entropy, the only
+rounding is one division and one multiplication per class and the compensated sum of the class
+terms, taken in the same order as for observed entropy. So when every weight is 1 ($k = 1$, or
+every pair of k-mers differs at every site) similarity-weighted entropy equals observed entropy
+bit for bit, as long as $f_c \cdot k \cdot N \le 2^{53}$ for every class of $f_c$ k-mers seen $c$
+times: integers up to $2^{53}$ convert exactly and their quotient is correctly rounded
+[@goldberg1991, §2.1.4]. Weights of 1 need every pair to differ at the first site, so at most 26
+distinct k-mers, and the bound holds whenever $kN \le 3.46 \times 10^{14}$.
+
+Because it shares the entropy terms, similarity-weighted entropy also shares their rounding
+error, the one that grows with $N$ at a conserved position (see
+[Where the rounding error comes from](#where-the-rounding-error-comes-from)). The weighting
+keeps that error but not the value: the dominant k-mer, whose term carries the error, keeps a
+weight close to 1, while the accurate terms of the rare k-mers shrink to about $d/k$ of their
+size. The absolute error is therefore the same as that of observed entropy, but the relative
+error is larger, by up to the ratio $\hat H / H_\text{sim}$. Measured as in the table above,
+with each rare k-mer differing from the dominant one at one site:
+
+| Profile | $N$ | Observed entropy | Similarity-weighted, $k = 9$ | Similarity-weighted, $k = 27$ |
+|---|---|---|---|---|
+| one differing sequence | 2,208,211 | $2.2 \times 10^{-12}$ | $1.3 \times 10^{-11}$ | $2.2 \times 10^{-11}$ |
+| near-conserved | 2,208,211 | $4.3 \times 10^{-13}$ | $2.5 \times 10^{-12}$ | $4.3 \times 10^{-12}$ |
+| many doubletons | 2,208,211 | $1.6 \times 10^{-13}$ | $9.6 \times 10^{-13}$ | $1.6 \times 10^{-12}$ |
+| one differing sequence | 17,500,000 | $3.0 \times 10^{-11}$ | $1.8 \times 10^{-10}$ | $3.3 \times 10^{-10}$ |
+| near-conserved | 17,500,000 | $7.0 \times 10^{-12}$ | $4.3 \times 10^{-11}$ | $7.5 \times 10^{-11}$ |
+| many doubletons | 17,500,000 | $2.4 \times 10^{-12}$ | $1.5 \times 10^{-11}$ | $2.5 \times 10^{-11}$ |
+
+The absolute errors stay between $2 \times 10^{-17}$ and $7 \times 10^{-17}$ bits, as for observed
+entropy, and the normalised values have the relative errors of the entropies they divide. On the
+four bundled datasets the largest relative error of similarity-weighted entropy is
+$1.9 \times 10^{-14}$ (MERS-CoV spike gene, position 433, where 451 of 452 sequences carry one
+27-mer). Mathematically both normalised values lie between 0 and 1 and similarity-weighted
+entropy is at most the observed entropy; a normalised value that rounding puts above 1 by at most
+$10^{-12}$ is written as 1, and a value outside these bounds by more than rounding stops the run
+as an internal error (exit 1).
+
+The computation counts the residues of $26 \times \min(k, 2048)$ table entries at a time, in
+blocks of at most 2,048 sites, so its table stays at most 426 kB however long the k-mers are; it
+also needs about 48 bytes per distinct k-mer, for each position being computed.
 
 ## What this means for testing
 
@@ -252,8 +288,10 @@ The differential test against the reference implementation
 (`crates/dima-core/tests/reference.rs`) and the paper test (`crates/dima-core/tests/paper.rs`,
 which compares the four bundled datasets with values the reference implementation computed)
 share one rule: every number must agree within a relative $10^{-13}$, so a zero must be exactly
-zero. Their alignments have at most a few thousand sequences per position; the largest
-difference measured is $2.6 \times 10^{-15}$, a last-bit difference in a platform's logarithm
+zero. Their alignments have at most about 11,000 sequences per position; the largest
+difference measured is $2.6 \times 10^{-15}$ for the entropies and $1.9 \times 10^{-14}$ for
+similarity-weighted entropy (see [Similarity-weighted entropy](#similarity-weighted-entropy)), a
+last-bit difference in a platform's logarithm
 moves the reference by at most $6 \times 10^{-16}$, and every legitimate code change measured
 (summation order, a one-pass regression, the deferred fix below) moved the values by at most
 $8 \times 10^{-15}$. The bound leaves a wide margin above all of these, yet catches a numerical
@@ -263,8 +301,9 @@ identical the accepted tolerance belongs in the documentation and the tests
 [@taschuk2017, Rule 10].
 
 At a million or more sequences per position the default estimator's own rounding reaches
-$10^{-12}$ to $5 \times 10^{-11}$ relative, so a test at that scale would need a looser rule
-or the deferred fix below. No test runs at that scale.
+$10^{-12}$ to $5 \times 10^{-11}$ relative, and similarity-weighted entropy's up to
+$3.3 \times 10^{-10}$, so a test at that scale would need a looser rule or the deferred fix
+below. No test runs at that scale.
 
 ## What the fix would be
 
@@ -298,8 +337,8 @@ estimator:
 | HIV-1 *pol* protein | 456 of 41,156 | $1.1 \times 10^{-15}$ |
 | HIV-1 *pol* gene | 1,048 of 800,270 | $6.1 \times 10^{-16}$ |
 
-Five of the 13 golden output files of the command-line tests would change, and with the exact
-$\alpha/2$ also the conserved-sequence tables.
+Five of the 13 golden output files of dima 1.0.0's command-line tests would change, and with
+the exact $\alpha/2$ also the conserved-sequence tables.
 
 ## Why the fix is deferred
 

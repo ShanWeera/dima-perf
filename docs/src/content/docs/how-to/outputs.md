@@ -83,8 +83,8 @@ and the summary is `null`, so a script can rely on the same layout either way.
 The positions table of the MERS-CoV spike sample, for three positions:
 
 ```sh
-dima analyze -i mers_spike_aa.fasta --similarity-weighted-entropy -o positions.tsv --table positions
-cut -f 1,3,6,13-15 positions.tsv | awk 'NR == 1 || $1 == 7 || $1 == 25 || $1 == 26'
+dima analyze -i mers_spike_aa.fasta --similarity-weighted-entropy -o mers.swe.json --tsv-dir tables
+cut -f 1,3,6,13-15 tables/mers_spike_aa.positions.tsv | awk 'NR == 1 || $1 == 7 || $1 == 25 || $1 == 26'
 ```
 
 ```text
@@ -102,7 +102,7 @@ top-level entropy summary, and gives the mean observed entropy of the same posit
 comparison:
 
 ```sh
-jq '.similarity_weighted_entropy_summary' mers.json
+jq '.similarity_weighted_entropy_summary' mers.swe.json
 ```
 
 ```json

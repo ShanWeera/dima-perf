@@ -6,8 +6,8 @@ description: DiMA's results next to the published values of its methods' source 
 The DiMA paper reports results for an HIV-1 *pol* gene alignment and for the MERS-CoV spike
 protein of its Fig. 1C [@tharanga2025]. Both datasets are part of this repository (see
 `tests/data/README.md` for their sources: the Los Alamos HIV Sequence Database [@kuiken2003] and
-NCBI Virus [@hatcher2017]), so the comparison below is reproduced by every test run and can be
-printed with
+NCBI Virus [@hatcher2017]), so the comparison with the DiMA paper below is reproduced by every
+test run and can be printed with
 
 ```sh
 scripts/validate_paper.sh            # builds target/release/dima if needed
@@ -38,7 +38,8 @@ All values with the defaults: $T = 100$, $k = 27$ (DNA) or 9 (protein), the `dim
 
 1. **Mean entropy.** The paper's correction draws random subsamples, so each run gives a
    slightly different mean; <!-- docs-numbers:hiv-run-mean:start -->
-   the mean of one run of the published procedure has a standard deviation of 0.0020 bits (exact)<!-- docs-numbers:hiv-run-mean:end -->. DiMA reports the exact expectation of the procedure's
+   the mean intercept of one run of the published procedure, before its negative-intercept rule, has
+   a standard deviation of 0.0020 bits (exact)<!-- docs-numbers:hiv-run-mean:end -->. DiMA reports the exact expectation of the procedure's
    intercept, 5.3504 (see [The exact expectation](/explanation/entropy/#the-exact-expectation)).
 2. **Range and highest position.** The paper's extremes come from one random run. <!-- docs-numbers:hiv-2176-2177:start -->
    The expected corrected entropies at positions 2176 and 2177 are 9.4755 and 9.4601 bits, a
@@ -89,20 +90,26 @@ HIV-1 *pol* means differ from DiMA's by less than 0.00026 bits (DNA) and 0.0011 
 
 Wu's paper introduces similarity-weighted entropy [@wu2025] (see
 [the methodology](/explanation/entropy/#similarity-weighted-entropy-opt-in)). Two of its examples
-come with their data: Supplementary File 1 prints the four metrics of the simulated populations,
-and Supplementary File 2 lists the unique ToBRFV sequences of the two plants with their read
-counts. Wu's potato spindle tuber viroid (PSTVd) pools (practical, IR, LM and Sys) are not
-published as sequences. Every value below is fixed by the test suite
-(`crates/dima-core/tests/paper.rs`, which builds the simulated populations and reads the ToBRFV
-data in `tests/data/`) and agrees with the reference implementation, which computes
-$H_\text{sim}$ pair by pair as Wu defines it.
+come with their data: Supplementary File 1 prints the four metrics of further simulated
+populations (not those of Figs. 2 and 4), and Supplementary File 2 lists the unique ToBRFV
+sequences of the two samples with their read counts. Wu's potato spindle tuber viroid (PSTVd)
+pools (practical, IR, LM and Sys) are not published as sequences. DiMA's values below are fixed
+by the test suite (`crates/dima-core/tests/paper.rs`, which builds the simulated populations and
+reads the ToBRFV data in `tests/data/`); the ToBRFV values and the Fig. 5c pool also agree with
+the reference implementation, which computes $H_\text{sim}$ pair by pair as Wu defines it. The
+Hamming distances are computed by `scripts/reference/docs_numbers.py`, and the other readings of
+Fig. 5c below are arithmetic shown in the text.
 
 **Supplementary File 1.** Its "Figure 2 Extended Data" sheet gives $H$, $H_n$, $H_\text{sim}$ and
 $H_\text{nsim}$ to five decimals for five populations of 10 sequences, every pair of sequences at
-one similarity, for 14 similarities from 0.999 to 0.001. DiMA's formulas reproduce 278 of its 280
-values; the two others are one cell, distribution 1 at similarity 0.3, which holds the values at
-0.4. The tests check the five populations at similarities 0.999, 0.9, 0.5 and 0.001 (built as ten
-1,000-residue k-mers; within $5 \times 10^{-6}$ of the printed values). In the "Figure 3 Extended
+one similarity, for 14 similarities from 0.999 to 0.001 (checked once against the spreadsheet,
+when this page was written). DiMA's formulas reproduce 278 of its 280 values; the two others are
+one cell, distribution 1 at similarity 0.3, which holds the values at 0.4. The tests check the
+five populations at similarities 0.999, 0.9, 0.5 and 0.001 (built as ten 1,000-residue k-mers;
+within $5 \times 10^{-6}$ of the printed values), and the reference implementation's self-test
+checks distribution 1 at 0.9. These populations are not those of Fig. 2: the sheet's
+distribution 1, for example, is 0.7, four times 0.05 and five times 0.02, Fig. 2's 0.9, 0.02 and
+eight times 0.01. In the "Figure 3 Extended
 Data" sheet the cell of D-1 at similarity 0.7 holds the values at 0.95 ($H_\text{sim}$ 0.01921 and
 $H_\text{nsim}$ 0.00578; at 0.7 they are 0.04363 and 0.01313 for the frequencies of Fig. 3a).
 
@@ -119,11 +126,17 @@ $H_\text{nsim} = 129/256 = 0.50390625$, where the paper prints 8, 1, 4.04 and 0.
 not say so. Three decimals give 4.0317; counting each sequence's similarity to itself gives 4.00,
 and the similarities of Fig. 5b, which are those of the four free sites only, give 6.03.
 
-**ToBRFV.** Supplementary File 2 lists 48 (tm-2 plant) and 47 (Tm-2² plant) unique 120-nucleotide
-sequences of the 5′-120nts region with their read counts (Wu excluded sequences below 0.1% of the
-reads). `tests/data/tobrfv_tm2.fasta.bz2` and `tobrfv_tm22.fasta.bz2` hold each sequence once per
-read, so a run with `-a dna -k 120 --similarity-weighted-entropy` has one position whose k-mer
-counts are the read counts:
+**ToBRFV.** Supplementary File 2 lists 48 (tm-2 sample) and 47 (Tm-2² sample) unique
+120-nucleotide sequences of the 5′-120nts region with their read counts. Wu reports excluding
+sequences below 0.1% of the reads, but the tm-2 list holds eight with 10 of 10,833 reads (0.092%);
+all of them are used here. `tests/data/tobrfv_tm2.fasta.bz2` and `tobrfv_tm22.fasta.bz2` hold each
+sequence once per read, so a run such as
+
+```sh
+dima analyze -i tests/data/tobrfv_tm2.fasta.bz2 -a dna -k 120 --similarity-weighted-entropy -o tm2.json
+```
+
+has one position whose k-mer counts are the read counts:
 
 <!-- docs-numbers:tobrfv:start -->
 
@@ -140,7 +153,8 @@ counts are the read counts:
 
 <!-- docs-numbers:tobrfv:end -->
 
-The tm-2 values match Fig. 6d. For Tm-2², Fig. 6d shows about 0.71, 0.127, 0.116 and 0.021: with
+The tm-2 values match Fig. 6d, reading its $H_\text{nsim}$ axis as linear (its tick labelled
+0.015 stands where 0.010 would). For Tm-2², Fig. 6d shows about 0.71, 0.127, 0.116 and 0.021: with
 the published data $H$ and $H_n$ are higher in Tm-2² than in tm-2, the opposite of Section 3.3,
 while $H_\text{sim}$ and $H_\text{nsim}$ are higher in Tm-2², as the paper reports. The mean and
 largest Hamming distances match Section 3.3. As of 25 November 2026 Crossref lists no correction

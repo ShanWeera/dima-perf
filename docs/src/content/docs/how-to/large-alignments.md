@@ -46,9 +46,10 @@ DiMA's memory does not grow with the number of sequences times their length. It 
   sequences it can be larger;
 - for each position, its distinct k-mers — about $k + 25$ bytes each — and, with metadata, about
   19 bytes for each combination of k-mer and header value;
-- with `--similarity-weighted-entropy`, a table of $26 \times k$ counters ($208 \cdot k$ bytes)
-  for each position being computed, so one per thread at a time: 5.6 kB per thread at $k = 27$,
-  208 kB at $k = 1{,}000$;
+- with `--similarity-weighted-entropy`, for each position being computed (so one per thread at
+  a time): a table of $26 \times \min(k, 2048)$ counters, $208 \cdot k$ bytes up to $k = 2{,}048$
+  and 426 kB above it (5.6 kB at $k = 27$, 208 kB at $k = 1{,}000$), and about 48 bytes per
+  distinct k-mer at the position;
 - the results until they are written.
 
 Memory therefore grows with the **diversity** of the alignment: conserved alignments need little
@@ -69,18 +70,20 @@ looks like an identifier and prints the option that leaves it out; see
 ([what it computes](/explanation/entropy/#similarity-weighted-entropy-opt-in)) adds work at
 every position with support. There, its time is proportional to the number of distinct k-mers
 times $k$: DiMA counts the residues at each of the $k$ offsets of the k-mers once, instead of
-comparing every pair of k-mers. Its memory is the small table listed under [Memory](#memory).
-It is computed only when an output holds its values (the results, or the positions table).
+comparing every pair of k-mers. Its memory is listed under [Memory](#memory): a table of at most
+426 kB and about 48 bytes per distinct k-mer, for each position being computed. Above 2,048 sites
+the table is filled 2,048 sites at a time, so that it stays in the processor's cache. It is
+computed only when an output holds its values (the results, or the positions table).
 
 Measured on 25 November 2026 with a release build, on a virtual machine with 4 CPUs (Intel Xeon
 at 2.30 GHz) and 16 GB of memory, running Ubuntu 24.04 and other work at the same time. Each
 time is the median of 11 to 31 runs, alternating with and without the option, using all 4
 threads; CPU time is the sum over the threads:
 
-| Alignment | $k$ | Distinct k-mers per position (mean) | Without the option | With it |
+| Alignment | $k$ | Distinct k-mers per position with support (mean) | Without the option | With it |
 |---|---|---|---|---|
-| HIV-1 *pol* DNA (`tests/data/HIV1_FLT_2022_pol_DNA.fasta.bz2`, 2,637 sequences) | 27 | 234 | 1.05 s (CPU 1.58 s) | 1.06 s (CPU 1.64 s) |
-| The same, ten mutated copies of each sequence (26,370 sequences, from `scripts/bench/make_data.py`) | 27 | 579 | 2.53 s (CPU 6.11 s) | 2.54 s (CPU 6.17 s) |
+| HIV-1 *pol* DNA (`tests/data/HIV1_FLT_2022_pol_DNA.fasta.bz2`, 2,637 sequences) | 27 | 293 | 1.05 s (CPU 1.58 s) | 1.06 s (CPU 1.64 s) |
+| The same, ten mutated copies of each sequence (26,370 sequences, from `scripts/bench/make_data.py`) | 27 | 725 | 2.53 s (CPU 6.11 s) | 2.54 s (CPU 6.17 s) |
 | MERS-CoV spike gene (`tests/data/MERS_Spike_nt.fasta.bz2`, 499 sequences), results discarded with `-o /dev/null -O json` | 1,000 | 123 | 0.74 s (CPU 1.24 s) | 0.93 s (CPU 1.88 s) |
 
 At $k = 27$ the option added about 0.05 s of CPU time and almost nothing to the wall time. Peak
@@ -88,7 +91,7 @@ memory did not change measurably: about 120 MB, 265 MB and 630 MB with or withou
 k-mers its share grows, because every distinct k-mer costs $k$ steps: at $k = 1{,}000$ it
 increased the CPU time by about half and the wall time by about a quarter. Long k-mers also make
 most windows distinct, so the counting itself then needs much more memory (see
-[Memory](#memory)); the option adds only its table.
+[Memory](#memory)); the option adds only its table and its 48 bytes per distinct k-mer.
 
 ## Output size
 

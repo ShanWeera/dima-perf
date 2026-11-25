@@ -1,13 +1,14 @@
 ---
 title: Entropy and its correction
-description: Shannon entropy of k-mer variants, the paper's sample-size correction (Fig. 2) and why DiMA computes its exact expectation, the alternative estimators, sample coverage, and why positions without support have no entropy.
+description: Shannon entropy of k-mer variants, the paper's sample-size correction (Fig. 2) and why DiMA computes its exact expectation, the alternative estimators, sample coverage, why positions without support have no entropy, and the optional similarity-weighted entropy (Wu 2025).
 ---
 
 At every position DiMA summarises the distribution of variants by its Shannon entropy
 [@shannon1948]: 0 bits when every sequence carries the same k-mer, more as variants become more
 numerous and more even. This page derives the observed entropy, the paper's correction for small
 samples [@tharanga2025], the way DiMA evaluates that correction exactly, the optional
-alternative estimators, and the sample coverage reported next to them.
+alternative estimators, the sample coverage reported next to them, and the optional
+[similarity-weighted entropy](#similarity-weighted-entropy-opt-in).
 
 Notation: a position has support $N$ (sequences with a valid k-mer) and $D$ distinct variants with
 counts $c_1, \dots, c_D$; $f_c$ is the number of variants seen exactly $c$ times (so $f_1$ counts
@@ -156,7 +157,8 @@ the AVANA tool extrapolated from 100 random sub-alignments by default [@khan2017
 - Results are reproducible bit for bit; no random seed is involved.
 - On the paper's HIV-1 *pol* dataset the mean corrected entropy is 5.3504 bits; the paper reports
   about 5.35, <!-- docs-numbers:hiv-run-mean:start -->
-  and the mean of one run of the random procedure has a standard deviation of 0.0020 bits around it<!-- docs-numbers:hiv-run-mean:end --> (see
+  and the mean intercept of one run of the random procedure, before its negative-intercept rule, has
+  a standard deviation of 0.0020 bits around it<!-- docs-numbers:hiv-run-mean:end --> (see
   [Comparison with the papers](/explanation/paper-comparison/)).
 - **Fig. 1C.** At MERS-CoV spike position 25 the paper shows 1.38 bits ($T = 30$). <!-- docs-numbers:fig1c:start -->
   The exact expectation is 1.4451 bits, and the intercept of one run of the random procedure has a
@@ -231,9 +233,9 @@ populations with a known entropy (minor-variant frequency 0.05, 0.1, 0.2, 0.5, 1
 and 100), v5.0.9's per-run rule overestimated the entropy by up to 31% on average with $T = 100$ and
 20% with $T = 30$ (seeded Monte Carlo of 100,000 runs per case, 95% intervals within ±0.5 percentage
 points). The exact expectation underestimated it by up to 27% when less than one minor-variant
-sequence was expected and by up to 6.4% otherwise (and overestimated it by at most 0.13%), within
-3.2 percentage points of the error of the Miller–Madow correction. Neither had the smaller error
-everywhere.
+sequence was expected and by up to 6.4% otherwise (and overestimated it by at most 0.14%), within
+3.3 percentage points of the error of the Miller–Madow correction. Neither v5.0.9's per-run rule nor
+the exact expectation had the smaller error everywhere.
 
 <!-- docs-numbers:population-study:end -->
 
@@ -364,8 +366,8 @@ H_\text{sim} = \sum_i \left(-\hat p_i \log_2 \hat p_i\right)\left(1 - S_i\right)
 \end{equation}
 $$
 
-$S_i$ is the average similarity of variant $i$ to the other sequences at the position, and
-$1 - S_i$ is the variant's weight. Wu uses other letters for two of these quantities: his $N$ is
+$S_i$ is the average, over all $N$ sequences at the position, of their similarity to variant
+$i$, with the variant's own sequences counted as 0; $1 - S_i$ is the variant's weight. Wu uses other letters for two of these quantities: his $N$ is
 the number of distinct sequences ($D$ below) and his $T$ the number of sequences (clones; $N$
 here) [@wu2025, Sections 1 and 2.1]. On this page $T$ is the support threshold.
 
@@ -409,9 +411,11 @@ $H_\text{sim} = (k + d)/(2k)$ bits, against $\hat H = 1$ bit.
 
 ### Normalised values
 
-DiMA also reports both entropies divided by their largest possible value for the number of
-distinct k-mers $D$ at the position (the Index included): $H_n = \hat H / \log_2 D$ and
-$H_\text{nsim} = H_\text{sim} / \log_2 D$, each between 0 and 1 [@wu2025, Section 2.1]. Wu notes
+DiMA also reports both entropies divided by $\log_2 D$, the largest observed entropy possible
+with the $D$ distinct k-mers at the position (the Index included): $H_n = \hat H / \log_2 D$ and
+$H_\text{nsim} = H_\text{sim} / \log_2 D$, each between 0 and 1 [@wu2025, Section 2.1].
+$H_\text{nsim}$ reaches 1 only when every pair of k-mers differs at every site, which needs no
+more distinct k-mers than letters. Wu notes
 that entropy is commonly normalised by $\log_2$ of the number of clones, or by $\log_2$ of "the
 estimated number of unique sequences", the latter "particularly common in next generation
 sequencing (NGS) data analyses" [@wu2025, Section 1]; his $H_n$ divides by $\log_2$ of "the total
@@ -469,8 +473,8 @@ entropy column by column.
 
 Wu defines a viral quasispecies as "a population of related viral sequences within an infected
 host" [@wu2025, Section 1], and applied the metric only to such populations: simulated ones, a
-potato spindle tuber viroid mutant pool and the tomato brown rugose fruit virus (ToBRFV)
-populations of two plants, all of nucleotide sequences of equal length that differ by
+potato spindle tuber viroid mutant pool and two tomato brown rugose fruit virus (ToBRFV)
+samples, all of nucleotide sequences of equal length that differ by
 substitutions only [@wu2025, Sections 2.1 and 3.1–3.3]. DiMA's alignments usually hold sequences
 from many hosts, and DiMA applies the metric at every k-mer position, to amino-acid k-mers too.
 Wu's reading, that a variant similar to the others adds less to a quasispecies' diversity, then
@@ -481,7 +485,7 @@ As of 25 November 2026, searches of OpenAlex, Semantic Scholar, OpenCitations an
 (including full text; Crossref's citation count agrees) found no published application or
 evaluation of the metric by other authors; the works that cite it are reviews. Wu's ToBRFV data
 (the unique sequences with their read counts) are published, and with them DiMA reproduces his
-values for one plant but not for the other (see [Comparison with the papers](/explanation/paper-comparison/#similarity-weighted-entropy-wu-2025)).
+values for one sample but not for the other (see [Comparison with the papers](/explanation/paper-comparison/#similarity-weighted-entropy-wu-2025)).
 
 ### How the values change with the number of sequences
 
@@ -542,7 +546,8 @@ the samples with at least two distinct k-mers.
 **Why DiMA reports no corrected values.** Wu defines plug-in values, and the published method is
 DiMA's specification ([working agreement 1](/contributing/working-agreements/)). No
 published or validated correction exists for $H_\text{sim}$, and all three values depend on
-support [@zhao2019, Section 3.1; @gregori2014, Sections 2.4 and 3.2]. Nor can any of them be
+support: observed and normalised entropy [@zhao2019, Section 3.1; @gregori2014, Sections 2.4 and
+3.2], and similarity-weighted entropy too (Tables 1 and 2). Nor can any of them be
 estimated without bias: from $n$ sequences drawn independently at random, only polynomials of the
 variant frequencies can be estimated without bias, and Shannon entropy is not one
 [@paninski2003, Appendix A.2, Proposition 8]. $H_\text{sim}$ is not one either: for two k-mers of
@@ -551,11 +556,12 @@ $H_\text{sim} = -p \log_2 p\,(1 - s + sp) - (1 - p)\log_2(1 - p)\,(1 - sp)$, who
 without bound as $p \to 0$, which a polynomial's never does.
 
 **Comparing positions.** Because the values depend on support, positions of very different
-support can rank differently from their populations [@zhao2019, Section 3.1; @gregori2014,
-Section 3.2]. Compare positions of similar support and similar sample coverage (both are
-reported): equally complete samples can be compared directly [@chao2012, p. 2538]. Quasispecies
-studies instead rarefy the larger samples by repeated subsampling without replacement
-[@gregori2014, Sections 2.5 and 3.2]; DiMA does not.
+support can rank differently from their populations, as shown for observed and normalised entropy
+[@zhao2019, Section 3.1; @gregori2014, Section 3.2]. Compare positions of similar support and
+similar sample coverage (both are reported): equally complete samples can be compared directly
+[@chao2012, p. 2538]. For quasispecies data, Gregori et al. recommend rarefying the larger sample
+to the size of the smaller by repeated subsampling without replacement [@gregori2014, Sections
+2.5 and 3.2]; DiMA does not.
 
 The summary (`similarity_weighted_entropy_summary`: the mean, lowest and highest
 similarity-weighted entropy, and the mean observed entropy of the same positions) covers the
@@ -588,10 +594,14 @@ of the paper differ from it, or from Wu's data (the numbers are in
   printed $H_\text{sim} = 4.04$ and $H_\text{nsim} = 0.50$ of the theoretical UNNNNA pool need all
   six sites; exactly, they are 4.03125 and 0.50390625.
 - Two cells of Supplementary File 1 hold the values of another similarity: in the "Figure 2
-  Extended Data" sheet, distribution 1's values at similarity 0.3 are those at 0.4, and in the
-  "Figure 3 Extended Data" sheet, D-1's values at 0.7 are those at 0.95 (Fig. 3b).
-- From Wu's published ToBRFV reads, $H$ and $H_n$ are higher in the Tm-2² plant than in the tm-2
-  plant, the opposite of Section 3.3.
+  Extended Data" sheet (whose five populations are further ones, not Fig. 2's), distribution 1's
+  values at similarity 0.3 are those at 0.4, and in the "Figure 3 Extended Data" sheet, D-1's
+  values at 0.7 are those at 0.95 (Fig. 3b).
+- From Wu's published ToBRFV data (the unique sequences with their read counts), $H$ and $H_n$
+  are higher in the Tm-2² sample than in the tm-2 sample, the opposite of Section 3.3.
+- Fig. 6's legend says that sequences below 0.1% of the reads were excluded, but the published
+  tm-2 data list eight sequences with 10 of 10,833 reads (0.092%); with all 48, the tm-2 values
+  of Fig. 6d are reproduced.
 
 ## Numerical details
 
@@ -600,12 +610,15 @@ compensated (Neumaier) summation; each position is computed by one thread and su
 reduced in position order. Identical inputs therefore give byte-identical outputs.
 
 Rounding error is present in every value, as in any floating-point program, and grows with the
-number of sequences at a position. On the bundled datasets it is within about
-$5 \times 10^{-15}$ of the exact values (relative), and at the 2.2 million sequences per position
+number of sequences at a position. On the bundled datasets every entropy is within about
+$5 \times 10^{-15}$ of the exact value (relative), and at the 2.2 million sequences per position
 of the paper's SARS-CoV-2 analysis within $2.2 \times 10^{-12}$. That is $10^{10}$ to
-$10^{12}$ times smaller than the sampling error of the estimate. [Numerical accuracy](/explanation/numerical-accuracy/)
-gives the measurements, the one limit (more than $9 \times 10^{15}$ sequences at a position) and
-why a prototyped fix for the last digits is deferred.
+$10^{12}$ times smaller than the sampling error of the estimate. Similarity-weighted entropy has
+the same absolute error as observed entropy, but is smaller, so its relative error is larger: up
+to $2 \times 10^{-14}$ on the bundled datasets and $2.2 \times 10^{-11}$ at 2.2 million sequences.
+[Numerical accuracy](/explanation/numerical-accuracy/) gives the measurements, the one limit
+(more than $9 \times 10^{15}$ sequences at a position) and why a prototyped fix for the last
+digits is deferred.
 
 ## References
 

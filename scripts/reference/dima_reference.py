@@ -2035,6 +2035,18 @@ def _self_test_similarity(t: _Checker) -> None:
     t.check(normalised_entropy(plug_in_entropy_decimal(multiplicities([1, 1, 1, 1]), 4), 4) == 1.0, "H_n = 1")
     hn_sim = normalised_entropy(similarity_weighted_entropy_decimal(uniform, 4), 4)
     t.check(hn_sim is not None and 0 < hn_sim < 1, "H_nsim below 1")
+    # Unequal counts at partial similarity, where weighting S_i by f_i instead of f_j (Wu's
+    # printed slip) gives another value: counts 3 and 1 one site apart in k = 2, weights 7/8
+    # and 5/8, so H_sim = (21/32) log2(4/3) + 5/16.
+    want = 21 / 32 * math.log2(4 / 3) + 5 / 16
+    t.check(abs(h_sim([(b"AA", 3), (b"AC", 1)]) - want) <= 1e-15 * want, "counts 3 and 1, k = 2")
+    # Wu's Supplementary File 1, sheet "Figure 2 Extended Data": distribution 1 at similarity 0.9
+    # (ten 1,000-residue k-mers, every pair differing at 100 sites), printed to five decimals.
+    counts = [70, 5, 5, 5, 5, 2, 2, 2, 2, 2]
+    pool = [(bytes([letter]) * 100 + b"A" * 900, c) for letter, c in zip(b"CDEFGHIKLM", counts)]
+    value = h_sim(pool)
+    t.check(round(value, 5) == 0.45488, "Supplementary File 1: H_sim 0.45488")
+    t.check(round(value / math.log2(10), 5) == 0.13693, "Supplementary File 1: H_nsim 0.13693")
 
 
 def _expect_error(t: _Checker, what: str, func, error_type=DimaError, fragment: str = "") -> None:
@@ -2132,6 +2144,24 @@ def _self_test_pipeline(t: _Checker) -> None:
     t.check(clean_metadata_value(" ", fill) == fill, "clean: U+2000 stripped")
     t.check(clean_metadata_value("x\x7f", fill) == "x\x7f", "clean: DEL kept")
 
+    # Similarity-weighted entropy through the whole pipeline: an Index tie one site apart
+    # (H_n = 1, H_sim = (k + d)/(2k) = 2/3), positions without support (null), one k-mer
+    # (H_sim 0, normalised null), and the summary over eligible positions only.
+    fasta = b">a\nACG--TTTT\n>b\nACG--TTTA\n>c\nACC--TTTT\n>d\nACC--TTTT\n"
+    result = json.loads(analyse_to_string(fasta, Options(kmer_length=3, threshold=3, alphabet=DNA,
+                                                          similarity_weighted_entropy=True)))
+    pos = result["positions"]
+    t.check(pos[0]["normalised_observed_entropy"] == 1.0 and pos[0]["similarity_weighted_entropy"] == 2 / 3,
+            "pipeline: Index tie, H_n = 1 and H_sim = 2/3")
+    t.check(all(p["similarity_weighted_entropy"] is None for p in pos[1:5]), "pipeline: no support, null")
+    t.check(pos[5]["similarity_weighted_entropy"] == 0.0 and pos[5]["normalised_similarity_weighted_entropy"] is None,
+            "pipeline: one k-mer, 0 and null")
+    summary = result["similarity_weighted_entropy_summary"]
+    t.check(summary["position_count"] == 3, "pipeline: summary over the eligible positions")
+    off = json.loads(analyse_to_string(fasta, Options(kmer_length=3, threshold=3, alphabet=DNA)))
+    t.check(off["similarity_weighted_entropy_summary"] is None
+            and all(p["similarity_weighted_entropy"] is None for p in off["positions"]),
+            "pipeline: nothing without the option")
     # Whole pipeline on a small protein alignment.
     fasta = (
         ">s1|Human|2020\nMKTAYIAKQR\n"

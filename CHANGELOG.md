@@ -20,7 +20,7 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   k-mers (the Index included); undefined with one distinct k-mer. Computed exactly from residue
   counts per site instead of pairs of variants (the column-profile form of sum-of-pairs scores,
   Gotoh 1994, [doi:10.1093/bioinformatics/10.4.379](https://doi.org/10.1093/bioinformatics/10.4.379),
-  eqs. (1), (4a), (9b)). Without the option nothing is computed and no existing value changes;
+  eqs. (1) and (4a)). Without the option nothing is computed and no existing value changes;
   with it, no existing value changes either.
 
 ### Added
@@ -103,7 +103,8 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
 - The counter-overflow message said "64-bit" for counters that are 32-bit (distinct k-mers at
   one position, distinct header values); it now reads "… exceeds the range of DiMA's counters".
 - Messages about the schema version of a conserved-sequences file no longer call it a results
-  schema.
+  schema, and the hint for one written by a newer DiMA names its `tool.version` (results files
+  have `run.tool.version`).
 - The desktop app's entropy chart could keep drawing the solid line of the previous results
   when new results showed the same positions, zoom and highest entropy (for example the same
   alignment analysed again with the raw estimator and another support threshold); the line is

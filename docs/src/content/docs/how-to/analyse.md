@@ -32,7 +32,9 @@ dima analyze -i spike.fasta -o spike.json
 
 Without `-o` (and without `--tsv-dir` or `--hcs-output`), the results go to standard output as
 JSON. DiMA prints warnings and a one-line summary on standard error; add `-v` for progress
-milestones and a performance report, or `-q` for errors only.
+milestones and a performance report, or `-q` for errors only. The summary gives entropies to four
+decimals; a value that is not zero never reads `0.0000` there, but `< 0.0001`. The results keep
+every digit.
 
 ## Choose the k-mer length
 
@@ -120,7 +122,7 @@ tables). Turning it on changes no other result: the run only records the option 
 | Key | Meaning |
 |---|---|
 | `similarity_weighted_entropy` | The similarity-weighted entropy, in bits: never more than the observed entropy, and 0 at a position with a single variant |
-| `normalised_observed_entropy` | The observed entropy divided by $\log_2 D$, the largest entropy possible with $D$ distinct k-mers (the Index included), so between 0 and 1 |
+| `normalised_observed_entropy` | The observed entropy divided by $\log_2 D$, the largest entropy possible with $D$ distinct k-mers (the [Index](/reference/glossary/#index-major-minor-and-unique) included), so between 0 and 1 |
 | `normalised_similarity_weighted_entropy` | The similarity-weighted entropy divided by the same $\log_2 D$ |
 
 The results also gain `similarity_weighted_entropy_summary`: the mean, lowest and highest

@@ -4,8 +4,9 @@
 Wu J. "Similarity-weighted entropy for quantifying genetic diversity in viral quasispecies".
 Virus Evol 2025;11(1):veaf029, doi:10.1093/ve/veaf029, CC BY 4.0. Supplementary File 2 lists
 the unique 120-nt sequences of the 5'-120nts region of tomato brown rugose fruit virus in tm-2
-and Tm-2^2 tomato plants, each with its read count (sequences below 0.1% of the reads were
-excluded by the author). Europe PMC serves the supplement as a zip archive
+and Tm-2^2 tomato plants, each with its read count. (Wu reports excluding sequences below 0.1% of
+the reads; the tm-2 sheet nevertheless lists eight with 10 reads, 0.092%. All are kept: with all
+48 the tm-2 values of Wu's Fig. 6d are reproduced.) Europe PMC serves the supplement as a zip archive
 (PMC12079039, ``/rest/PMC12079039/supplementaryFiles``) holding ``veaf029_supp.zip``, which
 holds ``suppl_data/Supplementary File 2.xlsx``.
 
@@ -58,9 +59,12 @@ def read_sheets(path: Path) -> dict[str, list[tuple[str, str, int]]]:
             continue
         records = []
         for row in cells(book, "xl/" + target[sheet.get(rel_ns)].lstrip("/").removeprefix("xl/"), shared):
-            seq, reads = row.get("B", ""), row.get("C", "")
-            if re.fullmatch(r"[ACGT]+", seq) and re.fullmatch(r"[0-9]+", reads):
-                records.append((row["A"].strip(), seq, int(reads)))
+            ident, seq, reads = row.get("A", "").strip(), row.get("B", ""), row.get("C", "")
+            if not re.fullmatch(r"Seq[0-9]+", ident):
+                continue  # the title and header rows
+            if not (re.fullmatch(r"[ACGT]+", seq) and re.fullmatch(r"[0-9]+", reads)):
+                raise ValueError(f"{name}: row {ident} is not a sequence of A, C, G, T with a whole read count")
+            records.append((ident, seq, int(reads)))
         out[name] = records
     return out
 

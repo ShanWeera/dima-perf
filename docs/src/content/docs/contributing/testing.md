@@ -22,9 +22,13 @@ python3 scripts/reference/dima_reference.py analyze -i samples/mers_spike_aa.fas
 The differential tests (`crates/dima-core/tests/reference.rs`) run it and the library on the same
 inputs. Every number must agree within a relative $10^{-13}$ (so a zero must be exactly zero),
 and everything else — labels, k-mers, motif classes, methods, region membership — must be
-identical. The test alignments are small, and there the two agree to $2.6 \times 10^{-15}$ at
-worst. At millions of sequences per position the library's own rounding is larger, so
-differences up to $5 \times 10^{-11}$ are expected there (see
+identical. The test alignments are small: synthetic ones (with gaps, ambiguity codes, lower case
+and wrapped lines, one with low-support positions), the golden `tiny` input (positions without
+support, with low support and with an Index tie) and the MERS-CoV spike sample, all with
+similarity-weighted entropy. There the two agree to $2.6 \times 10^{-15}$ at worst for the
+entropies and $6 \times 10^{-15}$ for similarity-weighted entropy. At millions of sequences per
+position the library's own rounding is larger, so differences up to $5 \times 10^{-11}$ (for
+similarity-weighted entropy $3.3 \times 10^{-10}$) are expected there (see
 [Numerical accuracy](/explanation/numerical-accuracy/#what-this-means-for-testing)).
 The tests need `python3` 3.10 or newer; `DIMA_SKIP_REFERENCE=1` skips them where Python is
 unavailable (never in CI).
@@ -69,6 +73,15 @@ git diff tests/golden/
 ```
 
 `.gitattributes` keeps these files byte-exact on every platform.
+
+The desktop app has two golden images of its exported chart,
+`crates/dima-gui/tests/golden/entropy_chart.png` and `entropy_chart.svg`, drawn from a fixed scene
+with the bundled fonts. Re-bless them the same way and look at both images before committing:
+
+```sh
+DIMA_BLESS=1 cargo test -p dima-gui
+git diff --stat crates/dima-gui/tests/golden/
+```
 
 ## Invariance and properties
 

@@ -94,7 +94,8 @@ precision printed.
 Monte Carlo uses only random.Random(seed).random(), whose stream is the same on CPython 3.10 to
 3.13 and on every platform, with the seeds and run counts below; binomial counts are drawn by
 inverting cumulative tables built with + - * / only. The texts state the run counts and the
-95% half-widths (1.96 standard errors), which are checked against the precision printed.
+95% half-widths (1.96 standard errors), rounded up; where a value is printed to a single precision
+(the v5.0.9 means), the half-width is checked to stay within it.
 
 Usage: python3 scripts/reference/docs_numbers.py [--check]
 """
@@ -1201,7 +1202,10 @@ def half_width_text(hw: float, decimals: int) -> str:
 
 
 def render_hiv_run_mean(s: dict) -> str:
-    return f"and the mean of one run of the random procedure has a standard deviation of {f4(s['hiv_dna']['sd_run_mean'])} bits around it"
+    return (
+        "and the mean intercept of one run of the random procedure, before its negative-intercept rule, "
+        f"has a standard deviation of {f4(s['hiv_dna']['sd_run_mean'])} bits around it"
+    )
 
 
 def render_fig1c(s: dict) -> str:
@@ -1310,8 +1314,9 @@ def render_population(s: dict) -> str:
         f"95% intervals within ±{ceil_sig(100 * hw, 1)} percentage points). The exact expectation "
         f"underestimated it by up to {pct(under_below, 0)} when less than one minor-variant sequence was "
         f"expected and by up to {pct(under_above)} otherwise (and overestimated it by at most "
-        f"{pct(over_dima, 2)}), within {100 * gap:.1f} percentage points of the error of the Miller–Madow "
-        "correction. Neither had the smaller error everywhere."
+        f"{ceil_sig(100 * over_dima, 2)}%), within {ceil_sig(100 * gap, 2)} percentage points of the error of the "
+        "Miller–Madow correction. Neither v5.0.9's per-run rule nor the exact expectation had the smaller error "
+        "everywhere."
     )
 
 
@@ -1343,7 +1348,6 @@ def share(p: float) -> str:
 
 def render_populations(s: dict) -> str:
     t = s["table2"]
-    fig = t["fig1b"]
     subs = [subs for _, subs in FIG1B[1:]]
     lines = [
         "**Table 2.** The values of two populations, and their average over samples of $n$ sequences drawn at "
@@ -1362,7 +1366,6 @@ def render_populations(s: dict) -> str:
         for r in t[key]["rows"]:
             lines.append(f"| {label} | {r['n']} | {f4(r['H'])} | {f4(r['H_sim'])} | {f4(r['H_n'])} | {f4(r['H_nsim'])} | {share(r['P1'])} |")
         lines.append(f"| {label} | population | {f4(pop['H'])} | {f4(pop['H_sim'])} | {f4(pop['H_n'])} | {f4(pop['H_nsim'])} | — |")
-    del fig
     return "\n".join(lines)
 
 
@@ -1380,7 +1383,10 @@ def render_tobrfv(s: dict) -> str:
 
 
 def render_hiv_run_mean_note(s: dict) -> str:
-    return f"the mean of one run of the published procedure has a standard deviation of {f4(s['hiv_dna']['sd_run_mean'])} bits (exact)"
+    return (
+        "the mean intercept of one run of the published procedure, before its negative-intercept rule, has "
+        f"a standard deviation of {f4(s['hiv_dna']['sd_run_mean'])} bits (exact)"
+    )
 
 
 def render_hiv_positions(s: dict) -> str:
