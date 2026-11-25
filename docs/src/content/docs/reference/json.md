@@ -28,8 +28,9 @@ Conventions shared by all three:
   without the options their schema did not have: results written by dima 1.0.0 (schema 1.0.0)
   are read as runs without similarity-weighted entropy, so writing them again gives `null` for
   its values and `false` for its option (`dima view` says so in a note). Such files validate
-  against the 1.0.0 schema of the documentation and release of version 1.0, not against the
-  current schema, which requires the keys 1.1.0 added.
+  against the 1.0.0 schema, `schemas/results.schema.json` of release 1.0.0 (tag `v1.0.0`), not
+  against the schema now published at the address in its `$id`, which is 1.1.0 and requires the
+  keys 1.1.0 added (see [Comparing versions](/how-to/reproducibility/#comparing-versions)).
 - **Undefined or not requested is `null`.** A value that cannot be computed (an entropy without
   support, a $0/0$ ratio, a summary without eligible positions) or that was not requested (the
   similarity-weighted values of a run without `--similarity-weighted-entropy`) is `null`, never

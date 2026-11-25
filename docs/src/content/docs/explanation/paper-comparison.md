@@ -91,8 +91,11 @@ HIV-1 *pol* means differ from DiMA's by less than 0.00026 bits (DNA) and 0.0011 
 Wu's paper introduces similarity-weighted entropy [@wu2025] (see
 [the methodology](/explanation/entropy/#similarity-weighted-entropy-opt-in)). Two of its examples
 come with their data: Supplementary File 1 prints the four metrics of further simulated
-populations (not those of Figs. 2 and 4), and Supplementary File 2 lists the unique ToBRFV
-sequences of the two samples with their read counts. Wu's potato spindle tuber viroid (PSTVd)
+populations (not those of Figs. 2 and 4), and Supplementary File 2 lists the unique sequences,
+with their read counts, of two samples of tomato brown rugose fruit virus (ToBRFV): one from
+tomato plants with the susceptible tm-2 allele and one from plants with the resistant Tm-2²
+allele, both of the 5′-120nts region, the first 120 nucleotides at the 5′ end of the genome
+[@wu2025, Sections 2.2 and 3.3]. Wu's potato spindle tuber viroid (PSTVd)
 pools (practical, IR, LM and Sys) are not published as sequences. DiMA's values below are fixed
 by the test suite (`crates/dima-core/tests/paper.rs`, which builds the simulated populations and
 reads the ToBRFV data in `tests/data/`); the ToBRFV values and the Fig. 5c pool also agree with

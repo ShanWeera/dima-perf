@@ -116,7 +116,7 @@ In the desktop app, tick **Compute similarity-weighted entropy (Wu 2025)** under
 before you run the analysis.
 
 Each position then has three more values; without the option they are `null` (`NA` in the
-tables). Turning it on changes no other result: the run only records the option in
+positions table). Turning it on changes no other result: the run only records the option in
 `run.parameters.similarity_weighted_entropy` and its sources in `run.references`.
 
 | Key | Meaning |

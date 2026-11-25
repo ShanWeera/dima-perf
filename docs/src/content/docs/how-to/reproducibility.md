@@ -28,10 +28,12 @@ checked by the test suite on every change [@taschuk2017, Rule 10].
 
 Byte-identical is not the same as exact. Like any floating-point program, DiMA rounds, and its
 values carry a small rounding error. On the bundled datasets it is in the last one or two of
-the 17 significant digits. It grows with the number of sequences at a position, to at most the
-11th digit at 17.5 million sequences. That is always at least $10^{10}$ times smaller than the
-sampling error of an entropy estimate.
-A future version may correct these last digits, so compare results across versions at about ten
+the 17 significant digits (the last three or four for the opt-in similarity-weighted entropy). It
+grows with the number of sequences at a position, to at most the 11th digit at 17.5 million
+sequences (the 10th for similarity-weighted entropy). That is always at least $10^{10}$ times
+smaller than the sampling error of an entropy estimate ($3 \times 10^9$ times for
+similarity-weighted entropy).
+A future version may correct these last digits, so compare results across versions at about nine
 significant digits. Results from the same version match exactly. The measurements are in
 [Numerical accuracy](/explanation/numerical-accuracy/).
 

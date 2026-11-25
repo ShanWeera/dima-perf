@@ -352,7 +352,7 @@ variant's entropy term by how *dissimilar* it is to the rest of the position, so
 variants count for less. It is not part of the DiMA method and is computed only on request:
 `dima analyze --similarity-weighted-entropy`, or **Compute similarity-weighted entropy (Wu 2025)**
 under **Advanced** in the [desktop app](/how-to/desktop-app/#similarity-weighted-entropy).
-Without it, the three values below are `null` (`NA` in the tables); with it, nothing else
+Without it, the three values below are `null` (`NA` in the positions table); with it, nothing else
 changes.
 
 At a position with support $N$, let variant $i$ (a distinct k-mer, the Index included) be carried
@@ -367,9 +367,14 @@ H_\text{sim} = \sum_i \left(-\hat p_i \log_2 \hat p_i\right)\left(1 - S_i\right)
 $$
 
 $S_i$ is the average, over all $N$ sequences at the position, of their similarity to variant
-$i$, with the variant's own sequences counted as 0; $1 - S_i$ is the variant's weight. Wu uses other letters for two of these quantities: his $N$ is
-the number of distinct sequences ($D$ below) and his $T$ the number of sequences (clones; $N$
-here) [@wu2025, Sections 1 and 2.1]. On this page $T$ is the support threshold.
+$i$, with the variant's own sequences counted as 0; $1 - S_i$ is the variant's weight. Wu uses
+other letters for two of these quantities [@wu2025, Sections 1 and 2.1]:
+
+| Quantity | This page | Wu 2025 |
+|---|---|---|
+| Sequences at the position (support) | $N$ | $T$ (clones) |
+| Distinct k-mers at the position | $D$ | $N$ (unique sequences) |
+| Support threshold | $T$ | — |
 
 ### The similarity of two k-mers
 
@@ -426,11 +431,13 @@ $J' = H'/\log s$, with $D$ in place of the number of species $s$ of the populati
 species [@sheldon1969, p. 467].
 
 With a single distinct k-mer ($D = 1$) the largest possible entropy is 0, so the normalised values
-are undefined (`null`) while $H_\text{sim} = 0$, as Pielou left the evenness of a quadrat with a
+are undefined (`null`) while $H_\text{sim} = 0$, as Pielou left the evenness of a quadrat (a
+sampling plot of a plant community) with a
 single species undefined [@pielou1966, p. 141]. Without support all three values are `null`.
 
 The normalised values depend on $D$ as well as on how evenly the sequences are spread, especially
-when $D$ is small: equitability indices are "fairly stable for S > 20" [@sheldon1969, p. 467],
+when $D$ is small: equitability indices (evenness measures such as $H_n$, with $S$ the number of
+species, here $D$) are "fairly stable for S > 20" [@sheldon1969, p. 467],
 while $J'$, the form of $H_n$, depends on the number of species "up to S = 25 or higher"
 [@smith1996, Requirement 1, p. 72].
 
@@ -464,7 +471,8 @@ $H_\text{sim}$ takes similarity into account, as the family of similarity-sensit
 measures of Leinster and Cobbold does [@leinster2012, p. 479], but it is not a member of that
 family: with their similarity matrix $Z_{ij} = s_{ij}$ ($Z_{ii} = 1$),
 $S_i = (Z\hat p)_i - \hat p_i$, and $H_\text{sim}$ is an entropy in bits, not an effective number
-of variants. It is also not to be confused with the "similarity-weighted entropy analysis" of
+of variants (the number of equally common, entirely dissimilar variants that would have the same
+diversity). It is also not to be confused with the "similarity-weighted entropy analysis" of
 Mo et al. [@mo2026, Methods, "Entropy of VP1 codons and physical property analyses of high-entropy
 codons", and Results], which gives near-identical sequences less weight and then computes Shannon
 entropy column by column.

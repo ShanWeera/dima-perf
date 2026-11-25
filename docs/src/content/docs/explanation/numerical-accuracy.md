@@ -28,7 +28,8 @@ scientific software [@darriba2018; @eddy2011].
   but has the same absolute error, is within $2.2 \times 10^{-11}$ (at 17.5 million sequences
   $3.3 \times 10^{-10}$). In absolute terms no error reaches $10^{-14}$ bits.
 - **Far below the sampling error.** The rounding error is $10^{10}$ to $10^{12}$ times smaller
-  than the standard deviation of the entropy estimate itself. The paper reports entropies to two
+  than the standard deviation of the entropy estimate itself ($3 \times 10^9$ to
+  $2.2 \times 10^{11}$ times for similarity-weighted entropy). The paper reports entropies to two
   decimals.
 - **Results stay deterministic either way.** Identical inputs give byte-identical outputs on
   every platform and thread count (see
@@ -270,7 +271,11 @@ with each rare k-mer differing from the dominant one at one site:
 | many doubletons | 17,500,000 | $2.4 \times 10^{-12}$ | $1.5 \times 10^{-11}$ | $2.5 \times 10^{-11}$ |
 
 The absolute errors stay between $2 \times 10^{-17}$ and $7 \times 10^{-17}$ bits, as for observed
-entropy, and the normalised values have the relative errors of the entropies they divide. On the
+entropy, and the normalised values have the relative errors of the entropies they divide. The
+standard deviation of similarity-weighted entropy from sampling, computed as for the entropies
+above, is $9.8 \times 10^{-7}$ to $7.1 \times 10^{-6}$ bits on these profiles at 2,208,211
+sequences and $1.3 \times 10^{-7}$ to $9.9 \times 10^{-7}$ bits at 17.5 million, so the rounding
+error stays $3 \times 10^9$ to $2.2 \times 10^{11}$ times smaller. On the
 four bundled datasets the largest relative error of similarity-weighted entropy is
 $1.9 \times 10^{-14}$ (MERS-CoV spike gene, position 433, where 451 of 452 sequences carry one
 27-mer). Mathematically both normalised values lie between 0 and 1 and similarity-weighted
@@ -343,7 +348,8 @@ the exact $\alpha/2$ also the conserved-sequence tables.
 ## Why the fix is deferred
 
 1. **No scientific result changes.** At every realistic $N$ the rounding error is at least
-   $10^{10}$ times smaller than the sampling error. A fix would change digits that no analysis
+   $10^{10}$ times smaller than the sampling error ($3 \times 10^9$ times for similarity-weighted
+   entropy). A fix would change digits that no analysis
    can rely on.
 2. **The project's rule for engineering changes.** The paper is the specification, and a pure
    engineering change must leave results unchanged (see
