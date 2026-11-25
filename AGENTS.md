@@ -136,6 +136,7 @@ python3 scripts/reference/dima_reference.py --self-test
 python3 scripts/release/check-windows-crt.py --self-test
 python3 scripts/notices/generate.py --check                       # after dependency changes (cargo-about)
 python3 scripts/reference/paper_values.py --check                 # after changes to the reference implementation or the datasets
+python3 scripts/reference/docs_numbers.py --check                 # after changes to the reference implementation, the datasets or a docs-numbers region (about a minute)
 cargo deny check bans licenses sources                             # after dependency changes (cargo-deny)
 cargo deny --config deny-strict.toml --exclude dima-gui --exclude xtask --exclude-dev check bans  # cargo-deny 0.20+
 pnpm -C docs install --frozen-lockfile && pnpm -C docs build       # after docs changes
@@ -143,7 +144,7 @@ pnpm -C docs install --frozen-lockfile && pnpm -C docs build       # after docs 
 
 Generated files are never edited by hand: `cargo xtask gen --mode write` regenerates the CLI
 reference, the bibliography, the docs' citation data (`references.json`, `references.bib`),
-`CITATION.cff`, `.zenodo.json` and the README's citation section; `python3 scripts/notices/generate.py` regenerates `THIRD-PARTY-NOTICES.md`; `python3 scripts/reference/paper_values.py` regenerates the paper test's expected values (`crates/dima-core/tests/paper_expected/mod.rs`) from the reference implementation.
+`CITATION.cff`, `.zenodo.json` and the README's citation section; `python3 scripts/notices/generate.py` regenerates `THIRD-PARTY-NOTICES.md`; `python3 scripts/reference/paper_values.py` regenerates the paper test's expected values (`crates/dima-core/tests/paper_expected/mod.rs`) from the reference implementation; `python3 scripts/reference/docs_numbers.py` regenerates the documentation's numbers that come from expectations and simulations (the `<!-- docs-numbers:NAME:start -->` regions of `entropy.md` and `paper-comparison.md` and the notes of `scripts/validate_paper.sh`).
 `scripts/validate_paper.sh` compares results with the paper; `scripts/bench/run.sh` regenerates
 `BENCHMARK.md` (run it on an otherwise idle machine).
 

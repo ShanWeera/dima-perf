@@ -111,6 +111,24 @@ documentation build fails on a broken internal link, an unknown citation key or 
 `pnpm -C docs run test:lighthouse` enforces the performance, accessibility, best-practice and
 search budgets of `docs/lighthouserc.cjs`.
 
+Some numbers on the methodology pages are not outputs of a run but properties of the methods:
+how far one run of the paper's random procedure strays from the exact expectation DiMA reports,
+how often DiMA v5.0.9's per-run rule replaces an intercept, how the similarity-weighted values
+change with the number of sequences, and the values of Wu 2025's ToBRFV samples.
+`scripts/reference/docs_numbers.py` computes them, exactly where an exact form exists and
+otherwise by Monte Carlo with fixed seeds, and writes them between
+`<!-- docs-numbers:NAME:start -->` and `<!-- docs-numbers:NAME:end -->` markers in
+[Entropy and its correction](/explanation/entropy/),
+[Comparison with the papers](/explanation/paper-comparison/) and `scripts/validate_paper.sh`; the
+prose around the markers is written by hand. It first checks its methods against enumerating
+every outcome of small cases, and the Monte Carlo against exact results. Continuous integration
+fails when a number is out of date:
+
+```sh
+python3 scripts/reference/docs_numbers.py           # regenerate after changing the reference, the datasets or a region
+python3 scripts/reference/docs_numbers.py --check   # what CI runs (about a minute on four cores)
+```
+
 ## References
 
 [^ref]
