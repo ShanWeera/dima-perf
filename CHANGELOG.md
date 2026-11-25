@@ -60,6 +60,10 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   when new results showed the same positions, zoom and highest entropy (for example the same
   alignment analysed again with the raw estimator and another support threshold); the line is
   now redrawn for every new set of results.
+- The desktop app's entropy axis repeated its labels (0.00, 0.01, 0.01, 0.02) when the highest
+  shown entropy was below about 0.024 bits, on screen and in exported figures. Ticks less than
+  0.01 bits apart now get three decimals, and the axis is at least 0.005 bits tall (1 bit, as
+  before, when every shown value is 0).
 
 ## [1.0.0] - 2026-10-07
 

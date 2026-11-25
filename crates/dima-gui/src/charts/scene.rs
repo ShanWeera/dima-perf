@@ -11,7 +11,7 @@ use std::fmt::Write as _;
 
 use ab_glyph::{Font as _, FontRef, PxScale, ScaleFont as _};
 
-use super::axis::{integer_ticks, nice_ticks};
+use super::axis::{integer_ticks, nice_ticks, y_tick_labels};
 use super::series::{Series, Style, strokes};
 use super::transform::{XMap, YMap};
 
@@ -277,10 +277,12 @@ impl ChartScene {
                 });
             }
         }
-        let y_ticks = nice_ticks(0.0, self.y_max, 6)
-            .into_iter()
-            .filter(|t| *t <= self.y_max)
-            .map(|t| (y.to_screen(t), format!("{t:.2}")))
+        let (ticks, step) = nice_ticks(0.0, self.y_max, 6);
+        let y_ticks = ticks
+            .iter()
+            .zip(y_tick_labels(&ticks, step))
+            .filter(|(t, _)| **t <= self.y_max)
+            .map(|(&t, label)| (y.to_screen(t), label))
             .collect();
         let x_ticks = integer_ticks(self.view.0, self.view.1, 8)
             .into_iter()

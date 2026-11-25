@@ -95,12 +95,17 @@ impl YMap {
     }
 }
 
-/// A y-axis maximum for data whose largest value is `max`: the value itself, or 1 bit when
-/// every value is 0 (a fully conserved stretch is drawn as a flat line, not hidden).
+/// The shortest value axis, in bits: its ticks are then at least 0.001 apart, so three
+/// decimals always tell them apart and every label fits in five characters.
+pub const MIN_Y_AXIS_MAX: f64 = 0.005;
+
+/// A y-axis maximum for data whose largest value is `max`: 5% above it and at least
+/// [`MIN_Y_AXIS_MAX`], or 1 bit when every value is 0 (a fully conserved stretch is drawn as a
+/// flat line, not hidden).
 #[must_use]
 pub fn y_axis_max(max: Option<f64>) -> f64 {
     match max {
-        Some(m) if m.is_finite() && m > 0.0 => m * 1.05,
+        Some(m) if m.is_finite() && m > 0.0 => (m * 1.05).max(MIN_Y_AXIS_MAX),
         _ => 1.0,
     }
 }
@@ -153,8 +158,19 @@ mod tests {
         assert!((y.to_screen(0.0) - 110.0).abs() < 1e-6);
         assert!((y.to_screen(2.0) - 10.0).abs() < 1e-6);
         assert_eq!(y_axis_max(None), 1.0);
-        assert_eq!(y_axis_max(Some(0.0)), 1.0);
+        assert_eq!(
+            y_axis_max(Some(0.0)),
+            1.0,
+            "all-zero data keeps a 1-bit axis"
+        );
         assert!((y_axis_max(Some(2.0)) - 2.1).abs() < 1e-12);
+        assert_eq!(y_axis_max(Some(1e-6)), MIN_Y_AXIS_MAX);
+        assert_eq!(
+            y_axis_max(Some(f64::from_bits(1))),
+            MIN_Y_AXIS_MAX,
+            "subnormal"
+        );
+        assert!((y_axis_max(Some(0.005)) - 0.00525).abs() < 1e-15);
         let flat = YMap {
             max: 0.0,
             top: 0.0,

@@ -14,7 +14,7 @@ use egui::{Color32, Pos2, Rect, Stroke, Ui};
 use super::common::{Swatch, hatch_rect, heading, legend_entry};
 use super::help_text;
 use crate::app::msg::Msg;
-use crate::charts::axis::{integer_ticks, nice_ticks};
+use crate::charts::axis::{integer_ticks, nice_ticks, y_tick_labels};
 use crate::charts::gpu_line::{LineCallback, LineUniforms, SegmentVertex, segment_vertices};
 use crate::charts::series::{
     ChartKey, Class, NsSpan, Series, Style, chart_cache_key, legend, nearest_point, ns_span_at,
@@ -431,7 +431,8 @@ fn draw_axes(p: &egui::Painter, x: XMap, y: YMap, plot: Rect, full: Rect, t: &De
     let font = egui::FontId::proportional(t.font_size_caption);
     p.line_segment([plot.left_top(), plot.left_bottom()], stroke);
     p.line_segment([plot.left_bottom(), plot.right_bottom()], stroke);
-    for v in nice_ticks(0.0, y.max, 6) {
+    let (ticks, step) = nice_ticks(0.0, y.max, 6);
+    for (&v, label) in ticks.iter().zip(y_tick_labels(&ticks, step)) {
         let sy = y.to_screen(v);
         if !(plot.top() - 0.5..=plot.bottom() + 0.5).contains(&sy) {
             continue;
@@ -446,7 +447,7 @@ fn draw_axes(p: &egui::Painter, x: XMap, y: YMap, plot: Rect, full: Rect, t: &De
         p.text(
             egui::pos2(plot.left() - 6.0, sy),
             egui::Align2::RIGHT_CENTER,
-            format!("{v:.2}"),
+            label,
             font.clone(),
             t.chart_axis,
         );
