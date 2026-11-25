@@ -1,9 +1,11 @@
 //! Ctrl/Cmd+K command palette: jump to a position, find which positions carry a k-mer, or run
-//! a command. The commands follow the screen (G7). Matches are cached per query and dataset
-//! (the session id changes with every load, G23) and recomputed in the same frame as the edit,
-//! so Enter always runs the entry shown for the text typed (G55); clicking the backdrop closes
-//! it completely (G22).
+//! a command. The commands follow the screen (G7) and the chart: with similarity-weighted
+//! entropy computed, the Results screen offers to show the metric the chart does not show.
+//! Matches are cached per query, dataset (the session id changes with every load, G23), screen
+//! and metric, and recomputed in the same frame as the edit, so Enter always runs the entry
+//! shown for the text typed (G55); clicking the backdrop closes it completely (G22).
 
+use crate::charts::metric::ChartMetric;
 use crate::state::View;
 use crate::state::session::Session;
 use crate::theme::DesignTokens;
@@ -26,6 +28,8 @@ pub enum PaletteAction {
     ResetFilters,
     /// Show every position on the chart.
     ResetZoom,
+    /// Plot a metric on the chart.
+    ShowMetric(ChartMetric),
     /// Switch between light and dark.
     ToggleTheme,
     /// Open a file.
@@ -41,12 +45,14 @@ pub enum PaletteAction {
 }
 
 impl PaletteAction {
-    fn label(self) -> String {
+    /// The entry's text, `metric` being the one the chart shows (it names the figures).
+    fn label(self, metric: ChartMetric) -> String {
         match self {
             Self::GoToPosition(p) => format!("Go to position {p}"),
-            Self::Export(k) => format!("Export {}", k.label().trim_end_matches('\u{2026}')),
+            Self::Export(k) => format!("Export {}", k.label(metric).trim_end_matches('\u{2026}')),
             Self::ResetFilters => "Reset filters".to_owned(),
             Self::ResetZoom => "Show every position (reset zoom)".to_owned(),
+            Self::ShowMetric(m) => format!("Show {}", m.in_sentence()),
             Self::ToggleTheme => "Switch light / dark theme".to_owned(),
             Self::OpenFile => "Open a file\u{2026}".to_owned(),
             Self::Show(View::Setup) => "Go to setup".to_owned(),
@@ -73,7 +79,7 @@ pub struct CommandPalette {
     cursor: usize,
     just_opened: bool,
     cache: Vec<Entry>,
-    cache_key: Option<(String, Option<u64>, View)>,
+    cache_key: Option<(String, Option<u64>, View, ChartMetric)>,
 }
 
 impl CommandPalette {
@@ -105,7 +111,8 @@ impl CommandPalette {
     }
 
     fn entries(&mut self, session: Option<&Session>, view: View) -> Vec<Entry> {
-        let key = (self.query.clone(), session.map(|s| s.id), view);
+        let metric = session.map(|s| s.metric).unwrap_or_default();
+        let key = (self.query.clone(), session.map(|s| s.id), view, metric);
         if self.cache_key.as_ref() != Some(&key) {
             self.cache = build(&self.query, session, view);
             self.cache_key = Some(key);
@@ -265,21 +272,32 @@ fn build(query: &str, session: Option<&Session>, view: View) -> Vec<Entry> {
         PaletteAction::ToggleTheme,
         PaletteAction::Cite,
     ];
-    if session.is_some() {
+    let metric = session.map(|s| s.metric).unwrap_or_default();
+    if let Some(s) = session {
         match view {
             View::Setup => commands.push(PaletteAction::Show(View::Workspace)),
-            View::Workspace => commands.extend([
-                PaletteAction::Show(View::Setup),
-                PaletteAction::ResetFilters,
-                PaletteAction::ResetZoom,
-                PaletteAction::Diagnostics,
-                PaletteAction::RunDetails,
-            ]),
+            View::Workspace => {
+                commands.extend([
+                    PaletteAction::Show(View::Setup),
+                    PaletteAction::ResetFilters,
+                    PaletteAction::ResetZoom,
+                ]);
+                // The metric the chart does not show, when the run computed both.
+                if ChartMetric::SimilarityWeighted.available(&s.results) {
+                    commands.extend(
+                        ChartMetric::ALL
+                            .into_iter()
+                            .filter(|&m| m != metric)
+                            .map(PaletteAction::ShowMetric),
+                    );
+                }
+                commands.extend([PaletteAction::Diagnostics, PaletteAction::RunDetails]);
+            }
         }
         commands.extend(ExportKind::ALL.into_iter().map(PaletteAction::Export));
     }
     for a in commands {
-        let label = a.label();
+        let label = a.label(metric);
         if lower.is_empty() || label.to_lowercase().contains(&lower) {
             out.push(Entry {
                 action: a,
@@ -348,6 +366,63 @@ mod tests {
         assert!(none.iter().any(|e| e.action == PaletteAction::OpenFile));
         let theme = build("theme", Some(&s), View::Workspace);
         assert_eq!(theme.len(), 1);
+    }
+
+    /// With similarity-weighted entropy computed, the Results screen offers the metric the chart
+    /// does not show (and names the figures by the one it does); nowhere else, and never
+    /// without it.
+    #[test]
+    fn the_metric_entries_follow_the_chart() {
+        let show = |e: &[Entry]| -> Vec<String> {
+            e.iter()
+                .filter(|e| matches!(e.action, PaletteAction::ShowMetric(_)))
+                .map(|e| e.label.clone())
+                .collect()
+        };
+        let off = session();
+        assert!(show(&build("", Some(&off), View::Workspace)).is_empty());
+        let mut s = Session::new(
+            9,
+            crate::tests::fixtures::mers_swe(),
+            crate::state::session::Origin::Opened("x.json".into()),
+        );
+        assert!(
+            show(&build("", Some(&s), View::Setup)).is_empty(),
+            "Results only"
+        );
+        let entries = build("", Some(&s), View::Workspace);
+        assert_eq!(show(&entries), ["Show similarity-weighted entropy"]);
+        assert!(
+            entries
+                .iter()
+                .any(|e| e.label == "Export Entropy chart (PNG)")
+        );
+        let found = build("similarity", Some(&s), View::Workspace);
+        assert_eq!(
+            found[0].action,
+            PaletteAction::ShowMetric(ChartMetric::SimilarityWeighted)
+        );
+        s.set_metric(ChartMetric::SimilarityWeighted);
+        let entries = build("", Some(&s), View::Workspace);
+        assert_eq!(show(&entries), ["Show entropy"]);
+        assert!(
+            entries
+                .iter()
+                .any(|e| e.label == "Export Similarity-weighted entropy chart (SVG)")
+        );
+        // The cache follows the metric.
+        let mut p = CommandPalette::default();
+        p.toggle();
+        p.query = "show".into();
+        assert_eq!(
+            show(&p.entries(Some(&s), View::Workspace)),
+            ["Show entropy"]
+        );
+        s.set_metric(ChartMetric::Entropy);
+        assert_eq!(
+            show(&p.entries(Some(&s), View::Workspace)),
+            ["Show similarity-weighted entropy"]
+        );
     }
 
     #[test]

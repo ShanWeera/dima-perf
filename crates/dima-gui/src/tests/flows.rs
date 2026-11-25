@@ -581,7 +581,8 @@ fn exports_write_atomically_and_reopen() {
     h.get_by_label("Export").click();
     h.run_steps(2);
     for k in ExportKind::ALL {
-        assert!(has_label(&h, k.label()), "{}", k.label());
+        let label = k.label(crate::charts::metric::ChartMetric::Entropy);
+        assert!(has_label(&h, label), "{label}");
     }
     h.key_press(egui::Key::Escape);
     h.run_steps(2);
@@ -589,14 +590,16 @@ fn exports_write_atomically_and_reopen() {
         h.state_mut().dispatch(Msg::Export(kind), None);
         h.run_steps(2);
         let session = h.state().state.session.as_ref().unwrap().id;
-        assert_eq!(
-            h.state().state.dialog.pending,
-            Some(Purpose::Export { kind, session })
-        );
+        let purpose = Purpose::Export {
+            kind,
+            session,
+            metric: crate::charts::metric::ChartMetric::Entropy,
+        };
+        assert_eq!(h.state().state.dialog.pending, Some(purpose));
         let path = dir.path().join(name);
         h.state_mut().dispatch(
             Msg::DialogClosed {
-                purpose: Purpose::Export { kind, session },
+                purpose,
                 path: Some(path.clone()),
                 failed_fast: false,
             },
@@ -968,4 +971,70 @@ fn the_table_scrolls_sideways_at_the_smallest_window() {
         column.contains(focused.left()) && column.contains(focused.right()),
         "the focused header scrolled into view: {focused:?} in {column:?}"
     );
+}
+
+/// The metric switch from the keyboard and the command palette: Space selects the radio that
+/// has the focus; while a control has the focus the arrow keys move between controls, not
+/// along the table, until Esc gives them back; the palette offers the metric not shown. The
+/// keyboard help lists these keys.
+#[test]
+fn the_metric_from_the_keyboard_and_the_palette() {
+    use crate::charts::metric::ChartMetric;
+    let mut h = harness();
+    load(&mut h, &fixtures::mers_swe());
+    let metric = |h: &H| h.state().state.session.as_ref().unwrap().metric;
+    let selected = |h: &H| h.state().state.session.as_ref().unwrap().selection.position;
+    h.get_by_role_and_label(Role::RadioButton, "Similarity-weighted entropy")
+        .focus();
+    h.run_steps(2);
+    h.key_press(egui::Key::Space);
+    h.run_steps(3);
+    assert_eq!(metric(&h), ChartMetric::SimilarityWeighted);
+    let before = selected(&h);
+    h.key_press(egui::Key::ArrowDown);
+    h.run_steps(2);
+    assert_eq!(selected(&h), before, "the focus took the arrow key");
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    h.key_press(egui::Key::ArrowDown);
+    h.run_steps(2);
+    assert_ne!(
+        selected(&h),
+        before,
+        "Esc gave the arrow keys back to the table"
+    );
+    // The palette: the metric the chart does not show.
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::K);
+    h.run_steps(2);
+    assert!(has_label(&h, "Show entropy"));
+    assert!(!has_label(&h, "Show similarity-weighted entropy"));
+    h.get_by_label("Show entropy").click();
+    h.run_steps(3);
+    assert_eq!(metric(&h), ChartMetric::Entropy);
+    // The export menu names the figures by the metric shown.
+    h.state_mut()
+        .dispatch(Msg::ChartMetric(ChartMetric::SimilarityWeighted), None);
+    h.run_steps(2);
+    h.get_by_label("Export").click();
+    h.run_steps(2);
+    for label in [
+        "Similarity-weighted entropy chart (PNG)\u{2026}",
+        "Similarity-weighted entropy chart (SVG)\u{2026}",
+    ] {
+        assert!(has_label(&h, label), "{label:?}");
+    }
+    assert!(!has_label(&h, "Entropy chart (PNG)\u{2026}"));
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    // Help ▸ Keyboard shortcuts.
+    h.state_mut().state.windows.shortcuts = true;
+    h.run_steps(2);
+    for line in [
+        "Tab / Shift+Tab",
+        "Move between controls",
+        "Press or select",
+        "Close the palette; also gives the arrow keys back to the table",
+    ] {
+        assert!(has_label(&h, line), "{line:?}");
+    }
 }

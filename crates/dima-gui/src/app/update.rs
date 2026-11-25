@@ -189,9 +189,10 @@ pub fn update(state: &mut AppState, msg: Msg) -> Vec<Effect> {
         Msg::Export(kind) => request_export(state, kind),
         Msg::ExportDone {
             kind,
+            metric,
             session,
             outcome,
-        } => export_done(state, kind, session, outcome),
+        } => export_done(state, kind, metric, session, outcome),
         Msg::DialogClosed {
             purpose,
             path,
@@ -278,9 +279,9 @@ fn dialog_effect(state: &AppState, purpose: Purpose, built_in: bool) -> Effect {
             DialogKind::Folder,
             "Choose a folder for the tables".to_owned(),
         ),
-        Purpose::Export { kind, .. } => (
+        Purpose::Export { kind, metric, .. } => (
             DialogKind::Save {
-                default_name: kind.default_name(&query),
+                default_name: kind.default_name(&query, metric),
                 filter: kind.extension().map(|_| {
                     // Native filters match the last extension; compound names (.json.gz) pass.
                     let mut exts: Vec<String> = kind
@@ -290,10 +291,13 @@ fn dialog_effect(state: &AppState, purpose: Purpose, built_in: bool) -> Effect {
                         .collect();
                     exts.sort();
                     exts.dedup();
-                    (kind.label().trim_end_matches('\u{2026}').to_owned(), exts)
+                    (
+                        kind.label(metric).trim_end_matches('\u{2026}').to_owned(),
+                        exts,
+                    )
                 }),
             },
-            format!("Save {}", kind.label().trim_end_matches('\u{2026}')),
+            format!("Save {}", kind.label(metric).trim_end_matches('\u{2026}')),
         ),
         Purpose::FailedRunReport => (
             DialogKind::Save {
@@ -731,17 +735,17 @@ fn chart_metric(state: &mut AppState, metric: ChartMetric) -> Vec<Effect> {
     Vec::new()
 }
 
-/// The figure for the current view of a session, of the metric it shows.
+/// The figure of `metric` for the current view of a session: `None` when nothing is shown, or
+/// when the chart shows another metric (its series is the only one there is).
 #[must_use]
-pub fn chart_scene(state: &AppState) -> Option<ChartScene> {
+pub fn chart_scene(state: &AppState, metric: ChartMetric) -> Option<ChartScene> {
     let s = state.session.as_ref()?;
-    if s.series.is_empty() {
+    if s.series.is_empty() || s.metric != metric {
         return None;
     }
     let full = s.extent()?;
     let view = s.viewport.unwrap_or(full);
     let r = &s.results;
-    let metric = s.metric;
     let (width, height) = state.settings.figure_size;
     Some(ChartScene {
         title: metric.figure_title(&r.query_name),
@@ -794,14 +798,26 @@ fn request_export(state: &mut AppState, kind: ExportKind) -> Vec<Effect> {
         );
         return Vec::new();
     }
-    let session = s.id;
-    open_dialog(state, Purpose::Export { kind, session })
+    let (session, metric) = (s.id, s.metric);
+    open_dialog(
+        state,
+        Purpose::Export {
+            kind,
+            session,
+            metric,
+        },
+    )
 }
 
-fn export_job(state: &AppState, kind: ExportKind, path: PathBuf) -> Option<Job> {
+fn export_job(
+    state: &AppState,
+    kind: ExportKind,
+    path: PathBuf,
+    metric: ChartMetric,
+) -> Option<Job> {
     let s = state.session.as_ref()?;
     let payload = match kind {
-        ExportKind::Png | ExportKind::Svg => Payload::Figure(Box::new(chart_scene(state)?)),
+        ExportKind::Png | ExportKind::Svg => Payload::Figure(Box::new(chart_scene(state, metric)?)),
         ExportKind::RunReport => {
             let Origin::Analysed(run) = &s.origin else {
                 return None;
@@ -823,6 +839,7 @@ fn export_job(state: &AppState, kind: ExportKind, path: PathBuf) -> Option<Job> 
     };
     Some(Job {
         kind,
+        metric,
         path,
         payload,
     })
@@ -875,10 +892,19 @@ fn dialog_closed(
 fn write_chosen(state: &mut AppState, purpose: Purpose, path: PathBuf) -> Vec<Effect> {
     match purpose {
         Purpose::OpenInput => open_path(state, path),
-        Purpose::Export { kind, session } => {
+        Purpose::Export {
+            kind,
+            session,
+            metric,
+        } => {
             // Other results may have been loaded while the dialog was open; never write them
             // under the name chosen for the earlier ones.
-            if state.session.as_ref().map(|s| s.id) != Some(session) {
+            let Some(shown) = state
+                .session
+                .as_ref()
+                .filter(|s| s.id == session)
+                .map(|s| s.metric)
+            else {
                 state.toasts.push(
                     Severity::Warning,
                     "Nothing was saved: other results were loaded while the dialog was open. \
@@ -887,8 +913,23 @@ fn write_chosen(state: &mut AppState, purpose: Purpose, path: PathBuf) -> Vec<Ef
                     state.now,
                 );
                 return Vec::new();
+            };
+            // Nor a figure of another metric under the name chosen for this one (the switch
+            // stays usable through a shortcut while a dialog is open).
+            if kind.is_figure() && shown != metric {
+                state.toasts.push(
+                    Severity::Warning,
+                    format!(
+                        "Nothing was saved: the chart was switched to {} while the dialog was \
+                         open. Export again to save the chart now shown.",
+                        shown.in_sentence()
+                    ),
+                    None,
+                    state.now,
+                );
+                return Vec::new();
             }
-            match export_job(state, kind, path) {
+            match export_job(state, kind, path, metric) {
                 Some(job) => {
                     state.export_busy = Some(kind);
                     vec![Effect::Export {
@@ -923,6 +964,7 @@ fn write_chosen(state: &mut AppState, purpose: Purpose, path: PathBuf) -> Vec<Ef
                 session: None,
                 job: Box::new(Job {
                     kind: ExportKind::RunReport,
+                    metric: ChartMetric::Entropy,
                     path,
                     payload: Payload::Report(Box::new(report)),
                 }),
@@ -934,6 +976,7 @@ fn write_chosen(state: &mut AppState, purpose: Purpose, path: PathBuf) -> Vec<Ef
 fn export_done(
     state: &mut AppState,
     kind: ExportKind,
+    metric: ChartMetric,
     session: Option<u64>,
     outcome: crate::workers::export::Outcome,
 ) -> Vec<Effect> {
@@ -974,7 +1017,7 @@ fn export_done(
             Severity::Error,
             format!(
                 "{} failed: {}",
-                kind.label().trim_end_matches('\u{2026}'),
+                kind.label(metric).trim_end_matches('\u{2026}'),
                 e
             ),
             Some(e.report()),

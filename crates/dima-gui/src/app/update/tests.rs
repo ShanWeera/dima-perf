@@ -678,6 +678,7 @@ fn exports_are_guarded_and_go_through_a_dialog() {
             purpose: Purpose::Export {
                 kind: ExportKind::Svg,
                 session,
+                ..
             },
             kind: DialogKind::Save { .. },
             built_in: false,
@@ -702,6 +703,7 @@ fn exports_are_guarded_and_go_through_a_dialog() {
             purpose: Purpose::Export {
                 kind: ExportKind::Svg,
                 session: id,
+                metric: ChartMetric::Entropy,
             },
             path: None,
             failed_fast: true,
@@ -717,6 +719,7 @@ fn exports_are_guarded_and_go_through_a_dialog() {
             purpose: Purpose::Export {
                 kind: ExportKind::Svg,
                 session: id,
+                metric: ChartMetric::Entropy,
             },
             path: Some(PathBuf::from("/x/figure")),
             failed_fast: false,
@@ -744,6 +747,7 @@ fn exports_are_guarded_and_go_through_a_dialog() {
         &mut s,
         Msg::ExportDone {
             kind: ExportKind::ResultsJson,
+            metric: ChartMetric::Entropy,
             session: Some(id),
             outcome: Ok(files.clone()),
         },
@@ -755,6 +759,7 @@ fn exports_are_guarded_and_go_through_a_dialog() {
         &mut s,
         Msg::ExportDone {
             kind: ExportKind::ResultsJson,
+            metric: ChartMetric::Entropy,
             session: Some(id + 1),
             outcome: Ok(files),
         },
@@ -876,6 +881,7 @@ fn an_export_never_writes_results_loaded_while_its_dialog_was_open() {
             purpose: Purpose::Export {
                 kind: ExportKind::ResultsJson,
                 session: first,
+                metric: ChartMetric::Entropy,
             },
             path: Some(PathBuf::from("/x/first.json")),
             failed_fast: false,
@@ -917,6 +923,7 @@ fn closing_during_an_export_asks_first() {
         &mut s,
         Msg::ExportDone {
             kind: ExportKind::ResultsJson,
+            metric: ChartMetric::Entropy,
             session: None,
             outcome: Ok(Vec::new()),
         },
@@ -934,6 +941,7 @@ fn an_appended_extension_never_replaces_a_file_unasked() {
     let purpose = Purpose::Export {
         kind: ExportKind::ResultsJson,
         session,
+        metric: ChartMetric::Entropy,
     };
     update(&mut s, Msg::Export(ExportKind::ResultsJson));
     // "results" was typed: the dialog checked that name, the app adds ".json", which exists.
@@ -1064,7 +1072,7 @@ fn the_figure_follows_the_metric() {
     use crate::charts::metric::ChartMetric::SimilarityWeighted;
     let mut s = state();
     with_results(&mut s, &fixtures::mers_swe());
-    let entropy = chart_scene(&s).unwrap();
+    let entropy = chart_scene(&s, ChartMetric::Entropy).unwrap();
     assert_eq!(
         entropy.title,
         "mers_spike_aa \u{2014} Shannon entropy per k-mer position"
@@ -1077,7 +1085,7 @@ fn the_figure_follows_the_metric() {
     assert!(entropy.subtitle.contains("estimator dima"));
     assert_eq!(entropy.legend[0], "support > 100: corrected where possible");
     update(&mut s, Msg::ChartMetric(SimilarityWeighted));
-    let scene = chart_scene(&s).unwrap();
+    let scene = chart_scene(&s, SimilarityWeighted).unwrap();
     assert_eq!(
         scene.title,
         "mers_spike_aa \u{2014} Similarity-weighted entropy per k-mer position"
@@ -1108,4 +1116,153 @@ fn the_figure_follows_the_metric() {
         "eligible mean {}",
         dima_core::human::fixed(mean, 4)
     )));
+}
+
+/// A figure is named and saved for the metric shown when it was chosen: the dialog proposes
+/// `<stem>.similarity-weighted-entropy.png`, and if the chart was switched while the dialog was
+/// open nothing is saved (a data export is unaffected); the success and failure messages name
+/// the figure by its metric.
+#[test]
+fn figures_are_saved_only_for_the_metric_they_were_chosen_for() {
+    use crate::charts::metric::ChartMetric::{Entropy, SimilarityWeighted};
+    let mut s = state();
+    with_results(&mut s, &fixtures::mers_swe());
+    let session = s.session.as_ref().unwrap().id;
+    update(&mut s, Msg::ChartMetric(SimilarityWeighted));
+    let effects = update(&mut s, Msg::Export(ExportKind::Png));
+    let [
+        Effect::Dialog {
+            purpose,
+            kind: DialogKind::Save { default_name, .. },
+            title,
+            ..
+        },
+    ] = effects.as_slice()
+    else {
+        panic!("{effects:?}");
+    };
+    assert_eq!(
+        *purpose,
+        Purpose::Export {
+            kind: ExportKind::Png,
+            session,
+            metric: SimilarityWeighted
+        }
+    );
+    assert_eq!(
+        default_name,
+        "mers_spike_aa.similarity-weighted-entropy.png"
+    );
+    assert_eq!(title, "Save Similarity-weighted entropy chart (PNG)");
+    let purpose = *purpose;
+    // Switched back (the palette, while the dialog is open): nothing is saved.
+    update(&mut s, Msg::ChartMetric(Entropy));
+    let effects = update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose,
+            path: Some(PathBuf::from("/x/figure.png")),
+            failed_fast: false,
+        },
+    );
+    assert!(effects.is_empty(), "{effects:?}");
+    assert_eq!(s.export_busy, None);
+    assert_eq!(s.dialog.pending, None);
+    let warning = s
+        .toasts
+        .items()
+        .iter()
+        .find(|t| t.severity == Severity::Warning)
+        .expect("a warning");
+    assert_eq!(
+        warning.text,
+        "Nothing was saved: the chart was switched to entropy while the dialog was open. \
+         Export again to save the chart now shown."
+    );
+    // The other way round, with the SVG.
+    s.toasts = crate::state::toasts::Toasts::default();
+    update(&mut s, Msg::Export(ExportKind::Svg));
+    update(&mut s, Msg::ChartMetric(SimilarityWeighted));
+    update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose: Purpose::Export {
+                kind: ExportKind::Svg,
+                session,
+                metric: Entropy,
+            },
+            path: Some(PathBuf::from("/x/figure.svg")),
+            failed_fast: false,
+        },
+    );
+    assert!(s.toasts.items().iter().any(|t| t.text
+        == "Nothing was saved: the chart was switched to similarity-weighted entropy while the \
+            dialog was open. Export again to save the chart now shown."));
+    // A data export does not depend on the chart.
+    update(&mut s, Msg::Export(ExportKind::ResultsJson));
+    update(&mut s, Msg::ChartMetric(Entropy));
+    let effects = update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose: Purpose::Export {
+                kind: ExportKind::ResultsJson,
+                session,
+                metric: SimilarityWeighted,
+            },
+            path: Some(PathBuf::from("/x/r.json")),
+            failed_fast: false,
+        },
+    );
+    assert!(
+        matches!(effects.as_slice(), [Effect::Export { .. }]),
+        "{effects:?}"
+    );
+    s.export_busy = None;
+    // The metric unchanged: the figure of that metric is written.
+    update(&mut s, Msg::ChartMetric(SimilarityWeighted));
+    update(&mut s, Msg::Export(ExportKind::Svg));
+    let effects = update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose: Purpose::Export {
+                kind: ExportKind::Svg,
+                session,
+                metric: SimilarityWeighted,
+            },
+            path: Some(PathBuf::from("/x/figure")),
+            failed_fast: false,
+        },
+    );
+    let [Effect::Export { job, .. }] = effects.as_slice() else {
+        panic!("{effects:?}");
+    };
+    assert_eq!(job.metric, SimilarityWeighted);
+    assert_eq!(job.path, PathBuf::from("/x/figure.svg"));
+    let crate::workers::export::Payload::Figure(scene) = &job.payload else {
+        panic!("a figure");
+    };
+    assert_eq!(scene.y_title, "Similarity-weighted entropy (bits)");
+    // A failed export names the figure by its metric.
+    update(
+        &mut s,
+        Msg::ExportDone {
+            kind: ExportKind::Svg,
+            metric: SimilarityWeighted,
+            session: Some(session),
+            outcome: Err(dima_core::DimaError::usage("disk full")),
+        },
+    );
+    let error = s
+        .toasts
+        .items()
+        .iter()
+        .find(|t| t.severity == Severity::Error)
+        .expect("an error");
+    assert!(
+        error
+            .text
+            .starts_with("Similarity-weighted entropy chart (SVG) failed: "),
+        "{}",
+        error.text
+    );
 }

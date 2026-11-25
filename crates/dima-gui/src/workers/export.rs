@@ -14,6 +14,7 @@ use dima_core::run_report::RunReport;
 use dima_core::{DimaError, Result};
 
 use super::{Priority, Worker};
+use crate::charts::metric::ChartMetric;
 use crate::charts::scene::ChartScene;
 
 /// What can be exported.
@@ -56,21 +57,33 @@ impl ExportKind {
         Self::Bibtex,
     ];
 
-    /// Menu label.
+    /// Menu label; a figure is named by the metric the chart shows.
     #[must_use]
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::ResultsJson => "Results (JSON)\u{2026}",
-            Self::Jsonl => "Positions (JSON Lines)\u{2026}",
-            Self::TsvFolder => "Tables (TSV folder)\u{2026}",
-            Self::HcsJson => "Conserved regions (JSON)\u{2026}",
-            Self::HcsTsv => "Conserved regions (TSV)\u{2026}",
-            Self::Png => "Entropy chart (PNG)\u{2026}",
-            Self::Svg => "Entropy chart (SVG)\u{2026}",
-            Self::RunReport => "Run report\u{2026}",
-            Self::Methods => "Methods & references\u{2026}",
-            Self::Bibtex => "References (BibTeX)\u{2026}",
+    pub const fn label(self, metric: ChartMetric) -> &'static str {
+        match (self, metric) {
+            (Self::ResultsJson, _) => "Results (JSON)\u{2026}",
+            (Self::Jsonl, _) => "Positions (JSON Lines)\u{2026}",
+            (Self::TsvFolder, _) => "Tables (TSV folder)\u{2026}",
+            (Self::HcsJson, _) => "Conserved regions (JSON)\u{2026}",
+            (Self::HcsTsv, _) => "Conserved regions (TSV)\u{2026}",
+            (Self::Png, ChartMetric::Entropy) => "Entropy chart (PNG)\u{2026}",
+            (Self::Svg, ChartMetric::Entropy) => "Entropy chart (SVG)\u{2026}",
+            (Self::Png, ChartMetric::SimilarityWeighted) => {
+                "Similarity-weighted entropy chart (PNG)\u{2026}"
+            }
+            (Self::Svg, ChartMetric::SimilarityWeighted) => {
+                "Similarity-weighted entropy chart (SVG)\u{2026}"
+            }
+            (Self::RunReport, _) => "Run report\u{2026}",
+            (Self::Methods, _) => "Methods & references\u{2026}",
+            (Self::Bibtex, _) => "References (BibTeX)\u{2026}",
         }
+    }
+
+    /// `true` for the chart's figures, which depend on the metric shown.
+    #[must_use]
+    pub const fn is_figure(self) -> bool {
+        matches!(self, Self::Png | Self::Svg)
     }
 
     /// The default extension (without dot); `None` for a folder.
@@ -105,9 +118,9 @@ impl ExportKind {
         }
     }
 
-    /// The default file name for a query name.
+    /// The default file name for a query name; a figure's names the metric the chart shows.
     #[must_use]
-    pub fn default_name(self, query_name: &str) -> String {
+    pub fn default_name(self, query_name: &str, metric: ChartMetric) -> String {
         let stem = dima_core::output::file_stem(query_name);
         match self {
             Self::ResultsJson => format!("{stem}.json"),
@@ -115,8 +128,8 @@ impl ExportKind {
             Self::TsvFolder => format!("{stem}_tables"),
             Self::HcsJson => format!("{stem}.hcs.json"),
             Self::HcsTsv => format!("{stem}.hcs.tsv"),
-            Self::Png => format!("{stem}.entropy.png"),
-            Self::Svg => format!("{stem}.entropy.svg"),
+            Self::Png => format!("{stem}.{}.png", metric.file_part()),
+            Self::Svg => format!("{stem}.{}.svg", metric.file_part()),
             Self::RunReport => format!("{stem}.run-report.json"),
             Self::Methods => format!("{stem}.methods.txt"),
             Self::Bibtex => format!("{stem}.references.bib"),
@@ -169,6 +182,8 @@ pub enum Payload {
 pub struct Job {
     /// What to write.
     pub kind: ExportKind,
+    /// The metric the chart showed when the export was chosen (names a figure in messages).
+    pub metric: ChartMetric,
     /// Destination (a folder for [`ExportKind::TsvFolder`]).
     pub path: PathBuf,
     /// The data.
@@ -418,6 +433,7 @@ mod tests {
     fn job(kind: ExportKind, path: PathBuf) -> Job {
         Job {
             kind,
+            metric: ChartMetric::Entropy,
             path,
             payload: Payload::Results {
                 results: crate::tests::fixtures::mers(),
@@ -497,6 +513,7 @@ mod tests {
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
         let mismatched = Job {
             kind: ExportKind::Png,
+            metric: ChartMetric::Entropy,
             path: dir.path().join("x.png"),
             payload: Payload::Results {
                 results: crate::tests::fixtures::mers(),
@@ -528,7 +545,45 @@ mod tests {
     #[test]
     fn names_and_extensions() {
         let k = ExportKind::ResultsJson;
-        assert_eq!(k.default_name("MERS spike"), "MERS_spike.json");
+        assert_eq!(
+            k.default_name("MERS spike", ChartMetric::SimilarityWeighted),
+            "MERS_spike.json",
+            "data files do not depend on the chart"
+        );
+        for (kind, metric, name, label) in [
+            (
+                ExportKind::Png,
+                ChartMetric::Entropy,
+                "MERS_spike.entropy.png",
+                "Entropy chart (PNG)\u{2026}",
+            ),
+            (
+                ExportKind::Svg,
+                ChartMetric::Entropy,
+                "MERS_spike.entropy.svg",
+                "Entropy chart (SVG)\u{2026}",
+            ),
+            (
+                ExportKind::Png,
+                ChartMetric::SimilarityWeighted,
+                "MERS_spike.similarity-weighted-entropy.png",
+                "Similarity-weighted entropy chart (PNG)\u{2026}",
+            ),
+            (
+                ExportKind::Svg,
+                ChartMetric::SimilarityWeighted,
+                "MERS_spike.similarity-weighted-entropy.svg",
+                "Similarity-weighted entropy chart (SVG)\u{2026}",
+            ),
+        ] {
+            assert_eq!(kind.default_name("MERS spike", metric), name);
+            assert_eq!(kind.label(metric), label);
+            assert!(kind.is_figure());
+        }
+        assert_eq!(
+            ExportKind::RunReport.label(ChartMetric::SimilarityWeighted),
+            "Run report\u{2026}"
+        );
         assert_eq!(
             k.with_extension(PathBuf::from("a")),
             PathBuf::from("a.json")
@@ -546,7 +601,13 @@ mod tests {
             PathBuf::from("f.svg.png")
         );
         for k in ExportKind::ALL {
-            assert!(!k.label().is_empty());
+            for m in ChartMetric::ALL {
+                assert!(!k.label(m).is_empty());
+            }
+            assert_eq!(
+                k.is_figure(),
+                matches!(k, ExportKind::Png | ExportKind::Svg)
+            );
         }
     }
 }

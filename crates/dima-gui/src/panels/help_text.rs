@@ -21,9 +21,10 @@ const fn c(key: &'static str) -> Cite {
     Cite::new(key)
 }
 
-/// An export (its tooltip), with the references of the format as in the command line's help.
+/// An export (its tooltip), with the references of the format as in the command line's help; a
+/// figure is named by the metric the chart shows.
 #[must_use]
-pub fn export(kind: crate::workers::export::ExportKind) -> String {
+pub fn export(kind: crate::workers::export::ExportKind, metric: ChartMetric) -> String {
     use crate::workers::export::ExportKind as K;
     const TABLES: [Cite; 3] = [c("wickham2014"), c("broman2018"), c("rfc4180")];
     const HCS: [Cite; 4] = [
@@ -53,12 +54,14 @@ pub fn export(kind: crate::workers::export::ExportKind) -> String {
             "The conserved regions at the current threshold, one row per region.{}",
             refs(&[HCS.as_slice(), TABLES.as_slice()].concat())
         ),
-        K::Png => "The entropy chart as shown (filters and zoom), downsampled to the image \
-                   width."
-            .to_owned(),
-        K::Svg => {
-            "The entropy chart as shown (filters and zoom), every point, editable text.".to_owned()
-        }
+        K::Png => format!(
+            "The {} chart as shown (filters and zoom), downsampled to the image width.",
+            metric.in_sentence()
+        ),
+        K::Svg => format!(
+            "The {} chart as shown (filters and zoom), every point, editable text.",
+            metric.in_sentence()
+        ),
         K::RunReport => format!(
             "How the analysis ran: version, equivalent command, threads, phase times, platform, \
              and the size and SHA-256 of the input and of the exported files. No paths, user or \
@@ -444,11 +447,24 @@ mod tests {
             "{swe}"
         );
         for kind in crate::workers::export::ExportKind::ALL {
-            assert!(!super::export(kind).is_empty());
+            for m in ChartMetric::ALL {
+                assert!(!super::export(kind, m).is_empty());
+            }
         }
         use crate::workers::export::ExportKind as K;
         for kind in [K::TsvFolder, K::HcsJson, K::HcsTsv, K::RunReport] {
-            assert!(super::export(kind).contains("\n\nRef: "), "{kind:?}");
+            assert!(
+                super::export(kind, ChartMetric::Entropy).contains("\n\nRef: "),
+                "{kind:?}"
+            );
         }
+        assert_eq!(
+            super::export(K::Png, ChartMetric::Entropy),
+            "The entropy chart as shown (filters and zoom), downsampled to the image width."
+        );
+        assert!(
+            super::export(K::Svg, ChartMetric::SimilarityWeighted)
+                .starts_with("The similarity-weighted entropy chart as shown")
+        );
     }
 }

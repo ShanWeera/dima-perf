@@ -143,8 +143,12 @@ switch:
    entropy range, a note says *Value range reset to the full range of similarity-weighted
    entropy*.
 
-Click **Entropy** to go back (the note then names entropy). Every dataset you open or analyse
-starts with entropy. Nothing you can click moves when you switch, so you can switch back and
+Click **Entropy** to go back (the note then names entropy). From the keyboard, press Tab until a
+button of the **Metric:** row has the focus (Tab / Shift+Tab: move between controls) and press
+Space to select it (Space: press or select). While a control has the focus, the arrow keys move
+between controls instead of along the position table; press Esc to give them back to the table.
+The command palette (below) offers the switch too. Every dataset you open or analyse starts with
+entropy. Nothing you can click moves when you switch, so you can switch back and
 forth in one place to compare the two lines. Each metric has its own value axis, so compare their
 shapes, not their heights: similarity-weighted entropy is never more than the observed entropy
 and is often much smaller.
@@ -206,7 +210,11 @@ Read them with care:
   with 4 different 9-mers and reads *1.0000 (low support)*.
 
 **Command palette.** Ctrl+K (⌘K on macOS) jumps to a position, finds the positions that carry a
-k-mer, or runs a command. **Help ▸ Keyboard shortcuts** lists the others.
+k-mer, or runs a command. On the Results screen of a run with similarity-weighted entropy it also
+offers **Show similarity-weighted entropy** or **Show entropy**, whichever the chart does not
+show. **Help ▸ Keyboard shortcuts** lists the other keys, among them Tab / Shift+Tab: move between
+controls; Space: press or select; and Esc, which closes the palette and also gives the arrow keys
+back to the table.
 
 ## Export
 
@@ -218,7 +226,7 @@ The export menu writes:
 | Positions (JSON Lines) | `dima analyze -o x.jsonl` |
 | Tables (TSV folder) | `dima analyze --tsv-dir` |
 | Conserved regions (JSON or TSV), at the current threshold | `dima hcs` |
-| Entropy chart (PNG or SVG), as shown | — |
+| Entropy chart (PNG or SVG), as shown — or Similarity-weighted entropy chart, when the chart shows it | — |
 | Run report | `dima analyze --run-report` |
 | Methods & references, References (BibTeX) | `dima cite --from` with the results and the conserved regions |
 
@@ -226,6 +234,22 @@ The entropy chart is exported at the size set in **Preferences**, with its text 
 size in the PNG and the SVG. Its legend continues on further rows when it is wider than the
 figure, and a title, subtitle or legend label too long for the figure is shortened with "…"
 (the SVG keeps the whole title as its document title).
+
+The chart is exported as it is shown, so with the chart switched to similarity-weighted entropy:
+
+- the menu items read **Similarity-weighted entropy chart (PNG)…** and **(SVG)…**;
+- the figure's title reads *<query> — Similarity-weighted entropy per k-mer position*, its value
+  axis *Similarity-weighted entropy (bits)*, and its legend and dashed line are those of the
+  chart; the subtitle leaves out the estimator, which applies only to entropy;
+- the save dialog proposes `<query>.similarity-weighted-entropy.png` (or `.svg`) instead of
+  `<query>.entropy.png`, so the figures of both metrics can be kept side by side.
+
+A figure is saved for the metric the chart showed when you chose the export. If the chart is
+switched while the save dialog is open (with the command palette, for instance), nothing is
+saved and a warning says *Nothing was saved: the chart was switched to similarity-weighted
+entropy while the dialog was open. Export again to save the chart now shown.* (or *…switched to
+entropy…*). Choose the export again: the dialog then proposes the name of the chart now shown.
+The other exports do not depend on the chart and are saved as usual.
 
 Every file is written completely or not at all. **Run details** shows how the analysis ran
 (equivalent command, threads, phase times, platform, whether similarity-weighted entropy was

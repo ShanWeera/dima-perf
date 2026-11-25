@@ -57,6 +57,13 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   ≤ T and reading "— (one variant)" where a single k-mer leaves them undefined.
 - Desktop app: the position table scrolls sideways when its columns do not fit the window, and
   every sortable header has its "Sort by …" tooltip as its accessibility description.
+- Desktop app: the chart exports follow the metric shown. A similarity-weighted figure is
+  offered as `<query>.similarity-weighted-entropy.png` (or `.svg`), and its menu items read
+  "Similarity-weighted entropy chart (PNG)…"/"(SVG)…". A figure is not saved if the chart was
+  switched to the other metric while its save dialog was open; a warning says so. The command
+  palette offers "Show similarity-weighted entropy" or "Show entropy", whichever the chart does
+  not show, and the keyboard shortcuts list Tab / Shift+Tab, Space, and that Esc gives the arrow
+  keys back to the table.
 
 ### Changed
 

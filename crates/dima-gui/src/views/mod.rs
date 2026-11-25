@@ -141,6 +141,7 @@ fn palette(
                 s.viewport = None;
             }
         }
+        PaletteAction::ShowMetric(m) => out.push(Msg::ChartMetric(m)),
         PaletteAction::ToggleTheme => ctx.set_theme(match ctx.theme() {
             egui::Theme::Dark => egui::Theme::Light,
             egui::Theme::Light => egui::Theme::Dark,

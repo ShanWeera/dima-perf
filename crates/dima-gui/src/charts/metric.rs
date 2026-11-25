@@ -103,6 +103,16 @@ impl ChartMetric {
         format!("{query} \u{2014} {what} per k-mer position")
     }
 
+    /// The part of an exported figure's default file name that names the metric:
+    /// `<stem>.entropy.png`, `<stem>.similarity-weighted-entropy.svg`.
+    #[must_use]
+    pub const fn file_part(self) -> &'static str {
+        match self {
+            Self::Entropy => "entropy",
+            Self::SimilarityWeighted => "similarity-weighted-entropy",
+        }
+    }
+
     /// The subtitle of an exported figure: the run's facts (the estimator only for entropy,
     /// the one metric it applies to) and how many positions are shown.
     #[must_use]

@@ -12,6 +12,7 @@ use dima_core::DimaError;
 
 use self::msg::{Effect, Msg};
 use self::update::update;
+use crate::charts::metric::ChartMetric;
 use crate::persist::{ConfigStore, RECENT_FILE, SETTINGS_FILE};
 use crate::state::recent::RecentFiles;
 use crate::state::settings::{Loaded, Settings};
@@ -35,7 +36,12 @@ struct Jobs {
     analysis: Option<(u64, analysis::Job)>,
     error_context: Option<(u64, Worker<Option<RecordExcerpt>>)>,
     hcs: Option<(u64, Worker<hcs::Outcome>)>,
-    export: Option<(ExportKind, Option<u64>, Worker<export::Outcome>)>,
+    export: Option<(
+        ExportKind,
+        ChartMetric,
+        Option<u64>,
+        Worker<export::Outcome>,
+    )>,
     native_dialog: Option<(Purpose, NativeDialog)>,
     built_in_dialog: Option<(Purpose, Box<egui_file_dialog::FileDialog>)>,
 }
@@ -221,8 +227,8 @@ impl DimaApp {
                 built_in,
             } => self.open_dialog(purpose, &kind, &title, built_in, frame),
             Effect::Export { session, job } => {
-                let kind = job.kind;
-                self.jobs.export = Some((kind, session, export::spawn(*job, ctx)));
+                let (kind, metric) = (job.kind, job.metric);
+                self.jobs.export = Some((kind, metric, session, export::spawn(*job, ctx)));
             }
             Effect::CancelClose => {
                 if let Some(ctx) = &ctx {
@@ -417,12 +423,13 @@ impl DimaApp {
                 }
             }
         }
-        if let Some((kind, session, w)) = j.export.as_mut() {
+        if let Some((kind, metric, session, w)) = j.export.as_mut() {
             match w.poll() {
                 Poll::Pending => {}
                 Poll::Ready(outcome) => {
                     out.push(Msg::ExportDone {
                         kind: *kind,
+                        metric: *metric,
                         session: *session,
                         outcome,
                     });
@@ -492,7 +499,7 @@ impl eframe::App for DimaApp {
         if let Some((_, job)) = &self.jobs.analysis {
             job.worker.cancel();
         }
-        if let Some((_, _, w)) = &self.jobs.export {
+        if let Some((_, _, _, w)) = &self.jobs.export {
             w.cancel();
         }
         dima_core::output::remove_temporaries();

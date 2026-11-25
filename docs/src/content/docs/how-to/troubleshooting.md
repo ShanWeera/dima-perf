@@ -170,3 +170,16 @@ For anything this page does not answer, see the [FAQ](/getting-started/faq/) or 
 
 **The desktop app does not open** on macOS or Windows — the packages are not code-signed yet; see
 [first launch](/getting-started/install/#desktop-app).
+
+**Desktop app: "Nothing was saved: the chart was switched to similarity-weighted entropy while
+the dialog was open. Export again to save the chart now shown."** (or "…switched to entropy…")
+— the chart showed another metric when you chose the figure export than when you confirmed the
+file name, so the file would have held the other metric's figure under a name chosen for this
+one. Choose the export again; the save dialog then proposes the name of the chart now shown. See
+[Export](/how-to/desktop-app/#export).
+
+**Desktop app: "Value range reset to the full range of similarity-weighted entropy"** (or "…of
+entropy") — you switched the chart's metric after narrowing the value range in the filter bar.
+Each metric has its own scale, so the range starts over at the new metric's full range; narrow
+it again if you need to. See
+[Plot similarity-weighted entropy](/how-to/desktop-app/#explore-the-results).

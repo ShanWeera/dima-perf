@@ -98,10 +98,15 @@ fn shortcuts(ui: &mut Ui, t: &DesignTokens) {
                     "Previous / next row of the position table",
                 ),
                 ("Home / End".to_owned(), "First / last row"),
+                ("Tab / Shift+Tab".to_owned(), "Move between controls"),
+                ("Space".to_owned(), "Press or select"),
                 ("Scroll over the chart".to_owned(), "Zoom about the cursor"),
                 ("Drag / Shift-drag".to_owned(), "Pan / zoom to a region"),
                 ("Double-click the chart".to_owned(), "Show every position"),
-                ("Esc".to_owned(), "Close the palette"),
+                (
+                    "Esc".to_owned(),
+                    "Close the palette; also gives the arrow keys back to the table",
+                ),
             ] {
                 ui.monospace(k);
                 ui.label(what);

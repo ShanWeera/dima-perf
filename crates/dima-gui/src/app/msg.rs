@@ -114,6 +114,8 @@ pub enum Msg {
     ExportDone {
         /// What.
         kind: ExportKind,
+        /// The metric the chart showed when it was chosen (names a figure).
+        metric: ChartMetric,
         /// The session exported from (`None`: the failed run's report).
         session: Option<u64>,
         /// The files written, or why not.
