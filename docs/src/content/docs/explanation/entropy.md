@@ -195,8 +195,9 @@ confirms the three steps above on random and adversarial count profiles.
 
 DiMA v5.0.9 applies the rule to each random run instead, and rounds the subsample sizes down (see
 [Differences from DiMA v5.0.9](/explanation/differences/#method)). Where one or a few sequences
-carry a variant other than the Index, a single run's intercept is often negative and is then
-replaced by the larger observed entropy, so v5.0.9's average over many runs is higher there. The
+carry a variant other than the [Index](/reference/glossary/#index-major-minor-and-unique), a
+single run's intercept is often negative and is then replaced by the larger observed entropy, so
+v5.0.9's average over many runs is higher there. The
 table gives the share of runs that fall back and how far they raise the average above DiMA's
 value, at positions where every other sequence carries the Index:
 
@@ -206,15 +207,15 @@ value, at positions where every other sequence carries the Index:
 |---|---|---|---|
 | one | 20.2–21.6% | 34.7–39.2% | 0.0044–0.0469 bits |
 | two, both carrying the same k-mer | 12.7–14.4% | 17.9–21.6% | 0.0082–0.0834 bits |
-| two, carrying two different k-mers | 12.3–14.0% | 17.6–21.1% | 0.0089–0.0937 bits |
+| two, carrying two different k-mers | 12–14% | 18–21% | 0.0089–0.0937 bits |
 | five, all carrying the same k-mer | 3.0–4.7% | 3.5–5.9% | 0.0180–0.1715 bits |
-| five, all carrying different k-mers | 3.3–4.6% | 3.9–5.7% | 0.0221–0.2341 bits |
+| five, all carrying different k-mers | 3–5% | 4–6% | 0.0221–0.2341 bits |
 
 Each range is over $N$ = 200, 300, 500, 1,000, 2,000 and 3,000 sequences ($T = 100$), where the grid
 has all eleven points and the subsample sizes need no rounding, so v5.0.9's runs differ from the
 paper's procedure only by the rule. Exact where the differing sequences carry one k-mer; seeded
 Monte Carlo of 100,000 runs per $N$ where they carry different ones (95% intervals within ±0.4
-percentage points).
+percentage points, so those rows give whole percentages).
 
 <!-- docs-numbers:v509-fallbacks:end -->
 
@@ -355,7 +356,8 @@ under **Advanced** in the [desktop app](/how-to/desktop-app/#similarity-weighted
 Without it, the three values below are `null` (`NA` in the positions table); with it, nothing else
 changes.
 
-At a position with support $N$, let variant $i$ (a distinct k-mer, the Index included) be carried
+At a position with support $N$, let variant $i$ (a distinct k-mer, the
+[Index](/reference/glossary/#index-major-minor-and-unique) included) be carried
 by $c_i$ sequences, so its frequency is $\hat p_i = c_i/N$, and let $s_{ij}$ be the similarity of
 variants $i$ and $j$ (below). Then [@wu2025, Section 2.1 and Supplementary File 1]
 
@@ -481,10 +483,10 @@ entropy column by column.
 ### What the evidence covers
 
 Wu defines a viral quasispecies as "a population of related viral sequences within an infected
-host" [@wu2025, Section 1], and applied the metric only to such populations: simulated ones, a
-potato spindle tuber viroid (PSTVd) mutant pool with the populations it gave in plants, and two
-tomato brown rugose fruit virus (ToBRFV) samples, all of nucleotide sequences of equal length
-that differ by substitutions only [@wu2025, Sections 2.1 and 3.1–3.3]. DiMA's alignments usually hold sequences
+host" [@wu2025, Section 1], and applied the metric only to nucleotide sequences of equal length
+that differ by substitutions only: simulated populations, a potato spindle tuber viroid (PSTVd)
+mutant pool and the populations it gave within single plants, and two tomato brown rugose fruit
+virus (ToBRFV) samples [@wu2025, Sections 2.1 and 3.1–3.3]. DiMA's alignments usually hold sequences
 from many hosts, and DiMA applies the metric at every k-mer position, to amino-acid k-mers too.
 Wu's reading, that a variant similar to the others adds less to a quasispecies' diversity, then
 becomes a statement about the k-mers sampled across hosts. These uses are DiMA's extension and are
@@ -622,10 +624,10 @@ reduced in position order. Identical inputs therefore give byte-identical output
 Rounding error is present in every value, as in any floating-point program, and grows with the
 number of sequences at a position. On the bundled datasets every entropy is within about
 $5 \times 10^{-15}$ of the exact value (relative), and at the 2.2 million sequences per position
-of the paper's SARS-CoV-2 analysis within $2.2 \times 10^{-12}$. That is $10^{10}$ to
+of the paper's SARS-CoV-2 analysis within about $8 \times 10^{-12}$. That is $10^{10}$ to
 $10^{12}$ times smaller than the sampling error of the estimate. Similarity-weighted entropy has
 the same absolute error as observed entropy, but is smaller, so its relative error is larger: up
-to $2 \times 10^{-14}$ on the bundled datasets and $3.4 \times 10^{-11}$ at 2.2 million sequences.
+to $2 \times 10^{-14}$ on the bundled datasets and $1.2 \times 10^{-10}$ at 2.2 million sequences.
 [Numerical accuracy](/explanation/numerical-accuracy/) gives the measurements, the one limit
 (more than $9 \times 10^{15}$ sequences at a position) and why a prototyped fix for the last
 digits is deferred.

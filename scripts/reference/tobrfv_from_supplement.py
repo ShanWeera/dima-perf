@@ -28,18 +28,32 @@ SHEETS = {"tm-2": "tobrfv_tm2.fasta", "Tm-22": "tobrfv_tm22.fasta"}
 
 
 def read_sheets(path: Path) -> dict[str, list[tuple[str, str, int]]]:
-    """{sheet name: [(id, sequence, reads), ...]} in the order of the sheet."""
+    """{sheet name: [(id, sequence, reads), ...]} in the order of the sheet.
+
+    Each row needs an ID, a sequence of A, C, G, T and a positive whole read count, and its
+    "Percentage" (column D, seven decimals) must be 100 x reads / (the listed reads' total),
+    which confirms that the list is complete.
+    """
     out = {}
     for name, rows in sheet_rows(path, set(SHEETS)).items():
-        records = []
+        records, percentages = [], []
         for _, row in rows:
             ident, seq, reads = row.get("A", "").strip(), row.get("B", ""), row.get("C", "")
             if not row or ident.startswith("Supplementary File") or ident == "IDs":
                 continue  # an empty row, the sheet's title or its header
             if not (re.fullmatch(r"Seq[0-9]+", ident) and re.fullmatch(r"[ACGT]+", seq)
-                    and re.fullmatch(r"[0-9]+", reads)):
-                raise ValueError(f"{name}: row {ident!r} is not a sequence of A, C, G, T with a whole read count")
+                    and re.fullmatch(r"[1-9][0-9]*", reads)):
+                raise ValueError(f"{name}: row {ident!r} is not a sequence of A, C, G, T with a positive whole read count")
             records.append((ident, seq, int(reads)))
+            percentages.append(row.get("D", ""))
+        total = sum(r for _, _, r in records)
+        for (ident, _, reads), shown in zip(records, percentages, strict=True):
+            try:
+                ok = abs(float(shown) - 100 * reads / total) <= 6e-8
+            except ValueError:
+                ok = False
+            if not ok:
+                raise ValueError(f"{name}: row {ident!r}: percentage {shown!r} is not 100 x {reads} / {total}")
         out[name] = records
     return out
 

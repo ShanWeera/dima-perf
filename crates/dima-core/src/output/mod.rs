@@ -504,11 +504,7 @@ impl JsonFile<'_> {
             )
             .with_hint(kind.hint()));
         }
-        let early_version = self
-            .prefix
-            .split("\"schema_version\"")
-            .nth(1)
-            .and_then(|rest| rest.split('"').nth(1));
+        let early_version = early_schema_version(&self.prefix);
         let current = kind.current_version();
         if let Some(version) = early_version {
             check_schema_major(version, kind, &name)?;
@@ -583,6 +579,19 @@ fn stream_error(e: io::Error, target: &IoTarget, name: &str, packed: Packed) -> 
     ))
 }
 
+/// The string value of the first `"schema_version"` member in the start of a file, if the key is
+/// followed by a string (a number, `null` or a cut-off string gives `None`, and the full parse
+/// then reports the file).
+fn early_schema_version(prefix: &str) -> Option<&str> {
+    let rest = prefix.split("\"schema_version\"").nth(1)?;
+    let rest = rest
+        .trim_start()
+        .strip_prefix(':')?
+        .trim_start()
+        .strip_prefix('"')?;
+    rest.find('"').map(|end| &rest[..end])
+}
+
 /// Refuses a file of another schema major version.
 fn check_schema_major(version: &str, kind: Kind, name: &str) -> Result<()> {
     let current = kind.current_version();
@@ -590,10 +599,16 @@ fn check_schema_major(version: &str, kind: Kind, name: &str) -> Result<()> {
     if major(version) == major(current) {
         return Ok(());
     }
+    // A version that is not a plain one is quoted, so spaces or odd characters show.
+    let shown = if parse_schema_version(version).is_some() {
+        version.to_owned()
+    } else {
+        format!("{version:?}")
+    };
     Err(DimaError::input_data(
         Some(Location::new(name.to_owned())),
         format!(
-            "written with {} schema {version}, but this version of DiMA reads schema \
+            "written with {} schema {shown}, but this version of DiMA reads schema \
              {current} (major version {})",
             kind.schema_name(),
             major(current)

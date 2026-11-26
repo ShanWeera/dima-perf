@@ -567,6 +567,37 @@ fn hidden_positions_ask_to_clear_the_filters() {
     );
 }
 
+/// A figure whose positions were all filtered out while its save dialog was open is not saved,
+/// and a warning says why.
+#[test]
+fn a_figure_with_no_positions_left_is_not_saved_silently() {
+    let mut s = state();
+    with_session(&mut s);
+    let effects = update(&mut s, Msg::Export(ExportKind::Png));
+    let [Effect::Dialog { purpose, .. }] = effects.as_slice() else {
+        panic!("{effects:?}");
+    };
+    let purpose = *purpose;
+    s.session.as_mut().unwrap().filter.value_range = (2.0, 3.0);
+    update(&mut s, Msg::FiltersEdited);
+    tick(&mut s, Duration::from_millis(16), false);
+    assert!(s.session.as_ref().unwrap().shown.is_empty());
+    let effects = update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose,
+            path: Some(PathBuf::from("/x/figure.png")),
+            failed_fast: false,
+        },
+    );
+    assert!(effects.is_empty(), "{effects:?}");
+    assert_eq!(s.export_busy, None);
+    assert!(s.toasts.items().iter().any(|t| t.severity == Severity::Warning
+        && t.text
+            == "Nothing was saved: no positions are shown, so there is no chart to export (check \
+                the filters)"));
+}
+
 #[test]
 fn filters_apply_when_the_pointer_is_released() {
     let mut s = state();

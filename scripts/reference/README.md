@@ -304,13 +304,13 @@ Limits of the comparison at large N:
 * **Rounding in the Rust code.** The Rust code computes `−p·log2 p` from a rounded
   `p = c/N` and the binomial odds from a rounded `p`. The oracle uses `log1p` and exact
   integer odds. At a highly conserved position (one dominant k-mer) the Rust values
-  therefore differ from the oracle's by up to about 2e-12 relative at 2.2 million
-  sequences and 5e-11 at 17.5 million. Chao–Wang–Jost agrees to a few units in the last
+  therefore differ from the oracle's by up to about 8e-12 relative at 2.2 million
+  sequences and 6e-11 at 17.5 million (how much depends on how c/N rounds at each N). Chao–Wang–Jost agrees to a few units in the last
   place at any N, because the Rust code evaluates its second term exactly (a hypergeometric
   series or continued fraction) while the oracle sums it in 80-digit `Decimal`; the two
   share no derivation. Similarity-weighted entropy shares the entropy terms' rounding but
-  is smaller, so its relative difference is larger: up to about 3.4e-11 at 2.2 million
-  sequences and 5.3e-10 at 17.5 million (the longer the k-mers, the larger).
+  is smaller, so its relative difference is larger: up to about 1.2e-10 at 2.2 million
+  sequences and 9.7e-10 at 17.5 million (the longer the k-mers, the larger).
 * **What the tests can detect.** A differential test at that scale could not separate a
   bug smaller than those numbers from rounding. No test runs at that scale. On the
   bundled datasets the Rust values are within about 5e-15 of the oracle's
@@ -318,7 +318,7 @@ Limits of the comparison at large N:
   MERS-CoV spike protein).
 
 The measurements, why the rounding never matters scientifically (it is at least 10^10 times
-smaller than the sampling error, 1.9e9 times for similarity-weighted entropy), and why the prototyped fix is deferred are in the
+smaller than the sampling error, 10^9 times for similarity-weighted entropy), and why the prototyped fix is deferred are in the
 documentation page "Numerical accuracy" (`docs/src/content/docs/explanation/numerical-accuracy.md`).
 For one differing sequence at N = 2,208,211 (`N − 1` copies of `A` and one `C`, run with
 `-a dna -k 1`), `observed_entropy` differs from the oracle by 2.2e-12 relative and `entropy` by

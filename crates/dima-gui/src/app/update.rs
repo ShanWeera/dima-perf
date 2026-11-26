@@ -937,7 +937,19 @@ fn write_chosen(state: &mut AppState, purpose: Purpose, path: PathBuf) -> Vec<Ef
                         job: Box::new(job),
                     }]
                 }
-                None => Vec::new(),
+                None => {
+                    // The filters may have hidden every position while the dialog was open.
+                    if kind.is_figure() {
+                        state.toasts.push(
+                            Severity::Warning,
+                            "Nothing was saved: no positions are shown, so there is no chart to \
+                             export (check the filters)",
+                            None,
+                            state.now,
+                        );
+                    }
+                    Vec::new()
+                }
             }
         }
         Purpose::FailedRunReport => {

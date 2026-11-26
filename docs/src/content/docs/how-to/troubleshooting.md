@@ -125,6 +125,8 @@ or accept the mismatches with `--validation permissive` (they get the fill value
 **`header is not valid UTF-8`** — convert the file to UTF-8 (`iconv -f LATIN1 -t UTF-8`), or use
 `--validation permissive` to replace invalid bytes.
 
+## Results files (exit 4)
+
 **`written with results schema …`** (or **`written with conserved-sequences schema …`**; from
 `dima view`, `dima hcs` or `dima cite --from`) — the major number of the file's schema version
 (before the first dot) is not `1`: it was written by a DiMA version with another major schema
@@ -226,6 +228,11 @@ the dialog was open. Export again to save the chart now shown."** (or "…switch
 file name, so the file would have held the other metric's figure under a name chosen for this
 one. Choose the export again; the save dialog then proposes the name of the chart now shown. See
 [Export](/how-to/desktop-app/#export).
+
+**Desktop app: "No positions are shown, so there is no chart to export (check the filters)"** —
+the filter bar hides every position, so the chart is empty. Widen the filters (or press
+**Reset**) and export again. When the filters were changed while the save dialog was open, the
+message starts with "Nothing was saved:" and nothing is written.
 
 **Desktop app: "Value range reset to the full range of similarity-weighted entropy"** (or "…of
 entropy") — you switched the chart's metric after narrowing the value range in the filter bar.

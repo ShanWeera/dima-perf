@@ -1552,6 +1552,21 @@ fn view_reports_older_and_newer_schemas() {
             ),
         }
     }
+    // An older file that already holds the values: no note.
+    let o = dima()
+        .args(["analyze", "-i", s(&tiny()), "-o", "on.json", "-s", "4"])
+        .args(TINY)
+        .arg("--similarity-weighted-entropy")
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    let mut v = json(&dir.join("on.json"));
+    v["schema_version"] = "1.0.0".into();
+    std::fs::write(dir.join("v.json"), serde_json::to_vec(&v).unwrap()).unwrap();
+    let o = run(&["view", "-i", "v.json", "-o", "-"], dir);
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    assert!(!stderr(&o).contains("note:"), "{}", stderr(&o));
 }
 
 /// `--similarity-weighted-entropy`: the values in the results and the end-of-run line; a

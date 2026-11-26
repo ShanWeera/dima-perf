@@ -95,15 +95,21 @@ populations (not those of Figs. 2 and 4). Supplementary File 2 lists the unique 
 their read counts, of two samples of tomato brown rugose fruit virus (ToBRFV): one from tomato
 plants with the susceptible tm-2 allele and one from plants with the resistant Tm-2² allele, both
 of the 5′-120nts region, the first 120 nucleotides at the 5′ end of the genome
-[@wu2025, Sections 2.2 and 3.3]. The potato spindle tuber viroid (PSTVd) libraries of Fig. 5c
-come from Wu's earlier study [@wu2025, Section 2.3], whose S2 Table lists their unique sequences
+[@wu2025, Sections 2.2 and 3.3]; Supplementary File 3 gives the Hamming distance (the number of
+sites at which two sequences differ) of every pair of them [@wu2025, Section 3.3]. The potato spindle tuber viroid (PSTVd) libraries of Fig. 5c
+come from Wu's earlier study [@wu2025, Sections 2.3 and 3.2], whose S2 Table lists their unique sequences
 with their read counts [@wu2024, Supporting information, S2 Table]. DiMA's values below are fixed
 by the test suite (`crates/dima-core/tests/paper.rs`, which builds the simulated populations and
 reads the ToBRFV and PSTVd data in `tests/data/`); the ToBRFV and PSTVd values and the Fig. 5c
 pool also agree with the reference implementation, which computes $H_\text{sim}$ pair by pair as
-Wu defines it. The tables, the Hamming distances and the changes between libraries are computed
-by `scripts/reference/docs_numbers.py`, and the other readings of Fig. 5c below are arithmetic
-shown in the text.
+Wu defines it. The tables, the Hamming distances, the changes between libraries and the
+comparison with the S1 Table of Wu's earlier study are computed by
+`scripts/reference/docs_numbers.py`, and the other readings of Fig. 5c below are arithmetic shown
+in the text. $H$, $H_n$, $H_\text{sim}$ and $H_\text{nsim}$ are Wu's values, computed from the
+observed frequencies: DiMA writes them as `observed_entropy`, `normalised_observed_entropy`,
+`similarity_weighted_entropy` and `normalised_similarity_weighted_entropy`. Its `entropy` key, and
+the first mean of the end-of-run line, are DiMA's corrected entropy, which Wu does not use, so
+the runs below print an "entropy mean" a little above the $H$ of the tables.
 
 **Supplementary File 1.** Its "Figure 2 Extended Data" sheet gives $H$, $H_n$, $H_\text{sim}$ and
 $H_\text{nsim}$ to five decimals for five populations of 10 sequences, every pair of sequences at
@@ -167,8 +173,9 @@ has one position whose k-mer counts are the read counts:
 
 <!-- docs-numbers:pstvd:end -->
 
-Fig. 5c plots one point for the pool and one for each of IR, LM and Sys, without error bars.
-Read from the figure's pixels, the practical pool's point agrees with the pool above, and the IR,
+Fig. 5c plots one point for the pool and one for each of IR, LM and Sys, without error bars; Wu
+et al. give the IR, LM and Sys values of their own figures as means of the three replicates
+[@wu2024, Fig. 2 legend]. Read from the figure's pixels, the practical pool's point agrees with the pool above, and the IR,
 LM and Sys points with the means of their three plants, to within 0.06 bits for $H$ and
 $H_\text{sim}$ and 0.005 for $H_n$ and $H_\text{nsim}$: about what the figure can be read to,
 since its theoretical-pool points, whose values are exact, read up to 0.02 bits and 0.004 off.
@@ -187,7 +194,14 @@ which the S2 Table's "reads per thousand" are computed: they are between 3 fewer
 pool lists 73,627 of 73,628 reads). Three libraries also list a different number of unique
 sequences from S1 Table's: IR-1 one more, IR-2 three more and Sys-2 one fewer. The values here use
 the listed sequences and reads; Wu 2025 does not say which it used, and the figure cannot tell
-such small differences apart.
+such small differences apart. S1 Table also prints each library's normalised Shannon entropy.
+Wu et al. write it as the entropy divided by $\log_2$ of the number of reads
+[@wu2024, Results and Materials and methods], but the printed values are the entropy divided by
+$\log_2$ of the number of unique sequences, $H_n$ (divided by $\log_2$ of the reads, the pool's
+would be 0.48): <!-- docs-numbers:pstvd-s1:start -->
+IR-1's 0.803969923 is $H_n$ above to its last decimal, and the others differ from $H_n$ by at most
+0.0008 (IR-2)<!-- docs-numbers:pstvd-s1:end -->. IR-1 is the one library whose listed reads add up to
+its S1 total.
 
 **ToBRFV.** Supplementary File 2 lists 48 (tm-2 sample) and 47 (Tm-2² sample) unique
 120-nucleotide sequences of the 5′-120nts region with their read counts. Wu reports excluding
@@ -220,7 +234,9 @@ The tm-2 values match Fig. 6d, reading its $H_\text{nsim}$ axis as linear (its t
 0.015 stands where 0.010 would). For Tm-2², Fig. 6d shows about 0.71, 0.127, 0.116 and 0.021: with
 the published data $H$ and $H_n$ are higher in Tm-2² than in tm-2, the opposite of Section 3.3,
 while $H_\text{sim}$ and $H_\text{nsim}$ are higher in Tm-2², as the paper reports. The mean and
-largest Hamming distances match Section 3.3. As of 25 November 2026 Crossref lists no correction
+largest Hamming distances match Section 3.3, and the committed sequences reproduce every distance
+of Supplementary File 3 (2,304 pairs for tm-2 and 2,209 for Tm-2², the sequences taken by their
+`SeqN` IDs; checked once against the spreadsheet, when this page was written). As of 25 November 2026 Crossref lists no correction
 to the paper.
 
 ## References

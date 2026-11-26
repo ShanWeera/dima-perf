@@ -102,9 +102,10 @@ number of distinct k-mers (which puts them between 0 and 1), only when you ask:
 It can help when it matters how different the variants are, not only how many there are and how
 common. Use it next to the entropy, not instead of it, and with care:
 
-- It was published in 2025, and its source study applied it only to nucleotide sequences of
-  viral populations within one host. Using it on protein k-mers, or on sequences from many hosts
-  as in the MERS-CoV and HIV-1 examples of this documentation, is DiMA's extension.
+- It was published in 2025, and its source study applied it only to nucleotide sequences:
+  simulated populations, a viroid mutant pool and the populations it gave within single plants,
+  and one plant-virus dataset. Using it on protein k-mers, or on sequences from many hosts as in
+  the MERS-CoV and HIV-1 examples of this documentation, is DiMA's extension.
 - None of its values is corrected for sample size: they change with the number of sequences, so
   compare them only between positions and datasets of similar support (see the previous
   question).
@@ -163,7 +164,7 @@ floating-point program, DiMA rounds. Its values are accurate to about 14 signifi
 alignments of thousands of sequences, and to at least 10 at 17.5 million sequences per
 position (the opt-in Chao–Wang–Jost estimator to about 15 digits at any size, the opt-in
 similarity-weighted entropy to at least 9). The error is at least $10^{10}$ times smaller than
-the sampling error of the estimate ($1.9 \times 10^9$ times for similarity-weighted entropy). [Numerical accuracy](/explanation/numerical-accuracy/)
+the sampling error of the estimate ($10^9$ times for similarity-weighted entropy). [Numerical accuracy](/explanation/numerical-accuracy/)
 has the measurements.
 
 ### How long will an analysis take, and how much memory does it need?

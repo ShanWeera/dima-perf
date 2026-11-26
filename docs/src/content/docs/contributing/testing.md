@@ -27,8 +27,8 @@ and wrapped lines, one with low-support positions), the golden `tiny` input (pos
 support, with low support and with an Index tie) and the MERS-CoV spike sample, all with
 similarity-weighted entropy. There the two agree to $2.6 \times 10^{-15}$ at worst for the
 entropies and $6 \times 10^{-15}$ for similarity-weighted entropy. At millions of sequences per
-position the library's own rounding is larger, so differences up to $5 \times 10^{-11}$ (for
-similarity-weighted entropy $5.3 \times 10^{-10}$) are expected there (see
+position the library's own rounding is larger, so differences up to $6 \times 10^{-11}$ (for
+similarity-weighted entropy $9.7 \times 10^{-10}$) are expected there (see
 [Numerical accuracy](/explanation/numerical-accuracy/#what-this-means-for-testing)).
 The tests need `python3` 3.10 or newer; `DIMA_SKIP_REFERENCE=1` skips them where Python is
 unavailable (never in CI).

@@ -20,17 +20,19 @@ scientific software [@darriba2018; @eddy2011].
   entropy is within $2 \times 10^{-14}$ (see
   [Similarity-weighted entropy](#similarity-weighted-entropy)).
 - **The DiMA paper's SARS-CoV-2 scale** (about 2.2 million sequences per position): a default
-  run (the `dima` estimate and the observed entropy) is within $2.2 \times 10^{-12}$. At
-  17.5 million sequences it is within $5.1 \times 10^{-11}$ (from the 11th significant digit
-  on). The opt-in Chao–Wang–Jost estimator, whose second term is evaluated exactly (see
-  [Chao–Wang–Jost's second term](#chaowangjosts-second-term)), stays within a few units in the
-  last place at any size. Similarity-weighted entropy, which is smaller than the observed entropy
-  but has the same absolute error, is within $3.4 \times 10^{-11}$ (at 17.5 million sequences
-  $5.3 \times 10^{-10}$), whatever the k-mer length. In absolute terms no error reaches $10^{-14}$ bits.
+  run (the `dima` estimate and the observed entropy) is within about $8 \times 10^{-12}$. At
+  17.5 million sequences it is within about $6 \times 10^{-11}$ (from the 11th significant digit
+  on). How close a value comes depends on how the most common k-mer's frequency rounds, which
+  changes from one number of sequences to the next; these are the largest errors (see
+  [The largest error](#the-largest-error)). The opt-in Chao–Wang–Jost estimator, whose second
+  term is evaluated exactly (see [Chao–Wang–Jost's second term](#chaowangjosts-second-term)),
+  stays within a few units in the last place at any size. Similarity-weighted entropy, which is
+  smaller than the observed entropy but has the same absolute error, is within
+  $1.2 \times 10^{-10}$ (at 17.5 million sequences $9.7 \times 10^{-10}$), whatever the k-mer
+  length. In absolute terms no error reaches $10^{-14}$ bits.
 - **Far below the sampling error.** The rounding error is $10^{10}$ to $10^{12}$ times smaller
-  than the standard deviation of the entropy estimate itself ($1.9 \times 10^9$ to
-  $2.2 \times 10^{11}$ times for similarity-weighted entropy). The paper reports entropies to two
-  decimals.
+  than the standard deviation of the entropy estimate itself (at least $10^9$ times for
+  similarity-weighted entropy). The paper reports entropies to two decimals.
 - **Results stay deterministic either way.** Identical inputs give byte-identical outputs on
   every platform and thread count (see
   [Numerical details](/explanation/entropy/#numerical-details)).
@@ -107,6 +109,23 @@ $AN = 9$: $4.6 \times 10^{-9}$ on a profile with 17.5 million sequences (one dom
 1,000 singletons and 4,450 doubletons), the worst of 2,427 profiles searched. There the exact
 value is $0.014173273093526109$ bits and DiMA writes `0.014173273093526107`.
 
+### The largest error
+
+The tables give the error at two chosen numbers of sequences. It changes from one $N$ to the
+next, because at a conserved position it comes almost entirely from rounding the most common
+k-mer's frequency $p = c/N$, and how far $c/N$ lies from the nearest double depends on $N$.
+Rounding to the nearest double moves a number by at most half a unit in its last place
+[@goldberg1991, §1.2], which is $2^{-54}$ for a number between 1/2 and 1. Near $p = 1$ that
+changes $-p \log_2 p$ by at most $2^{-54}/\ln 2 \approx 8.0 \times 10^{-17}$ bits, so no
+observed entropy is further from its exact value than about that at a conserved position. Some
+$N$ reach it: for one differing sequence at $N = 2{,}221{,}244$ the observed entropy is off by
+$8.0 \times 10^{-17}$ bits, $7.9 \times 10^{-12}$ relative (the `dima` estimate by
+$6.6 \times 10^{-12}$), and at $N = 17{,}528{,}686$ by $5.5 \times 10^{-11}$ (the `dima`
+estimate by $6.2 \times 10^{-11}$, $9.2 \times 10^{-17}$ bits). The relative error is the
+absolute error divided by the entropy, so it is largest where the entropy is smallest, at one
+differing sequence; there it is at most $7.9 \times 10^{-12}$ at about 2.2 million sequences and
+$5.5 \times 10^{-11}$ at 17.5 million for observed entropy.
+
 ### Compared with the sampling error
 
 An entropy estimated from $N$ sequences has a standard deviation of about $\sigma/\sqrt{N}$, with
@@ -125,7 +144,10 @@ any estimator by that standard deviation:
 | many doubletons | 17,500,000 | $2.8 \times 10^{-5}$ | $5.9 \times 10^{-6}$ | $9.3 \times 10^{-17}$ | $2 \times 10^{-11}$ |
 
 Drawing another sample of the same size would typically move each of these entropies
-$10^{10}$ to $10^{12}$ times further than rounding does.
+$10^{10}$ to $10^{12}$ times further than rounding does. That holds at the largest error too
+(see [The largest error](#the-largest-error)): $9.2 \times 10^{-17}$ bits against a standard
+deviation of $1.4 \times 10^{-6}$ bits for one differing sequence at 17.5 million sequences is a
+ratio of $7 \times 10^{-11}$.
 
 ### Sample coverage in real data
 
@@ -258,8 +280,8 @@ error, the one that grows with $N$ at a conserved position (see
 keeps that error but not the value: the dominant k-mer, whose term carries the error, keeps a
 weight close to 1, while the accurate terms of the rare k-mers shrink to about $d/k$ of their
 size. The absolute error is therefore the same as that of observed entropy, but the relative
-error is larger, by up to the ratio $\hat H / H_\text{sim}$. Measured as in the table above,
-with each rare k-mer differing from the dominant one at one site:
+error is larger, by up to the ratio $\hat H / H_\text{sim}$. Measured as in the table above, at
+the same numbers of sequences, with each rare k-mer differing from the dominant one at one site:
 
 | Profile | $N$ | Observed entropy | Similarity-weighted, $k = 9$ | Similarity-weighted, $k = 27$ |
 |---|---|---|---|---|
@@ -270,16 +292,19 @@ with each rare k-mer differing from the dominant one at one site:
 | near-conserved | 17,500,000 | $7.0 \times 10^{-12}$ | $4.3 \times 10^{-11}$ | $7.5 \times 10^{-11}$ |
 | many doubletons | 17,500,000 | $2.4 \times 10^{-12}$ | $1.5 \times 10^{-11}$ | $2.5 \times 10^{-11}$ |
 
-The absolute errors stay between $2 \times 10^{-17}$ and $7 \times 10^{-17}$ bits, as for observed
-entropy, and the normalised values have the relative errors of the entropies they divide. The
-standard deviation of similarity-weighted entropy from sampling, computed as for the entropies
-above, is $9.8 \times 10^{-7}$ to $7.1 \times 10^{-6}$ bits on these profiles at 2,208,211
-sequences and $1.3 \times 10^{-7}$ to $9.9 \times 10^{-7}$ bits at 17.5 million, so the rounding
-error stays $3 \times 10^9$ to $2.2 \times 10^{11}$ times smaller. Longer k-mers shrink the rare
-k-mers' terms further, so the relative error grows with $k$ towards about $1 + \ln N$ times that
-of observed entropy: for one differing sequence at $k = 1{,}000$ it is $3.4 \times 10^{-11}$ at
-2,208,211 sequences and $5.2 \times 10^{-10}$ at 17.5 million, still $1.9 \times 10^9$ times
-below the sampling error, and no k-mer length goes much beyond. On the
+The absolute errors are those of observed entropy at the same $N$, so at most about
+$8.0 \times 10^{-17}$ bits (see [The largest error](#the-largest-error)), and the normalised values
+have the relative errors of the entropies they divide. Longer k-mers shrink the rare k-mers'
+terms further, so the relative error grows with $k$ towards about $1 + \ln N$ times that of
+observed entropy. At the largest absolute error, one differing sequence is off by at most
+$4.7 \times 10^{-11}$ ($k = 9$), $8.0 \times 10^{-11}$ ($k = 27$) and $1.2 \times 10^{-10}$
+($k = 1{,}000$ or longer) at about 2.2 million sequences, and by $3.4 \times 10^{-10}$,
+$6.0 \times 10^{-10}$ and $9.7 \times 10^{-10}$ at 17.5 million; at $N = 2{,}221{,}244$, for
+example, DiMA's value at $k = 9$ is off by $4.7 \times 10^{-11}$. The standard deviation of
+similarity-weighted entropy from sampling, computed as for the entropies above, is at least
+$6.5 \times 10^{-7}$ bits on these profiles at 2,208,211 sequences and $8.2 \times 10^{-8}$ bits
+at 17.5 million (one differing sequence, the longest k-mers), so the rounding error stays at least
+$10^9$ times smaller. On the
 four bundled datasets the largest relative error of similarity-weighted entropy is
 $1.9 \times 10^{-14}$ (MERS-CoV spike gene, position 433, where 451 of 452 sequences carry one
 27-mer). Mathematically both normalised values lie between 0 and 1 and similarity-weighted
@@ -295,9 +320,10 @@ also needs about 48 bytes per distinct k-mer, for each position being computed.
 
 The differential test against the reference implementation
 (`crates/dima-core/tests/reference.rs`) and the paper test (`crates/dima-core/tests/paper.rs`,
-which compares the four bundled datasets with values the reference implementation computed)
-share one rule: every number must agree within a relative $10^{-13}$, so a zero must be exactly
-zero. Their alignments have at most about 11,000 sequences per position; the largest
+which compares the four bundled datasets, Wu 2025's two ToBRFV samples and the ten PSTVd
+libraries with values the reference implementation computed) share one rule: every number must
+agree within a relative $10^{-13}$, so a zero must be exactly zero. Their alignments have at most
+73,627 sequences per position; the largest
 difference measured is $2.6 \times 10^{-15}$ for the entropies and $1.9 \times 10^{-14}$ for
 similarity-weighted entropy (see [Similarity-weighted entropy](#similarity-weighted-entropy)), a
 last-bit difference in a platform's logarithm
@@ -310,8 +336,8 @@ identical the accepted tolerance belongs in the documentation and the tests
 [@taschuk2017, Rule 10].
 
 At a million or more sequences per position the default estimator's own rounding reaches
-$10^{-12}$ to $5 \times 10^{-11}$ relative, and similarity-weighted entropy's up to
-$5.3 \times 10^{-10}$, so a test at that scale would need a looser rule or the deferred fix
+$10^{-12}$ to $6 \times 10^{-11}$ relative, and similarity-weighted entropy's up to
+$9.7 \times 10^{-10}$, so a test at that scale would need a looser rule or the deferred fix
 below. No test runs at that scale.
 
 ## What the fix would be
@@ -352,7 +378,7 @@ the exact $\alpha/2$ also the conserved-sequence tables.
 ## Why the fix is deferred
 
 1. **No scientific result changes.** At every realistic $N$ the rounding error is at least
-   $10^{10}$ times smaller than the sampling error ($1.9 \times 10^9$ times for similarity-weighted
+   $10^{10}$ times smaller than the sampling error ($10^9$ times for similarity-weighted
    entropy). A fix would change digits that no analysis
    can rely on.
 2. **The project's rule for engineering changes.** The paper is the specification, and a pure

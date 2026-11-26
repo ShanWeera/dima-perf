@@ -20,7 +20,8 @@ library, each read number is a positive whole number, and each per-thousand valu
 1000 x reads / T for one whole number T per library, which confirms that the column holds the
 read numbers. T is the library's total of S1 Table (for example 73,628 for the pool); the reads
 the sheet lists add up to between 3 fewer and 2 more (73,627 for the pool). The converter prints
-both. Any other content fails the conversion.
+both. Anything else in those three columns fails the conversion; the name and "Cutoff Score"
+columns below row 1, and columns outside the libraries' blocks, are not read.
 
 Each unique sequence is written once per read, so that the 6-mer counts of a run at k = 6 are
 the read counts: ``pstvd_loop27_<library>.fasta`` (library pool, ir1 .. ir3, lm1 .. lm3,

@@ -125,7 +125,7 @@ impl Similarity {
         let weighted = similarity::similarity_weighted_entropy(
             ids.iter().map(|&id| (counts.kmer(id), counts.count(id))),
         )?
-        .unwrap_or(0.0);
+        .ok_or_else(|| DimaError::internal("a position with an observed entropy has no k-mers"))?;
         // Postcondition: 0 ≤ H_sim ≤ H. The weights are at most 1, so only rounding could
         // exceed H, by a few units in the last place (measured: at most 2.2e-16 relative).
         if !(weighted.is_finite() && weighted >= 0.0 && weighted <= observed * (1.0 + 1e-12)) {

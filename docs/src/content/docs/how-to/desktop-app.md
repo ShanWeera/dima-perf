@@ -70,8 +70,8 @@ Shannon entropy counts them alike. To compute it:
 1. Click **Advanced** to open the section.
 2. Tick **Compute similarity-weighted entropy (Wu 2025)**, in the row named
    **Similarity-weighted**. A dot appears after the row's name (its tooltip: *Changed from the
-   default (default: off)*), and the section's title reads **Advanced (1 changed)** from then
-   on, also when it is closed.
+   default (default: off)*), and the count in the section's title goes up by one, also when the
+   section is closed: **Advanced (1 changed)** if no other option in it was changed.
 3. Press **Analyze**.
 
 The run then computes, at every position, the similarity-weighted entropy and the two
@@ -187,7 +187,8 @@ click the field and type a value. Each pixel of a drag moves the bound by 1/200 
 full range, so 200 pixels cross the whole range; a range below 0.02 bits moves by 0.0001 per
 pixel instead, and takes fewer. The fields show four decimals; a minimum that reads 0.0000 is 0,
 and a maximum that reads as the largest value is that value exactly, so the full range hides no
-position.
+position. Each field's tooltip, which screen readers also read, names the metric it filters, for
+example *Highest similarity-weighted entropy shown, in bits*.
 
 When the table's columns do not fit the window, the table scrolls sideways: drag its horizontal
 scroll bar, scroll sideways on a touchpad, or hold Shift and turn the mouse wheel over the table.
@@ -277,7 +278,9 @@ switched while the save dialog is open (with the command palette, for instance),
 saved and a warning says *Nothing was saved: the chart was switched to similarity-weighted
 entropy while the dialog was open. Export again to save the chart now shown.* (or *…switched to
 entropy…*). Choose the export again: the dialog then proposes the name of the chart now shown.
-The other exports do not depend on the chart and are saved as usual.
+Likewise, if the filters hide every position while the dialog is open, nothing is saved and a
+warning says *Nothing was saved: no positions are shown, so there is no chart to export (check
+the filters)*. The other exports do not depend on the chart and are saved as usual.
 
 Every file is written completely or not at all. **Run details** shows how the analysis ran
 (equivalent command, threads, phase times, platform, whether similarity-weighted entropy was

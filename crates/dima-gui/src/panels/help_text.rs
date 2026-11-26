@@ -289,7 +289,7 @@ pub fn chart_encoding(t: u64, estimator: Estimator, metric: ChartMetric) -> Stri
     let cites = match metric {
         ChartMetric::Entropy => ENCODING.to_vec(),
         ChartMetric::SimilarityWeighted => {
-            [&[dima_core::similarity::REFERENCES[0]], ENCODING.as_slice()].concat()
+            [&[dima_core::similarity::WU2025], ENCODING.as_slice()].concat()
         }
     };
     format!(
@@ -315,7 +315,7 @@ pub fn chart_metric(metric: ChartMetric) -> String {
             "Plot each position's similarity-weighted entropy, in which near-identical variants \
              count for less than unrelated ones; it is not corrected for sample size. \
              {SWITCH}{}",
-            refs(&[dima_core::similarity::REFERENCES[0]])
+            refs(&[dima_core::similarity::WU2025])
         ),
     }
 }
@@ -323,8 +323,8 @@ pub fn chart_metric(metric: ChartMetric) -> String {
 /// The sources of a statement about the normalised entropies: their definition, and their
 /// dependence on sample size.
 fn normalised_refs() -> String {
-    let r = &dima_core::similarity::REFERENCES;
-    refs(&[r[0], r[3]])
+    use dima_core::similarity::{GREGORI2014, WU2025};
+    refs(&[WU2025, GREGORI2014])
 }
 
 /// The position fact "Similarity-weighted entropy".
@@ -334,7 +334,7 @@ pub fn similarity_weighted_fact() -> String {
         "Entropy in which each variant counts for less the more it resembles the other variants \
          at this position, in bits: 0 with one distinct k-mer, and never more than the observed \
          entropy. Not corrected for sample size.{}",
-        refs(&[dima_core::similarity::REFERENCES[0]])
+        refs(&[dima_core::similarity::WU2025])
     )
 }
 
@@ -370,7 +370,7 @@ pub fn similarity_weighted_mean(eligible: u64) -> String {
         "Mean similarity-weighted entropy over the {eligible} eligible positions, and in \
          parentheses the mean observed (uncorrected) entropy of the same positions, for a \
          like-for-like comparison.{}",
-        refs(&[dima_core::similarity::REFERENCES[0]])
+        refs(&[dima_core::similarity::WU2025])
     )
 }
 

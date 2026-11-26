@@ -199,7 +199,9 @@ fn every_output_validates() {
     assert!(!results.is_valid(&bad));
     // The presence rules of the similarity-weighted values hold in both directions.
     let on = serde_json::to_value(&cases[5].1).unwrap();
-    let off = serde_json::to_value(&cases[1].1).unwrap();
+    // Every position of the flag-off MERS file is supported, so a value there breaks only the
+    // rule for runs without the option.
+    let off = serde_json::to_value(&cases[0].1).unwrap();
     let multi = on["results"]
         .as_array()
         .unwrap()

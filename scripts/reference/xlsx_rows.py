@@ -61,11 +61,16 @@ def column_letters(index: int) -> str:
 def _rows(sheet: ET.Element, shared: list[str]) -> list[tuple[int, dict[str, str]]]:
     rows = []
     for row in sheet.iter(f"{{{NS['m']}}}row"):
+        if row.get("r") is None:
+            raise ValueError("a row without its number (attribute r), which this reader needs")
         cells = {}
         for c in row.findall("m:c", NS):
             v = c.find("m:v", NS)
             if v is None or not v.text:
                 continue
-            cells[re.match(r"[A-Z]+", c.get("r")).group()] = shared[int(v.text)] if c.get("t") == "s" else v.text
+            column = re.match(r"[A-Z]+", c.get("r") or "")
+            if column is None:
+                raise ValueError(f"row {row.get('r')}: a cell without its reference (attribute r), which this reader needs")
+            cells[column.group()] = shared[int(v.text)] if c.get("t") == "s" else v.text
         rows.append((int(row.get("r")), cells))
     return rows

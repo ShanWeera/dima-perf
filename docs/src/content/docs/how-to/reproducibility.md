@@ -31,7 +31,7 @@ values carry a small rounding error. On the bundled datasets it is in the last o
 the 17 significant digits (the last three or four for the opt-in similarity-weighted entropy). It
 grows with the number of sequences at a position, to at most the 11th digit at 17.5 million
 sequences (the 10th for similarity-weighted entropy). That is always at least $10^{10}$ times
-smaller than the sampling error of an entropy estimate ($1.9 \times 10^9$ times for
+smaller than the sampling error of an entropy estimate ($10^9$ times for
 similarity-weighted entropy).
 A future version may correct these last digits, so compare results across versions at about nine
 significant digits. Results from the same version match exactly. The measurements are in
@@ -119,7 +119,11 @@ against it.
 
 Results written by a newer 1.x version are read too, keeping only the keys this version knows;
 `dima view` warns about it (`newer_schema`), and a value this version does not know stops the
-reading. See [Troubleshooting](/how-to/troubleshooting/#results-written-by-another-dima-version).
+reading. `dima hcs` and `dima cite --from` read such files without a warning, and leave out what
+this version does not know: dima 1.0.0's `dima cite --from`, for example, writes no sentence for
+similarity-weighted entropy, although the run computed it and the references list Wu 2025. Read
+results with the version that wrote them, or a newer one. See
+[Troubleshooting](/how-to/troubleshooting/#results-written-by-another-dima-version).
 
 ## References
 

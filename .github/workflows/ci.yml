@@ -276,7 +276,8 @@ jobs:
         run: python scripts/reference/dima_reference.py --self-test
       - name: Windows C runtime checker self-test
         run: python scripts/release/check-windows-crt.py --self-test
-      # About a minute: the reference implementation on the bundled datasets and the ToBRFV samples.
+      # About a minute: the reference implementation on the bundled datasets, the ToBRFV samples
+      # and the PSTVd libraries.
       - name: The paper test's expected values match the reference implementation
         run: python scripts/reference/paper_values.py --check
       # About a minute on four cores: the documentation's numbers that come from expectations

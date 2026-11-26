@@ -50,7 +50,9 @@ DiMA's memory does not grow with the number of sequences times their length. It 
   a time): a table of $26 \times \min(k, 2048)$ counters, $208 \cdot k$ bytes up to $k = 2{,}048$
   and 426 kB above it (5.6 kB at $k = 27$, 208 kB at $k = 1{,}000$), and about 48 bytes per
   distinct k-mer at the position;
-- the results until they are written.
+- the results until they are written: a few hundred bytes per position (since dima 1.1 about
+  48 bytes more than in 1.0, for the three similarity-weighted values, whether or not they are
+  computed).
 
 Memory therefore grows with the **diversity** of the alignment: conserved alignments need little
 even with millions of sequences, highly diverse ones more. The number of threads does not change

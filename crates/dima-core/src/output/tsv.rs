@@ -1,7 +1,7 @@
 //! Tidy tab-separated tables (D22, D50): one observation per row, one variable per column
 //! (Wickham 2014; Broman & Woo 2018), a header row, RFC 4180 minimal quoting with a tab
-//! delimiter, `NA` for undefined values, and floating-point numbers in their shortest
-//! round-trip form.
+//! delimiter, `NA` for undefined or not computed values, and floating-point numbers in their
+//! shortest round-trip form.
 
 use std::io::{self, Write};
 

@@ -172,10 +172,10 @@ two normalised values are `null`: with a single distinct k-mer, the largest entr
 
 Read the values with care:
 
-- The method was published in 2025 and applied in its source study only to nucleotide sequences
-  of viral populations within one host (simulated ones, a viroid mutant pool and one plant-virus
-  dataset); its use on amino-acid k-mers and on sequences from many hosts is DiMA's extension
-  [@wu2025].
+- The method was published in 2025 and applied in its source study only to nucleotide sequences:
+  simulated populations, a viroid mutant pool and the populations it gave within single plants,
+  and one plant-virus dataset; its use on amino-acid k-mers and on sequences from many hosts is
+  DiMA's extension [@wu2025].
 - None of the three values is corrected for sample size: the observed entropy is lower on average
   with fewer sequences [@zhao2019, Section 3.1], the similarity-weighted entropy also changes with
   the number of sequences, and the normalised entropy also depends on sample size

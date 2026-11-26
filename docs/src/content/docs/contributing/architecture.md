@@ -118,7 +118,9 @@ confined to this crate.
 `update(&mut AppState, Msg) -> Vec<Effect>` that turns events into state changes and side
 effects —, `state` the plain-data application state, `views` the two screens (setup and results),
 `panels` the pieces they are made of, `charts` the entropy chart's model, downsampling (M4) and
-rendering (wgpu for the screen, SVG and PNG for export), `theme` the design tokens, `workers` the
+rendering (wgpu for the screen, SVG and PNG for export; the screen's line geometry is cached under
+a key of the session, its version, the view and the column count, so it is rebuilt only when one
+of them changes), `theme` the design tokens, `workers` the
 background jobs (inspection, analysis, conserved regions, export, file dialogs), `persist` the
 settings and recent files, and `report` the run report. Every worker calls the library; none
 re-implements a computation.

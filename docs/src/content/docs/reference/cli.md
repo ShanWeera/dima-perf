@@ -104,7 +104,7 @@ Entropy estimator. 'dima' is the paper's correction: entropies of subsamples of 
 
 Similarity-weighted entropy (Wu 2025) weights each variant's entropy term by how dissimilar it is to the other variants at the position, so near-identical variants count for less. The similarity of two k-mers is the share of their k residues that are the same, (k - d)/k when they differ at d of them; every substitution counts alike. Also reported: observed and similarity-weighted entropy divided by log2 of the number of distinct k-mers (Index included), between 0 and 1; these normalised values are undefined with one distinct k-mer. All three depend on k and the alphabet.
 
-Published in 2025 and applied in its source study only to nucleotide sequences of viral populations within one host (simulated ones, a viroid mutant pool and one plant-virus dataset); its use on amino-acid k-mers and on sequences from many hosts is dima's extension.
+Published in 2025 and applied in its source study only to nucleotide sequences: simulated populations, a viroid mutant pool and the populations it gave within single plants, and one plant-virus dataset; its use on amino-acid k-mers and on sequences from many hosts is dima's extension.
 
 None of the three values is corrected for sample size: observed entropy is lower on average with fewer sequences (Zhao & Illingworth 2019, Section 3.1), similarity-weighted entropy also changes with the number of sequences (see the methodology page, Entropy and its correction), and normalised entropy also depends on sample size (Gregori et al. 2014, Sections 2.4 and 3.2). The values are written only to the results (JSON, JSONL) and the positions table, and are null (NA) without this option.
 

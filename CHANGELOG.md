@@ -36,7 +36,8 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   (eligible positions, with their mean observed entropy) and the parameter
   `run.parameters.similarity_weighted_entropy`; three columns appended to the positions table.
   Without the option the keys are `null` (`NA` in the table); default results grow by 116 bytes
-  per position (compact JSON and JSONL; 140 indented; 9 per positions-table row).
+  per position (compact JSON and JSONL; 140 indented; 9 per positions-table row), and each
+  position takes about 48 bytes more memory until the results are written.
 - Desktop app: **Compute similarity-weighted entropy (Wu 2025)** in the Advanced options, off by
   default, remembered between sessions and turned off by **Reset to defaults**. The closed
   Advanced section's title counts the options inside it that differ from their defaults
@@ -171,6 +172,19 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
 - The command line's `--table` help and the desktop app's tooltip of the TSV-folder export said
   that `NA` marks undefined values; it also marks values that were not computed, such as the
   similarity-weighted columns without the option, and both now say so.
+- The methods text (`dima cite --from`, and **Methods & references** in the desktop app) of a run
+  with one position read "the overlapping 120-mers at each of the 1 position were counted"; it
+  now reads "at its one position".
+- Desktop app: a figure export did nothing, and said nothing, when the filters hid every position
+  while its save dialog was open; a warning now says that nothing was saved and why.
+- Desktop app: the filter bar's value fields had no accessible name, so a screen reader announced
+  only "max 1.5878"; each now names the bound and the metric (for example "Highest entropy shown,
+  in bits"), also as its tooltip.
+- Documentation: the precision of large runs was given as measured at 2,208,211 and 17,500,000
+  sequences per position, but the rounding error changes from one number of sequences to the
+  next. "Numerical accuracy" now gives the largest error, which follows from rounding the most
+  common k-mer's frequency: about 8e-12 relative at 2.2 million sequences and 6e-11 at 17.5 million
+  (it said 2.2e-12 and 5e-11), still at least 10^10 times below the sampling error.
 - Documentation: the numbers that came from random runs and simulations are now exact wherever
   an exact form exists, and seeded and stated with their precision otherwise. Among the changes:
   the paper's 1.38 bits at MERS-CoV spike position 25 lies 0.29 standard deviations below the

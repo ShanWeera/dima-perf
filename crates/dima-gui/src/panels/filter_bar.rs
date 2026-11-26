@@ -16,7 +16,7 @@
 
 use egui::{RichText, Ui};
 
-use super::common::{fixed_width_slot, text_width};
+use super::common::{fixed_width_slot, text_width, with_help};
 use super::help_text;
 use crate::app::msg::Msg;
 use crate::charts::metric::ChartMetric;
@@ -58,7 +58,10 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
         let max = b.max_for(metric).max(0.0);
         let speed = drag_speed(max);
         let before = *v;
-        for (bound, prefix, end) in [(&mut v.0, "min ", 0.0), (&mut v.1, "max ", max)] {
+        for (bound, prefix, end, which) in [
+            (&mut v.0, "min ", 0.0, "Lowest"),
+            (&mut v.1, "max ", max, "Highest"),
+        ] {
             let width = ChartMetric::ALL
                 .into_iter()
                 .filter(|m| m.available(&s.results))
@@ -69,8 +72,13 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
                 .speed(speed)
                 .range(0.0..=max)
                 .fixed_decimals(VALUE_DECIMALS);
+            // The field's own text is only its value: name the metric for screen readers.
+            let response = with_help(
+                fixed_width_slot(ui, width, |ui| ui.add(field)),
+                &format!("{which} {} shown, in bits", metric.in_sentence()),
+            );
             // Not while the field is being typed in, which would replace the text being typed.
-            if !fixed_width_slot(ui, width, |ui| ui.add(field)).has_focus() {
+            if !response.has_focus() {
                 *bound = snapped(*bound, end);
             }
         }
@@ -120,13 +128,10 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
 /// Decimals of the value fields.
 const VALUE_DECIMALS: usize = 4;
 
-/// Half the value of the fields' last decimal: a bound nearer than this to its end of the range
-/// (0 for the minimum, the largest value for the maximum) reads as that end.
-const HALF_STEP: f64 = 0.5e-4;
-
-/// `bound`, or `end` when the bound reads as it (see [`HALF_STEP`]).
+/// `bound`, or `end` (0 for the minimum, the largest value for the maximum) when the field
+/// shows them alike, with [`VALUE_DECIMALS`] decimals as the field formats its value.
 fn snapped(bound: f64, end: f64) -> f64 {
-    if (bound - end).abs() < HALF_STEP {
+    if format!("{bound:.VALUE_DECIMALS$}") == format!("{end:.VALUE_DECIMALS$}") {
         end
     } else {
         bound
@@ -173,7 +178,7 @@ fn right_group_width(ui: &Ui, text: &str) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{HALF_STEP, VALUE_DECIMALS, snapped};
+    use super::{VALUE_DECIMALS, snapped};
 
     /// A bound that reads as its end of the range is that end, so a field that is left without
     /// a change keeps the full range exactly; one that reads otherwise is kept.
@@ -186,17 +191,23 @@ mod tests {
             assert_eq!(snapped(max, max), max);
         }
         assert_eq!(snapped(1.5877, 1.587_825_175_645_670_3), 1.5877);
+        // Typed with more decimals: what the field shows decides, whichever way the end rounds.
+        let mers = 1.587_825_175_645_670_3;
+        assert_eq!(snapped(1.587_77, mers), mers, "reads 1.5878");
+        assert_eq!(snapped(1.587_76, mers), mers, "reads 1.5878");
+        assert_eq!(snapped(1.587_74, mers), 1.587_74, "reads 1.5877");
+        assert_eq!(
+            snapped(0.454_73, 0.454_776),
+            0.454_73,
+            "reads 0.4547, not 0.4548"
+        );
+        assert_eq!(snapped(0.454_79, 0.454_776), 0.454_776, "reads 0.4548");
         assert_eq!(snapped(0.0, 0.0), 0.0);
-        assert_eq!(snapped(0.4 * HALF_STEP, 0.0), 0.0);
+        assert_eq!(snapped(0.000_04, 0.0), 0.0, "reads 0.0000");
         assert_eq!(
             snapped(0.0001, 0.0),
             0.0001,
             "the smallest step shown is kept"
-        );
-        assert_eq!(
-            format!("{:.VALUE_DECIMALS$}", 2.0 * HALF_STEP),
-            format!("0.{}1", "0".repeat(VALUE_DECIMALS - 1)),
-            "half the last decimal shown"
         );
     }
 

@@ -145,6 +145,12 @@ TOBRFV = (("tm-2", "tests/data/tobrfv_tm2.fasta.bz2"), ("Tm-2²", "tests/data/to
 PSTVD = (("Pool", (("Pool", "pool"),)),) + tuple(
     (stage, tuple((f"{stage}-{i}", f"{stage.lower()}{i}") for i in (1, 2, 3))) for stage in ("IR", "LM", "Sys")
 )
+#: The normalised Shannon entropy of each loop-27 library as Wu et al. 2024's S1 Table prints it.
+PSTVD_S1 = {
+    "Pool": "0.915344445", "IR-1": "0.803969923", "IR-2": "0.82990161", "IR-3": "0.814703163",
+    "LM-1": "0.231117113", "LM-2": "0.1373706", "LM-3": "0.121050768",
+    "Sys-1": "0.126249232", "Sys-2": "0.155766481", "Sys-3": "0.089754292",
+}
 
 #: The paper's Fig. 1C value at MERS-CoV spike position 25 (T = 30).
 PAPER_FIG1C = 1.38
@@ -947,8 +953,24 @@ def fallback_exact_task(n_obs: int, minor: int, threshold: int) -> dict:
 
 
 def check_rule_mc() -> None:
-    """The Monte Carlo sampler against the exact two-k-mer results (within 4.5 standard errors),
-    and rule_effect_exact against enumerating every outcome of a small case."""
+    """The Monte Carlo samplers against exact results (within 4.5 standard errors): the rule's
+    effect at two k-mers, the mean intercept with several minor k-mers, and the population
+    study's effect over a distribution of minor counts; and rule_effect_exact against
+    enumerating every outcome of a small case."""
+    for counts in ([198, 1, 1], [195, 1, 1, 1, 1, 1]):
+        pos = RunPosition(counts, 100)
+        exact = intercept_moments(counts, 100, floor=True)
+        rng = random.Random(11)
+        runs = 20_000
+        mean = math.fsum(pos.intercept(rng) for _ in range(runs)) / runs
+        if abs(mean - exact["mean"]) > 4.5 * math.sqrt(exact["var"] / runs):
+            raise RuntimeError(f"Monte Carlo intercept disagrees with its exact mean at {counts}")
+    # The population study's sampler of M (scaled by P(M >= 1)): M = 0, 1, 2 with P 1/2, 1/4, 1/4.
+    P = [0.5, 0.25, 0.25]
+    exact = math.fsum(p * rule_effect_exact(171, m, 100, True)["effect"] for m, p in enumerate(P) if m)
+    effect, se = rule_effect_mc(171, 100, 0, P, 20_000, random.Random(13))
+    if abs(effect - exact) > 4.5 * se:
+        raise RuntimeError("the population study's Monte Carlo disagrees with the exact effect")
     for n_obs, minor, threshold in ((200, 2, 100), (171, 1, 100)):
         exact = rule_effect_exact(n_obs, minor, threshold, True)
         pos = RunPosition([n_obs - minor, minor], threshold)
@@ -988,18 +1010,40 @@ def check_rule_mc() -> None:
 # ---------------------------------------------------------------------------------------------
 
 
-def population_task(n_obs: int, threshold: int, runs: int, seed: int) -> list[dict]:
-    """The cells of one N and T: errors of DiMA's expectation, Miller-Madow, the observed
-    entropy (exact) and v5.0.9's per-run procedure (exact expectation + Monte Carlo effect).
+def rule_effect_mc(n_obs: int, threshold: int, lo: int, P: list[float], runs: int,
+                   rng: random.Random) -> tuple[float, float]:
+    """(estimate, standard error) of E[(H - S) 1{S < 0}], the effect of v5.0.9's per-run rule
+    at a position of two k-mers whose minor count M has P(M = lo + i) = P[i].
 
     A sample with no minor-variant sequence (M = 0) has entropy 0 and no effect, so the runs
     draw M from its distribution given M >= 1 and the mean effect is scaled by P(M >= 1)
-    (stratified sampling; unbiased, and no run is spent on samples without the variant)."""
+    (stratified sampling; unbiased, and no run is spent on samples without the variant). The
+    window never reaches M = N for the frequencies used."""
+    sizes, weights = design(n_obs, threshold, True)
+    hs = h2_table(n_obs)
+    start = 1 - lo if lo < 1 else 0
+    p_some = math.fsum(P[start:])
+    cum = list(accumulate(P[start:]))
+    effects = []
+    for _ in range(runs):
+        m = lo + start + min(bisect_right(cum, rng.random() * cum[-1]), len(cum) - 1)
+        parts = [weights[-1] * hs[m]]
+        for n, w in zip(sizes, weights[:-1], strict=True):
+            parts.append(w * h2_table(n)[draw_binomial(rng, n, m, n_obs - m)])
+        s = math.fsum(parts)
+        effects.append(hs[m] - s if s < 0 else 0.0)
+    mean = math.fsum(effects) / runs
+    sd = math.sqrt(math.fsum((e - mean) ** 2 for e in effects) / (runs - 1))
+    return p_some * mean, p_some * sd / math.sqrt(runs)
+
+
+def population_task(n_obs: int, threshold: int, runs: int, seed: int) -> list[dict]:
+    """The cells of one N and T: errors of DiMA's expectation, Miller-Madow, the observed
+    entropy (exact) and v5.0.9's per-run procedure (exact expectation + Monte Carlo effect,
+    rule_effect_mc)."""
     rng = random.Random(seed)
-    d509 = design(n_obs, threshold, True)
-    if d509 is None:
+    if design(n_obs, threshold, True) is None:
         raise RuntimeError(f"population study: no regression at N = {n_obs}, T = {threshold}")
-    sizes, weights = d509
     hs = h2_table(n_obs)
     out = []
     for a, b in POP_PHI:
@@ -1014,25 +1058,12 @@ def population_task(n_obs: int, threshold: int, runs: int, seed: int) -> list[di
                 v509.append(p * two_kmer_intercept(n_obs, m, threshold, True))
             obs.append(p * hs[m])
             mm.append(p * (hs[m] + (1.0 / (2 * n_obs * LN2) if 0 < m < n_obs else 0.0)))
-        # Runs given M >= 1 (the window never reaches M = N for these frequencies).
-        start = 1 - lo if lo < 1 else 0
-        p_some = math.fsum(P[start:])
-        cum = list(accumulate(P[start:]))
-        effects = []
-        for _ in range(runs):
-            m = lo + start + min(bisect_right(cum, rng.random() * cum[-1]), len(cum) - 1)
-            parts = [weights[-1] * hs[m]]
-            for n, w in zip(sizes, weights[:-1], strict=True):
-                parts.append(w * h2_table(n)[draw_binomial(rng, n, m, n_obs - m)])
-            s = math.fsum(parts)
-            effects.append(hs[m] - s if s < 0 else 0.0)
-        mean_effect = math.fsum(effects) / runs
-        sd = math.sqrt(math.fsum((e - mean_effect) ** 2 for e in effects) / (runs - 1))
+        effect, se = rule_effect_mc(n_obs, threshold, lo, P, runs, rng)
         out.append({
             "N": n_obs, "T": threshold, "phi": Fraction(a, b), "expected_minor": Fraction(n_obs * a, b),
             "dima": math.fsum(dima) / h_true - 1, "mm": math.fsum(mm) / h_true - 1, "observed": math.fsum(obs) / h_true - 1,
-            "v509": (math.fsum(v509) + p_some * mean_effect) / h_true - 1,
-            "v509_se": p_some * sd / math.sqrt(runs) / h_true,
+            "v509": (math.fsum(v509) + effect) / h_true - 1,
+            "v509_se": se / h_true,
         })
     return out
 
@@ -1276,16 +1307,19 @@ def render_fallback_table(s: dict) -> str:
             hw_p = max(hw_p, max(1.96 * c["p_se"] for c in cells))
             hw_e = max(hw_e, max(1.96 * c["effect_se"] / c["mean"] for c in cells))
             label = f"{names[m]}, {'carrying two different' if m == 2 else 'all carrying different'} k-mers"
-            lines.append(f"| {label} | {span(rates, pct)} | {span(raises, pct)} | {span(values, f4)} bits |")
+            # Whole percentages: the Monte Carlo cannot support the tenths (see the note).
+            whole = lambda x: pct(x, 0)  # noqa: E731
+            lines.append(f"| {label} | {span(rates, whole)} | {span(raises, whole)} | {span(values, f4)} bits |")
     hw = max(hw_p, hw_e)
-    if hw > 0.005:
-        raise RuntimeError(f"fallback Monte Carlo half-width {hw!r} above half a percentage point")
+    if hw >= 0.005:
+        raise RuntimeError(f"fallback Monte Carlo half-width {hw!r} not below half a percentage point")
     note = (
         f"Each range is over $N$ = {listing([thousands(n) for n in FALLBACK_N])} sequences ($T = 100$), "
         "where the grid has all eleven points and the subsample sizes need no rounding, so v5.0.9's runs "
         "differ from the paper's procedure only by the rule. Exact where the differing sequences carry one "
         f"k-mer; seeded Monte Carlo of {thousands(MC_FALLBACK[1])} runs per $N$ where they carry different "
-        f"ones (95% intervals within ±{ceil_sig(100 * hw, 1)} percentage points)."
+        f"ones (95% intervals within ±{ceil_sig(100 * hw, 1)} percentage points, so those rows give whole "
+        "percentages)."
     )
     return "\n".join(lines) + "\n\n" + note
 
@@ -1441,6 +1475,19 @@ def render_pstvd_drop(s: dict) -> str:
     return f"{parts[0].replace(' by ', ' falls by ', 1)} and {parts[1]}, {parts[2]} and {parts[3]}"
 
 
+def render_pstvd_s1(s: dict) -> str:
+    rows = {r["sample"]: r["H_n"] for _, libraries in s["pstvd"] for r in libraries}
+    diff = {name: abs(rows[name] - float(printed)) for name, printed in PSTVD_S1.items()}
+    exact = [name for name, printed in PSTVD_S1.items() if f"{rows[name]:.{len(printed) - 2}f}" == printed]
+    if exact != ["IR-1"]:
+        raise RuntimeError(f"the libraries whose H_n matches S1 Table to its last decimal are now {exact}")
+    worst = max((d, name) for name, d in diff.items() if name != "IR-1")
+    return (
+        f"IR-1's {PSTVD_S1['IR-1']} is $H_n$ above to its last decimal, and the others differ from $H_n$ by at "
+        f"most {ceil_sig(worst[0], 1)} ({worst[1]})"
+    )
+
+
 def render_pstvd_pool(s: dict) -> str:
     p = s["pstvd_pool"]
     return (
@@ -1521,6 +1568,7 @@ REGIONS = [
     (COMPARISON, "tobrfv", "block", render_tobrfv),
     (COMPARISON, "pstvd", "block", render_pstvd),
     (COMPARISON, "pstvd-pool", "inline", render_pstvd_pool),
+    (COMPARISON, "pstvd-s1", "inline", render_pstvd_s1),
     (COMPARISON, "pstvd-drop", "inline", render_pstvd_drop),
     (VALIDATE, "notes", "code", render_validate),
 ]

@@ -159,30 +159,6 @@ fn scroll_column_to_table(h: &mut H) {
     panic!("the column never reached its end");
 }
 
-/// The rectangles of every label and control above `bottom`, with their names.
-fn controls_above(h: &H, bottom: f32) -> Vec<(String, egui::Rect)> {
-    use egui_kittest::kittest::NodeT;
-    let roles = [
-        Role::Label,
-        Role::Button,
-        Role::CheckBox,
-        Role::RadioButton,
-        Role::SpinButton,
-        Role::ComboBox,
-        Role::TextInput,
-    ];
-    h.root()
-        .children_recursive()
-        .filter(|n| roles.contains(&n.accesskit_node().role()))
-        .map(|n| {
-            let a = n.accesskit_node();
-            let name = a.label().or_else(|| a.value()).unwrap_or_default();
-            (name, n.rect())
-        })
-        .filter(|(_, r)| r.top() < bottom)
-        .collect()
-}
-
 /// A label or control: its role, its text (a control's name, a label's or a field's value)
 /// and its rectangle.
 type Place = (Role, String, egui::Rect);
@@ -712,7 +688,11 @@ fn the_workspace_fits_the_smallest_window() {
         }
         let chart = h.get_by_label_contains("Entropy chart:").rect();
         assert!(chart.bottom() < MIN_WINDOW.y, "chart {chart:?}");
-        assert_no_overlap(&controls_above(&h, chart.top()));
+        let places: Vec<(String, egui::Rect)> = places_above(&h, chart.top())
+            .into_iter()
+            .map(|(_, text, rect)| (text, rect))
+            .collect();
+        assert_no_overlap(&places);
         // The wheel over the chart zooms it (in, then out) and leaves the column where it is,
         // although the column could scroll down.
         h.hover_at(chart.center());
@@ -884,6 +864,18 @@ fn the_metric_switch_moves_no_control() {
             h.run_steps(3);
             assert_eq!(h.state().state.session.as_ref().unwrap().metric, to);
             assert_eq!(state(&h, to), Some(Toggled::True));
+            // The value fields name the metric they filter (their text is only the value).
+            let fields: Vec<String> = h
+                .root()
+                .children_recursive()
+                .filter(|n| n.accesskit_node().role() == Role::SpinButton)
+                .filter_map(|n| n.accesskit_node().description())
+                .collect();
+            assert_eq!(
+                fields,
+                ["Lowest", "Highest"].map(|w| format!("{w} {} shown, in bits", to.in_sentence())),
+                "{size:?} at {ppp}"
+            );
             assert_in_place(
                 &before,
                 &places_above(&h, chart.top()),

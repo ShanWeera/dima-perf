@@ -170,6 +170,20 @@ fn reading_rejects_foreign_files() {
         e.to_string().contains("written with results schema 2.0.0"),
         "{e}"
     );
+    // A version that is not a string is reported as such, not by the next string in the file.
+    std::fs::write(&p, "{\"schema_version\":1.1,\"query_name\":\"q\"}\n").unwrap();
+    let e = output::read_results(&p).unwrap_err().to_string();
+    assert!(
+        e.contains("not a valid DiMA results file") && !e.contains("query_name"),
+        "{e}"
+    );
+    // A version with spaces is quoted, so it does not read like the version expected.
+    std::fs::write(&p, "{\"schema_version\": \" 1.1.0\"}\n").unwrap();
+    let e = output::read_results(&p).unwrap_err().to_string();
+    assert!(
+        e.contains("written with results schema \" 1.1.0\", but"),
+        "{e}"
+    );
     std::fs::write(&p, "{\"schema_version\":\"1.0.0\",\"query_name\":3}\n").unwrap();
     let e = output::read_results(&p).unwrap_err();
     assert!(

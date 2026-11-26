@@ -25,7 +25,8 @@
 //! 1 − S_i = (k·N − a_i) / (k·N),
 //! ```
 //!
-//! the column-profile form of sum-of-pairs scores of Gotoh (1994, *Bioinformatics* 10:379,
+//! the column-profile form of sum-of-pairs scores of Gotoh (1994, *Computer Applications in
+//! the Biosciences* 10:379,
 //! eqs. (1) and (4a)), taken with an identity score and one k-mer against the whole position;
 //! the k·c_i matches of the k-mer's own c_i copies are removed because Wu's sum runs over the
 //! other k-mers (j ≠ i). The numerators k·N − a_i are exact integers (`u128`; k·N < 2¹²⁸),
@@ -66,17 +67,21 @@ pub const DESCRIPTION: &str = "Similarity-weighted entropy (Wu 2025) weights eac
 /// The evidence behind the method, stated so that it stays true (shared like
 /// [`DESCRIPTION`]).
 pub const EVIDENCE: &str = "Published in 2025 and applied in its source study only to \
-    nucleotide sequences of viral populations within one host (simulated ones, a viroid mutant \
-    pool and one plant-virus dataset); its use on amino-acid k-mers and on sequences from many \
-    hosts is dima's extension.";
+    nucleotide sequences: simulated populations, a viroid mutant pool and the populations it \
+    gave within single plants, and one plant-virus dataset; its use on amino-acid k-mers and on \
+    sequences from many hosts is dima's extension.";
+
+/// The definition of the three values (Wu 2025).
+pub const WU2025: Cite = Cite::new("wu2025").at("Section 2.1 and Supplementary File 1");
+/// The similarity of two k-mers as the fraction of identical residues (Grishin 1995).
+pub const GRISHIN1995: Cite = Cite::new("grishin1995").at("p. 675");
+/// Observed entropy is lower on average with fewer sequences (Zhao & Illingworth 2019).
+pub const ZHAO2019: Cite = Cite::new("zhao2019").at("Section 3.1");
+/// Normalised entropy depends on sample size (Gregori et al. 2014).
+pub const GREGORI2014: Cite = Cite::new("gregori2014").at("Sections 2.4 and 3.2");
 
 /// The sources behind the option's behaviour, cited by the help and the tooltips.
-pub const REFERENCES: [Cite; 4] = [
-    Cite::new("wu2025").at("Section 2.1 and Supplementary File 1"),
-    Cite::new("grishin1995").at("p. 675"),
-    Cite::new("zhao2019").at("Section 3.1"),
-    Cite::new("gregori2014").at("Sections 2.4 and 3.2"),
-];
+pub const REFERENCES: [Cite; 4] = [WU2025, GRISHIN1995, ZHAO2019, GREGORI2014];
 
 /// That the values are not corrected for sample size, with the sources (shared like
 /// [`DESCRIPTION`]).
@@ -88,8 +93,8 @@ pub fn sample_size() -> String {
          number of sequences (see the methodology page, Entropy and its correction), and \
          normalised entropy also depends on \
          sample size ({}).",
-        REFERENCES[2].short(),
-        REFERENCES[3].short()
+        ZHAO2019.short(),
+        GREGORI2014.short()
     )
 }
 
@@ -227,7 +232,16 @@ mod tests {
         for text in [DESCRIPTION, EVIDENCE, &sample_size()] {
             assert!(text.is_ascii() && !text.contains("  "), "{text}");
         }
-        assert!(sample_size().contains("Zhao & Illingworth 2019, Section 3.1"));
+        // Each claim keeps its own source.
+        let s = sample_size();
+        assert!(
+            s.contains("with fewer sequences (Zhao & Illingworth 2019, Section 3.1)"),
+            "{s}"
+        );
+        assert!(
+            s.contains("sample size (Gregori et al. 2014, Sections 2.4 and 3.2)."),
+            "{s}"
+        );
     }
 
     use super::*;

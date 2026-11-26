@@ -3,8 +3,8 @@
 //! number agrees within a relative 1e-13 of the reference value (`common::assert_agrees`, so a
 //! zero must be exactly zero), everything else exactly. The test alignments are small, where the two agree to about
 //! 3e-15 at worst; at millions of sequences per position the Rust code's own rounding reaches
-//! 5e-11 relative, so a test at that scale would need a looser rule (docs, "Numerical
-//! accuracy").
+//! 6e-11 relative (1e-9 for similarity-weighted entropy), so a test at that scale would need a
+//! looser rule (docs, "Numerical accuracy").
 //!
 //! Requires `python3` (≥ 3.10). Set `DIMA_SKIP_REFERENCE=1` to skip where Python is unavailable;
 //! CI always runs these tests.
