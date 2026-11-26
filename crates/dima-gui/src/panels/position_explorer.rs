@@ -121,6 +121,9 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
         .id_salt("positions_columns")
         .auto_shrink([false, false])
         .show(ui, |ui| {
+            // A click anywhere in a row selects it: the cells' text is not selectable, which
+            // would take the click (copying goes through the row's menu instead).
+            ui.style_mut().interaction.selectable_labels = false;
             let row_height = 22.0;
             let height = ui.available_height().max(row_height * 4.0);
             let mut builder = egui_extras::TableBuilder::new(ui)
@@ -182,9 +185,16 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
                         for &c in &columns {
                             row.col(|ui| cell(ui, c, p, r, t, is_hovered && !is_selected));
                         }
-                        if row.response().clicked() {
+                        let response = row.response();
+                        if response.clicked() {
                             clicked_row = Some(p.position);
                         }
+                        response.context_menu(|ui| {
+                            if ui.button("Copy row").clicked() {
+                                ui.ctx().copy_text(row_text(&columns, p));
+                                ui.close();
+                            }
+                        });
                     });
                 });
         });
@@ -208,29 +218,61 @@ fn table_salt(columns: &[Column]) -> (&'static str, &[Column]) {
     ("positions", columns)
 }
 
+/// The text of one cell, as the table shows it (also what "Copy row" copies).
+fn cell_text(c: Column, p: &PositionResult) -> String {
+    match c {
+        Column::Position => p.position.to_string(),
+        Column::Entropy => opt_f64(p.entropy, 4),
+        Column::SimilarityWeighted => opt_f64(p.similarity_weighted_entropy, 4),
+        Column::Support => p.support.to_string(),
+        Column::Class => match Class::of(p) {
+            Class::Eligible => "\u{2714}".to_owned(),
+            class => class.short().to_owned(),
+        },
+        Column::TotalVariants => opt_percent(p.total_variants_incidence, 1),
+        Column::Coverage => {
+            let text = opt_coverage(p.sample_coverage, 3);
+            if p.below_min_coverage == Some(true) {
+                format!("{text} \u{25BC}")
+            } else {
+                text
+            }
+        }
+        Column::TopVariant => p.diversity_motifs.first().map_or_else(String::new, |v| {
+            format!(
+                "{}  {}",
+                v.sequence,
+                dima_core::human::percent_bounded(v.incidence, 1)
+            )
+        }),
+    }
+}
+
+/// A row as "Copy row" copies it: the text of the columns shown, separated by tabs, so that it
+/// pastes into a spreadsheet as one row.
+fn row_text(columns: &[Column], p: &PositionResult) -> String {
+    columns
+        .iter()
+        .map(|&c| cell_text(c, p))
+        .collect::<Vec<_>>()
+        .join("\t")
+}
+
 /// One cell; `hovered` italicises the position of a row the chart hovers.
 fn cell(ui: &mut Ui, c: Column, p: &PositionResult, r: &Results, t: &DesignTokens, hovered: bool) {
+    let text = cell_text(c, p);
     match c {
         Column::Position => {
-            let text = RichText::new(p.position.to_string());
+            let text = RichText::new(text);
             ui.label(if hovered { text.italics() } else { text });
-        }
-        Column::Entropy => {
-            ui.label(opt_f64(p.entropy, 4));
-        }
-        Column::SimilarityWeighted => {
-            ui.label(opt_f64(p.similarity_weighted_entropy, 4));
-        }
-        Column::Support => {
-            ui.label(p.support.to_string());
         }
         Column::Class => match Class::of(p) {
             Class::Eligible => {
-                ui.label("\u{2714}")
+                ui.label(text)
                     .on_hover_text(format!("eligible: support > {}", r.support_threshold));
             }
             class => {
-                ui.colored_label(t.warning_color, class.short())
+                ui.colored_label(t.warning_color, text)
                     .on_hover_text(class.describe(
                         r.support_threshold,
                         r.run.parameters.estimator.value,
@@ -238,32 +280,17 @@ fn cell(ui: &mut Ui, c: Column, p: &PositionResult, r: &Results, t: &DesignToken
                     ));
             }
         },
-        Column::TotalVariants => {
-            ui.label(opt_percent(p.total_variants_incidence, 1));
-        }
-        Column::Coverage => {
-            let text = opt_coverage(p.sample_coverage, 3);
-            if p.below_min_coverage == Some(true) {
-                // The marker's shape is the cue: the chart's purple fails text contrast on
-                // light and selected rows (WCAG 2.2 SC 1.4.3).
-                ui.label(format!("{text} \u{25BC}"))
-                    .on_hover_text("Below the minimum coverage of this run");
-            } else {
-                ui.label(text);
-            }
+        Column::Coverage if p.below_min_coverage == Some(true) => {
+            // The marker's shape is the cue: the chart's purple fails text contrast on light
+            // and selected rows (WCAG 2.2 SC 1.4.3).
+            ui.label(text)
+                .on_hover_text("Below the minimum coverage of this run");
         }
         Column::TopVariant => {
-            if let Some(v) = p.diversity_motifs.first() {
-                ui.label(
-                    RichText::new(format!(
-                        "{}  {}",
-                        v.sequence,
-                        dima_core::human::percent_bounded(v.incidence, 1)
-                    ))
-                    .monospace()
-                    .size(t.font_size_mono),
-                );
-            }
+            ui.label(RichText::new(text).monospace().size(t.font_size_mono));
+        }
+        _ => {
+            ui.label(text);
         }
     }
 }

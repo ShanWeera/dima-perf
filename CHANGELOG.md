@@ -117,6 +117,11 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   as before; a variant the table shows whole is one stop, on its sequence, which is outlined, and
   Space or Enter selects it, as does a click on the sequence (a click on the text did nothing). A
   column header that has the keyboard focus is outlined too.
+- Desktop app: a click anywhere in a row of the position or variant table selects it, its text
+  included; the text in the tables can no longer be selected, which took the click (a click on
+  the "5" of position 5 left the selection where it was, in 1.0.0 too). Instead, right-click a
+  row to copy it: **Copy row** copies its cells as shown, separated by tabs (they paste into a
+  spreadsheet as one row), and **Copy k-mer** a variant's k-mer.
 - Desktop app: notifications stack upwards from 16 px above the window's bottom-right corner,
   the newest nearest the corner. A message wraps beside its buttons, which sit at its top right
   (× and Copy details), and screen readers read the message before them.

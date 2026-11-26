@@ -5,6 +5,8 @@
 
 use egui::{RichText, Ui};
 
+use dima_core::model::Variant;
+
 use crate::app::msg::Msg;
 use crate::state::session::Session;
 use crate::state::sort::variant_columns as col;
@@ -79,6 +81,10 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
     let height = (ui.ctx().content_rect().height() * 0.3).clamp(140.0, 380.0);
     let mut clicked_col = None;
     let mut clicked_row = None;
+    // A click anywhere in a row selects it: the cells' text is not selectable, which would take
+    // the click (copying goes through the row's menu instead); restored after the table.
+    let selectable = ui.style().interaction.selectable_labels;
+    ui.style_mut().interaction.selectable_labels = false;
     egui_extras::TableBuilder::new(ui)
         .id_salt("variants")
         .striped(true)
@@ -110,14 +116,15 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
                 let i = visible[row.index()];
                 let v = &variants[i];
                 row.set_selected(selected == Some(i));
+                let [count, incidence, motif] = cells(v);
                 row.col(|ui| {
-                    ui.label(v.count.to_string());
+                    ui.label(count);
                 });
                 row.col(|ui| {
-                    ui.label(dima_core::human::percent_bounded(v.incidence, 2));
+                    ui.label(incidence);
                 });
                 row.col(|ui| {
-                    ui.label(v.motif.long());
+                    ui.label(motif);
                 });
                 row.col(|ui| {
                     let text = RichText::new(&v.sequence)
@@ -145,17 +152,46 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
                     if sequence.clicked() {
                         clicked_row = Some(i);
                     }
+                    // The sequence takes its own clicks, the right one included.
+                    sequence.context_menu(|ui| copy_menu(ui, v));
                 });
-                if row.response().clicked() {
+                let response = row.response();
+                if response.clicked() {
                     clicked_row = Some(i);
                 }
+                response.context_menu(|ui| copy_menu(ui, v));
             });
         });
+    ui.style_mut().interaction.selectable_labels = selectable;
     if let Some(c) = clicked_col {
         out.push(Msg::SortVariants(c));
     }
     if let Some(i) = clicked_row {
         out.push(Msg::SelectVariant(i));
+    }
+}
+
+/// The count, incidence and motif cells of a variant's row, as the table shows them.
+fn cells(v: &Variant) -> [String; 3] {
+    [
+        v.count.to_string(),
+        dima_core::human::percent_bounded(v.incidence, 2),
+        v.motif.long().to_owned(),
+    ]
+}
+
+/// A variant's row menu: "Copy k-mer", and "Copy row" (its cells as the table shows them,
+/// separated by tabs, so that it pastes into a spreadsheet as one row).
+fn copy_menu(ui: &mut Ui, v: &Variant) {
+    if ui.button("Copy k-mer").clicked() {
+        ui.ctx().copy_text(v.sequence.clone());
+        ui.close();
+    }
+    if ui.button("Copy row").clicked() {
+        let [count, incidence, motif] = cells(v);
+        ui.ctx()
+            .copy_text([count, incidence, motif, v.sequence.clone()].join("\t"));
+        ui.close();
     }
 }
 

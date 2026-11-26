@@ -1493,6 +1493,119 @@ fn table_rows_are_chosen_by_click_or_keys_never_by_cell_stops() {
     assert_eq!(cells, 0, "no table cell takes the focus");
 }
 
+/// A click on the text of a table cell selects its row: the text is not selectable, which took
+/// the click in 1.0.0 (a click on the "5" of position 5 left position 1 selected). Copying goes
+/// through a row's menu instead (a right click): "Copy row" in both tables gives the row's cells
+/// as shown, separated by tabs, and "Copy k-mer" in the variant table gives the variant's k-mer.
+#[test]
+fn a_click_on_a_cells_text_selects_its_row_and_its_menu_copies_it() {
+    use egui_kittest::kittest::NodeT;
+    let mut h = harness();
+    let results = fixtures::mers_swe();
+    load(&mut h, &results);
+    let position = |h: &H| h.state().state.session.as_ref().unwrap().selection.position;
+    assert_eq!(position(&h), Some(1));
+    let labels_showing = |h: &H, text: &str| {
+        h.root()
+            .children_recursive()
+            .filter(|n| {
+                let a = n.accesskit_node();
+                a.role() == Role::Label && a.value().as_deref() == Some(text)
+            })
+            .count()
+    };
+    // The top-variant cell of a position in view (its k-mer and share, which no other label
+    // shows).
+    let (target, top) = (2..=8u64)
+        .map(|n| {
+            let p = &results.results[usize::try_from(n).unwrap() - 1];
+            let v = &p.diversity_motifs[0];
+            let share = dima_core::human::percent_bounded(v.incidence, 1);
+            (n, format!("{}  {share}", v.sequence))
+        })
+        .find(|(_, text)| labels_showing(&h, text) == 1)
+        .expect("a position in view whose top variant no other label shows");
+    let cell = |h: &H| {
+        h.root()
+            .children_recursive()
+            .find(|n| {
+                let a = n.accesskit_node();
+                a.role() == Role::Label && a.value().as_deref() == Some(top.as_str())
+            })
+            .expect("the cell")
+            .rect()
+            .center()
+    };
+    let at = cell(&h);
+    h.hover_at(at);
+    h.event(egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.event(egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(3);
+    assert_eq!(
+        position(&h),
+        Some(target),
+        "a click on the text selects the row"
+    );
+    // The position table's menu.
+    let at = cell(&h);
+    h.hover_at(at);
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Secondary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        });
+    }
+    h.run_steps(2);
+    h.get_by_label("Copy row").click();
+    h.run_steps(1);
+    let row = copied(&h);
+    assert_eq!(row.len(), 1, "{row:?}");
+    let fields: Vec<&str> = row[0].split('\t').collect();
+    assert_eq!(fields.len(), 7, "{fields:?}");
+    assert_eq!(
+        [fields[0], fields[6]],
+        [target.to_string().as_str(), top.as_str()]
+    );
+    h.run_steps(2);
+    assert!(h.query_by_label("Copy row").is_none(), "the menu closed");
+    // The variant table's menu, on a variant's sequence.
+    let session = h.state().state.session.as_ref().unwrap();
+    let variant = session.selected().unwrap().diversity_motifs[0].clone();
+    h.get_by_label(&variant.sequence).click_secondary();
+    h.run_steps(2);
+    h.get_by_label("Copy k-mer").click();
+    h.run_steps(1);
+    assert_eq!(copied(&h), std::slice::from_ref(&variant.sequence));
+    h.run_steps(2);
+    h.get_by_label(&variant.sequence).click_secondary();
+    h.run_steps(2);
+    h.get_by_label("Copy row").click();
+    h.run_steps(1);
+    let row = copied(&h);
+    let fields: Vec<&str> = row[0].split('\t').collect();
+    assert_eq!(
+        fields,
+        [
+            variant.count.to_string().as_str(),
+            dima_core::human::percent_bounded(variant.incidence, 2).as_str(),
+            variant.motif.long(),
+            variant.sequence.as_str()
+        ]
+    );
+}
+
 /// Screen readers meet the chart's heading and legend before its zoom buttons, as the row
 /// reads (1.0.0's order), although the buttons are laid out first at its top right.
 #[test]

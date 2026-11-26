@@ -204,14 +204,20 @@ tooltip shows the minimum incidence, minimum support and 95% lower bound.
 **Positions and variants.** The position table lists every shown position and can be sorted by
 any column but **Coverage**: click a column's header, or press Space or Enter while the header
 has the focus (it is then outlined); click it again to reverse the order. A position whose
-sample coverage is below the run's minimum is marked ▼ in the **Coverage** column. Click a row to
-select its position, or move along the rows with the arrow keys, Home and End. The panels on the
+sample coverage is below the run's minimum is marked ▼ in the **Coverage** column. Click
+anywhere in a row, its text included, to select its position, or move along the rows with the
+arrow keys, Home and End. The panels on the
 right describe the selected position (class, entropies and the method that produced them,
 support, incidences, coverage), its motif composition, its variants (searchable, filterable by
 incidence) and, for the selected variant, its counts per header value. To select a variant, click
 its row; from the keyboard, press Tab until its sequence is outlined and press Space or Enter.
 Tab reaches the variants the table shows whole; to reach another, scroll the table, search for
 it or sort the table.
+
+To copy from a table, right-click a row. **Copy row** copies its cells as the table shows them,
+separated by tabs, so they paste into a spreadsheet as one row; in the variant table, **Copy
+k-mer** copies the variant's k-mer alone. The text in the tables cannot be selected, so that a
+click anywhere selects the row; the exports (below) hold every value with all its digits.
 
 The filter bar restricts the view by position range, entropy range (the range of
 similarity-weighted entropy while the chart shows it), motif class and support class. To change a
