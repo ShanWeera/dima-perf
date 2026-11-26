@@ -1,6 +1,8 @@
-//! The position table: every shown position, sortable by any column (null-aware, G10), with
-//! the selection highlighted and kept in view (G46) and the chart's hovered position mirrored.
-//! Only visible rows are laid out. When the run computed it, similarity-weighted entropy has
+//! The position table: every shown position, sortable by every column but coverage
+//! (null-aware, G10), with the selection highlighted and kept in view (G46) and the chart's
+//! hovered position mirrored. Rows are chosen with a click or the arrow keys; the cells are no
+//! keyboard stops. Only visible rows are laid out. When the run computed it, similarity-weighted
+//! entropy has
 //! its column right after entropy. The table scrolls sideways when its columns do not fit; a
 //! header that gains the keyboard focus scrolls into view, sideways and in the column around
 //! the table. Each set of columns is its own table for egui, so widths dragged for one set
@@ -136,9 +138,9 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
                     egui_extras::Column::auto().at_least(c.min_width())
                 });
             }
-            builder = builder
-                .max_scroll_height(height)
-                .sense(egui::Sense::click());
+            // Rows take clicks, but no cell is a keyboard stop (Tab would otherwise stop at
+            // every cell, with no visible focus): the arrow keys move along the rows.
+            builder = builder.max_scroll_height(height).sense(egui::Sense::CLICK);
             if let Some(row) = scroll_to {
                 builder = builder.scroll_to_row(row, Some(egui::Align::Center));
             }

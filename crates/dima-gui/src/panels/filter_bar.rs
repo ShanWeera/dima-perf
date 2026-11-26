@@ -1,22 +1,25 @@
 //! The filter bar: position range, the value range of the metric the chart plots (entropy, or
 //! similarity-weighted entropy), motif classes and the low-support switch, with the shown/total
 //! count and "Reset". Changes are applied when the pointer is released (a drag does not
-//! refilter on every tick).
+//! refilter on every tick), and a value typed into a field when it is entered (Enter, Tab or a
+//! click elsewhere), not at every keystroke; Esc leaves the field without applying it.
 //!
 //! The two value fields show four decimals (a drag value otherwise picks its decimals from its
-//! speed and the screen's pixel size), a minimum that reads as 0 is 0 and a maximum that reads
-//! as the metric's largest value is that value exactly: a drag value stores the text it showed
-//! when it loses the focus, so tabbing through a field would otherwise narrow the range by the
-//! rounding.
+//! speed and the screen's pixel size) and keep a typed value to those four decimals, a minimum
+//! that reads as 0 is 0 and a maximum that reads as the metric's largest value is that value
+//! exactly: a drag value stores the text it showed when it loses the focus, so tabbing through
+//! a field would otherwise change the bound by the rounding.
 //!
-//! The bar does not rearrange when its texts change: the value fields sit in slots as wide as
-//! the widest value of the metrics the results hold, the count and Reset start a row of their
-//! own whenever the longest count would not fit at the end of the last one, and when the metric
-//! can be switched the value label keeps the width of the longer name.
+//! The bar does not rearrange when its texts change: the position fields are as wide as their
+//! text at the last position, also while typed in, the value fields sit in slots as wide as the
+//! widest value of the metrics the results hold, the count and Reset start a row of their own
+//! whenever the longest count would not fit at the end of the last one, and when the metric can
+//! be switched the value label keeps the width of the longer name. Each field's text is only its
+//! value, so each is named (for screen readers, and as its tooltip) by what it bounds.
 
 use egui::{RichText, Ui};
 
-use super::common::{fixed_width_slot, text_width, with_help};
+use super::common::{fixed_width_slot, text_width, with_name};
 use super::help_text;
 use crate::app::msg::Msg;
 use crate::charts::metric::ChartMetric;
@@ -32,12 +35,22 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
         ui.label("Positions")
             .on_hover_text("Show a range of positions");
         let r = &mut s.filter.position_range;
-        changed |= ui
-            .add(egui::DragValue::new(&mut r.0).prefix("from ").range(b.positions.0..=b.positions.1))
-            .changed();
-        changed |= ui
-            .add(egui::DragValue::new(&mut r.1).prefix("to ").range(b.positions.0..=b.positions.1))
-            .changed();
+        let before = *r;
+        for (bound, prefix, name) in [
+            (&mut r.0, "from ", "First position shown"),
+            (&mut r.1, "to ", "Last position shown"),
+        ] {
+            let width = field_width(ui, &format!("{prefix}{}", b.positions.1));
+            let previous = *bound;
+            let field = egui::DragValue::new(&mut *bound)
+                .prefix(prefix)
+                .range(b.positions.0..=b.positions.1)
+                .update_while_editing(false);
+            let size = egui::vec2(width, ui.spacing().interact_size.y);
+            let response = with_name(ui.add_sized(size, field), name);
+            undo_escape(ui, &response, bound, previous);
+        }
+        changed |= *r != before;
         ui.add_space(t.space_12);
         let metric = s.metric;
         let label = |ui: &mut Ui| {
@@ -65,19 +78,26 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
             let width = ChartMetric::ALL
                 .into_iter()
                 .filter(|m| m.available(&s.results))
-                .map(|m| value_field_width(ui, prefix, b.max_for(m).max(0.0)))
+                .map(|m| {
+                    let widest = b.max_for(m).max(0.0);
+                    field_width(ui, &format!("{prefix}{widest:.VALUE_DECIMALS$}"))
+                })
                 .fold(0.0, f32::max);
+            let previous = *bound;
             let field = egui::DragValue::new(&mut *bound)
                 .prefix(prefix)
                 .speed(speed)
                 .range(0.0..=max)
-                .fixed_decimals(VALUE_DECIMALS);
-            // The field's own text is only its value: name the metric for screen readers.
-            let response = with_help(
+                .fixed_decimals(VALUE_DECIMALS)
+                .custom_parser(parse_value)
+                .update_while_editing(false);
+            let response = with_name(
                 fixed_width_slot(ui, width, |ui| ui.add(field)),
                 &format!("{which} {} shown, in bits", metric.in_sentence()),
             );
-            // Not while the field is being typed in, which would replace the text being typed.
+            undo_escape(ui, &response, bound, previous);
+            // Not while the field has the focus, where a new value would replace the text
+            // being typed.
             if !response.has_focus() {
                 *bound = snapped(*bound, end);
             }
@@ -138,14 +158,44 @@ fn snapped(bound: f64, end: f64) -> f64 {
     }
 }
 
-/// The width of a value field showing `prefix` and `max` with [`VALUE_DECIMALS`] decimals: its
-/// text in the drag-value style, the button's padding on both sides, and one digit to spare
-/// for measuring the text whole rather than in its two parts.
-fn value_field_width(ui: &Ui, prefix: &str, max: f64) -> f32 {
+/// Puts `bound` back to `previous`, its value before the frame, when Esc took the focus of
+/// `field`, so that Esc drops what was typed. egui applies the text of a field that lost the
+/// focus once more on the next frame, Esc or not (and that frame comes only with the next
+/// input); the bound is put back on that frame, which is asked for at once.
+fn undo_escape<T: Copy + Default + Send + Sync + 'static>(
+    ui: &Ui,
+    field: &egui::Response,
+    bound: &mut T,
+    previous: T,
+) {
+    let key = field.id.with("escaped");
+    if field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        ui.data_mut(|d| d.insert_temp(key, previous));
+        ui.ctx().request_repaint();
+    } else if let Some(kept) = ui.data_mut(|d| d.remove_temp::<T>(key)) {
+        *bound = kept;
+    }
+}
+
+/// A value typed into a value field, kept to the [`VALUE_DECIMALS`] decimals the field shows
+/// (`None` for text that is not a number, which leaves the bound as it was). Stored as shown,
+/// a typed bound is what the field reads again when it next loses the focus, so tabbing
+/// through it changes nothing.
+fn parse_value(text: &str) -> Option<f64> {
+    text.trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|v| v.is_finite())
+        .map(|v| egui::emath::round_to_decimals(v, VALUE_DECIMALS))
+}
+
+/// The width of a field showing `text` (its prefix and widest value): the text in the
+/// drag-value style, the button's padding on both sides, and one digit to spare for measuring
+/// the text whole rather than in its two parts.
+fn field_width(ui: &Ui, text: &str) -> f32 {
     let font = ui.style().drag_value_text_style.resolve(ui.style());
     let spacing = ui.spacing();
-    let text = format!("{prefix}{max:.VALUE_DECIMALS$}");
-    let width = text_width(ui, &text, font.clone())
+    let width = text_width(ui, text, font.clone())
         + 2.0 * spacing.button_padding.x
         + text_width(ui, "0", font);
     width.max(spacing.interact_size.x)
@@ -178,7 +228,26 @@ fn right_group_width(ui: &Ui, text: &str) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{VALUE_DECIMALS, snapped};
+    use super::{VALUE_DECIMALS, parse_value, snapped};
+
+    /// A typed value is kept to the four decimals the field shows, so the text the field reads
+    /// back when it loses the focus is that value again; text that is not a finite number
+    /// leaves the bound as it was.
+    #[test]
+    fn a_typed_value_is_kept_as_the_field_shows_it() {
+        assert_eq!(parse_value("0.111293"), Some(0.1113));
+        assert_eq!(parse_value(" 0.11126 "), Some(0.1113));
+        assert_eq!(parse_value("1.5878"), Some(1.5878));
+        assert_eq!(parse_value("2"), Some(2.0));
+        assert_eq!(parse_value("0.00004"), Some(0.0));
+        for text in ["", "abc", "1.2.3", "nan", "inf", "-inf"] {
+            assert_eq!(parse_value(text), None, "{text:?}");
+        }
+        for v in [0.1113, 1.5878, 0.0001, 0.4548] {
+            let shown = format!("{v:.VALUE_DECIMALS$}");
+            assert_eq!(parse_value(&shown), Some(v), "read back unchanged");
+        }
+    }
 
     /// A bound that reads as its end of the range is that end, so a field that is left without
     /// a change keeps the full range exactly; one that reads otherwise is kept.

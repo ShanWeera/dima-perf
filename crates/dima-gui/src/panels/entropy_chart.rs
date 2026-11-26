@@ -19,7 +19,7 @@ use egui::{Color32, Pos2, Rect, Stroke, Ui};
 
 use super::common::{
     Swatch, fixed_width_slot, hatch_rect, heading, legend_entry, legend_entry_at_least,
-    legend_entry_width, text_width, with_help,
+    legend_entry_width, row_with_trailing, text_width, with_help,
 };
 use super::help_text;
 use crate::app::msg::Msg;
@@ -239,7 +239,8 @@ fn metric_switch(ui: &mut Ui, current: ChartMetric, out: &mut Vec<Msg>) {
 
 /// The heading row: the heading, the legend and the gesture hint, wrapping as the width needs,
 /// with Fit, + and − at its top right. The zoom buttons are laid out first and the rest wraps
-/// in the width left of them, so a long legend can neither run under them nor push them down.
+/// in the width left of them, so a long legend can neither run under them nor push them down;
+/// screen readers still meet the heading and the legend before the buttons, as in the row.
 /// When the metric can be switched, the heading and the legend entries whose text depends on it
 /// keep the width of the longer of their two texts, so the row wraps alike for both metrics.
 fn header(
@@ -250,17 +251,13 @@ fn header(
     threshold: u64,
     switchable: bool,
 ) {
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-        zoom_buttons(ui, s);
-        ui.add_space(t.space_8);
-        // As `horizontal_wrapped` does, but left to right inside this right-to-left row: one
-        // row's height to start with, growing by a row whenever an item does not fit.
-        let row = egui::vec2(
-            ui.available_size_before_wrap().x,
-            ui.spacing().interact_size.y,
-        );
-        let wrapping = egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true);
-        ui.allocate_ui_with_layout(row, wrapping, |ui| {
+    // The gap the buttons leave: the item spacing after the last one, and 8 px more.
+    let gap = ui.spacing().item_spacing.x + t.space_8;
+    let session: &Session = s;
+    let ((), zoomed) = row_with_trailing(
+        ui,
+        gap,
+        |ui| {
             if switchable {
                 let font = egui::FontId::new(
                     t.font_size_heading,
@@ -268,12 +265,12 @@ fn header(
                 );
                 let width =
                     widest(ChartMetric::ALL.map(|m| text_width(ui, m.name(), font.clone())));
-                fixed_width_slot(ui, width, |ui| heading(ui, t, s.metric.name()));
+                fixed_width_slot(ui, width, |ui| heading(ui, t, session.metric.name()));
             } else {
-                heading(ui, t, s.metric.name());
+                heading(ui, t, session.metric.name());
             }
             ui.add_space(t.space_8);
-            legend_entries(ui, s, series, t, threshold, switchable);
+            legend_entries(ui, session, series, t, threshold, switchable);
             // One item, so it moves to the next row whole rather than wrapping inside.
             ui.add(
                 egui::Label::new(
@@ -281,8 +278,12 @@ fn header(
                 )
                 .extend(),
             );
-        });
-    });
+        },
+        |ui| zoom_buttons(ui, session),
+    );
+    if let Some(viewport) = zoomed {
+        s.viewport = viewport;
+    }
 }
 
 /// The larger of two widths.
@@ -350,15 +351,16 @@ fn legend_entries(
     }
 }
 
-/// Fit, + and −, right to left.
-fn zoom_buttons(ui: &mut Ui, s: &mut Session) {
+/// Fit, + and −, right to left; returns the zoom a clicked button asks for.
+fn zoom_buttons(ui: &mut Ui, s: &Session) -> Option<Option<(f64, f64)>> {
     let zoomed = s.viewport.is_some();
+    let mut asked = None;
     if ui
         .add_enabled(zoomed, egui::Button::new("Fit").small())
         .on_hover_text("Show every shown position (or double-click the chart)")
         .clicked()
     {
-        s.viewport = None;
+        asked = Some(None);
     }
     if let Some(full) = s.extent() {
         if ui
@@ -366,16 +368,17 @@ fn zoom_buttons(ui: &mut Ui, s: &mut Session) {
             .on_hover_text("Zoom in (or scroll over the chart)")
             .clicked()
         {
-            s.viewport = viewport::zoom(s.viewport, full, 0.8, 0.5);
+            asked = Some(viewport::zoom(s.viewport, full, 0.8, 0.5));
         }
         if ui
             .add_enabled(zoomed, egui::Button::new("\u{2212}").small())
             .on_hover_text("Zoom out")
             .clicked()
         {
-            s.viewport = viewport::zoom(s.viewport, full, 1.25, 0.5);
+            asked = Some(viewport::zoom(s.viewport, full, 1.25, 0.5));
         }
     }
+    asked
 }
 
 fn band_rect(span: NsSpan, x: XMap, plot: Rect) -> Rect {

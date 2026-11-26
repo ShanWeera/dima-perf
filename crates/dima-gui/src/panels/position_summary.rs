@@ -48,6 +48,27 @@ pub fn show(
         return;
     };
     heading(ui, t, format!("Position {}", p.position));
+    // The facts end before the inspector's scroll bar, which floats over the panel's right
+    // edge while the pointer is over it, so a long value (a method with its fallback) wraps
+    // before the bar instead of under it.
+    let bar = &ui.spacing().scroll;
+    let room = bar.bar_inner_margin + bar.bar_width + bar.bar_outer_margin;
+    let width = (ui.available_width() - room).max(0.0);
+    ui.scope(|ui| {
+        ui.set_max_width(width);
+        facts(ui, p, threshold, estimator, similarity_weighted, t);
+    });
+}
+
+/// The class line and the facts' grids of `p`.
+fn facts(
+    ui: &mut Ui,
+    p: &PositionResult,
+    threshold: u64,
+    estimator: Estimator,
+    similarity_weighted: bool,
+    t: &DesignTokens,
+) {
     let class = Class::of(p);
     let color = if class == Class::Eligible {
         t.success_color

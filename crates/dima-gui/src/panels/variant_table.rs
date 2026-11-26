@@ -1,6 +1,7 @@
 //! The variants of the selected position: searchable (k-mer or motif), filterable by minimum
 //! incidence (null-aware, G33), sortable, and the selector of the variant whose metadata is
-//! shown below. The default variant is the first Index variant in the library's order (G53).
+//! shown below (a click on its row, or Tab to its sequence and Space). The default variant is
+//! the first Index variant in the library's order (G53).
 
 use egui::{RichText, Ui};
 
@@ -82,7 +83,9 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
         .column(egui_extras::Column::auto().at_least(56.0))
         .column(egui_extras::Column::remainder().at_least(90.0).clip(true))
         .max_scroll_height(height)
-        .sense(egui::Sense::click())
+        // Rows take clicks, but no cell is a keyboard stop: each row's one stop is its
+        // sequence (below), not its four cells, which would show no focus.
+        .sense(egui::Sense::CLICK)
         .header(22.0, |mut header| {
             for (i, name) in col::NAMES.iter().enumerate() {
                 header.col(|ui| {
@@ -110,11 +113,31 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
                     ui.label(v.motif.long());
                 });
                 row.col(|ui| {
-                    ui.label(
-                        RichText::new(&v.sequence)
-                            .monospace()
-                            .size(t.font_size_mono),
-                    );
+                    let text = RichText::new(&v.sequence)
+                        .monospace()
+                        .size(t.font_size_mono);
+                    if !shown_whole(ui) {
+                        ui.label(text);
+                        return;
+                    }
+                    // The row's keyboard stop: Tab reaches the sequence (outlined while it has
+                    // the focus), and Space or Enter selects the variant, as a click does. It
+                    // has an id of its own, as a cell's changes when the table scrolls (which
+                    // would drop the focus); the colour is a plain label's, which a clickable
+                    // one would change.
+                    let id = ui.id().with("sequence");
+                    let sequence = ui
+                        .scope_builder(egui::UiBuilder::new().id(id), |ui| {
+                            ui.add(
+                                egui::Label::new(text.color(t.text_primary))
+                                    .sense(egui::Sense::click()),
+                            )
+                        })
+                        .inner;
+                    super::common::focus_outline(ui, &sequence);
+                    if sequence.clicked() {
+                        clicked_row = Some(i);
+                    }
                 });
                 if row.response().clicked() {
                     clicked_row = Some(i);
@@ -127,4 +150,11 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
     if let Some(i) = clicked_row {
         out.push(Msg::SelectVariant(i));
     }
+}
+
+/// Whether the table shows this cell's row whole. Only such rows are keyboard stops: the table
+/// also lays out rows it shows in part or not at all (at its edges), whose focus would be hidden.
+fn shown_whole(ui: &Ui) -> bool {
+    let (cell, clip) = (ui.max_rect(), ui.clip_rect());
+    clip.top() <= cell.top() && cell.bottom() <= clip.bottom()
 }

@@ -479,6 +479,11 @@ fn opened(
                 None,
                 state.now,
             );
+            if let Some(warning) = newer_schema_warning(&results.schema_version) {
+                state
+                    .toasts
+                    .push(Severity::Warning, warning, None, state.now);
+            }
             let mut effects = start_session(state, Arc::new(*results), Origin::Opened(path));
             if state.recent.add(entry) {
                 effects.push(Effect::SaveRecent(state.recent.to_json()));
@@ -504,6 +509,36 @@ fn opened(
             }
             effects
         }
+    }
+}
+
+/// The warning `dima view` gives (`newer_schema`) for results written with a newer schema than
+/// this version writes, or with one it does not recognise: this version keeps only the fields
+/// it knows, so an export leaves out the others. `None` for this version's schema or an older
+/// one.
+fn newer_schema_warning(version: &str) -> Option<String> {
+    use dima_core::output::parse_schema_version;
+    let current = dima_core::model::SCHEMA_VERSION;
+    if matches!(
+        (parse_schema_version(version), parse_schema_version(current)),
+        (Some(file), Some(this)) if file <= this
+    ) {
+        return None;
+    }
+    Some(format!(
+        "The results were written with schema {}; this version writes {current} and keeps only \
+         the fields it knows. Use the DiMA version that wrote the file to keep every field.",
+        shown_schema_version(version)
+    ))
+}
+
+/// A schema version as messages show it: plain when it is one (`1.2.0`), quoted otherwise, so
+/// spaces or odd characters show (`"1.1.0-dev"`).
+fn shown_schema_version(version: &str) -> String {
+    if dima_core::output::parse_schema_version(version).is_some() {
+        version.to_owned()
+    } else {
+        format!("{version:?}")
     }
 }
 

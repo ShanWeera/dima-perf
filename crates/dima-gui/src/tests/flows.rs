@@ -864,16 +864,28 @@ fn the_metric_switch_moves_no_control() {
             h.run_steps(3);
             assert_eq!(h.state().state.session.as_ref().unwrap().metric, to);
             assert_eq!(state(&h, to), Some(Toggled::True));
-            // The value fields name the metric they filter (their text is only the value).
-            let fields: Vec<String> = h
+            // The filter bar's fields are named by what they bound, the value fields by the
+            // metric they filter (their text is only the value), once: as the name, not again
+            // as a description.
+            let fields: Vec<(Option<String>, Option<String>)> = h
                 .root()
                 .children_recursive()
                 .filter(|n| n.accesskit_node().role() == Role::SpinButton)
-                .filter_map(|n| n.accesskit_node().description())
+                .take(4)
+                .map(|n| {
+                    let a = n.accesskit_node();
+                    (a.label(), a.description())
+                })
                 .collect();
+            let names = [
+                "First position shown".to_owned(),
+                "Last position shown".to_owned(),
+                format!("Lowest {} shown, in bits", to.in_sentence()),
+                format!("Highest {} shown, in bits", to.in_sentence()),
+            ];
             assert_eq!(
                 fields,
-                ["Lowest", "Highest"].map(|w| format!("{w} {} shown, in bits", to.in_sentence())),
+                names.map(|name| (Some(name), None)),
                 "{size:?} at {ppp}"
             );
             assert_in_place(
@@ -1078,10 +1090,13 @@ fn the_table_scrolls_sideways_at_the_smallest_window() {
 }
 
 /// The keyboard route to the metric switch that the guide gives: Tab from the top of the
-/// Results screen reaches the "Metric:" row through the filter bar's value fields, and Space
-/// selects. Leaving a value field that shows the full range keeps the range exactly: egui
-/// stores the text a field showed when it loses the focus, and the rounded maximum hid the
-/// highest position, enabled Reset and made a later switch say the range had been reset.
+/// Results screen reaches the "Metric:" row through the top bar, the filter bar and the panel on
+/// the right, and Space selects. Every stop on the way shows its focus: no table cell is one
+/// (each used to be, with nothing drawn); the only stops that draw nothing are the variant
+/// table's three column-resize handles, which egui_extras makes focusable. Leaving a value
+/// field that shows the full range keeps the range exactly: egui stores the text a field showed
+/// when it loses the focus, and the rounded maximum hid the highest position, enabled Reset and
+/// made a later switch say the range had been reset.
 #[test]
 fn the_metric_switch_by_tab_and_space_keeps_the_value_range() {
     use crate::charts::metric::ChartMetric;
@@ -1099,14 +1114,19 @@ fn the_metric_switch_by_tab_and_space_keeps_the_value_range() {
         Some(max),
         "the field rounds the maximum"
     );
+    // A field by the text it shows, anything else by its name or text.
     let focused = |h: &H| {
         h.root()
             .children_recursive()
             .find(|n| n.is_focused())
             .map(|n| {
                 let a = n.accesskit_node();
-                let text = a.label().or_else(|| a.value()).unwrap_or_default();
-                (a.role(), text.to_owned())
+                let text = if a.role() == Role::SpinButton {
+                    a.value()
+                } else {
+                    a.label().or_else(|| a.value())
+                };
+                (a.role(), text.unwrap_or_default())
             })
     };
     // Nothing changed, nothing hidden, Reset off and no note.
@@ -1126,8 +1146,11 @@ fn the_metric_switch_by_tab_and_space_keeps_the_value_range() {
     let entropy = Some((Role::RadioButton, "Entropy".to_owned()));
     let mut crossed = Vec::new();
     while focused(&h) != entropy {
+        // 31 stops today: 9 in the top bar, 9 in the filter bar, then the variant search and
+        // minimum incidence, the 4 variant headers, the 3 variants of position 1 and the 3
+        // resize handles; every cell was a stop before (44).
         assert!(
-            crossed.len() < 100,
+            crossed.len() < 40,
             "Tab never reached the switch: {crossed:?}"
         );
         h.key_press(egui::Key::Tab);
@@ -1139,6 +1162,10 @@ fn the_metric_switch_by_tab_and_space_keeps_the_value_range() {
         fields("0.0000") && fields(&shown),
         "the route crosses both value fields: {crossed:?}"
     );
+    let roles = |role: Role| crossed.iter().flatten().filter(|(r, _)| *r == role).count();
+    assert_eq!(roles(Role::GenericContainer), 0, "no cell: {crossed:?}");
+    assert_eq!(roles(Role::Unknown), 3, "the resize handles: {crossed:?}");
+    assert!(crossed.iter().all(Option::is_some), "{crossed:?}");
     unchanged(&h, ChartMetric::Entropy, "Tab to the switch");
     h.key_press(egui::Key::Space);
     h.run_steps(3);
@@ -1224,5 +1251,432 @@ fn the_metric_from_the_keyboard_and_the_palette() {
         "Close the palette; also gives the arrow keys back to the table",
     ] {
         assert!(has_label(&h, line), "{line:?}");
+    }
+}
+
+/// Puts the keyboard focus in the filter bar's field `name` and selects its text, as a click
+/// on it does.
+fn type_into(h: &mut H, name: &str, text: &str) {
+    h.get_by_role_and_label(Role::SpinButton, name).focus();
+    h.run_steps(2);
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    h.run_steps(1);
+    h.event(egui::Event::Text(text.into()));
+    h.run_steps(3);
+}
+
+/// A value typed into a value field is applied when it is entered (Enter, Tab or a click
+/// elsewhere), not at every keystroke: typing 0.2 as the maximum used to apply 0 at the first
+/// key, which hid the selected position and moved the selection away for good. Esc leaves the
+/// field without applying. A typed value is kept to the four decimals the field shows, so
+/// passing through the field later changes nothing: egui reads back the text a field shows
+/// when it loses the focus, and a typed 0.111293 (shown as 0.1113) then became 0.1113, hid
+/// position 1 (entropy 0.111294) and reset the zoom.
+#[test]
+fn a_typed_bound_applies_when_entered_as_the_field_shows_it() {
+    const LOWEST: &str = "Lowest entropy shown, in bits";
+    const HIGHEST: &str = "Highest entropy shown, in bits";
+    fn session(h: &H) -> &crate::state::session::Session {
+        h.state().state.session.as_ref().unwrap()
+    }
+    let mut h = harness();
+    load(&mut h, &fixtures::mers());
+    let (total, max) = (session(&h).shown.len(), session(&h).bounds.max_entropy);
+    h.state_mut().dispatch(
+        Msg::Select(4, crate::state::session::SelectSource::Palette),
+        None,
+    );
+    h.run_steps(2);
+    type_into(&mut h, HIGHEST, "0");
+    let s = session(&h);
+    assert_eq!(s.filter.value_range, (0.0, max), "nothing applied yet");
+    assert_eq!((s.shown.len(), s.selection.position), (total, Some(4)));
+    h.event(egui::Event::Text(".2".into()));
+    h.run_steps(2);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(4);
+    let s = session(&h);
+    assert_eq!(s.filter.value_range, (0.0, 0.2), "applied by Enter");
+    assert_eq!(s.selection.position, Some(4), "position 4 is still shown");
+    type_into(&mut h, HIGHEST, "1");
+    h.key_press(egui::Key::Escape);
+    h.run_steps(4);
+    assert_eq!(
+        session(&h).filter.value_range,
+        (0.0, 0.2),
+        "Esc applies nothing"
+    );
+    let e1 = session(&h).results.results[0].entropy.unwrap();
+    assert!((0.111_293..0.1113).contains(&e1), "{e1}");
+    type_into(&mut h, LOWEST, "0.111293");
+    h.key_press(egui::Key::Tab);
+    h.run_steps(4);
+    let s = session(&h);
+    assert_eq!(s.filter.value_range.0, 0.1113, "kept as the field shows it");
+    assert!(
+        !s.is_shown(1),
+        "position 1 is below 0.1113, as the field reads"
+    );
+    h.state_mut().state.session.as_mut().unwrap().viewport = Some((100.5, 600.5));
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::SpinButton, LOWEST).focus();
+    h.run_steps(2);
+    h.key_press(egui::Key::Tab);
+    h.run_steps(4);
+    let s = session(&h);
+    assert_eq!(
+        s.filter.value_range,
+        (0.1113, 0.2),
+        "passing through changes nothing"
+    );
+    assert_eq!(s.viewport, Some((100.5, 600.5)), "and keeps the zoom");
+}
+
+/// The filter bar keeps its controls in place while a position field is edited: focusing one
+/// (which shows its number without "from"/"to") and a shorter position ("to 500") used to move
+/// every control right of it by 6 to 8 px.
+#[test]
+fn editing_a_position_field_moves_nothing_in_the_filter_bar() {
+    let mut h = harness();
+    load(&mut h, &fixtures::mers());
+    h.event(egui::Event::PointerGone);
+    h.run_steps(2);
+    // The filter bar's labels and controls but the field being edited, whose own width follows
+    // its text.
+    let bar = |h: &H, editing: &str| -> Vec<Place> {
+        let top = h.get_by_label("Positions").rect().top() - 1.0;
+        let reset = h.get_by_role_and_label(Role::Button, "Reset").rect();
+        places_above(h, reset.bottom())
+            .into_iter()
+            .filter(|(_, text, r)| r.top() >= top && text != editing)
+            .collect()
+    };
+    const FROM: &str = "First position shown";
+    const TO: &str = "Last position shown";
+    let before = bar(&h, FROM);
+    assert!(before.len() > 10, "{before:?}");
+    h.get_by_role_and_label(Role::SpinButton, FROM).focus();
+    h.run_steps(3);
+    assert_in_place(&before, &bar(&h, FROM), "'from' focused");
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    let before = bar(&h, TO);
+    type_into(&mut h, TO, "500");
+    h.key_press(egui::Key::Enter);
+    h.run_steps(4);
+    assert_eq!(
+        h.state()
+            .state
+            .session
+            .as_ref()
+            .unwrap()
+            .filter
+            .position_range,
+        (1, 500)
+    );
+    // The count reads "500 of 1345 positions" at the same right edge; nothing else changed.
+    assert_in_place(&before, &bar(&h, TO), "'to 500'");
+}
+
+/// A metric switch in the frame of a filter edit not yet applied (a value field left by a click
+/// on the switch) keeps the zoom: the edit is applied with the switch, not again on the next
+/// frame (which reset the zoom).
+#[test]
+fn the_metric_switch_keeps_the_zoom_after_a_typed_bound() {
+    use crate::charts::metric::ChartMetric;
+    let mut h = harness();
+    load(&mut h, &fixtures::mers_swe());
+    type_into(&mut h, "Highest entropy shown, in bits", "1.2");
+    h.state_mut().state.session.as_mut().unwrap().viewport = Some((100.5, 600.5));
+    h.get_by_role_and_label(Role::RadioButton, "Similarity-weighted entropy")
+        .click();
+    h.run_steps(4);
+    let s = h.state().state.session.as_ref().unwrap();
+    assert_eq!(s.metric, ChartMetric::SimilarityWeighted);
+    assert_eq!(
+        s.filter.value_range,
+        (0.0, s.bounds.max_similarity_weighted),
+        "the switch resets the value range"
+    );
+    assert_eq!(s.viewport, Some((100.5, 600.5)), "and keeps the zoom");
+    assert!(!s.filter_dirty);
+}
+
+/// Each table row is chosen with a click (also on its text, for the variants) or from the
+/// keyboard, never by a stop on each of its cells, which showed no focus: the position table
+/// moves with the arrow keys, and each variant the table shows whole has one stop, its
+/// sequence, where Space selects it (for its metadata). No cell takes the focus on a whole
+/// round of Tab.
+#[test]
+fn table_rows_are_chosen_by_click_or_keys_never_by_cell_stops() {
+    use egui_kittest::kittest::NodeT;
+    let mut h = harness();
+    load(&mut h, &fixtures::hiv_pro_swe());
+    let rows = h
+        .state_mut()
+        .state
+        .session
+        .as_mut()
+        .unwrap()
+        .visible_variants();
+    let s = h.state().state.session.as_ref().unwrap();
+    let variants = &s.selected().unwrap().diversity_motifs;
+    let (second, third) = (
+        variants[rows[1]].sequence.clone(),
+        variants[rows[2]].sequence.clone(),
+    );
+    assert_eq!(s.selection.variant, Some(rows[0]));
+    let focused = |h: &H| {
+        h.root()
+            .children_recursive()
+            .find(|n| n.is_focused())
+            .map(|n| {
+                let a = n.accesskit_node();
+                (
+                    a.role(),
+                    a.label().or_else(|| a.value()).unwrap_or_default(),
+                )
+            })
+    };
+    let mut cells = 0;
+    for _ in 0..60 {
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        let now = focused(&h);
+        cells += usize::from(
+            now.as_ref()
+                .is_some_and(|(r, _)| *r == Role::GenericContainer),
+        );
+        if now == Some((Role::Label, second.clone())) {
+            break;
+        }
+    }
+    assert_eq!(
+        focused(&h),
+        Some((Role::Label, second.clone())),
+        "Tab reaches it"
+    );
+    h.key_press(egui::Key::Space);
+    h.run_steps(3);
+    let variant = |h: &H| h.state().state.session.as_ref().unwrap().selection.variant;
+    assert_eq!(variant(&h), Some(rows[1]), "Space selects it");
+    h.get_by_label(&third).click();
+    h.run_steps(3);
+    assert_eq!(
+        variant(&h),
+        Some(rows[2]),
+        "a click on the text selects it too"
+    );
+    // The rest of the round, back to the top bar.
+    for _ in 0..80 {
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        let now = focused(&h);
+        cells += usize::from(
+            now.as_ref()
+                .is_some_and(|(r, _)| *r == Role::GenericContainer),
+        );
+        if now == Some((Role::Button, "Setup".to_owned())) {
+            break;
+        }
+    }
+    assert_eq!(focused(&h), Some((Role::Button, "Setup".to_owned())));
+    assert_eq!(cells, 0, "no table cell takes the focus");
+}
+
+/// Screen readers meet the chart's heading and legend before its zoom buttons, as the row
+/// reads (1.0.0's order), although the buttons are laid out first at its top right.
+#[test]
+fn the_chart_heading_is_read_before_the_zoom_buttons() {
+    use egui_kittest::kittest::NodeT;
+    for size in [MIN_WINDOW, egui::vec2(1500.0, 1100.0)] {
+        let mut h = harness_sized(size);
+        load(&mut h, &fixtures::hiv_pro_swe());
+        // Labels and buttons in reading order, with their top edges.
+        let nodes: Vec<(Role, String, f64)> = h
+            .root()
+            .children_recursive()
+            .filter_map(|n| {
+                let a = n.accesskit_node();
+                let text = a.label().or_else(|| a.value()).unwrap_or_default();
+                let top = a.bounding_box()?.y0;
+                matches!(a.role(), Role::Label | Role::Button).then_some((a.role(), text, top))
+            })
+            .collect();
+        let at = |role: Role, text: &str| {
+            nodes
+                .iter()
+                .position(|(r, t, _)| *r == role && t == text)
+                .unwrap()
+        };
+        let fit = at(Role::Button, "Fit");
+        // The heading is the "Entropy" label on the row of the buttons.
+        let heading = nodes
+            .iter()
+            .position(|(r, t, top)| {
+                *r == Role::Label && t == "Entropy" && (top - nodes[fit].2).abs() < 4.0
+            })
+            .unwrap();
+        let hint = at(Role::Label, "drag: pan \u{2022} Shift-drag: zoom to region");
+        let mean = at(Role::Label, "eligible mean");
+        assert!(
+            heading < mean && mean < hint && hint < fit,
+            "{size:?}: {nodes:?}"
+        );
+        assert!(
+            fit < at(Role::Button, "+") && at(Role::Button, "+") < at(Role::Button, "\u{2212}")
+        );
+        // Laid out as before: the buttons at the top right of the chart's column.
+        let (fit, chart) = (
+            h.get_by_label("Fit").rect(),
+            h.get_by_label_contains("chart: ").rect(),
+        );
+        assert!(
+            (fit.right() - chart.right()).abs() < 1.0,
+            "{size:?}: {fit:?}"
+        );
+    }
+}
+
+/// Notifications stay in the window: a warning of three lines used to grow downwards past the
+/// bottom edge, with its close button half off it. The stack ends 16 px above the bottom, the
+/// newest nearest the corner, and a toast's message comes before its buttons, which are at its
+/// top right.
+#[test]
+fn notifications_stay_in_the_window() {
+    use crate::state::toasts::Severity;
+    use egui_kittest::kittest::NodeT;
+    const WARNING: &str = "Nothing was saved: the chart was switched to similarity-weighted \
+                           entropy while the dialog was open. Export again to save the chart \
+                           now shown.";
+    for size in [MIN_WINDOW, egui::vec2(1360.0, 860.0)] {
+        let mut h = harness_sized(size);
+        load(&mut h, &fixtures::mers());
+        let now = h.state().state.now;
+        let toasts = &mut h.state_mut().state.toasts;
+        toasts.push(Severity::Warning, WARNING.to_owned(), None, now);
+        toasts.push(Severity::Info, "Opened results.json".to_owned(), None, now);
+        h.run_steps(4);
+        let window = h.ctx.content_rect();
+        let warning = h.get_by_label(&format!("Warning: {WARNING}")).rect();
+        let note = h.get_by_label("Note: Opened results.json").rect();
+        let dismiss = h.get_by_role_and_label(Role::Button, "Dismiss").rect();
+        for r in [warning, note, dismiss] {
+            assert!(window.contains_rect(r), "{size:?}: {r:?} in {window:?}");
+        }
+        assert!(warning.height() > 40.0, "the warning wraps: {warning:?}");
+        assert!(
+            warning.bottom() < note.top(),
+            "the newest is nearest the corner"
+        );
+        // The note's frame (8 px margin, 1 px stroke) ends 16 px above the bottom.
+        assert!(
+            (window.bottom() - 16.0 - 9.0 - note.bottom()).abs() < 1.0,
+            "{note:?}"
+        );
+        assert!(dismiss.left() >= warning.right() && dismiss.top() <= warning.top() + 2.0);
+        let order: Vec<String> = h
+            .root()
+            .children_recursive()
+            .filter_map(|n| {
+                n.accesskit_node()
+                    .label()
+                    .or_else(|| n.accesskit_node().value())
+            })
+            .collect();
+        let at = |t: &str| order.iter().position(|o| o == t).unwrap();
+        assert!(
+            at(&format!("Warning: {WARNING}")) < at("Dismiss"),
+            "read first"
+        );
+    }
+}
+
+/// Ticking an option that is the widest row of its grid adds its dot without moving any
+/// control (the dot's place is kept), so a second click at the same place reaches the same
+/// check box; the main grid keeps its controls when T changes.
+#[test]
+fn the_change_dot_moves_no_option() {
+    use egui_kittest::kittest::NodeT;
+    const OPTION: &str = "Compute similarity-weighted entropy (Wu 2025)";
+    let mut h = harness();
+    open(&mut h, &fixtures::mers_path());
+    h.get_by_role_and_label(Role::Button, "Advanced").click();
+    h.run_steps(2);
+    let controls = |h: &H| -> Vec<egui::Rect> {
+        h.root()
+            .children_recursive()
+            .filter(|n| {
+                matches!(
+                    n.accesskit_node().role(),
+                    Role::CheckBox | Role::ComboBox | Role::SpinButton | Role::TextInput
+                )
+            })
+            .map(|n| n.rect())
+            .collect()
+    };
+    let before = controls(&h);
+    let option = h.get_by_role_and_label(Role::CheckBox, OPTION).rect();
+    h.get_by_role_and_label(Role::CheckBox, OPTION).click();
+    h.run_steps(3);
+    assert!(has_label(&h, "Similarity-weighted changed; default: off"));
+    assert_eq!(
+        h.get_by_role_and_label(Role::CheckBox, OPTION).rect(),
+        option
+    );
+    assert_eq!(controls(&h), before, "ticked");
+    h.state_mut().state.setup.options.support_threshold = 50;
+    h.run_steps(3);
+    assert_eq!(controls(&h), before, "T changed");
+}
+
+/// The selected position's facts end before the panel's scroll bar, which floats over the
+/// panel's right edge while the pointer is over the panel: the method with its fallback
+/// ("plug_in; fallback: support at or below threshold") used to run under it.
+#[test]
+fn the_position_facts_end_before_the_scroll_bar() {
+    use egui_kittest::kittest::NodeT;
+    for size in [MIN_WINDOW, egui::vec2(1360.0, 860.0)] {
+        let mut h = harness_sized(size);
+        load(&mut h, &fixtures::hiv_pro_swe());
+        h.state_mut().dispatch(
+            Msg::Select(3, crate::state::session::SelectSource::Palette),
+            None,
+        );
+        h.run_steps(4);
+        let method = h
+            .get_by_label("plug_in; fallback: support at or below threshold")
+            .rect();
+        let bar = h
+            .root()
+            .children_recursive()
+            .filter(|n| n.accesskit_node().role() == Role::ScrollBar)
+            .map(|n| n.rect())
+            .filter(|r| r.y_range().contains(method.center().y))
+            .max_by(|a, b| a.right().total_cmp(&b.right()))
+            .expect("the panel's scroll bar");
+        assert!(
+            method.right() <= bar.left(),
+            "{size:?}: {method:?} under {bar:?}"
+        );
+    }
+}
+
+/// The results header's chips give screen readers what their tooltips show, as the facts do.
+#[test]
+fn the_chips_tooltips_are_their_descriptions() {
+    use egui_kittest::kittest::NodeT;
+    let mut h = harness();
+    load(&mut h, &fixtures::mers_swe());
+    let s = h.state().state.session.as_ref().unwrap();
+    let chips = crate::panels::summary::chips(&s.results, s);
+    assert!(
+        chips
+            .iter()
+            .any(|(text, _)| text.starts_with("similarity-weighted mean"))
+    );
+    for (text, tip) in chips {
+        let node = h.get_by_label(&text);
+        assert_eq!(node.accesskit_node().description(), Some(tip), "{text:?}");
     }
 }

@@ -152,7 +152,8 @@ pub fn show(ui: &mut Ui, session: &Session, t: &DesignTokens) {
     });
     ui.horizontal_wrapped(|ui| {
         for (text, tip) in chips(r, session) {
-            chip(ui, t, &text).on_hover_text(tip);
+            // The explanation is the tooltip and, for screen readers, the description.
+            super::common::with_help(chip(ui, t, &text), &tip);
         }
     });
 }

@@ -332,11 +332,14 @@ impl Session {
     }
 
     /// Plots `metric`: its value range becomes the full range (each metric has its own), the
-    /// shown positions and the chart are recomputed, the zoom is kept (moved into the new
+    /// shown positions and the chart are recomputed with every filter (a filter edit not yet
+    /// applied included, which needs no second pass), the zoom is kept (moved into the new
     /// extent if that changed), and the selection too when it is still shown. Returns whether
     /// the user had narrowed the value range, which is now lost (the caller says so).
     pub fn set_metric(&mut self, metric: ChartMetric) -> bool {
         let narrowed = self.filter.value_range != (0.0, self.bounds.max_for(self.metric));
+        // Applied here, so the next tick does not apply it again and reset the zoom.
+        let pending = std::mem::take(&mut self.filter_dirty);
         self.metric = metric;
         self.filter.value_range = (0.0, self.bounds.max_for(metric));
         self.refresh_shown();
@@ -345,10 +348,10 @@ impl Session {
             .zip(self.extent())
             .and_then(|(v, full)| viewport::normalise(v, full));
         if self.selection.position.is_some_and(|p| self.is_shown(p)) {
-            // The positions a narrowed range hid are back, so the selected row can be out of
-            // the table's view; a range that was not narrowed shows the same rows and moves
-            // nothing.
-            self.selection.scroll_to_row |= narrowed;
+            // The positions a narrowed range hid are back (and a pending edit can change the
+            // rows), so the selected row can be out of the table's view; a range that was not
+            // narrowed shows the same rows and moves nothing.
+            self.selection.scroll_to_row |= narrowed || pending;
         } else {
             self.select_first(SelectSource::Auto);
         }

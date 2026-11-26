@@ -1306,3 +1306,75 @@ fn figures_are_saved_only_for_the_metric_they_were_chosen_for() {
         error.text
     );
 }
+
+/// A metric switch in the frame of a filter edit not yet applied applies that edit with the
+/// switch and keeps the zoom, as the switch promises; the edit was applied again on the next
+/// tick, which resets the zoom. The rows the edit changes can push the selected one out of
+/// view, so the table scrolls back to it, as after any filter edit.
+#[test]
+fn a_metric_switch_applies_a_pending_filter_edit_and_keeps_the_zoom() {
+    use crate::charts::metric::ChartMetric::SimilarityWeighted;
+    let mut s = state();
+    with_results(&mut s, &fixtures::mers_swe());
+    let session = s.session.as_mut().unwrap();
+    session.viewport = Some((100.5, 600.5));
+    session.select(150, SelectSource::Chart);
+    session.selection.scroll_to_row = false;
+    session.filter.position_range = (50, 900);
+    update(&mut s, Msg::FiltersEdited);
+    update(&mut s, Msg::ChartMetric(SimilarityWeighted));
+    tick(&mut s, Duration::from_millis(16), false);
+    let session = s.session.as_ref().unwrap();
+    assert_eq!(session.metric, SimilarityWeighted);
+    assert!(!session.filter_dirty, "applied with the switch");
+    assert!(
+        session
+            .shown
+            .iter()
+            .all(|&i| (50..=900).contains(&session.results.results[i].position)),
+        "the edit is applied"
+    );
+    assert_eq!(session.viewport, Some((100.5, 600.5)), "the zoom is kept");
+    assert_eq!(session.selection.position, Some(150));
+    assert!(session.selection.scroll_to_row);
+}
+
+/// Results written with a newer schema, or one this version does not recognise, open with the
+/// warning `dima view` gives, as an export keeps only the fields this version knows; this
+/// version's schema and older ones open without it.
+#[test]
+fn results_of_a_newer_schema_open_with_a_warning() {
+    let current = dima_core::model::SCHEMA_VERSION;
+    for (version, shown) in [
+        ("1.2.0", Some("1.2.0")),
+        ("1.10.0", Some("1.10.0")),
+        ("1.1.0-dev", Some("\"1.1.0-dev\"")),
+        (current, None),
+        ("1.0.0", None),
+    ] {
+        let mut s = state();
+        let mut r = (*fixtures::mers()).clone();
+        r.schema_version = version.to_owned();
+        with_results(&mut s, &r);
+        let warnings: Vec<&str> = s
+            .toasts
+            .items()
+            .iter()
+            .filter(|t| t.severity == Severity::Warning)
+            .map(|t| t.text.as_str())
+            .collect();
+        let expected = shown.map(|v| {
+            format!(
+                "The results were written with schema {v}; this version writes {current} and \
+                 keeps only the fields it knows. Use the DiMA version that wrote the file to \
+                 keep every field."
+            )
+        });
+        assert_eq!(
+            warnings,
+            expected.as_deref().into_iter().collect::<Vec<_>>(),
+            "{version}"
+        );
+        assert!(s.session.is_some(), "{version}: opened all the same");
+    }
+}

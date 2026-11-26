@@ -7,6 +7,10 @@ use egui::{Color32, RichText, Ui};
 use crate::theme::DesignTokens;
 use crate::util::truncate_display;
 
+/// The glyph of the buttons that close or remove something: × (U+00D7), which the bundled IBM
+/// Plex Sans draws (✕, U+2715, is in none of the app's fonts and would show as an empty box).
+pub const CLOSE: &str = "\u{00D7}";
+
 /// A section heading.
 pub fn heading(ui: &mut Ui, t: &DesignTokens, text: impl Into<String>) {
     ui.label(
@@ -22,7 +26,9 @@ pub fn sub_heading(ui: &mut Ui, text: impl Into<String>) {
 }
 
 /// A label for an option, with a dot and a "default: X" tooltip when its value differs from
-/// the default (D73).
+/// the default (D73). The dot's place is kept when there is no dot, so the column of labels
+/// keeps its width and no control moves when an option is changed (a second click at the same
+/// place reaches the same control).
 pub fn option_label(
     ui: &mut Ui,
     t: &DesignTokens,
@@ -30,24 +36,25 @@ pub fn option_label(
     help: &str,
     default: Option<String>,
 ) {
+    const DOT: egui::Vec2 = egui::vec2(8.0, 8.0);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        let label = ui.label(text).on_hover_text(help);
-        let _ = label;
-        if let Some(d) = default {
-            let (rect, response) =
-                ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-            ui.painter().circle_filled(rect.center(), 3.5, t.accent);
-            response
-                .on_hover_text(format!("Changed from the default (default: {d})"))
-                .widget_info(|| {
-                    egui::WidgetInfo::labeled(
-                        egui::WidgetType::Label,
-                        true,
-                        format!("{text} changed; default: {d}"),
-                    )
-                });
-        }
+        ui.label(text).on_hover_text(help);
+        let Some(d) = default else {
+            ui.allocate_space(DOT);
+            return;
+        };
+        let (rect, response) = ui.allocate_exact_size(DOT, egui::Sense::hover());
+        ui.painter().circle_filled(rect.center(), 3.5, t.accent);
+        response
+            .on_hover_text(format!("Changed from the default (default: {d})"))
+            .widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::WidgetType::Label,
+                    true,
+                    format!("{text} changed; default: {d}"),
+                )
+            });
     });
 }
 
@@ -243,6 +250,66 @@ pub fn with_help(response: egui::Response, text: &str) -> egui::Response {
     response.on_hover_text(text)
 }
 
+/// Names a control whose own text does not say what it is (a field that shows only its value):
+/// `name` is its AccessKit name, which a screen reader says first, and its hover text. Call it
+/// after the control is added, whose own AccessKit node it completes.
+pub fn with_name(response: egui::Response, name: &str) -> egui::Response {
+    response
+        .ctx
+        .accesskit_node_builder(response.id, |node| node.set_label(name));
+    response.on_hover_text(name)
+}
+
+/// Draws a keyboard-focus outline around a control that draws none of its own (a frameless
+/// button, a clickable label) while it has the focus, so the focus is always visible.
+pub fn focus_outline(ui: &Ui, response: &egui::Response) {
+    if response.has_focus() {
+        let visuals = ui.visuals();
+        ui.painter().rect_stroke(
+            response.rect.expand(2.0),
+            visuals.widgets.active.corner_radius,
+            visuals.widgets.active.bg_stroke,
+            egui::StrokeKind::Outside,
+        );
+    }
+}
+
+/// One row as wide as the space left: `trailing` (controls such as buttons) at its top right,
+/// laid out right to left, and `leading` (what the row says) left-aligned in the width left of
+/// them less `gap`, wrapping onto further lines as it needs. `leading` is created first, so a
+/// screen reader reads it before the controls at its end, as the row reads; `trailing` is laid
+/// out first, so `leading` knows its width. Returns what both return.
+pub fn row_with_trailing<L, T>(
+    ui: &mut Ui,
+    gap: f32,
+    leading: impl FnOnce(&mut Ui) -> L,
+    trailing: impl FnOnce(&mut Ui) -> T,
+) -> (L, T) {
+    let full = ui.available_rect_before_wrap();
+    let first_line = egui::Rect::from_min_size(
+        full.min,
+        egui::vec2(full.width(), ui.spacing().interact_size.y),
+    );
+    let mut lead = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt("leading")
+            .max_rect(first_line)
+            .layout(egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true)),
+    );
+    let mut trail = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt("trailing")
+            .max_rect(full)
+            .layout(egui::Layout::right_to_left(egui::Align::Min)),
+    );
+    let t = trailing(&mut trail);
+    let trail_rect = trail.min_rect();
+    lead.set_max_width((trail_rect.left() - gap - full.left()).max(0.0));
+    let l = leading(&mut lead);
+    ui.advance_cursor_after_rect(lead.min_rect().union(trail_rect));
+    (l, t)
+}
+
 /// A muted "key value" pair in a grid row; returns the key's response (for its tooltip).
 pub fn fact(ui: &mut Ui, t: &DesignTokens, key: &str, value: impl Into<String>) -> egui::Response {
     let key = ui.label(RichText::new(key).color(t.text_secondary));
@@ -317,13 +384,15 @@ pub fn card(t: &DesignTokens) -> egui::Frame {
 
 /// A sortable column header: a frameless button (reachable with Tab and announced as a button
 /// by screen readers) showing the column name and, when the table is sorted by it, the
-/// direction arrow. "Sort by `sort_name`" is its tooltip and its AccessKit description, and a
-/// header that gains the keyboard focus scrolls into view.
+/// direction arrow. "Sort by `sort_name`" is its tooltip and its AccessKit description; a
+/// header that has the keyboard focus is outlined (its text alone does not change) and scrolls
+/// into view when it gains it.
 pub fn sort_header(ui: &mut Ui, name: &str, sort_name: &str, arrow: &str) -> egui::Response {
     let response = ui
         .add(egui::Button::new(RichText::new(format!("{name}{arrow}")).strong()).frame(false))
         .on_hover_cursor(egui::CursorIcon::PointingHand);
     let response = with_help(response, &format!("Sort by {sort_name}"));
+    focus_outline(ui, &response);
     if response.gained_focus() {
         response.scroll_to_me(None);
     }

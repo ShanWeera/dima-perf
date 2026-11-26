@@ -28,9 +28,12 @@ pub const SEMIBOLD: &str = "PlexSansSemiBold";
 ///
 /// egui's own default fonts are deliberately retained *after* ours in every
 /// family's fallback chain. Plex covers Latin text but not the UI symbols the
-/// app draws (sort arrows, check marks, the dismiss glyph, the macOS command
-/// key). Keeping the defaults as a fallback means an uncovered code point
-/// resolves to egui's font instead of rendering as a missing-glyph box.
+/// app draws (sort arrows, check marks, the warning sign, the macOS command
+/// key, the triangles ▸ and ▼). Keeping the defaults as a fallback means an
+/// uncovered code point resolves to egui's font instead of rendering as a
+/// missing-glyph box. The triangles are only in egui's monospaced Hack, so Hack
+/// ends the proportional chains too; being last, it draws only what no other
+/// face has. A symbol that no face has (✕, U+2715) is not used.
 pub fn install(ctx: &egui::Context) {
     ctx.set_fonts(definitions());
 }
@@ -56,12 +59,15 @@ pub fn definitions() -> egui::FontDefinitions {
     );
 
     // Prepend our faces so they win for the code points they cover, while the
-    // pre-existing default entries remain as the fallback tail.
-    fonts
+    // pre-existing default entries remain as the fallback tail, Hack last.
+    let proportional = fonts
         .families
         .entry(egui::FontFamily::Proportional)
-        .or_default()
-        .insert(0, "PlexSans".to_owned());
+        .or_default();
+    proportional.insert(0, "PlexSans".to_owned());
+    if !proportional.iter().any(|f| f == "Hack") {
+        proportional.push("Hack".to_owned());
+    }
 
     fonts
         .families
@@ -150,13 +156,16 @@ mod tests {
         let defaults = egui::FontDefinitions::default();
         let defs = definitions();
 
-        for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+        for (family, added) in [
+            (egui::FontFamily::Proportional, 2),
+            (egui::FontFamily::Monospace, 1),
+        ] {
             let before = defaults.families[&family].len();
             let after = defs.families[&family].len();
             assert_eq!(
                 after,
-                before + 1,
-                "family {family:?} should gain exactly one face and keep every fallback"
+                before + added,
+                "family {family:?} should gain {added} faces and keep every fallback"
             );
             for fallback in &defaults.families[&family] {
                 assert!(
@@ -165,6 +174,55 @@ mod tests {
                 );
             }
         }
+        assert_eq!(
+            defs.families[&egui::FontFamily::Proportional]
+                .last()
+                .map(String::as_str),
+            Some("Hack"),
+            "Hack ends the proportional chain, so it draws only what no other face has"
+        );
+    }
+
+    /// Every symbol the interface writes is drawn by a face of the family that writes it, so
+    /// none shows as an empty box: the close glyph, the sort arrows, the class check mark, the
+    /// warning sign, the theme switch, the command key, the menu-path and coverage triangles,
+    /// the drag-hint bullet and the minus of the zoom-out button. The faces are read directly
+    /// (egui's own check reports no glyph for those of the face that draws its replacement
+    /// character, among them the check mark).
+    #[test]
+    fn every_symbol_of_the_interface_has_a_glyph() {
+        use ab_glyph::Font as _;
+        let defs = definitions();
+        let has = |family: &egui::FontFamily, c: char| {
+            defs.families[family].iter().any(|name| {
+                let data = &defs.font_data[name];
+                ab_glyph::FontRef::try_from_slice_and_index(&data.font, data.index)
+                    .is_ok_and(|face| face.glyph_id(c).0 != 0)
+            })
+        };
+        let symbols = [
+            crate::panels::common::CLOSE,
+            crate::state::sort::Direction::Ascending.arrow(),
+            crate::state::sort::Direction::Descending.arrow(),
+            "\u{2714}",
+            "\u{26A0}",
+            "\u{2600}",
+            "\u{2318}",
+            "\u{25B8}",
+            "\u{25BC}",
+            "\u{2022}",
+            "\u{2212}",
+        ];
+        for family in [
+            egui::FontFamily::Proportional,
+            egui::FontFamily::Name(SEMIBOLD.into()),
+        ] {
+            for c in symbols.iter().flat_map(|s| s.trim().chars()) {
+                assert!(has(&family, c), "{c:?} has no glyph in {family:?}");
+            }
+        }
+        // The glyph that the close buttons used to show is in no face.
+        assert!(!has(&egui::FontFamily::Proportional, '\u{2715}'));
     }
 
     #[test]
