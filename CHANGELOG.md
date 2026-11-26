@@ -206,8 +206,8 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   each now cites the rule, section or table that supports it and states the rest in plain words.
 - Documentation: the methodology page now cites the classical results behind its exact standard
   deviations and its bounds on DiMA v5.0.9's HIV-1 *pol* means (Cantelli's, Scarf's and
-  McDiarmid's inequalities and the Krawtchouk recurrence), and the v5.0.9 comparison says that it
-  applies v5.0.9's procedure to the same k-mers.
+  McDiarmid's inequalities, and the Krawtchouk expansion and recurrence), and the v5.0.9
+  comparison says that it applies v5.0.9's procedure to the same k-mers.
 - Documentation: "Large alignments" gave the memory of the results as a few hundred bytes per
   position; it now also counts the variants they hold until they are written (each its k-mer and
   about 72 bytes), which can be most of it on diverse alignments. The exit-code reference now

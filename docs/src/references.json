@@ -59,7 +59,7 @@
       "href": "https://doi.org/10.59161/AUEZ1291",
       "label": "doi:10.59161/AUEZ1291"
     },
-    "order": 118,
+    "order": 119,
     "text": "SI Brochure. Bureau International des Poids et Mesures. The International System of Units (SI), 9th edition. BIPM; 2019."
   },
   "blackwell1947": {
@@ -176,7 +176,7 @@
       "href": "https://www.w3.org/TR/2021/NOTE-charmod-norm-20210811/",
       "label": "https://www.w3.org/TR/2021/NOTE-charmod-norm-20210811/"
     },
-    "order": 95,
+    "order": 96,
     "text": "Phillips A. Character Model for the World Wide Web: String Matching. W3C Working Group Note; 2021."
   },
   "claessen2000": {
@@ -242,13 +242,22 @@
     "order": 24,
     "text": "da Veiga Leprevost F, Grüning BA, Alves Aflitos S, Röst HL, Uszkoreit J, Barsnes H, Vaudel M, Moreno P, Gatto L, Weber J, Bai M, Jimenez RC, Sachsenberg T, Pfeuffer J, Vera Alvarez R, Griss J, Nesvizhskii AI, Perez-Riverol Y. BioContainers: an open-source and community-driven framework for software standardization. Bioinformatics. 2017;33(16):2580-2582."
   },
+  "diaconis2019": {
+    "label": "Diaconis & Griffiths 2019",
+    "link": {
+      "href": "https://doi.org/10.1016/j.jat.2019.01.007",
+      "label": "doi:10.1016/j.jat.2019.01.007"
+    },
+    "order": 26,
+    "text": "Diaconis P, Griffiths RC. Reproducing kernel orthogonal polynomials on the multinomial distribution. Journal of Approximation Theory. 2019;242:1-30."
+  },
   "dpubaria11": {
     "label": "DPUB-ARIA 1.1",
     "link": {
       "href": "https://www.w3.org/TR/2025/REC-dpub-aria-1.1-20250612/",
       "label": "https://www.w3.org/TR/2025/REC-dpub-aria-1.1-20250612/"
     },
-    "order": 26,
+    "order": 27,
     "text": "DPUB-ARIA 1.1. Garrish M, Siegman T. Digital Publishing WAI-ARIA Module 1.1. W3C Recommendation; 2025."
   },
   "durant2022": {
@@ -257,7 +266,7 @@
       "href": "https://doi.org/10.1371/journal.pcbi.1010622",
       "label": "doi:10.1371/journal.pcbi.1010622"
     },
-    "order": 27,
+    "order": 28,
     "text": "Durant E, Rouard M, Ganko EW, Muller C, Cleary AM, Farmer AD, Conte M, Sabot F. Ten simple rules for developing visualization tools in genomics. PLOS Computational Biology. 2022;18(11):e1010622."
   },
   "eaton2005": {
@@ -266,7 +275,7 @@
       "href": "https://doi.org/10.1007/11555261_68",
       "label": "doi:10.1007/11555261_68"
     },
-    "order": 28,
+    "order": 29,
     "text": "Eaton C, Plaisant C, Drizd T. Visualizing Missing Data: Graph Interpretation User Study. In: Lecture Notes in Computer Science. 2005. p. 861-872."
   },
   "eddy2011": {
@@ -275,7 +284,7 @@
       "href": "https://doi.org/10.1371/journal.pcbi.1002195",
       "label": "doi:10.1371/journal.pcbi.1002195"
     },
-    "order": 29,
+    "order": 30,
     "text": "Eddy SR. Accelerated Profile HMM Searches. PLoS Computational Biology. 2011;7(10):e1002195."
   },
   "efron1979": {
@@ -284,7 +293,7 @@
       "href": "https://doi.org/10.1214/aos/1176344552",
       "label": "doi:10.1214/aos/1176344552"
     },
-    "order": 30,
+    "order": 31,
     "text": "Efron B. Bootstrap Methods: Another Look at the Jackknife. The Annals of Statistics. 1979;7(1):1-26."
   },
   "ewels2016": {
@@ -293,7 +302,7 @@
       "href": "https://doi.org/10.1093/bioinformatics/btw354",
       "label": "doi:10.1093/bioinformatics/btw354"
     },
-    "order": 31,
+    "order": 32,
     "text": "Ewels P, Magnusson M, Lundin S, Käller M. MultiQC: summarize analysis results for multiple tools and samples in a single report. Bioinformatics. 2016;32(19):3047-3048."
   },
   "falk1991": {
@@ -302,7 +311,7 @@
       "href": "https://doi.org/10.1038/351290a0",
       "label": "doi:10.1038/351290a0"
     },
-    "order": 32,
+    "order": 33,
     "text": "Falk K, Rötzschke O, Stevanović S, Jung G, Rammensee HG. Allele-specific motifs revealed by sequencing of self-peptides eluted from MHC molecules. Nature. 1991;351(6324):290-296."
   },
   "filipuk2026": {
@@ -311,7 +320,7 @@
       "href": "https://doi.org/10.1007/s11075-025-02299-z",
       "label": "doi:10.1007/s11075-025-02299-z"
     },
-    "order": 33,
+    "order": 34,
     "text": "Filipuk G, Mañas-Mañas JF, Moreno-Balcázar JJ, Rodríguez-Perales C. Differential system related to generalised Krawtchouk polynomials: iterated regularisation and Painlevé equation. Numerical Algorithms. 2026;102(3):1891-1922."
   },
   "gallego1993": {
@@ -320,7 +329,7 @@
       "href": "https://doi.org/10.1057/jors.1993.141",
       "label": "doi:10.1057/jors.1993.141"
     },
-    "order": 34,
+    "order": 35,
     "text": "Gallego G, Moon I. The Distribution Free Newsboy Problem: Review and Extensions. Journal of the Operational Research Society. 1993;44(8):825-834."
   },
   "goecks2010": {
@@ -329,7 +338,7 @@
       "href": "https://doi.org/10.1186/gb-2010-11-8-r86",
       "label": "doi:10.1186/gb-2010-11-8-r86"
     },
-    "order": 35,
+    "order": 36,
     "text": "Goecks J, Nekrutenko A, Taylor J, Galaxy Team. Galaxy: a comprehensive approach for supporting accessible, reproducible, and transparent computational research in the life sciences. Genome Biology. 2010;11(8):R86."
   },
   "goldberg1991": {
@@ -338,7 +347,7 @@
       "href": "https://doi.org/10.1145/103162.103163",
       "label": "doi:10.1145/103162.103163"
     },
-    "order": 36,
+    "order": 37,
     "text": "Goldberg D. What every computer scientist should know about floating-point arithmetic. ACM Computing Surveys. 1991;23(1):5-48."
   },
   "good1953": {
@@ -347,7 +356,7 @@
       "href": "https://doi.org/10.2307/2333344",
       "label": "doi:10.2307/2333344"
     },
-    "order": 37,
+    "order": 38,
     "text": "Good IJ. The Population Frequencies of Species and the Estimation of Population Parameters. Biometrika. 1953;40(3/4):237-264."
   },
   "gotoh1994": {
@@ -356,7 +365,7 @@
       "href": "https://doi.org/10.1093/bioinformatics/10.4.379",
       "label": "doi:10.1093/bioinformatics/10.4.379"
     },
-    "order": 38,
+    "order": 39,
     "text": "Gotoh O. Further improvement in methods of group-to-group sequence alignment with generalized profile operations. Computer Applications in the Biosciences. 1994;10(4):379-387."
   },
   "gregori2014": {
@@ -365,7 +374,7 @@
       "href": "https://doi.org/10.1093/bioinformatics/btt768",
       "label": "doi:10.1093/bioinformatics/btt768"
     },
-    "order": 39,
+    "order": 40,
     "text": "Gregori J, Salicrú M, Domingo E, Sanchez A, Esteban JI, Rodríguez-Frías F, Quer J. Inference with viral quasispecies diversity indices: clonal and NGS approaches. Bioinformatics. 2014;30(8):1104-1111."
   },
   "grishin1995": {
@@ -374,7 +383,7 @@
       "href": "https://doi.org/10.1007/BF00175826",
       "label": "doi:10.1007/BF00175826"
     },
-    "order": 40,
+    "order": 41,
     "text": "Grishin NV. Estimation of the number of amino acid substitutions per site when the substitution rate varies among sites. Journal of Molecular Evolution. 1995;41(5):675-679."
   },
   "gruning2018bioconda": {
@@ -383,7 +392,7 @@
       "href": "https://doi.org/10.1038/s41592-018-0046-7",
       "label": "doi:10.1038/s41592-018-0046-7"
     },
-    "order": 42,
+    "order": 43,
     "text": "Grüning B, Dale R, Sjödin A, Chapman BA, Rowe J, Tomkins-Tinch CH, Valieris R, Köster J, Bioconda Team. Bioconda: sustainable and comprehensive software distribution for the life sciences. Nature Methods. 2018;15(7):475-476."
   },
   "gruning2018repro": {
@@ -392,7 +401,7 @@
       "href": "https://doi.org/10.1016/j.cels.2018.03.014",
       "label": "doi:10.1016/j.cels.2018.03.014"
     },
-    "order": 41,
+    "order": 42,
     "text": "Grüning B, Chilton J, Köster J, Dale R, Soranzo N, van den Beek M, Goecks J, Backofen R, Nekrutenko A, Taylor J. Practical Computational Reproducibility in the Life Sciences. Cell Systems. 2018;6(6):631-635."
   },
   "hankin2015": {
@@ -401,7 +410,7 @@
       "href": "https://doi.org/10.32614/RJ-2015-022",
       "label": "doi:10.32614/RJ-2015-022"
     },
-    "order": 43,
+    "order": 44,
     "text": "Hankin RKS. Numerical Evaluation of the Gauss Hypergeometric Function with the hypergeo Package. The R Journal. 2015;7(2):81-88."
   },
   "harrison2007": {
@@ -410,7 +419,7 @@
       "href": "https://doi.org/10.1145/1294211.1294231",
       "label": "doi:10.1145/1294211.1294231"
     },
-    "order": 44,
+    "order": 45,
     "text": "Harrison C, Amento B, Kuznetsov S, Bell R. Rethinking the progress bar. In: Proceedings of the 20th annual ACM symposium on User interface software and technology. 2007. p. 115-118."
   },
   "hatcher2017": {
@@ -419,7 +428,7 @@
       "href": "https://doi.org/10.1093/nar/gkw1065",
       "label": "doi:10.1093/nar/gkw1065"
     },
-    "order": 45,
+    "order": 46,
     "text": "Hatcher EL, Zhdanov SA, Bao Y, Blinkova O, Nawrocki EP, Ostapchuck Y, Schäffer AA, Brister JR. Virus Variation Resource – improved response to emergent viral outbreaks. Nucleic Acids Research. 2017;45(D1):D482-D490."
   },
   "hattab2020": {
@@ -428,7 +437,7 @@
       "href": "https://doi.org/10.1371/journal.pcbi.1008259",
       "label": "doi:10.1371/journal.pcbi.1008259"
     },
-    "order": 46,
+    "order": 47,
     "text": "Hattab G, Rhyne TM, Heider D. Ten simple rules to colorize biological data visualization. PLOS Computational Biology. 2020;16(10):e1008259."
   },
   "he2025": {
@@ -437,7 +446,7 @@
       "href": "https://doi.org/10.1145/3715728",
       "label": "doi:10.1145/3715728"
     },
-    "order": 47,
+    "order": 48,
     "text": "He H, Vasilescu B, Kästner C. Pinning Is Futile: You Need More Than Local Dependency Versioning to Defend against Supply Chain Attacks. Proceedings of the ACM on Software Engineering. 2025;2(FSE):266-289."
   },
   "henrici1966": {
@@ -446,7 +455,7 @@
       "href": "https://doi.org/10.1007/BF02166031",
       "label": "doi:10.1007/BF02166031"
     },
-    "order": 48,
+    "order": 49,
     "text": "Henrici P, Pflüger P. Truncation error estimates for Stieltjes fractions. Numerische Mathematik. 1966;9(2):120-138."
   },
   "howison2016": {
@@ -455,7 +464,7 @@
       "href": "https://doi.org/10.1002/asi.23538",
       "label": "doi:10.1002/asi.23538"
     },
-    "order": 49,
+    "order": 50,
     "text": "Howison J, Bullard J. Software in the scientific literature: Problems with seeing, finding, and using software mentioned in the biology literature. Journal of the Association for Information Science and Technology. 2016;67(9):2137-2155."
   },
   "hu2013": {
@@ -464,7 +473,7 @@
       "href": "https://doi.org/10.1371/journal.pone.0059994",
       "label": "doi:10.1371/journal.pone.0059994"
     },
-    "order": 50,
+    "order": 51,
     "text": "Hu Y, Tan PT, Tan TW, August JT, Khan AM. Dissecting the Dynamics of HIV-1 Protein Sequence Diversity. PLoS ONE. 2013;8(4):e59994."
   },
   "hunterzinck2021": {
@@ -473,7 +482,7 @@
       "href": "https://doi.org/10.1371/journal.pcbi.1009481",
       "label": "doi:10.1371/journal.pcbi.1009481"
     },
-    "order": 51,
+    "order": 52,
     "text": "Hunter-Zinck H, de Siqueira AF, Vásquez VN, Barnes R, Martinez CC. Ten simple rules on writing clean and reliable open-source scientific software. PLOS Computational Biology. 2021;17(11):e1009481."
   },
   "ion2023": {
@@ -482,7 +491,7 @@
       "href": "https://doi.org/10.1007/s11749-022-00844-9",
       "label": "doi:10.1007/s11749-022-00844-9"
     },
-    "order": 52,
+    "order": 53,
     "text": "Ion RA, Klaassen CAJ, van den Heuvel ER. Sharp inequalities of Bienaymé–Chebyshev and Gauß type for possibly asymmetric intervals around the mean. TEST. 2023;32(2):566-601."
   },
   "jones1974": {
@@ -491,7 +500,7 @@
       "href": "https://doi.org/10.1090/S0025-5718-1974-0373265-5",
       "label": "doi:10.1090/S0025-5718-1974-0373265-5"
     },
-    "order": 53,
+    "order": 54,
     "text": "Jones WB, Thron WJ. Numerical stability in evaluating continued fractions. Mathematics of Computation. 1974;28(127):795-810."
   },
   "jugel2014": {
@@ -500,7 +509,7 @@
       "href": "https://doi.org/10.14778/2732951.2732953",
       "label": "doi:10.14778/2732951.2732953"
     },
-    "order": 54,
+    "order": 55,
     "text": "Jugel U, Jerzak Z, Hackenbroich G, Markl V. M4. Proceedings of the VLDB Endowment. 2014;7(10):797-808."
   },
   "kanewala2014": {
@@ -509,7 +518,7 @@
       "href": "https://doi.org/10.1016/j.infsof.2014.05.006",
       "label": "doi:10.1016/j.infsof.2014.05.006"
     },
-    "order": 55,
+    "order": 56,
     "text": "Kanewala U, Bieman JM. Testing scientific software: A systematic literature review. Information and Software Technology. 2014;56(10):1219-1232."
   },
   "karimzadeh2018": {
@@ -518,7 +527,7 @@
       "href": "https://doi.org/10.1093/bib/bbw134",
       "label": "doi:10.1093/bib/bbw134"
     },
-    "order": 56,
+    "order": 57,
     "text": "Karimzadeh M, Hoffman MM. Top considerations for creating bioinformatics software documentation. Briefings in Bioinformatics. 2018;19(4):693-699."
   },
   "karp1987": {
@@ -527,7 +536,7 @@
       "href": "https://doi.org/10.1147/rd.312.0249",
       "label": "doi:10.1147/rd.312.0249"
     },
-    "order": 57,
+    "order": 58,
     "text": "Karp RM, Rabin MO. Efficient randomized pattern-matching algorithms. IBM Journal of Research and Development. 1987;31(2):249-260."
   },
   "katoh2013": {
@@ -536,7 +545,7 @@
       "href": "https://doi.org/10.1093/molbev/mst010",
       "label": "doi:10.1093/molbev/mst010"
     },
-    "order": 58,
+    "order": 59,
     "text": "Katoh K, Standley DM. MAFFT Multiple Sequence Alignment Software Version 7: Improvements in Performance and Usability. Molecular Biology and Evolution. 2013;30(4):772-780."
   },
   "katz2021": {
@@ -545,7 +554,7 @@
       "href": "https://doi.org/10.12688/f1000research.26932.2",
       "label": "doi:10.12688/f1000research.26932.2"
     },
-    "order": 59,
+    "order": 60,
     "text": "Katz DS, Chue Hong NP, Clark T, Muench A, Stall S, Bouquin D, Cannon M, Edmunds S, Faez T, Feeney P, Fenner M, Friedman M, Grenier G, Harrison M, Heber J, Leary A, MacCallum C, Murray H, Pastrana E, Perry K, et al. Recognizing the value of software: a software citation guide. F1000Research. 2021;9:1257."
   },
   "kent2010": {
@@ -554,7 +563,7 @@
       "href": "https://doi.org/10.1093/bioinformatics/btq351",
       "label": "doi:10.1093/bioinformatics/btq351"
     },
-    "order": 60,
+    "order": 61,
     "text": "Kent WJ, Zweig AS, Barber G, Hinrichs AS, Karolchik D. BigWig and BigBed: enabling browsing of large distributed datasets. Bioinformatics. 2010;26(17):2204-2207."
   },
   "kerpedjiev2018": {
@@ -563,7 +572,7 @@
       "href": "https://doi.org/10.1186/s13059-018-1486-1",
       "label": "doi:10.1186/s13059-018-1486-1"
     },
-    "order": 61,
+    "order": 62,
     "text": "Kerpedjiev P, Abdennur N, Lekschas F, McCallum C, Dinkla K, Strobelt H, Luber JM, Ouellette SB, Azhir A, Kumar N, Hwang J, Lee S, Alver BH, Pfister H, Mirny LA, Park PJ, Gehlenborg N. HiGlass: web-based visual exploration and analysis of genome interaction maps. Genome Biology. 2018;19(1):125."
   },
   "khan2008": {
@@ -572,7 +581,7 @@
       "href": "https://doi.org/10.1371/journal.pntd.0000272",
       "label": "doi:10.1371/journal.pntd.0000272"
     },
-    "order": 62,
+    "order": 63,
     "text": "Khan AM, Miotto O, Nascimento EJM, Srinivasan KN, Heiny AT, Zhang GL, Marques ET, Tan TW, Brusic V, Salmon J, August JT. Conservation and Variability of Dengue Virus Proteins: Implications for Vaccine Design. PLoS Neglected Tropical Diseases. 2008;2(8):e272."
   },
   "khan2017": {
@@ -581,7 +590,7 @@
       "href": "https://doi.org/10.1186/s12920-017-0301-2",
       "label": "doi:10.1186/s12920-017-0301-2"
     },
-    "order": 63,
+    "order": 64,
     "text": "Khan AM, Hu Y, Miotto O, Thevasagayam NM, Sukumaran R, Abd Raman HS, Brusic V, Tan TW, August JT. Analysis of viral diversity for vaccine target discovery. BMC Medical Genomics. 2017;10(S4):78."
   },
   "khan2019": {
@@ -590,7 +599,7 @@
       "href": "https://doi.org/10.1093/gigascience/giz095",
       "label": "doi:10.1093/gigascience/giz095"
     },
-    "order": 64,
+    "order": 65,
     "text": "Khan FZ, Soiland-Reyes S, Sinnott RO, Lonie A, Goble C, Crusoe MR. Sharing interoperable workflow provenance: A review of best practices and their practical application in CWLProv. GigaScience. 2019;8(11):giz095."
   },
   "kryukov2020": {
@@ -599,7 +608,7 @@
       "href": "https://doi.org/10.1093/gigascience/giaa072",
       "label": "doi:10.1093/gigascience/giaa072"
     },
-    "order": 65,
+    "order": 66,
     "text": "Kryukov K, Ueda MT, Nakagawa S, Imanishi T. Sequence Compression Benchmark (SCB) database—A comprehensive evaluation of reference-free compressors for FASTA-formatted sequences. GigaScience. 2020;9(7):giaa072."
   },
   "kuiken2003": {
@@ -608,7 +617,7 @@
       "href": "https://europepmc.org/article/MED/12875108",
       "label": "https://europepmc.org/article/MED/12875108"
     },
-    "order": 66,
+    "order": 67,
     "text": "Kuiken C, Korber B, Shafer RW. HIV sequence databases. AIDS Reviews. 2003;5(1):52-61."
   },
   "kurtzer2017": {
@@ -617,7 +626,7 @@
       "href": "https://doi.org/10.1371/journal.pone.0177459",
       "label": "doi:10.1371/journal.pone.0177459"
     },
-    "order": 67,
+    "order": 68,
     "text": "Kurtzer GM, Sochat V, Bauer MW. Singularity: Scientific containers for mobility of compute. PLOS ONE. 2017;12(5):e0177459."
   },
   "ladisa2023": {
@@ -626,7 +635,7 @@
       "href": "https://doi.org/10.1109/SP46215.2023.10179304",
       "label": "doi:10.1109/SP46215.2023.10179304"
     },
-    "order": 68,
+    "order": 69,
     "text": "Ladisa P, Plate H, Martinez M, Barais O. SoK: Taxonomy of Attacks on Open-Source Software Supply Chains. In: 2023 IEEE Symposium on Security and Privacy (SP). 2023. p. 1509-1526."
   },
   "lanlcodes": {
@@ -635,7 +644,7 @@
       "href": "https://www.hiv.lanl.gov/content/sequence/HelpDocs/IUPAC.html",
       "label": "https://www.hiv.lanl.gov/content/sequence/HelpDocs/IUPAC.html"
     },
-    "order": 77,
+    "order": 78,
     "text": "Los Alamos HIV Sequence Database. Codes and Symbols in Sequence Alignments. Los Alamos National Laboratory; 2009."
   },
   "lanlgenecutter": {
@@ -644,7 +653,7 @@
       "href": "https://www.hiv.lanl.gov/content/sequence/GENE_CUTTER/cutter-help.html",
       "label": "https://www.hiv.lanl.gov/content/sequence/GENE_CUTTER/cutter-help.html"
     },
-    "order": 78,
+    "order": 79,
     "text": "Los Alamos HIV Sequence Database. Gene Cutter Help and Explanation. Los Alamos National Laboratory; 2024."
   },
   "lazar2016": {
@@ -653,7 +662,7 @@
       "href": "https://doi.org/10.1021/acs.jproteome.5b00981",
       "label": "doi:10.1021/acs.jproteome.5b00981"
     },
-    "order": 69,
+    "order": 70,
     "text": "Lazar C, Gatto L, Ferro M, Bruley C, Burger T. Accounting for the multiple natures of missing values in label-free quantitative proteomics data sets to compare imputation strategies. Journal of Proteome Research. 2016;15(4):1116-1125."
   },
   "lee2018": {
@@ -662,7 +671,7 @@
       "href": "https://doi.org/10.1371/journal.pcbi.1006561",
       "label": "doi:10.1371/journal.pcbi.1006561"
     },
-    "order": 70,
+    "order": 71,
     "text": "Lee BD. Ten simple rules for documenting scientific software. PLOS Computational Biology. 2018;14(12):e1006561."
   },
   "leijen2019": {
@@ -671,7 +680,7 @@
       "href": "https://doi.org/10.1007/978-3-030-34175-6_13",
       "label": "doi:10.1007/978-3-030-34175-6_13"
     },
-    "order": 71,
+    "order": 72,
     "text": "Leijen D, Zorn B, de Moura L. Mimalloc: Free List Sharding in Action. In: Lecture Notes in Computer Science. 2019. p. 244-265."
   },
   "leinster2012": {
@@ -680,7 +689,7 @@
       "href": "https://doi.org/10.1890/10-2402.1",
       "label": "doi:10.1890/10-2402.1"
     },
-    "order": 72,
+    "order": 73,
     "text": "Leinster T, Cobbold CA. Measuring diversity: the importance of species similarity. Ecology. 2012;93(3):477-489."
   },
   "leo2024": {
@@ -689,7 +698,7 @@
       "href": "https://doi.org/10.1371/journal.pone.0309210",
       "label": "doi:10.1371/journal.pone.0309210"
     },
-    "order": 73,
+    "order": 74,
     "text": "Leo S, Crusoe MR, Rodríguez-Navas L, Sirvent R, Kanitz A, De Geest P, Wittner R, Pireddu L, Garijo D, Fernández JM, Colonnelli I, Gallo M, Ohta T, Suetake H, Capella-Gutierrez S, de Wit R, Kinoshita BP, Soiland-Reyes S. Recording provenance of workflow runs with RO-Crate. PLOS ONE. 2024;19(9):e0309210."
   },
   "li2009": {
@@ -698,7 +707,7 @@
       "href": "https://doi.org/10.1093/bioinformatics/btp352",
       "label": "doi:10.1093/bioinformatics/btp352"
     },
-    "order": 74,
+    "order": 75,
     "text": "Li H, Handsaker B, Wysoker A, Fennell T, Ruan J, Homer N, Marth G, Abecasis G, Durbin R, 1000 Genome Project Data Processing Subgroup. The Sequence Alignment/Map format and SAMtools. Bioinformatics. 2009;25(16):2078-2079."
   },
   "list2017": {
@@ -707,7 +716,7 @@
       "href": "https://doi.org/10.1371/journal.pcbi.1005265",
       "label": "doi:10.1371/journal.pcbi.1005265"
     },
-    "order": 75,
+    "order": 76,
     "text": "List M, Ebert P, Albrecht F. Ten Simple Rules for Developing Usable Software in Computational Biology. PLOS Computational Biology. 2017;13(1):e1005265."
   },
   "lo2024": {
@@ -716,7 +725,7 @@
       "href": "https://doi.org/10.1145/3659096",
       "label": "doi:10.1145/3659096"
     },
-    "order": 76,
+    "order": 77,
     "text": "Lo K, Chang JC, Head A, Bragg J, Zhang AX, Trier C, Anastasiades C, August T, Authur R, Bragg D, Bransom E, Cachola I, Candra S, Chandrasekhar Y, Chen YS, Cheng EYY, Chou Y, Downey D, Evans R, Fok R, et al. The Semantic Reader Project. Communications of the ACM. 2024;67(10):50-61."
   },
   "maceachren2012": {
@@ -725,7 +734,7 @@
       "href": "https://doi.org/10.1109/TVCG.2012.279",
       "label": "doi:10.1109/TVCG.2012.279"
     },
-    "order": 79,
+    "order": 80,
     "text": "MacEachren AM, Roth RE, O'Brien J, Li B, Swingley D, Gahegan M. Visual Semiotics & Uncertainty Visualization: An Empirical Study. IEEE Transactions on Visualization and Computer Graphics. 2012;18(12):2496-2505."
   },
   "manekar2018": {
@@ -734,7 +743,7 @@
       "href": "https://doi.org/10.1093/gigascience/giy125",
       "label": "doi:10.1093/gigascience/giy125"
     },
-    "order": 80,
+    "order": 81,
     "text": "Manekar SC, Sathe SR. A benchmark study of k-mer counting methods for high-throughput sequencing. GigaScience. 2018;7(12):giy125."
   },
   "mangul2019bench": {
@@ -743,7 +752,7 @@
       "href": "https://doi.org/10.1038/s41467-019-09406-4",
       "label": "doi:10.1038/s41467-019-09406-4"
     },
-    "order": 81,
+    "order": 82,
     "text": "Mangul S, Martin LS, Hill BL, Lam AKM, Distler MG, Zelikovsky A, Eskin E, Flint J. Systematic benchmarking of omics computational tools. Nature Communications. 2019;10(1):1393."
   },
   "mangul2019install": {
@@ -752,7 +761,7 @@
       "href": "https://doi.org/10.1371/journal.pbio.3000333",
       "label": "doi:10.1371/journal.pbio.3000333"
     },
-    "order": 82,
+    "order": 83,
     "text": "Mangul S, Mosqueiro T, Abdill RJ, Duong D, Mitchell K, Sarwal V, Hill B, Brito J, Littman RJ, Statz B, Lam AKM, Dayama G, Grieneisen L, Martin LS, Flint J, Eskin E, Blekhman R. Challenges and recommendations to improve the installability and archival stability of omics computational tools. PLOS Biology. 2019;17(6):e3000333."
   },
   "marcais2011": {
@@ -761,7 +770,7 @@
       "href": "https://doi.org/10.1093/bioinformatics/btr011",
       "label": "doi:10.1093/bioinformatics/btr011"
     },
-    "order": 83,
+    "order": 84,
     "text": "Marçais G, Kingsford C. A fast, lock-free approach for efficient parallel counting of occurrences of k-mers. Bioinformatics. 2011;27(6):764-770."
   },
   "martin1985": {
@@ -770,13 +779,13 @@
       "href": "https://doi.org/10.1093/nar/13.24.8927",
       "label": "doi:10.1093/nar/13.24.8927"
     },
-    "order": 84,
+    "order": 85,
     "text": "Martin FH, Castro MM, Aboul-ela F, Tinoco I. Base pairing involving deoxyinosine: implications for probe design. Nucleic Acids Research. 1985;13(24):8927-8938."
   },
   "miller1955": {
     "label": "Miller 1955",
     "link": null,
-    "order": 85,
+    "order": 86,
     "text": "Miller GA. Note on the bias of information estimates. In: Information Theory in Psychology: Problems and Methods (Quastler H, ed.), Free Press, Glencoe, IL. 1955. p. 95-100."
   },
   "miller1968": {
@@ -785,7 +794,7 @@
       "href": "https://doi.org/10.1145/1476589.1476628",
       "label": "doi:10.1145/1476589.1476628"
     },
-    "order": 86,
+    "order": 87,
     "text": "Miller RB. Response time in man-computer conversational transactions. In: Proceedings of the December 9-11, 1968, fall joint computer conference, part I on - AFIPS '68 (Fall, part I). 1968. p. 267."
   },
   "miotto2008": {
@@ -794,7 +803,7 @@
       "href": "https://doi.org/10.1186/1471-2105-9-S1-S18",
       "label": "doi:10.1186/1471-2105-9-S1-S18"
     },
-    "order": 87,
+    "order": 88,
     "text": "Miotto O, Heiny AT, Tan TW, August JT, Brusic V. Identification of human-to-human transmissibility factors in PB2 proteins of influenza A by large-scale mutual information analysis. BMC Bioinformatics. 2008;9(S1):S18."
   },
   "mo2026": {
@@ -803,7 +812,7 @@
       "href": "https://doi.org/10.1099/jgv.0.002306",
       "label": "doi:10.1099/jgv.0.002306"
     },
-    "order": 88,
+    "order": 89,
     "text": "Mo H, Li H, Yi L, Qian K, Lin J, Lin Z, He F, Zhang X, Ni X, Zhou X. Evolutionary and molecular characteristics of high-Shannon entropy codons in VP1 of Coxsackievirus A6. Journal of General Virology. 2026;107(7):002306."
   },
   "nielsen1990": {
@@ -812,7 +821,7 @@
       "href": "https://doi.org/10.1145/97243.97281",
       "label": "doi:10.1145/97243.97281"
     },
-    "order": 89,
+    "order": 90,
     "text": "Nielsen J, Molich R. Heuristic evaluation of user interfaces. In: Proceedings of the SIGCHI conference on Human factors in computing systems Empowering people - CHI '90. 1990. p. 249-256."
   },
   "nielsen1994": {
@@ -821,7 +830,7 @@
       "href": "https://doi.org/10.1145/191666.191729",
       "label": "doi:10.1145/191666.191729"
     },
-    "order": 90,
+    "order": 91,
     "text": "Nielsen J. Enhancing the explanatory power of usability heuristics. In: Proceedings of the SIGCHI Conference on Human Factors in Computing Systems. 1994. p. 152-158."
   },
   "ohtsuka1985": {
@@ -830,7 +839,7 @@
       "href": "https://doi.org/10.1016/S0021-9258(18)89400-5",
       "label": "doi:10.1016/S0021-9258(18)89400-5"
     },
-    "order": 91,
+    "order": 92,
     "text": "Ohtsuka E, Matsuki S, Ikehara M, Takahashi Y, Matsubara K. An alternative approach to deoxyoligonucleotides as hybridization probes by insertion of deoxyinosine at ambiguous codon positions. Journal of Biological Chemistry. 1985;260(5):2605-2608."
   },
   "paninski2003": {
@@ -839,7 +848,7 @@
       "href": "https://doi.org/10.1162/089976603321780272",
       "label": "doi:10.1162/089976603321780272"
     },
-    "order": 92,
+    "order": 93,
     "text": "Paninski L. Estimation of Entropy and Mutual Information. Neural Computation. 2003;15(6):1191-1253."
   },
   "panzeri2007": {
@@ -848,7 +857,7 @@
       "href": "https://doi.org/10.1152/jn.00559.2007",
       "label": "doi:10.1152/jn.00559.2007"
     },
-    "order": 93,
+    "order": 94,
     "text": "Panzeri S, Senatore R, Montemurro MA, Petersen RS. Correcting for the Sampling Bias Problem in Spike Train Information Measures. Journal of Neurophysiology. 2007;98(3):1064-1072."
   },
   "pearson1988": {
@@ -857,7 +866,7 @@
       "href": "https://doi.org/10.1073/pnas.85.8.2444",
       "label": "doi:10.1073/pnas.85.8.2444"
     },
-    "order": 94,
+    "order": 95,
     "text": "Pearson WR, Lipman DJ. Improved tools for biological sequence comparison. Proceedings of the National Academy of Sciences. 1988;85(8):2444-2448."
   },
   "piccardi2020": {
@@ -866,7 +875,7 @@
       "href": "https://doi.org/10.1145/3366423.3380300",
       "label": "doi:10.1145/3366423.3380300"
     },
-    "order": 96,
+    "order": 97,
     "text": "Piccardi T, Redi M, Colavizza G, West R. Quantifying Engagement with Citations on Wikipedia. In: Proceedings of The Web Conference 2020. 2020. p. 2365-2376."
   },
   "pielou1966": {
@@ -875,7 +884,7 @@
       "href": "https://doi.org/10.1016/0022-5193(66)90013-0",
       "label": "doi:10.1016/0022-5193(66)90013-0"
     },
-    "order": 97,
+    "order": 98,
     "text": "Pielou EC. The measurement of diversity in different types of biological collections. Journal of Theoretical Biology. 1966;13:131-144."
   },
   "pimentel2019": {
@@ -884,7 +893,7 @@
       "href": "https://doi.org/10.1109/MSR.2019.00077",
       "label": "doi:10.1109/MSR.2019.00077"
     },
-    "order": 98,
+    "order": 99,
     "text": "Pimentel JF, Murta L, Braganholo V, Freire J. A Large-Scale Study About Quality and Reproducibility of Jupyter Notebooks. In: 2019 IEEE/ACM 16th International Conference on Mining Software Repositories (MSR). 2019. p. 507-517."
   },
   "raghava2006": {
@@ -893,7 +902,7 @@
       "href": "https://doi.org/10.1186/1471-2105-7-415",
       "label": "doi:10.1186/1471-2105-7-415"
     },
-    "order": 99,
+    "order": 100,
     "text": "Raghava GPS, Barton GJ. Quantification of the variation in percentage identity for protein sequence alignments. BMC Bioinformatics. 2006;7(1):415."
   },
   "raman2020": {
@@ -911,13 +920,13 @@
       "href": "https://doi.org/10.1146/annurev.immunol.11.1.213",
       "label": "doi:10.1146/annurev.immunol.11.1.213"
     },
-    "order": 100,
+    "order": 101,
     "text": "Rammensee H. Peptides Naturally Presented by MHC Class I Molecules. Annual Review of Immunology. 1993;11(1):213-244."
   },
   "rao1945": {
     "label": "Rao 1945",
     "link": null,
-    "order": 101,
+    "order": 102,
     "text": "Rao CR. Information and the accuracy attainable in the estimation of statistical parameters. Bulletin of the Calcutta Mathematical Society. 1945;37:81-91."
   },
   "rfc4180": {
@@ -926,7 +935,7 @@
       "href": "https://doi.org/10.17487/RFC4180",
       "label": "doi:10.17487/RFC4180"
     },
-    "order": 102,
+    "order": 103,
     "text": "RFC 4180. Shafranovich Y. Common Format and MIME Type for Comma-Separated Values (CSV) Files. RFC 4180; 2005."
   },
   "rfc6596": {
@@ -935,7 +944,7 @@
       "href": "https://doi.org/10.17487/RFC6596",
       "label": "doi:10.17487/RFC6596"
     },
-    "order": 103,
+    "order": 104,
     "text": "RFC 6596. Ohye M, Kupke J. The Canonical Link Relation. RFC 6596; 2012."
   },
   "rfc7322": {
@@ -944,7 +953,7 @@
       "href": "https://doi.org/10.17487/RFC7322",
       "label": "doi:10.17487/RFC7322"
     },
-    "order": 104,
+    "order": 105,
     "text": "RFC 7322. Flanagan H, Ginoza S. RFC Style Guide. RFC 7322; 2014."
   },
   "rfc8259": {
@@ -953,7 +962,7 @@
       "href": "https://doi.org/10.17487/RFC8259",
       "label": "doi:10.17487/RFC8259"
     },
-    "order": 105,
+    "order": 106,
     "text": "RFC 8259. Bray T. The JavaScript Object Notation (JSON) Data Interchange Format. RFC 8259; 2017."
   },
   "rfc9309": {
@@ -962,7 +971,7 @@
       "href": "https://doi.org/10.17487/RFC9309",
       "label": "doi:10.17487/RFC9309"
     },
-    "order": 106,
+    "order": 107,
     "text": "RFC 9309. Koster M, Illyes G, Zeller H, Sassman L. Robots Exclusion Protocol. RFC 9309; 2022."
   },
   "rio2013": {
@@ -971,7 +980,7 @@
       "href": "https://doi.org/10.1214/ECP.v18-2659",
       "label": "doi:10.1214/ECP.v18-2659"
     },
-    "order": 107,
+    "order": 108,
     "text": "Rio E. On McDiarmid's concentration inequality. Electronic Communications in Probability. 2013;18:44."
   },
   "rolland2007": {
@@ -980,7 +989,7 @@
       "href": "https://doi.org/10.1371/journal.ppat.0030157",
       "label": "doi:10.1371/journal.ppat.0030157"
     },
-    "order": 108,
+    "order": 109,
     "text": "Rolland M, Nickle DC, Mullins JI. HIV-1 Group M Conserved Elements Vaccine. PLoS Pathogens. 2007;3(11):e157."
   },
   "rubin1976": {
@@ -989,7 +998,7 @@
       "href": "https://doi.org/10.1093/biomet/63.3.581",
       "label": "doi:10.1093/biomet/63.3.581"
     },
-    "order": 109,
+    "order": 110,
     "text": "Rubin DB. Inference and missing data. Biometrika. 1976;63(3):581-592."
   },
   "sampath2021": {
@@ -998,7 +1007,7 @@
       "href": "https://doi.org/10.1145/3411764.3445544",
       "label": "doi:10.1145/3411764.3445544"
     },
-    "order": 110,
+    "order": 111,
     "text": "Sampath H, Merrick A, Macvean A. Accessibility of Command Line Interfaces. In: Proceedings of the 2021 CHI Conference on Human Factors in Computing Systems. 2021. p. 1-10."
   },
   "sandve2013": {
@@ -1007,7 +1016,7 @@
       "href": "https://doi.org/10.1371/journal.pcbi.1003285",
       "label": "doi:10.1371/journal.pcbi.1003285"
     },
-    "order": 111,
+    "order": 112,
     "text": "Sandve GK, Nekrutenko A, Taylor J, Hovig E. Ten Simple Rules for Reproducible Computational Research. PLoS Computational Biology. 2013;9(10):e1003285."
   },
   "schafer2002": {
@@ -1016,7 +1025,7 @@
       "href": "https://doi.org/10.1037/1082-989x.7.2.147",
       "label": "doi:10.1037/1082-989x.7.2.147"
     },
-    "order": 112,
+    "order": 113,
     "text": "Schafer JL, Graham JW. Missing data: Our view of the state of the art. Psychological Methods. 2002;7(2):147-177."
   },
   "seemann2013": {
@@ -1025,7 +1034,7 @@
       "href": "https://doi.org/10.1186/2047-217X-2-15",
       "label": "doi:10.1186/2047-217X-2-15"
     },
-    "order": 113,
+    "order": 114,
     "text": "Seemann T. Ten recommendations for creating usable bioinformatics command line software. GigaScience. 2013;2(1):15."
   },
   "shannon1948": {
@@ -1034,7 +1043,7 @@
       "href": "https://doi.org/10.1002/j.1538-7305.1948.tb01338.x",
       "label": "doi:10.1002/j.1538-7305.1948.tb01338.x"
     },
-    "order": 114,
+    "order": 115,
     "text": "Shannon CE. A Mathematical Theory of Communication. Bell System Technical Journal. 1948;27(3):379-423."
   },
   "sheldon1969": {
@@ -1043,7 +1052,7 @@
       "href": "https://doi.org/10.2307/1933900",
       "label": "doi:10.2307/1933900"
     },
-    "order": 115,
+    "order": 116,
     "text": "Sheldon AL. Equitability Indices: Dependence on the Species Count. Ecology. 1969;50(3):466-467."
   },
   "shen2016": {
@@ -1052,7 +1061,7 @@
       "href": "https://doi.org/10.1371/journal.pone.0163962",
       "label": "doi:10.1371/journal.pone.0163962"
     },
-    "order": 116,
+    "order": 117,
     "text": "Shen W, Le S, Li Y, Hu F. SeqKit: A Cross-Platform and Ultrafast Toolkit for FASTA/Q File Manipulation. PLOS ONE. 2016;11(10):e0163962."
   },
   "shen2024": {
@@ -1061,7 +1070,7 @@
       "href": "https://doi.org/10.1002/imt2.191",
       "label": "doi:10.1002/imt2.191"
     },
-    "order": 117,
+    "order": 118,
     "text": "Shen W, Sipos B, Zhao L. SeqKit2: A Swiss army knife for sequence and alignment processing. iMeta. 2024;3(3):e191."
   },
   "sievers2011": {
@@ -1070,7 +1079,7 @@
       "href": "https://doi.org/10.1038/msb.2011.75",
       "label": "doi:10.1038/msb.2011.75"
     },
-    "order": 119,
+    "order": 120,
     "text": "Sievers F, Wilm A, Dineen D, Gibson TJ, Karplus K, Li W, Lopez R, McWilliam H, Remmert M, Söding J, Thompson JD, Higgins DG. Fast, scalable generation of high-quality protein multiple sequence alignments using Clustal Omega. Molecular Systems Biology. 2011;7(1):MSB201175."
   },
   "silverman2020": {
@@ -1079,7 +1088,7 @@
       "href": "https://doi.org/10.1016/j.csbj.2020.09.014",
       "label": "doi:10.1016/j.csbj.2020.09.014"
     },
-    "order": 120,
+    "order": 121,
     "text": "Silverman JD, Roche K, Mukherjee S, David LA. Naught all zeros in sequence count data are the same. Computational and Structural Biotechnology Journal. 2020;18:2789-2798."
   },
   "smith1996": {
@@ -1088,7 +1097,7 @@
       "href": "https://doi.org/10.2307/3545749",
       "label": "doi:10.2307/3545749"
     },
-    "order": 121,
+    "order": 122,
     "text": "Smith B, Wilson JB. A Consumer's Guide to Evenness Indices. Oikos. 1996;76(1):70-82."
   },
   "smith2016": {
@@ -1097,7 +1106,7 @@
       "href": "https://doi.org/10.7717/peerj-cs.86",
       "label": "doi:10.7717/peerj-cs.86"
     },
-    "order": 122,
+    "order": 123,
     "text": "Smith AM, Katz DS, Niemeyer KE, FORCE11 Software Citation Working Group. Software citation principles. PeerJ Computer Science. 2016;2:e86."
   },
   "song2019": {
@@ -1106,7 +1115,7 @@
       "href": "https://doi.org/10.1109/TVCG.2018.2864914",
       "label": "doi:10.1109/TVCG.2018.2864914"
     },
-    "order": 123,
+    "order": 124,
     "text": "Song H, Szafir DA. Where's My Data? Evaluating Visualizations with Missing Data. IEEE Transactions on Visualization and Computer Graphics. 2019;25(1):914-924."
   },
   "srinivasan2002": {
@@ -1115,7 +1124,7 @@
       "href": "https://doi.org/10.1126/science.1069588",
       "label": "doi:10.1126/science.1069588"
     },
-    "order": 124,
+    "order": 125,
     "text": "Srinivasan G, James CM, Krzycki JA. Pyrrolysine Encoded by UAG in Archaea: Charging of a UAG-Decoding Specialized tRNA. Science. 2002;296(5572):1459-1462."
   },
   "strong1998": {
@@ -1124,7 +1133,7 @@
       "href": "https://doi.org/10.1103/PhysRevLett.80.197",
       "label": "doi:10.1103/PhysRevLett.80.197"
     },
-    "order": 125,
+    "order": 126,
     "text": "Strong SP, Koberle R, de Ruyter van Steveninck RR, Bialek W. Entropy and Information in Neural Spike Trains. Physical Review Letters. 1998;80(1):197-200."
   },
   "taschuk2017": {
@@ -1133,7 +1142,7 @@
       "href": "https://doi.org/10.1371/journal.pcbi.1005412",
       "label": "doi:10.1371/journal.pcbi.1005412"
     },
-    "order": 126,
+    "order": 127,
     "text": "Taschuk M, Wilson G. Ten simple rules for making research software more robust. PLOS Computational Biology. 2017;13(4):e1005412."
   },
   "tharanga2025": {
@@ -1142,7 +1151,7 @@
       "href": "https://doi.org/10.1093/bib/bbae607",
       "label": "doi:10.1093/bib/bbae607"
     },
-    "order": 127,
+    "order": 128,
     "text": "Tharanga S, Ünlü ES, Hu Y, Sjaugi MF, Çelik MA, Hekimoğlu H, Miotto O, Öncel MM, Khan AM. DiMA: sequence diversity dynamics analyser for viruses. Briefings in Bioinformatics. 2025;26(1):bbae607."
   },
   "uax15": {
@@ -1151,7 +1160,7 @@
       "href": "https://www.unicode.org/reports/tr15/tr15-57.html",
       "label": "https://www.unicode.org/reports/tr15/tr15-57.html"
     },
-    "order": 128,
+    "order": 129,
     "text": "UAX #15. Whistler K. Unicode Standard Annex #15: Unicode Normalization Forms. The Unicode Consortium; 2025."
   },
   "uax44": {
@@ -1160,7 +1169,7 @@
       "href": "https://www.unicode.org/reports/tr44/tr44-36.html",
       "label": "https://www.unicode.org/reports/tr44/tr44-36.html"
     },
-    "order": 129,
+    "order": 130,
     "text": "UAX #44. Unicode Consortium. Unicode Standard Annex #44: Unicode Character Database. The Unicode Consortium; 2025."
   },
   "vandersijs2006": {
@@ -1169,7 +1178,7 @@
       "href": "https://doi.org/10.1197/jamia.M1809",
       "label": "doi:10.1197/jamia.M1809"
     },
-    "order": 130,
+    "order": 131,
     "text": "van der Sijs H, Aarts J, Vulto A, Berg M. Overriding of Drug Safety Alerts in Computerized Physician Order Entry. Journal of the American Medical Informatics Association. 2006;13(2):138-147."
   },
   "vanvleck1901": {
@@ -1178,7 +1187,7 @@
       "href": "https://doi.org/10.2307/1967627",
       "label": "doi:10.2307/1967627"
     },
-    "order": 131,
+    "order": 132,
     "text": "Van Vleck EB. On the Convergence of the Continued Fraction of Gauss and Other Continued Fractions. The Annals of Mathematics. 1901;3(1/4):1-18."
   },
   "wang2021": {
@@ -1187,7 +1196,7 @@
       "href": "https://doi.org/10.1145/3441852.3476545",
       "label": "doi:10.1145/3441852.3476545"
     },
-    "order": 132,
+    "order": 133,
     "text": "Wang LL, Cachola I, Bragg J, Cheng EYY, Haupt C, Latzke M, Kuehl B, van Zuylen MN, Wagner L, Weld D. SciA11y: Converting Scientific Papers to Accessible HTML. In: Proceedings of the 23rd International ACM SIGACCESS Conference on Computers and Accessibility. 2021. p. 1-4."
   },
   "wcag22": {
@@ -1196,7 +1205,7 @@
       "href": "https://www.w3.org/TR/2024/REC-WCAG22-20241212/",
       "label": "https://www.w3.org/TR/2024/REC-WCAG22-20241212/"
     },
-    "order": 133,
+    "order": 134,
     "text": "WCAG 2.2. Campbell A, Adams C, Bradley Montgomery R, Cooper M, Kirkpatrick A. Web Content Accessibility Guidelines (WCAG) 2.2. W3C Recommendation; 2024."
   },
   "wcag2ict": {
@@ -1205,7 +1214,7 @@
       "href": "https://www.w3.org/TR/2025/NOTE-wcag2ict-22-20251211/",
       "label": "https://www.w3.org/TR/2025/NOTE-wcag2ict-22-20251211/"
     },
-    "order": 134,
+    "order": 135,
     "text": "WCAG2ICT. W3C Accessibility Guidelines Working Group. Guidance on Applying WCAG 2 to Non-Web Information and Communications Technologies (WCAG2ICT). W3C Group Note; 2025."
   },
   "weber2019": {
@@ -1214,7 +1223,7 @@
       "href": "https://doi.org/10.1186/s13059-019-1738-8",
       "label": "doi:10.1186/s13059-019-1738-8"
     },
-    "order": 135,
+    "order": 136,
     "text": "Weber LM, Saelens W, Cannoodt R, Soneson C, Hapfelmeier A, Gardner PP, Boulesteix AL, Saeys Y, Robinson MD. Essential guidelines for computational method benchmarking. Genome Biology. 2019;20(1):125."
   },
   "weiskopf2022": {
@@ -1223,7 +1232,7 @@
       "href": "https://doi.org/10.3389/fbinf.2022.793819",
       "label": "doi:10.3389/fbinf.2022.793819"
     },
-    "order": 136,
+    "order": 137,
     "text": "Weiskopf D. Uncertainty Visualization: Concepts, Methods, and Applications in Biological Data Visualization. Frontiers in Bioinformatics. 2022;2:793819."
   },
   "wickham2014": {
@@ -1232,7 +1241,7 @@
       "href": "https://doi.org/10.18637/jss.v059.i10",
       "label": "doi:10.18637/jss.v059.i10"
     },
-    "order": 137,
+    "order": 138,
     "text": "Wickham H. Tidy Data. Journal of Statistical Software. 2014;59(10):1-23."
   },
   "wilkinson2016": {
@@ -1241,7 +1250,7 @@
       "href": "https://doi.org/10.1038/sdata.2016.18",
       "label": "doi:10.1038/sdata.2016.18"
     },
-    "order": 138,
+    "order": 139,
     "text": "Wilkinson MD, Dumontier M, Aalbersberg IJ, Appleton G, Axton M, Baak A, Blomberg N, Boiten JW, da Silva Santos LB, Bourne PE, Bouwman J, Brookes AJ, Clark T, Crosas M, Dillo I, Dumon O, Edmunds S, Evelo CT, Finkers R, Gonzalez-Beltran A, et al. The FAIR Guiding Principles for scientific data management and stewardship. Scientific Data. 2016;3(1):160018."
   },
   "wilson2014": {
@@ -1250,7 +1259,7 @@
       "href": "https://doi.org/10.1371/journal.pbio.1001745",
       "label": "doi:10.1371/journal.pbio.1001745"
     },
-    "order": 139,
+    "order": 140,
     "text": "Wilson G, Aruliah DA, Brown CT, Chue Hong NP, Davis M, Guy RT, Haddock SHD, Huff KD, Mitchell IM, Plumbley MD, Waugh B, White EP, Wilson P. Best Practices for Scientific Computing. PLoS Biology. 2014;12(1):e1001745."
   },
   "wong2011": {
@@ -1259,7 +1268,7 @@
       "href": "https://doi.org/10.1038/nmeth.1618",
       "label": "doi:10.1038/nmeth.1618"
     },
-    "order": 140,
+    "order": 141,
     "text": "Wong B. Points of view: Color blindness. Nature Methods. 2011;8(6):441-441."
   },
   "wu2024": {
@@ -1268,7 +1277,7 @@
       "href": "https://doi.org/10.1371/journal.ppat.1012142",
       "label": "doi:10.1371/journal.ppat.1012142"
     },
-    "order": 141,
+    "order": 142,
     "text": "Wu J, Zhang Y, Nie Y, Yan F, Zirbel CL, Bisaro DM. RNA three-dimensional structure drives the sequence organization of potato spindle tuber viroid quasispecies. PLOS Pathogens. 2024;20(4):e1012142."
   },
   "wu2025": {
@@ -1277,7 +1286,7 @@
       "href": "https://doi.org/10.1093/ve/veaf029",
       "label": "doi:10.1093/ve/veaf029"
     },
-    "order": 142,
+    "order": 143,
     "text": "Wu J. Similarity-weighted entropy for quantifying genetic diversity in viral quasispecies. Virus Evolution. 2025;11(1):veaf029."
   },
   "zahan2023": {
@@ -1286,7 +1295,7 @@
       "href": "https://doi.org/10.1109/MSEC.2023.3279773",
       "label": "doi:10.1109/MSEC.2023.3279773"
     },
-    "order": 143,
+    "order": 144,
     "text": "Zahan N, Kanakiya P, Hambleton B, Shohan S, Williams L. OpenSSF Scorecard: On the Path Toward Ecosystem-Wide Automated Security Metrics. IEEE Security & Privacy. 2023;21(6):76-88."
   },
   "zhang2021": {
@@ -1295,7 +1304,7 @@
       "href": "https://doi.org/10.1109/TSE.2019.2906315",
       "label": "doi:10.1109/TSE.2019.2906315"
     },
-    "order": 144,
+    "order": 145,
     "text": "Zhang H, Wang S, Chen TH, Zou Y, Hassan AE. An Empirical Study of Obsolete Answers on Stack Overflow. IEEE Transactions on Software Engineering. 2021;47(4):850-862."
   },
   "zhao2019": {
@@ -1304,7 +1313,7 @@
       "href": "https://doi.org/10.1093/ve/vey041",
       "label": "doi:10.1093/ve/vey041"
     },
-    "order": 145,
+    "order": 146,
     "text": "Zhao L, Illingworth CJR. Measurements of intrahost viral diversity require an unbiased diversity metric. Virus Evolution. 2019;5(1):vey041."
   }
 }

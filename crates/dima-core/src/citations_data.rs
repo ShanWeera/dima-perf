@@ -587,6 +587,20 @@ pub(super) static DOI_CITATIONS: &[Citation] = &[
         tier: Tier::Domain,
     },
     Citation {
+        key: "diaconis2019",
+        authors: &[("Diaconis", "Persi"), ("Griffiths", "Robert C.")],
+        year: 2019,
+        title: "Reproducing kernel orthogonal polynomials on the multinomial distribution",
+        venue: "Journal of Approximation Theory",
+        volume: Some("242"),
+        issue: None,
+        pages: Some("1-30"),
+        doi: Some("10.1016/j.jat.2019.01.007"),
+        url: None,
+        kind: Kind::Article,
+        tier: Tier::General,
+    },
+    Citation {
         key: "durant2022",
         authors: &[
             ("Durant", "Eloi"),

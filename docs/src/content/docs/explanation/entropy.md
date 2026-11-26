@@ -168,10 +168,13 @@ the AVANA tool extrapolated from 100 random sub-alignments by default [@khan2017
 
 These standard deviations are exact too: the subsamples are drawn independently, so the variance
 of the random intercept is $\sum_j w_j^2 \operatorname{Var}(\hat H_{n_j})$, and each variance
-follows from the multinomial distribution of the subsample counts. The covariance of the counts
-of two k-mers comes from their expansion in orthonormal Krawtchouk polynomials, evaluated with
-the polynomials' three-term recurrence [@filipuk2026, pp. 1892–1893]; `docs_numbers.py` checks
-the result against every outcome of small cases.
+follows from the multinomial distribution of the subsample counts. The counts of two k-mers are
+the margins of the 2 × 2 table "this k-mer or not" by "that one or not", whose joint distribution
+is a series in orthonormal Krawtchouk polynomials [@diaconis2019, Section 2, eqs. (7), (11) and
+(12)] with the table's correlation $\rho = -\sqrt{p_i p_j / ((1 - p_i)(1 - p_j))}$; that gives
+their covariance, and the polynomials are evaluated with their three-term recurrence
+[@filipuk2026, pp. 1892–1893]. `docs_numbers.py` checks the result against every outcome of
+small cases.
 
 ### The negative-intercept rule
 

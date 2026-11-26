@@ -360,6 +360,25 @@
   "volume": "19",
   "year": 2007
  },
+ "10.1016/j.jat.2019.01.007": {
+  "authors": [
+   [
+    "Diaconis",
+    "Persi"
+   ],
+   [
+    "Griffiths",
+    "Robert C."
+   ]
+  ],
+  "issue": null,
+  "key": "diaconis2019",
+  "pages": "1-30",
+  "title": "Reproducing kernel orthogonal polynomials on the multinomial distribution",
+  "venue": "Journal of Approximation Theory",
+  "volume": "242",
+  "year": 2019
+ },
  "10.1021/acs.jproteome.5b00981": {
   "authors": [
    [
