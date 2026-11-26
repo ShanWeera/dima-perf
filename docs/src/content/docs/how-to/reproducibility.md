@@ -118,11 +118,12 @@ requires `schema_version` 1.1.0 and the keys 1.1.0 added, so a 1.0.0 file does n
 against it.
 
 Results written by a newer 1.x version are read too, keeping only the keys this version knows;
-`dima view` warns about it (`newer_schema`), and a value this version does not know stops the
-reading. `dima hcs` and `dima cite --from` read such files without a warning, and leave out what
-this version does not know: dima 1.0.0's `dima cite --from`, for example, writes no sentence for
-similarity-weighted entropy, although the run computed it and the references list Wu 2025. Read
-results with the version that wrote them, or a newer one. See
+`dima view` warns about it (`newer_schema`), the desktop app opens such a file with the same
+warning (a version it does not recognise is quoted in both), and a value this version does not
+know stops the reading. `dima hcs` and `dima cite --from` read such files without a warning, and
+leave out what this version does not know: dima 1.0.0's `dima cite --from`, for example, writes
+no sentence for similarity-weighted entropy, although the run computed it and the references list
+Wu 2025. Read results with the version that wrote them, or a newer one. See
 [Troubleshooting](/how-to/troubleshooting/#results-written-by-another-dima-version).
 
 ## References
