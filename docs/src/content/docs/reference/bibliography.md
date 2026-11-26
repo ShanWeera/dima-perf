@@ -79,6 +79,7 @@ Every reference cited by `dima`, its help texts, the desktop app and these pages
 - Weiskopf D. Uncertainty Visualization: Concepts, Methods, and Applications in Biological Data Visualization. Frontiers in Bioinformatics. 2022;2:793819. [doi:10.3389/fbinf.2022.793819](https://doi.org/10.3389/fbinf.2022.793819)
 - Wilson G, Aruliah DA, Brown CT, Chue Hong NP, Davis M, Guy RT, Haddock SHD, Huff KD, Mitchell IM, Plumbley MD, Waugh B, White EP, Wilson P. Best Practices for Scientific Computing. PLoS Biology. 2014;12(1):e1001745. [doi:10.1371/journal.pbio.1001745](https://doi.org/10.1371/journal.pbio.1001745)
 - Wong B. Points of view: Color blindness. Nature Methods. 2011;8(6):441-441. [doi:10.1038/nmeth.1618](https://doi.org/10.1038/nmeth.1618)
+- Wu J, Zhang Y, Nie Y, Yan F, Zirbel CL, Bisaro DM. RNA three-dimensional structure drives the sequence organization of potato spindle tuber viroid quasispecies. PLOS Pathogens. 2024;20(4):e1012142. [doi:10.1371/journal.ppat.1012142](https://doi.org/10.1371/journal.ppat.1012142)
 - Wu J. Similarity-weighted entropy for quantifying genetic diversity in viral quasispecies. Virus Evolution. 2025;11(1):veaf029. [doi:10.1093/ve/veaf029](https://doi.org/10.1093/ve/veaf029)
 - Zhao L, Illingworth CJR. Measurements of intrahost viral diversity require an unbiased diversity metric. Virus Evolution. 2019;5(1):vey041. [doi:10.1093/ve/vey041](https://doi.org/10.1093/ve/vey041)
 

@@ -73,7 +73,12 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   option in the guides, the references, the FAQ, the Glossary and Troubleshooting.
 - Test data: Wu 2025's ToBRFV samples (Supplementary File 2, CC BY 4.0) as
   `tests/data/tobrfv_tm2.fasta.bz2` and `tobrfv_tm22.fasta.bz2`, written by
-  `scripts/reference/tobrfv_from_supplement.py`. The reference implementation
+  `scripts/reference/tobrfv_from_supplement.py`, and the ten PSTVd loop-27 libraries of Wu 2025's
+  Fig. 5c (the S2 Table of Wu et al. 2024, PLOS Pathogens,
+  [doi:10.1371/journal.ppat.1012142](https://doi.org/10.1371/journal.ppat.1012142), CC BY 4.0) as
+  `tests/data/pstvd_loop27_<library>.fasta.bz2`, written by
+  `scripts/reference/pstvd_from_supplement.py`; "Comparison with the papers" compares DiMA's
+  values on them with Fig. 5c. The reference implementation
   (`scripts/reference/dima_reference.py`) computes similarity-weighted entropy pair by pair, as Wu
   defines it, with `--similarity-weighted-entropy`.
 - `scripts/reference/docs_numbers.py` computes the documentation's numbers that come from

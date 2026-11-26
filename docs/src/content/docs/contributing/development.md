@@ -146,4 +146,6 @@ named by `CHROME_PATH`.
 | `scripts/reference/paper_values.py` | Writes the paper test's expected values from the reference implementation; `--check` compares |
 | `scripts/reference/docs_numbers.py` | Computes the documentation's numbers that come from expectations and simulations and writes them between their markers; `--check` compares |
 | `scripts/reference/tobrfv_from_supplement.py` | Writes the ToBRFV test alignments from Wu 2025's Supplementary File 2 (see `tests/data/README.md`) |
+| `scripts/reference/pstvd_from_supplement.py` | Writes the PSTVd loop-27 test alignments from the S2 Table of Wu et al. 2024 (see `tests/data/README.md`) |
+| `scripts/reference/xlsx_rows.py` | Reads the cells of spreadsheet (.xlsx) sheets for the two converters above (standard library only) |
 | `scripts/release/check-windows-crt.py` | Checks that Windows programs need no Visual C++ runtime DLL, by reading their import tables; CI and the release workflow run it on every Windows program |

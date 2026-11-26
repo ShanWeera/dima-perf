@@ -28,7 +28,8 @@ python3 scripts/reference/dima_reference.py --self-test
 ```
 
 The paper test (`crates/dima-core/tests/paper.rs`) compares the library with this oracle's
-output on the four bundled datasets and Wu 2025's two ToBRFV samples without running Python:
+output on the four bundled datasets, Wu 2025's two ToBRFV samples and the ten PSTVd loop-27
+libraries of Wu 2025's Fig. 5c without running Python:
 `paper_values.py` (in this directory) runs the oracle and writes those numbers to
 `crates/dima-core/tests/paper_expected/mod.rs`, and CI fails when they are out of date:
 

@@ -1226,13 +1226,22 @@
     "order": 136,
     "text": "Wong B. Points of view: Color blindness. Nature Methods. 2011;8(6):441-441."
   },
+  "wu2024": {
+    "label": "Wu et al. 2024",
+    "link": {
+      "href": "https://doi.org/10.1371/journal.ppat.1012142",
+      "label": "doi:10.1371/journal.ppat.1012142"
+    },
+    "order": 137,
+    "text": "Wu J, Zhang Y, Nie Y, Yan F, Zirbel CL, Bisaro DM. RNA three-dimensional structure drives the sequence organization of potato spindle tuber viroid quasispecies. PLOS Pathogens. 2024;20(4):e1012142."
+  },
   "wu2025": {
     "label": "Wu 2025",
     "link": {
       "href": "https://doi.org/10.1093/ve/veaf029",
       "label": "doi:10.1093/ve/veaf029"
     },
-    "order": 137,
+    "order": 138,
     "text": "Wu J. Similarity-weighted entropy for quantifying genetic diversity in viral quasispecies. Virus Evolution. 2025;11(1):veaf029."
   },
   "zahan2023": {
@@ -1241,7 +1250,7 @@
       "href": "https://doi.org/10.1109/MSEC.2023.3279773",
       "label": "doi:10.1109/MSEC.2023.3279773"
     },
-    "order": 138,
+    "order": 139,
     "text": "Zahan N, Kanakiya P, Hambleton B, Shohan S, Williams L. OpenSSF Scorecard: On the Path Toward Ecosystem-Wide Automated Security Metrics. IEEE Security & Privacy. 2023;21(6):76-88."
   },
   "zhang2021": {
@@ -1250,7 +1259,7 @@
       "href": "https://doi.org/10.1109/TSE.2019.2906315",
       "label": "doi:10.1109/TSE.2019.2906315"
     },
-    "order": 139,
+    "order": 140,
     "text": "Zhang H, Wang S, Chen TH, Zou Y, Hassan AE. An Empirical Study of Obsolete Answers on Stack Overflow. IEEE Transactions on Software Engineering. 2021;47(4):850-862."
   },
   "zhao2019": {
@@ -1259,7 +1268,7 @@
       "href": "https://doi.org/10.1093/ve/vey041",
       "label": "doi:10.1093/ve/vey041"
     },
-    "order": 140,
+    "order": 141,
     "text": "Zhao L, Illingworth CJR. Measurements of intrahost viral diversity require an unbiased diversity metric. Virus Evolution. 2019;5(1):vey041."
   }
 }

@@ -89,19 +89,21 @@ HIV-1 *pol* means differ from DiMA's by less than 0.00026 bits (DNA) and 0.0011 
 ## Similarity-weighted entropy (Wu 2025)
 
 Wu's paper introduces similarity-weighted entropy [@wu2025] (see
-[the methodology](/explanation/entropy/#similarity-weighted-entropy-opt-in)). Two of its examples
-come with their data: Supplementary File 1 prints the four metrics of further simulated
-populations (not those of Figs. 2 and 4), and Supplementary File 2 lists the unique sequences,
-with their read counts, of two samples of tomato brown rugose fruit virus (ToBRFV): one from
-tomato plants with the susceptible tm-2 allele and one from plants with the resistant Tm-2²
-allele, both of the 5′-120nts region, the first 120 nucleotides at the 5′ end of the genome
-[@wu2025, Sections 2.2 and 3.3]. Wu's potato spindle tuber viroid (PSTVd)
-pools (practical, IR, LM and Sys) are not published as sequences. DiMA's values below are fixed
+[the methodology](/explanation/entropy/#similarity-weighted-entropy-opt-in)). Three of its examples
+come with their data. Supplementary File 1 prints the four metrics of further simulated
+populations (not those of Figs. 2 and 4). Supplementary File 2 lists the unique sequences, with
+their read counts, of two samples of tomato brown rugose fruit virus (ToBRFV): one from tomato
+plants with the susceptible tm-2 allele and one from plants with the resistant Tm-2² allele, both
+of the 5′-120nts region, the first 120 nucleotides at the 5′ end of the genome
+[@wu2025, Sections 2.2 and 3.3]. The potato spindle tuber viroid (PSTVd) libraries of Fig. 5c
+come from Wu's earlier study [@wu2025, Section 2.3], whose S2 Table lists their unique sequences
+with their read counts [@wu2024, Supporting information, S2 Table]. DiMA's values below are fixed
 by the test suite (`crates/dima-core/tests/paper.rs`, which builds the simulated populations and
-reads the ToBRFV data in `tests/data/`); the ToBRFV values and the Fig. 5c pool also agree with
-the reference implementation, which computes $H_\text{sim}$ pair by pair as Wu defines it. The
-Hamming distances are computed by `scripts/reference/docs_numbers.py`, and the other readings of
-Fig. 5c below are arithmetic shown in the text.
+reads the ToBRFV and PSTVd data in `tests/data/`); the ToBRFV and PSTVd values and the Fig. 5c
+pool also agree with the reference implementation, which computes $H_\text{sim}$ pair by pair as
+Wu defines it. The tables, the Hamming distances and the changes between libraries are computed
+by `scripts/reference/docs_numbers.py`, and the other readings of Fig. 5c below are arithmetic
+shown in the text.
 
 **Supplementary File 1.** Its "Figure 2 Extended Data" sheet gives $H$, $H_n$, $H_\text{sim}$ and
 $H_\text{nsim}$ to five decimals for five populations of 10 sequences, every pair of sequences at
@@ -128,6 +130,64 @@ $H_\text{nsim} = 129/256 = 0.50390625$, where the paper prints 8, 1, 4.04 and 0.
 4.04 is reproduced if the similarities are rounded to two decimals first (4.0353); the paper does
 not say so. Three decimals give 4.0317; counting each sequence's similarity to itself gives 4.00,
 and the similarities of Fig. 5b, which are those of the four free sites only, give 6.03.
+
+**Fig. 5c: the PSTVd libraries.** Loop 27 of PSTVd, UUUUCA, was mutated to UNNNNA, each N any
+of the four nucleotides [@wu2025, Fig. 5a]. The mutant pool was sequenced, and so were the
+populations it gave in *Nicotiana benthamiana* plants: in the inoculated region (IR), at the
+margin of the inoculated leaves (LM) and in systemic leaves (Sys), each in three plants, one
+plant per replicate [@wu2024, Materials and methods]. Sheet "Loop27" of the S2 Table lists the
+unique 6-nucleotide sequences of the ten libraries, in DNA letters (TTTTCA for UUUUCA), with
+their read counts.
+`tests/data/pstvd_loop27_<library>.fasta.bz2` holds each sequence once per read (library `pool`,
+`ir1` to `ir3`, `lm1` to `lm3` and `sys1` to `sys3`), so a run such as
+
+```sh
+dima analyze -i tests/data/pstvd_loop27_pool.fasta.bz2 -a dna -k 6 --similarity-weighted-entropy -o pool.json
+```
+
+has one position whose k-mer counts are the read counts:
+
+<!-- docs-numbers:pstvd:start -->
+
+| Library | Reads | Unique sequences ($D$) | $H$ | $H_n$ | $H_\text{sim}$ | $H_\text{nsim}$ |
+|---|---|---|---|---|---|---|
+| Pool | 73,627 | 343 | 7.7128 | 0.9158 | 3.8754 | 0.4601 |
+| IR-1 | 56,701 | 344 | 6.7745 | 0.8040 | 3.3020 | 0.3919 |
+| IR-2 | 61,108 | 347 | 6.9968 | 0.8291 | 3.4247 | 0.4058 |
+| IR-3 | 52,903 | 347 | 6.8783 | 0.8151 | 3.3456 | 0.3965 |
+| IR, mean of the 3 plants | | | 6.8832 | 0.8161 | 3.3574 | 0.3980 |
+| LM-1 | 30,013 | 245 | 1.8352 | 0.2312 | 0.8919 | 0.1124 |
+| LM-2 | 33,075 | 270 | 1.1098 | 0.1374 | 0.5431 | 0.0672 |
+| LM-3 | 38,708 | 225 | 0.9462 | 0.1211 | 0.4613 | 0.0590 |
+| LM, mean of the 3 plants | | | 1.2971 | 0.1632 | 0.6321 | 0.0796 |
+| Sys-1 | 62,182 | 216 | 0.9796 | 0.1263 | 0.4491 | 0.0579 |
+| Sys-2 | 65,426 | 244 | 1.2365 | 0.1559 | 0.6131 | 0.0773 |
+| Sys-3 | 50,835 | 248 | 0.7141 | 0.0898 | 0.2987 | 0.0376 |
+| Sys, mean of the 3 plants | | | 0.9767 | 0.1240 | 0.4536 | 0.0576 |
+
+<!-- docs-numbers:pstvd:end -->
+
+Fig. 5c plots one point for the pool and one for each of IR, LM and Sys, without error bars.
+Read from the figure's pixels, the practical pool's point agrees with the pool above, and the IR,
+LM and Sys points with the means of their three plants, to within 0.06 bits for $H$ and
+$H_\text{sim}$ and 0.005 for $H_n$ and $H_\text{nsim}$: about what the figure can be read to,
+since its theoretical-pool points, whose values are exact, read up to 0.02 bits and 0.004 off.
+No single LM plant would match: the LM point is at about 1.30 bits. The pool's values use every
+listed sequence, <!-- docs-numbers:pstvd-pool:start -->
+255 of them of the form UNNNNA and 88 others; the 255 alone would give $H_n = 0.9598$<!-- docs-numbers:pstvd-pool:end -->, against about 0.91 in the figure. As Section 3.2 reports
+[@wu2025, Section 3.2], all four values fall from the pool through IR and LM to Sys. From the
+pool to the mean of the Sys plants, <!-- docs-numbers:pstvd-drop:start -->
+$H$ falls by 6.7361 bits (87.3%) and $H_\text{sim}$ by 3.4217 bits (88.3%), $H_n$ by 0.7918 (86.5%)
+and $H_\text{nsim}$ by 0.4026 (87.5%)<!-- docs-numbers:pstvd-drop:end -->. So $H$ falls by more bits than $H_\text{sim}$, and $H_n$
+by more than $H_\text{nsim}$, as the paper says; in proportion to the pool's values the four
+fall by similar amounts.
+
+The listed reads do not always add up to the library's total in the study's S1 Table, against
+which the S2 Table's "reads per thousand" are computed: they are between 3 fewer and 2 more (the
+pool lists 73,627 of 73,628 reads). Three libraries also list a different number of unique
+sequences from S1 Table's: IR-1 one more, IR-2 three more and Sys-2 one fewer. The values here use
+the listed sequences and reads; Wu 2025 does not say which it used, and the figure cannot tell
+such small differences apart.
 
 **ToBRFV.** Supplementary File 2 lists 48 (tm-2 sample) and 47 (Tm-2² sample) unique
 120-nucleotide sequences of the 5′-120nts region with their read counts. Wu reports excluding

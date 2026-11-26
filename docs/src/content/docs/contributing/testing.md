@@ -47,8 +47,11 @@ sources and checksums in its README) and checks the values of
 [Comparison with the papers](/explanation/paper-comparison/): position counts, support classes,
 means, extrema with their positions and ties, the MERS-CoV position 25 of Fig. 1C, and the
 conserved regions with their flags and bounds. With similarity-weighted entropy it also checks Wu
-2025's two ToBRFV samples (committed from the paper's Supplementary File 2), the saturated pools of
-Wu's Figs 4 and 5c, whose values are exact fractions, and the populations of Wu's Supplementary
+2025's two ToBRFV samples (committed from the paper's Supplementary File 2), the ten PSTVd loop-27
+libraries of Wu's Fig. 5c (committed from the S2 Table of Wu et al. 2024; the test also checks that
+all four values fall from the pool through the inoculated region and the leaf margins to the
+systemic leaves, as Wu reports), the saturated pools of Wu's Figs 4 and 5c, whose values are
+exact fractions, and the populations of Wu's Supplementary
 File 1 against its printed values. Its numbers are compared with the same rule as
 the differential tests (a relative $10^{-13}$), defined once in
 `crates/dima-core/tests/common/mod.rs`. The entropies it expects are the reference
@@ -127,7 +130,8 @@ search budgets of `docs/lighthouserc.cjs`.
 Some numbers on the methodology pages are not outputs of a run but properties of the methods:
 how far one run of the paper's random procedure strays from the exact expectation DiMA reports,
 how often DiMA v5.0.9's per-run rule replaces an intercept, how the similarity-weighted values
-change with the number of sequences, and the values of Wu 2025's ToBRFV samples.
+change with the number of sequences, and the values of Wu 2025's ToBRFV samples and PSTVd
+libraries.
 `scripts/reference/docs_numbers.py` computes them, exactly where an exact form exists and
 otherwise by Monte Carlo with fixed seeds, and writes them between
 `<!-- docs-numbers:NAME:start -->` and `<!-- docs-numbers:NAME:end -->` markers in

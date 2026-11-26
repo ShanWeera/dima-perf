@@ -482,9 +482,9 @@ entropy column by column.
 
 Wu defines a viral quasispecies as "a population of related viral sequences within an infected
 host" [@wu2025, Section 1], and applied the metric only to such populations: simulated ones, a
-potato spindle tuber viroid mutant pool and two tomato brown rugose fruit virus (ToBRFV)
-samples, all of nucleotide sequences of equal length that differ by
-substitutions only [@wu2025, Sections 2.1 and 3.1–3.3]. DiMA's alignments usually hold sequences
+potato spindle tuber viroid (PSTVd) mutant pool with the populations it gave in plants, and two
+tomato brown rugose fruit virus (ToBRFV) samples, all of nucleotide sequences of equal length
+that differ by substitutions only [@wu2025, Sections 2.1 and 3.1–3.3]. DiMA's alignments usually hold sequences
 from many hosts, and DiMA applies the metric at every k-mer position, to amino-acid k-mers too.
 Wu's reading, that a variant similar to the others adds less to a quasispecies' diversity, then
 becomes a statement about the k-mers sampled across hosts. These uses are DiMA's extension and are
@@ -492,9 +492,10 @@ untested.
 
 As of 25 November 2026, searches of OpenAlex, Semantic Scholar, OpenCitations and Europe PMC
 (including full text; Crossref's citation count agrees) found no published application or
-evaluation of the metric by other authors; the works that cite it are reviews. Wu's ToBRFV data
-(the unique sequences with their read counts) are published, and with them DiMA reproduces his
-values for one sample but not for the other (see [Comparison with the papers](/explanation/paper-comparison/#similarity-weighted-entropy-wu-2025)).
+evaluation of the metric by other authors; the works that cite it are reviews. The data of both
+of Wu's real examples are published as unique sequences with their read counts. With them DiMA
+reproduces his PSTVd values (Fig. 5c, as far as the figure can be read), and his ToBRFV values for
+one sample but not for the other (see [Comparison with the papers](/explanation/paper-comparison/#similarity-weighted-entropy-wu-2025)).
 
 ### How the values change with the number of sequences
 

@@ -14,8 +14,18 @@ SHA-256 of the **decompressed** bytes.
 | `MERS_Spike_nt.fasta.bz2` (MERS-CoV spike gene, lower-case) | 499 × 4,065 | `b1d1880e2546504b57d93e7b9343ff80edfb312e19886220d5e2f1a437253243` | 2,120,534 |
 | `HIV1_ALL_2020_pol_PRO.fasta.bz2` (HIV-1 pol protein, LANL alignment, CRLF) | 3,756 × 1,197 | `281f1fcd266d00865b910f7467dddf63fe4acd86e1e9c5c53596fe4e4d154af4` | 4,754,950 |
 | `HIV1_FLT_2022_pol_DNA.fasta.bz2` (HIV-1 group M pol gene; the paper's HIV dataset) | 2,637 × 3,390 | `45878c9e55703c148105139332346a8b3152bac0ac85d26cb122c2a9172895a2` | 9,194,803 |
-| `tobrfv_tm2.fasta.bz2` (ToBRFV 5'-120nts reads, tm-2 sample; Wu 2025) | 10,833 × 120 | `2665bb5348c260475aa66008cb8c79e674b465c41b82720acf88fb201c88ffd4` | 1,427,535 |
-| `tobrfv_tm22.fasta.bz2` (ToBRFV 5'-120nts reads, Tm-2² sample; Wu 2025) | 6,969 × 120 | `d44eb59de3f4697a335d0b567dbfe6611bd4d8b6aec108c43fa03a248cda424d` | 917,725 |
+| `tobrfv_tm2.fasta.bz2` (ToBRFV 5'-120nts reads, tm-2 sample; Wu 2025) | 10,833 × 120 | `68a7158e652d1b8ccea4f5299c32f1935d187cb8f524a946d95bc5f8b63fdd30` | 1,376,295 |
+| `tobrfv_tm22.fasta.bz2` (ToBRFV 5'-120nts reads, Tm-2² sample; Wu 2025) | 6,969 × 120 | `ff945575be50fe26a13cffe0094e73eb113bac76336fc3c325e4d6555d55e326` | 885,401 |
+| `pstvd_loop27_pool.fasta.bz2` (PSTVd loop 27, mutant pool; Wu et al. 2024) | 73,627 × 6 | `b09fc4f58eab692bfbde7cd163f83f66b265cb8413034e6c3c5c45d6720a7b5c` | 1,049,087 |
+| `pstvd_loop27_ir1.fasta.bz2` (PSTVd loop 27, inoculated region, plant 1; Wu et al. 2024) | 56,701 × 6 | `425c87192dfbcd86777345555fb4b7262cddb987770bd7ec66efa74f5bc14b54` | 787,303 |
+| `pstvd_loop27_ir2.fasta.bz2` (PSTVd loop 27, inoculated region, plant 2; Wu et al. 2024) | 61,108 × 6 | `e62fad37acb5850ae81bdc70bb246bb74215104dbbbf31c65e324f32aa7c5907` | 852,243 |
+| `pstvd_loop27_ir3.fasta.bz2` (PSTVd loop 27, inoculated region, plant 3; Wu et al. 2024) | 52,903 × 6 | `695ff41c54b0a08fa9dbd54d608e5a3dc9a9e9db40168c9c8ac5952b96fa720e` | 735,604 |
+| `pstvd_loop27_lm1.fasta.bz2` (PSTVd loop 27, leaf margin, plant 1; Wu et al. 2024) | 30,013 × 6 | `a4cdb737b385d28f8add88a0fb3b32183e9e707f628a3183f6482cdd51a38c1f` | 394,454 |
+| `pstvd_loop27_lm2.fasta.bz2` (PSTVd loop 27, leaf margin, plant 2; Wu et al. 2024) | 33,075 × 6 | `65256ca3d9d3bce31ab6892a1639a81ddd2ad105586939da897c196b928a45e9` | 432,924 |
+| `pstvd_loop27_lm3.fasta.bz2` (PSTVd loop 27, leaf margin, plant 3; Wu et al. 2024) | 38,708 × 6 | `9e425ef037cf819cb917ca3ec985d92b2c99a86ee9326f39dd43908ec1b438f1` | 505,928 |
+| `pstvd_loop27_sys1.fasta.bz2` (PSTVd loop 27, systemic leaves, plant 1; Wu et al. 2024) | 62,182 × 6 | `aed884a05d2b3bf551b30ab335afc32eada35c7ca8f9d3f656c495a3d817df13` | 809,367 |
+| `pstvd_loop27_sys2.fasta.bz2` (PSTVd loop 27, systemic leaves, plant 2; Wu et al. 2024) | 65,426 × 6 | `fe0f5c07d99c9baa1563e522f881f18b031655f24598373347208349dae75594` | 852,651 |
+| `pstvd_loop27_sys3.fasta.bz2` (PSTVd loop 27, systemic leaves, plant 3; Wu et al. 2024) | 50,835 × 6 | `d1a144861b35a6327c8b9a7187def77453c099a5031e46d3203f68dd488b4568` | 662,522 |
 | `results-schema-1.0.0.json.gz` (results written by dima 1.0.0, schema 1.0.0) | — | `4ee511590ca0fb53f95126e078ee155693f7264ab7f1d232c7870adc365faff9` | 15,400 |
 
 The MERS amino-acid dataset is byte-identical to `samples/mers_spike_aa.fasta` and is not
@@ -44,12 +54,33 @@ duplicated here.
   tomato brown rugose fruit virus in the tm-2 and Tm-2² samples with their read counts (48
   sequences and 10,833 reads; 47 and 6,969). Wu reports excluding sequences below 0.1% of the
   reads; the tm-2 sheet nevertheless lists eight with 10 reads (0.092%). All are kept: with all
-  48, the tm-2 values of Wu's Fig. 6d are reproduced. Each unique sequence is written once per read, so that a run at $k = 120$ (one
-  position) counts the reads; records are named `SeqN_r`. Retrieved from Europe PMC (PMC12079039,
+  48, the tm-2 values of Wu's Fig. 6d are reproduced. Each unique sequence is written once per
+  read, so that a run at $k = 120$ (one position) counts the reads; every record of a sequence
+  carries the sheet's ID (`SeqN`). Retrieved from Europe PMC (PMC12079039,
   supplementary files) on 2026-11-25 (`Supplementary File 2.xlsx`, SHA-256
   `4d3e3fb6c0f59925ff56008c795d51b8823f26bd32a9dc5b12d780496190b074`) and converted with
   `python3 scripts/reference/tobrfv_from_supplement.py "Supplementary File 2.xlsx" DIR`,
   then `bzip2 -9`. Used for the similarity-weighted entropy paper test.
+* **PSTVd loop 27 (mutant pool and nine plant libraries).** From the supporting information of
+  Wu J, Zhang Y, Nie Y, Yan F, Zirbel CL, Bisaro DM. RNA three-dimensional structure drives the
+  sequence organization of potato spindle tuber viroid quasispecies. *PLoS Pathog*
+  2024;20(4):e1012142, doi:10.1371/journal.ppat.1012142; © 2024 Wu et al., an open access article
+  distributed under the Creative Commons Attribution License (CC BY 4.0,
+  <https://creativecommons.org/licenses/by/4.0/>); converted as described below, not otherwise
+  changed. Sheet "Loop27" of its S2 Table lists the unique sequences of PSTVd loop 27 (wild type
+  UUUUCA, mutated to UNNNNA; written in DNA letters) with their read counts, for the mutant pool
+  and for the inoculated region (IR), the margin of the inoculated leaves (LM) and the systemic
+  leaves (Sys) of three *Nicotiana benthamiana* plants each: the data of Wu 2025's Fig. 5c. The
+  sheet's "reads per thousand" are relative to each library's total in the study's S1 Table; the
+  listed reads add up to between 3 fewer and 2 more (73,627 of 73,628 for the pool), and IR-1,
+  IR-2 and Sys-2 list 1 more, 3 more and 1 fewer unique sequences than S1 Table counts. The
+  listed sequences and reads are used as they are. Each unique sequence is written once per read,
+  so that a run at $k = 6$ (one position) counts the reads; every record of a sequence is named
+  `SeqN`, N being its place in the library's list. Retrieved from Europe PMC (PMC11020406,
+  supplementary files) on 2026-11-25 (`journal.ppat.1012142.s002.xlsx`, SHA-256
+  `b1312329cd06ce56c2cbeaf61923d552658ab6db3ae6b7663b94cf159fe7388f`) and converted with
+  `python3 scripts/reference/pstvd_from_supplement.py journal.ppat.1012142.s002.xlsx DIR`, which
+  checks every row, then `bzip2 -9`. Used for the similarity-weighted entropy paper test.
 * **`results-schema-1.0.0.json.gz`.** The golden results of the `tiny` test input
   (`tests/golden/tiny/results.json`) as dima 1.0.0 wrote them, before schema 1.1.0, frozen to
   test that older results are read as runs without the options their schema did not have

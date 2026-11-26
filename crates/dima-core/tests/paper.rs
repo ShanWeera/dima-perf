@@ -277,49 +277,220 @@ fn hiv_pol_dna_reproduces_the_paper() {
     }
 }
 
+/// The expected values of a run of one k-mer position (the whole sequence): summary, position 1,
+/// similarity-weighted summary and values of position 1.
+type OnePosition = (
+    &'static Summary,
+    &'static Position,
+    &'static SimilaritySummary,
+    &'static SimilarityPosition,
+);
+
+/// Analyses `path`, a file with one record per read, as one k-mer position, checks the reads, the
+/// distinct k-mers and every value against `want`, and returns the position.
+#[track_caller]
+fn one_position(
+    path: &str,
+    params: &AnalysisParams,
+    (reads, distinct): (u64, usize),
+    (want, pos, sim, sim_pos): OnePosition,
+) -> dima_core::model::PositionResult {
+    let mut r = run(path, params.clone());
+    assert_eq!((r.sequence_count, r.position_count), (reads, 1), "{path}");
+    summary(&r, want, (1, 1), (1, 1));
+    similarity(&r, sim, (1, 1), (1, 1));
+    let p = r.results.remove(0);
+    assert_eq!(
+        (p.support, p.diversity_motifs.len()),
+        (reads, distinct),
+        "{path}"
+    );
+    close(p.entropy.unwrap(), pos.entropy);
+    close(p.observed_entropy.unwrap(), pos.observed);
+    close(p.sample_coverage.unwrap(), pos.coverage);
+    similarity_position(&p, sim_pos);
+    p
+}
+
 /// Wu 2025's ToBRFV samples (Supplementary File 2: the unique 120-nt sequences of the 5'-120nts
 /// region with their read counts; tests/data/README.md): one 120-mer position each. With the
 /// published data the observed entropy is higher in the Tm-2² sample than in tm-2, the reverse
 /// of Wu's Section 3.3 (documented on "Comparison with the papers").
 #[test]
 fn wu_tobrfv_samples() {
+    use paper_expected::*;
     let params = AnalysisParams {
         alphabet: Some(Alphabet::Dna),
         kmer_length: Some(120),
         ..with_similarity()
     };
-    let mut observed = Vec::new();
-    for (path, reads, distinct, want, pos, sim, sim_pos) in [
+    let tm2 = one_position(
+        "tests/data/tobrfv_tm2.fasta.bz2",
+        &params,
+        (10_833, 48),
         (
-            "tests/data/tobrfv_tm2.fasta.bz2",
-            10_833,
-            48,
-            &paper_expected::TOBRFV_TM2,
-            &paper_expected::TOBRFV_TM2_POS1,
-            &paper_expected::TOBRFV_TM2_SIMILARITY,
-            &paper_expected::TOBRFV_TM2_POS1_SIMILARITY,
+            &TOBRFV_TM2,
+            &TOBRFV_TM2_POS1,
+            &TOBRFV_TM2_SIMILARITY,
+            &TOBRFV_TM2_POS1_SIMILARITY,
+        ),
+    );
+    let tm22 = one_position(
+        "tests/data/tobrfv_tm22.fasta.bz2",
+        &params,
+        (6_969, 47),
+        (
+            &TOBRFV_TM22,
+            &TOBRFV_TM22_POS1,
+            &TOBRFV_TM22_SIMILARITY,
+            &TOBRFV_TM22_POS1_SIMILARITY,
+        ),
+    );
+    assert!(tm22.observed_entropy > tm2.observed_entropy);
+}
+
+/// Wu et al. 2024's PSTVd loop-27 libraries (S2 Table: the unique 6-nt loop sequences of each
+/// library with their read counts; tests/data/README.md), the data of Wu 2025's Fig. 5c: one
+/// 6-mer position each. Wu 2025, Section 3.2: after replication in the inoculated region (IR),
+/// migration to the leaf margins (LM) and trafficking to systemic leaves (Sys), "all four values
+/// gradually decreased"; here from the pool through the means of the three plants of each.
+#[test]
+fn wu_pstvd_loop27() {
+    use paper_expected::*;
+    let params = AnalysisParams {
+        alphabet: Some(Alphabet::Dna),
+        kmer_length: Some(6),
+        ..with_similarity()
+    };
+    let libraries: [(&str, (u64, usize), OnePosition); 10] = [
+        (
+            "pool",
+            (73_627, 343),
+            (
+                &PSTVD_POOL,
+                &PSTVD_POOL_POS1,
+                &PSTVD_POOL_SIMILARITY,
+                &PSTVD_POOL_POS1_SIMILARITY,
+            ),
         ),
         (
-            "tests/data/tobrfv_tm22.fasta.bz2",
-            6_969,
-            47,
-            &paper_expected::TOBRFV_TM22,
-            &paper_expected::TOBRFV_TM22_POS1,
-            &paper_expected::TOBRFV_TM22_SIMILARITY,
-            &paper_expected::TOBRFV_TM22_POS1_SIMILARITY,
+            "ir1",
+            (56_701, 344),
+            (
+                &PSTVD_IR1,
+                &PSTVD_IR1_POS1,
+                &PSTVD_IR1_SIMILARITY,
+                &PSTVD_IR1_POS1_SIMILARITY,
+            ),
         ),
-    ] {
-        let r = run(path, params.clone());
-        assert_eq!((r.sequence_count, r.position_count), (reads, 1));
-        let p = &r.results[0];
-        assert_eq!((p.support, p.diversity_motifs.len()), (reads, distinct));
-        summary(&r, want, (1, 1), (1, 1));
-        close(p.observed_entropy.unwrap(), pos.observed);
-        similarity(&r, sim, (1, 1), (1, 1));
-        similarity_position(p, sim_pos);
-        observed.push(p.observed_entropy.unwrap());
+        (
+            "ir2",
+            (61_108, 347),
+            (
+                &PSTVD_IR2,
+                &PSTVD_IR2_POS1,
+                &PSTVD_IR2_SIMILARITY,
+                &PSTVD_IR2_POS1_SIMILARITY,
+            ),
+        ),
+        (
+            "ir3",
+            (52_903, 347),
+            (
+                &PSTVD_IR3,
+                &PSTVD_IR3_POS1,
+                &PSTVD_IR3_SIMILARITY,
+                &PSTVD_IR3_POS1_SIMILARITY,
+            ),
+        ),
+        (
+            "lm1",
+            (30_013, 245),
+            (
+                &PSTVD_LM1,
+                &PSTVD_LM1_POS1,
+                &PSTVD_LM1_SIMILARITY,
+                &PSTVD_LM1_POS1_SIMILARITY,
+            ),
+        ),
+        (
+            "lm2",
+            (33_075, 270),
+            (
+                &PSTVD_LM2,
+                &PSTVD_LM2_POS1,
+                &PSTVD_LM2_SIMILARITY,
+                &PSTVD_LM2_POS1_SIMILARITY,
+            ),
+        ),
+        (
+            "lm3",
+            (38_708, 225),
+            (
+                &PSTVD_LM3,
+                &PSTVD_LM3_POS1,
+                &PSTVD_LM3_SIMILARITY,
+                &PSTVD_LM3_POS1_SIMILARITY,
+            ),
+        ),
+        (
+            "sys1",
+            (62_182, 216),
+            (
+                &PSTVD_SYS1,
+                &PSTVD_SYS1_POS1,
+                &PSTVD_SYS1_SIMILARITY,
+                &PSTVD_SYS1_POS1_SIMILARITY,
+            ),
+        ),
+        (
+            "sys2",
+            (65_426, 244),
+            (
+                &PSTVD_SYS2,
+                &PSTVD_SYS2_POS1,
+                &PSTVD_SYS2_SIMILARITY,
+                &PSTVD_SYS2_POS1_SIMILARITY,
+            ),
+        ),
+        (
+            "sys3",
+            (50_835, 248),
+            (
+                &PSTVD_SYS3,
+                &PSTVD_SYS3_POS1,
+                &PSTVD_SYS3_SIMILARITY,
+                &PSTVD_SYS3_POS1_SIMILARITY,
+            ),
+        ),
+    ];
+    let values: Vec<[f64; 4]> = libraries
+        .into_iter()
+        .map(|(stem, counts, want)| {
+            let path = format!("tests/data/pstvd_loop27_{stem}.fasta.bz2");
+            let p = one_position(&path, &params, counts, want);
+            [
+                p.observed_entropy,
+                p.similarity_weighted_entropy,
+                p.normalised_observed_entropy,
+                p.normalised_similarity_weighted_entropy,
+            ]
+            .map(Option::unwrap)
+        })
+        .collect();
+    let mean = |plants: &[[f64; 4]], i: usize| plants.iter().map(|v| v[i]).sum::<f64>() / 3.0;
+    for i in 0..4 {
+        let stages = [
+            values[0][i],
+            mean(&values[1..4], i),
+            mean(&values[4..7], i),
+            mean(&values[7..10], i),
+        ];
+        assert!(
+            stages.windows(2).all(|w| w[0] > w[1]),
+            "value {i}: {stages:?}"
+        );
     }
-    assert!(observed[1] > observed[0]);
 }
 
 /// One position of `variants` (k-mer, count), analysed with the given alphabet.

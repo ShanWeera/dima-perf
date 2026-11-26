@@ -5,7 +5,8 @@ Most numbers in the documentation are outputs of dima runs, fixed by the tests. 
 how far one run of the paper's random procedure strays from the exact expectation DiMA reports,
 how often DiMA v5.0.9's per-run negative-intercept rule replaces an intercept and how much that
 raises its averages, how the similarity-weighted values change with the number of sequences,
-and the values of Wu 2025's ToBRFV samples. This script computes them and writes them between
+and the values of Wu 2025's ToBRFV samples and of Wu et al. 2024's PSTVd loop-27 libraries (the
+data of Wu 2025's Fig. 5c). This script computes them and writes them between
 markers in the pages that show them, and in the notes of scripts/validate_paper.sh:
 
     <!-- docs-numbers:NAME:start -->...<!-- docs-numbers:NAME:end -->
@@ -139,6 +140,11 @@ DATASETS = {
     "hiv_pro": "tests/data/HIV1_ALL_2020_pol_PRO.fasta.bz2",
 }
 TOBRFV = (("tm-2", "tests/data/tobrfv_tm2.fasta.bz2"), ("Tm-2²", "tests/data/tobrfv_tm22.fasta.bz2"))
+#: PSTVd loop 27 (Wu et al. 2024, S2 Table): the mutant pool, then three plants of each stage,
+#: as (stage, [(library, file)]).
+PSTVD = (("Pool", (("Pool", "pool"),)),) + tuple(
+    (stage, tuple((f"{stage}-{i}", f"{stage.lower()}{i}") for i in (1, 2, 3))) for stage in ("IR", "LM", "Sys")
+)
 
 #: The paper's Fig. 1C value at MERS-CoV spike position 25 (T = 30).
 PAPER_FIG1C = 1.38
@@ -317,7 +323,7 @@ def read_alignment(rel: str) -> tuple[int, list[list[tuple[bytes, int]]]]:
 
 
 def read_unique(rel: str) -> list[tuple[bytes, int]]:
-    """The distinct sequences of a FASTA file with their counts (ToBRFV: one record per read)."""
+    """The distinct sequences of a FASTA file with their counts (ToBRFV, PSTVd: one record per read)."""
     records = R.parse_fasta(R.read_input(str(ROOT / rel)))
     return R.sort_variants(Counter(r.seq for r in records))
 
@@ -539,23 +545,43 @@ def table2() -> dict:
 # ---------------------------------------------------------------------------------------------
 
 
+def sample_values(variants: list[tuple[bytes, int]]) -> dict:
+    """The four values of a sample of reads, with its reads and unique sequences."""
+    values = population_values(variants)
+    values.update(reads=sum(c for _, c in variants), unique=len(variants))
+    return values
+
+
 def tobrfv() -> list[dict]:
     out = []
     for label, rel in TOBRFV:
         variants = read_unique(rel)
         k = len(variants[0][0])
-        values = population_values(variants)
+        values = sample_values(variants)
         ints = [int.from_bytes(s, "big") for s, _ in variants]
         dist = [k - R.matches(ints[i], ints[j], k) for i, j in combinations(range(len(ints)), 2)]
-        values.update(
-            sample=label,
-            reads=sum(c for _, c in variants),
-            unique=len(variants),
-            mean_distance=Fraction(sum(dist), len(dist)),
-            max_distance=max(dist),
-        )
+        values.update(sample=label, mean_distance=Fraction(sum(dist), len(dist)), max_distance=max(dist))
         out.append(values)
     return out
+
+
+# ---------------------------------------------------------------------------------------------
+# PSTVd loop 27
+# ---------------------------------------------------------------------------------------------
+
+
+def pstvd() -> dict:
+    """The libraries of tests/data/pstvd_loop27_*.fasta.bz2 as [(stage, [values of each library])],
+    and the pool's sequences of the mutated form UNNNNA (TNNNNA) with their H_n."""
+    stages = [
+        (stage, [dict(sample_values(read_unique(f"tests/data/pstvd_loop27_{stem}.fasta.bz2")), sample=label)
+                 for label, stem in libraries])
+        for stage, libraries in PSTVD
+    ]
+    pool = read_unique("tests/data/pstvd_loop27_pool.fasta.bz2")
+    mutated = [(seq, c) for seq, c in pool if re.fullmatch(rb"T[ACGT]{4}A", seq)]
+    return {"stages": stages, "mutated": len(mutated), "others": len(pool) - len(mutated),
+            "mutated_H_n": population_values(mutated)["H_n"]}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1025,6 +1051,7 @@ TASKS = {
     "table1": table1,
     "table2": table2,
     "tobrfv": tobrfv,
+    "pstvd": pstvd,
     "procedure": random_procedure,
     "mers_rule": mers_rule_task,
     "expected_means": expected_means_task,
@@ -1069,7 +1096,7 @@ def compute(workers: int | None) -> dict:
             for ni, n_obs in enumerate(POP_N):
                 seed = MC_POPULATION[0] * 1000 + ti * 100 + ni
                 submit(("population", threshold, n_obs), "population", n_obs, threshold, MC_POPULATION[1], seed)
-        for name in ("table1", "table2", "tobrfv"):
+        for name in ("table1", "table2", "tobrfv", "pstvd"):
             submit((name,), name)
         counts = {}
         for dataset in ("mers_aa", "mers_nt", "hiv_dna", "hiv_pro"):
@@ -1147,6 +1174,8 @@ def summarise(res: dict) -> dict:
     s["table1"] = res[("table1",)]
     s["table2"] = res[("table2",)]
     s["tobrfv"] = res[("tobrfv",)]
+    s["pstvd"] = res[("pstvd",)]["stages"]
+    s["pstvd_pool"] = res[("pstvd",)]
     return s
 
 
@@ -1385,6 +1414,41 @@ def render_tobrfv(s: dict) -> str:
     return "\n".join(lines)
 
 
+PSTVD_KEYS = ("H", "H_n", "H_sim", "H_nsim")
+
+
+def render_pstvd(s: dict) -> str:
+    lines = [
+        "| Library | Reads | Unique sequences ($D$) | $H$ | $H_n$ | $H_\\text{sim}$ | $H_\\text{nsim}$ |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for stage, libraries in s["pstvd"]:
+        for r in libraries:
+            lines.append(f"| {r['sample']} | {thousands(r['reads'])} | {r['unique']} | " + " | ".join(f4(r[k]) for k in PSTVD_KEYS) + " |")
+        if len(libraries) > 1:
+            means = [math.fsum(r[k] for r in libraries) / len(libraries) for k in PSTVD_KEYS]
+            lines.append(f"| {stage}, mean of the {len(libraries)} plants | | | " + " | ".join(f4(m) for m in means) + " |")
+    return "\n".join(lines)
+
+
+def render_pstvd_drop(s: dict) -> str:
+    stages = dict(s["pstvd"])
+    pool, plants = stages["Pool"][0], stages["Sys"]
+    parts = []
+    for key, label, unit in (("H", "$H$", " bits"), ("H_sim", "$H_\\text{sim}$", " bits"), ("H_n", "$H_n$", ""), ("H_nsim", "$H_\\text{nsim}$", "")):
+        mean = math.fsum(r[key] for r in plants) / len(plants)
+        parts.append(f"{label} by {f4(pool[key] - mean)}{unit} ({pct(1 - mean / pool[key])})")
+    return f"{parts[0].replace(' by ', ' falls by ', 1)} and {parts[1]}, {parts[2]} and {parts[3]}"
+
+
+def render_pstvd_pool(s: dict) -> str:
+    p = s["pstvd_pool"]
+    return (
+        f"{p['mutated']} of them of the form UNNNNA and {p['others']} others; the {p['mutated']} alone would give "
+        f"$H_n = {f4(p['mutated_H_n'])}$"
+    )
+
+
 def render_hiv_run_mean_note(s: dict) -> str:
     return (
         "the mean intercept of one run of the published procedure, before its negative-intercept rule, has "
@@ -1455,6 +1519,9 @@ REGIONS = [
     (COMPARISON, "fig1c", "inline", render_fig1c_note),
     (COMPARISON, "v509-means", "inline", render_v509_comparison),
     (COMPARISON, "tobrfv", "block", render_tobrfv),
+    (COMPARISON, "pstvd", "block", render_pstvd),
+    (COMPARISON, "pstvd-pool", "inline", render_pstvd_pool),
+    (COMPARISON, "pstvd-drop", "inline", render_pstvd_drop),
     (VALIDATE, "notes", "code", render_validate),
 ]
 

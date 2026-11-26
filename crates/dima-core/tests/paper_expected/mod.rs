@@ -219,3 +219,323 @@ pub const TOBRFV_TM22_POS1_SIMILARITY: SimilarityPosition = SimilarityPosition {
     normalised_observed: 0.1401546577896422,
     normalised_similarity_weighted: 0.019018592509672624,
 };
+
+/// PSTVd loop 27, the mutant pool (Wu et al. 2024, S2 Table), one 6-mer position:
+/// `dima_reference.py analyze -i tests/data/pstvd_loop27_pool.fasta.bz2 -a dna -k 6 --similarity-weighted-entropy`.
+pub const PSTVD_POOL: Summary = Summary {
+    mean: 7.714766000160633,
+    all_mean: 7.714766000160633,
+    // position 1
+    lowest: 7.714766000160633,
+    // position 1
+    highest: 7.714766000160633,
+};
+/// Position 1 of the run above.
+pub const PSTVD_POOL_POS1: Position = Position {
+    entropy: 7.714766000160633,
+    observed: 7.712800206292026,
+    coverage: 0.9992122488282535,
+};
+/// Similarity-weighted entropy of the run above.
+pub const PSTVD_POOL_SIMILARITY: SimilaritySummary = SimilaritySummary {
+    mean: 3.875364987043785,
+    observed_mean: 7.712800206292026,
+    // position 1
+    lowest: 3.875364987043785,
+    // position 1
+    highest: 3.875364987043785,
+};
+/// The similarity-weighted values of position 1 of the run above.
+pub const PSTVD_POOL_POS1_SIMILARITY: SimilarityPosition = SimilarityPosition {
+    similarity_weighted: 3.875364987043785,
+    normalised_observed: 0.9157849554031519,
+    normalised_similarity_weighted: 0.4601442870172612,
+};
+
+/// PSTVd loop 27, inoculated region, plant 1 (Wu et al. 2024, S2 Table), one 6-mer position:
+/// `dima_reference.py analyze -i tests/data/pstvd_loop27_ir1.fasta.bz2 -a dna -k 6 --similarity-weighted-entropy`.
+pub const PSTVD_IR1: Summary = Summary {
+    mean: 6.777030479842631,
+    all_mean: 6.777030479842631,
+    // position 1
+    lowest: 6.777030479842631,
+    // position 1
+    highest: 6.777030479842631,
+};
+/// Position 1 of the run above.
+pub const PSTVD_IR1_POS1: Position = Position {
+    entropy: 6.777030479842631,
+    observed: 6.774463422046009,
+    coverage: 0.9988360012313705,
+};
+/// Similarity-weighted entropy of the run above.
+pub const PSTVD_IR1_SIMILARITY: SimilaritySummary = SimilaritySummary {
+    mean: 3.3019717661149492,
+    observed_mean: 6.774463422046009,
+    // position 1
+    lowest: 3.3019717661149492,
+    // position 1
+    highest: 3.3019717661149492,
+};
+/// The similarity-weighted values of position 1 of the run above.
+pub const PSTVD_IR1_POS1_SIMILARITY: SimilarityPosition = SimilarityPosition {
+    similarity_weighted: 3.3019717661149492,
+    normalised_observed: 0.8039699225289193,
+    normalised_similarity_weighted: 0.3918666054579349,
+};
+
+/// PSTVd loop 27, inoculated region, plant 2 (Wu et al. 2024, S2 Table), one 6-mer position:
+/// `dima_reference.py analyze -i tests/data/pstvd_loop27_ir2.fasta.bz2 -a dna -k 6 --similarity-weighted-entropy`.
+pub const PSTVD_IR2: Summary = Summary {
+    mean: 6.999204597446548,
+    all_mean: 6.999204597446548,
+    // position 1
+    lowest: 6.999204597446548,
+    // position 1
+    highest: 6.999204597446548,
+};
+/// Position 1 of the run above.
+pub const PSTVD_IR2_POS1: Position = Position {
+    entropy: 6.999204597446548,
+    observed: 6.996784737217074,
+    coverage: 0.9990181393305155,
+};
+/// Similarity-weighted entropy of the run above.
+pub const PSTVD_IR2_SIMILARITY: SimilaritySummary = SimilaritySummary {
+    mean: 3.4247237034561246,
+    observed_mean: 6.996784737217074,
+    // position 1
+    lowest: 3.4247237034561246,
+    // position 1
+    highest: 3.4247237034561246,
+};
+/// The similarity-weighted values of position 1 of the run above.
+pub const PSTVD_IR2_POS1_SIMILARITY: SimilarityPosition = SimilarityPosition {
+    similarity_weighted: 3.4247237034561246,
+    normalised_observed: 0.8291216159193905,
+    normalised_similarity_weighted: 0.40583104350533145,
+};
+
+/// PSTVd loop 27, inoculated region, plant 3 (Wu et al. 2024, S2 Table), one 6-mer position:
+/// `dima_reference.py analyze -i tests/data/pstvd_loop27_ir3.fasta.bz2 -a dna -k 6 --similarity-weighted-entropy`.
+pub const PSTVD_IR3: Summary = Summary {
+    mean: 6.881081894112248,
+    all_mean: 6.881081894112248,
+    // position 1
+    lowest: 6.881081894112248,
+    // position 1
+    highest: 6.881081894112248,
+};
+/// Position 1 of the run above.
+pub const PSTVD_IR3_POS1: Position = Position {
+    entropy: 6.881081894112248,
+    observed: 6.878298921949332,
+    coverage: 0.9987713440799318,
+};
+/// Similarity-weighted entropy of the run above.
+pub const PSTVD_IR3_SIMILARITY: SimilaritySummary = SimilaritySummary {
+    mean: 3.345567033629789,
+    observed_mean: 6.878298921949332,
+    // position 1
+    lowest: 3.345567033629789,
+    // position 1
+    highest: 3.345567033629789,
+};
+/// The similarity-weighted values of position 1 of the run above.
+pub const PSTVD_IR3_POS1_SIMILARITY: SimilarityPosition = SimilarityPosition {
+    similarity_weighted: 3.345567033629789,
+    normalised_observed: 0.8150810023650293,
+    normalised_similarity_weighted: 0.3964509484385061,
+};
+
+/// PSTVd loop 27, inoculated-leaf margin, plant 1 (Wu et al. 2024, S2 Table), one 6-mer position:
+/// `dima_reference.py analyze -i tests/data/pstvd_loop27_lm1.fasta.bz2 -a dna -k 6 --similarity-weighted-entropy`.
+pub const PSTVD_LM1: Summary = Summary {
+    mean: 1.8387767248400912,
+    all_mean: 1.8387767248400912,
+    // position 1
+    lowest: 1.8387767248400912,
+    // position 1
+    highest: 1.8387767248400912,
+};
+/// Position 1 of the run above.
+pub const PSTVD_LM1_POS1: Position = Position {
+    entropy: 1.8387767248400912,
+    observed: 1.8351685487877551,
+    coverage: 0.9980009173585144,
+};
+/// Similarity-weighted entropy of the run above.
+pub const PSTVD_LM1_SIMILARITY: SimilaritySummary = SimilaritySummary {
+    mean: 0.8919124626624553,
+    observed_mean: 1.8351685487877551,
+    // position 1
+    lowest: 0.8919124626624553,
+    // position 1
+    highest: 0.8919124626624553,
+};
+/// The similarity-weighted values of position 1 of the run above.
+pub const PSTVD_LM1_POS1_SIMILARITY: SimilarityPosition = SimilarityPosition {
+    similarity_weighted: 0.8919124626624553,
+    normalised_observed: 0.2312274495689529,
+    normalised_similarity_weighted: 0.11237912949000488,
+};
+
+/// PSTVd loop 27, inoculated-leaf margin, plant 2 (Wu et al. 2024, S2 Table), one 6-mer position:
+/// `dima_reference.py analyze -i tests/data/pstvd_loop27_lm2.fasta.bz2 -a dna -k 6 --similarity-weighted-entropy`.
+pub const PSTVD_LM2: Summary = Summary {
+    mean: 1.1137290879563155,
+    all_mean: 1.1137290879563155,
+    // position 1
+    lowest: 1.1137290879563155,
+    // position 1
+    highest: 1.1137290879563155,
+};
+/// Position 1 of the run above.
+pub const PSTVD_LM2_POS1: Position = Position {
+    entropy: 1.1137290879563155,
+    observed: 1.1097856880635841,
+    coverage: 0.9989116030184391,
+};
+/// Similarity-weighted entropy of the run above.
+pub const PSTVD_LM2_SIMILARITY: SimilaritySummary = SimilaritySummary {
+    mean: 0.5431165871241157,
+    observed_mean: 1.1097856880635841,
+    // position 1
+    lowest: 0.5431165871241157,
+    // position 1
+    highest: 0.5431165871241157,
+};
+/// The similarity-weighted values of position 1 of the run above.
+pub const PSTVD_LM2_POS1_SIMILARITY: SimilarityPosition = SimilarityPosition {
+    similarity_weighted: 0.5431165871241157,
+    normalised_observed: 0.13740386600739177,
+    normalised_similarity_weighted: 0.0672439008416175,
+};
+
+/// PSTVd loop 27, inoculated-leaf margin, plant 3 (Wu et al. 2024, S2 Table), one 6-mer position:
+/// `dima_reference.py analyze -i tests/data/pstvd_loop27_lm3.fasta.bz2 -a dna -k 6 --similarity-weighted-entropy`.
+pub const PSTVD_LM3: Summary = Summary {
+    mean: 0.9489243408997021,
+    all_mean: 0.9489243408997021,
+    // position 1
+    lowest: 0.9489243408997021,
+    // position 1
+    highest: 0.9489243408997021,
+};
+/// Position 1 of the run above.
+pub const PSTVD_LM3_POS1: Position = Position {
+    entropy: 0.9489243408997021,
+    observed: 0.9462321266704493,
+    coverage: 0.9990699970731786,
+};
+/// Similarity-weighted entropy of the run above.
+pub const PSTVD_LM3_SIMILARITY: SimilaritySummary = SimilaritySummary {
+    mean: 0.4613128626229932,
+    observed_mean: 0.9462321266704493,
+    // position 1
+    lowest: 0.4613128626229932,
+    // position 1
+    highest: 0.4613128626229932,
+};
+/// The similarity-weighted values of position 1 of the run above.
+pub const PSTVD_LM3_POS1_SIMILARITY: SimilarityPosition = SimilarityPosition {
+    similarity_weighted: 0.4613128626229932,
+    normalised_observed: 0.12109785307707967,
+    normalised_similarity_weighted: 0.05903836456817155,
+};
+
+/// PSTVd loop 27, systemic leaves, plant 1 (Wu et al. 2024, S2 Table), one 6-mer position:
+/// `dima_reference.py analyze -i tests/data/pstvd_loop27_sys1.fasta.bz2 -a dna -k 6 --similarity-weighted-entropy`.
+pub const PSTVD_SYS1: Summary = Summary {
+    mean: 0.9812290239760366,
+    all_mean: 0.9812290239760366,
+    // position 1
+    lowest: 0.9812290239760366,
+    // position 1
+    highest: 0.9812290239760366,
+};
+/// Position 1 of the run above.
+pub const PSTVD_SYS1_POS1: Position = Position {
+    entropy: 0.9812290239760366,
+    observed: 0.9796263478496717,
+    coverage: 0.99903511588567,
+};
+/// Similarity-weighted entropy of the run above.
+pub const PSTVD_SYS1_SIMILARITY: SimilaritySummary = SimilaritySummary {
+    mean: 0.449053198948338,
+    observed_mean: 0.9796263478496717,
+    // position 1
+    lowest: 0.449053198948338,
+    // position 1
+    highest: 0.449053198948338,
+};
+/// The similarity-weighted values of position 1 of the run above.
+pub const PSTVD_SYS1_POS1_SIMILARITY: SimilarityPosition = SimilarityPosition {
+    similarity_weighted: 0.449053198948338,
+    normalised_observed: 0.12632373423552234,
+    normalised_similarity_weighted: 0.057905830203605214,
+};
+
+/// PSTVd loop 27, systemic leaves, plant 2 (Wu et al. 2024, S2 Table), one 6-mer position:
+/// `dima_reference.py analyze -i tests/data/pstvd_loop27_sys2.fasta.bz2 -a dna -k 6 --similarity-weighted-entropy`.
+pub const PSTVD_SYS2: Summary = Summary {
+    mean: 1.238163306145334,
+    all_mean: 1.238163306145334,
+    // position 1
+    lowest: 1.238163306145334,
+    // position 1
+    highest: 1.238163306145334,
+};
+/// Position 1 of the run above.
+pub const PSTVD_SYS2_POS1: Position = Position {
+    entropy: 1.238163306145334,
+    observed: 1.2364651353476463,
+    coverage: 0.9990523799219313,
+};
+/// Similarity-weighted entropy of the run above.
+pub const PSTVD_SYS2_SIMILARITY: SimilaritySummary = SimilaritySummary {
+    mean: 0.6131443679431966,
+    observed_mean: 1.2364651353476463,
+    // position 1
+    lowest: 0.6131443679431966,
+    // position 1
+    highest: 0.6131443679431966,
+};
+/// The similarity-weighted values of position 1 of the run above.
+pub const PSTVD_SYS2_POS1_SIMILARITY: SimilarityPosition = SimilarityPosition {
+    similarity_weighted: 0.6131443679431966,
+    normalised_observed: 0.15590796702991197,
+    normalised_similarity_weighted: 0.0773124038592376,
+};
+
+/// PSTVd loop 27, systemic leaves, plant 3 (Wu et al. 2024, S2 Table), one 6-mer position:
+/// `dima_reference.py analyze -i tests/data/pstvd_loop27_sys3.fasta.bz2 -a dna -k 6 --similarity-weighted-entropy`.
+pub const PSTVD_SYS3: Summary = Summary {
+    mean: 0.7163856540389211,
+    all_mean: 0.7163856540389211,
+    // position 1
+    lowest: 0.7163856540389211,
+    // position 1
+    highest: 0.7163856540389211,
+};
+/// Position 1 of the run above.
+pub const PSTVD_SYS3_POS1: Position = Position {
+    entropy: 0.7163856540389211,
+    observed: 0.7141224743975645,
+    coverage: 0.9987213843554982,
+};
+/// Similarity-weighted entropy of the run above.
+pub const PSTVD_SYS3_SIMILARITY: SimilaritySummary = SimilaritySummary {
+    mean: 0.29869403430474945,
+    observed_mean: 0.7141224743975645,
+    // position 1
+    lowest: 0.29869403430474945,
+    // position 1
+    highest: 0.29869403430474945,
+};
+/// The similarity-weighted values of position 1 of the run above.
+pub const PSTVD_SYS3_POS1_SIMILARITY: SimilarityPosition = SimilarityPosition {
+    similarity_weighted: 0.29869403430474945,
+    normalised_observed: 0.08977933741276133,
+    normalised_similarity_weighted: 0.0375517554067284,
+};

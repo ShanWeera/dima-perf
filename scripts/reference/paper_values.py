@@ -2,12 +2,13 @@
 """Writes the expected values of the paper test (crates/dima-core/tests/paper.rs).
 
 Runs the reference implementation (dima_reference.py, in this directory) on the four bundled
-datasets and Wu 2025's two ToBRFV samples with the parameters the test uses, and writes the
+datasets, Wu 2025's two ToBRFV samples and the ten PSTVd loop-27 libraries of Wu et al. 2024
+with the parameters the test uses, and writes the
 numbers the test compares with `common::assert_agrees` to
 crates/dima-core/tests/paper_expected/mod.rs, a generated file that is never edited by hand.
 Every run but the T = 30 one computes similarity-weighted entropy (pairwise, as Wu defines it),
 so the unchanged values also show that the option changes nothing else. `--check` fails if that
-file is out of date (CI), and prints the difference. Standard library only; the seven runs take
+file is out of date (CI), and prints the difference. Standard library only; the 17 runs take
 about a minute on four cores, almost all of it in the HIV-1 datasets; about 250 MB of memory.
 
 The dima entropy (and so every mean and extreme) uses the platform's `math.log`, whose last bit
@@ -51,6 +52,24 @@ RUNS = [
         "ToBRFV in Tm-2^2 plants (Wu 2025, Supplementary File 2), one 120-mer position",
     ),
 ]
+# The PSTVd loop-27 libraries (Wu et al. 2024, S2 Table; Wu 2025, Fig. 5c): the mutant pool and
+# three plants each of the inoculated region, the leaf margins and systemic leaves.
+PSTVD = [("pool", "the mutant pool")] + [
+    (f"{part.lower()}{plant}", f"{where}, plant {plant}")
+    for part, where in (("IR", "inoculated region"), ("LM", "inoculated-leaf margin"), ("Sys", "systemic leaves"))
+    for plant in (1, 2, 3)
+]
+RUNS += [
+    (
+        f"pstvd_{stem}",
+        f"tests/data/pstvd_loop27_{stem}.fasta.bz2",
+        ["-a", "dna", "-k", "6", SWE],
+        f"PSTVd loop 27, {what} (Wu et al. 2024, S2 Table), one 6-mer position",
+    )
+    for stem, what in PSTVD
+]
+# Runs of one k-mer position (the whole sequence), whose position 1 is also written.
+ONE_POSITION = ("tobrfv", "pstvd")
 
 
 def without_motifs(obj: dict) -> dict:
@@ -193,13 +212,13 @@ def render(results: dict) -> str:
         if name.startswith("mers_aa"):
             # The paper's Fig. 1C.
             text += position(name, r, 25)
-        if name.startswith("tobrfv"):
+        if name.startswith(ONE_POSITION):
             text += position(name, r, 1)
         if SWE in options:
             text += similarity_summary(name, r)
             if name == "mers_aa_t100":
                 text += similarity_position(name, r, 25)
-            if name.startswith("tobrfv"):
+            if name.startswith(ONE_POSITION):
                 text += similarity_position(name, r, 1)
         parts.append(text)
     return "\n".join(parts)
