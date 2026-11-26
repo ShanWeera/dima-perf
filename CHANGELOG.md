@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). The
 "Methodology" group lists every change that can alter a result, with the sources behind it.
 
-## [1.1.0] - Unreleased
+## [1.1.0] - 2026-11-26
 
 ### Methodology
 
