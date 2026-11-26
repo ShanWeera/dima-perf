@@ -48,11 +48,11 @@ DiMA's memory does not grow with the number of sequences times their length. It 
   19 bytes for each combination of k-mer and header value;
 - with `--similarity-weighted-entropy`, for each position being computed (so one per thread at
   a time): a table of $26 \times \min(k, 2048)$ counters, $208 \cdot k$ bytes up to $k = 2{,}048$
-  and 426 kB above it (5.6 kB at $k = 27$, 208 kB at $k = 1{,}000$), and about 48 bytes per
-  distinct k-mer at the position;
-- the results until they are written: a few hundred bytes per position (since dima 1.1 about
-  48 bytes more than in 1.0, for the three similarity-weighted values, whether or not they are
-  computed).
+  and 426 kB above it (5.6 kB at $k = 27$, 208 kB at $k = 1{,}000$), and about 40 to 80 bytes
+  per distinct k-mer at the position (the upper end when most k-mers have different counts);
+- the results until they are written: about 180 bytes per position (48 of them, since dima 1.1,
+  for the three similarity-weighted values, whether or not they are computed), plus, for every
+  variant, its k-mer and about 72 bytes, and its metadata counts when metadata are used.
 
 Memory therefore grows with the **diversity** of the alignment: conserved alignments need little
 even with millions of sequences, highly diverse ones more. The number of threads does not change
@@ -73,7 +73,7 @@ looks like an identifier and prints the option that leaves it out; see
 every position with support. There, its time is proportional to the number of distinct k-mers
 times $k$: DiMA counts the residues at each of the $k$ offsets of the k-mers once, instead of
 comparing every pair of k-mers. Its memory is listed under [Memory](#memory): a table of at most
-426 kB and about 48 bytes per distinct k-mer, for each position being computed. Above 2,048 sites
+426 kB and about 40 to 80 bytes per distinct k-mer, for each position being computed. Above 2,048 sites
 the table is filled 2,048 sites at a time, so that it stays in the processor's cache. It is
 computed only when an output holds its values (the results, or the positions table).
 
@@ -93,7 +93,7 @@ memory did not change measurably: about 120 MB, 265 MB and 630 MB with or withou
 k-mers its share grows, because every distinct k-mer costs $k$ steps: at $k = 1{,}000$ it
 increased the CPU time by about half and the wall time by about a quarter. Long k-mers also make
 most windows distinct, so the counting itself then needs much more memory (see
-[Memory](#memory)); the option adds only its table and its 48 bytes per distinct k-mer.
+[Memory](#memory)); the option adds only its table and its 40 to 80 bytes per distinct k-mer.
 
 ## Output size
 

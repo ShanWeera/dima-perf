@@ -168,7 +168,10 @@ the AVANA tool extrapolated from 100 random sub-alignments by default [@khan2017
 
 These standard deviations are exact too: the subsamples are drawn independently, so the variance
 of the random intercept is $\sum_j w_j^2 \operatorname{Var}(\hat H_{n_j})$, and each variance
-follows from the multinomial distribution of the subsample counts.
+follows from the multinomial distribution of the subsample counts. The covariance of the counts
+of two k-mers comes from their expansion in orthonormal Krawtchouk polynomials, evaluated with
+the polynomials' three-term recurrence [@filipuk2026, pp. 1892–1893]; `docs_numbers.py` checks
+the result against every outcome of small cases.
 
 ### The negative-intercept rule
 
@@ -224,8 +227,22 @@ one sequence differing raises the average by 50% at $N = 171$ and by 105% at $N 
 exact)<!-- docs-numbers:v509-few-points:end -->.
 On the MERS-CoV spike protein ($T = 100$) the eligible mean is 0.1261 bits here and <!-- docs-numbers:v509-means:start -->
 0.1417 bits averaged over v5.0.9 runs (seeded Monte Carlo of 2,000 runs, 95% interval ±0.0001); on
-the HIV-1 *pol* datasets the two differ by less than 0.00026 bits (DNA) and 0.0011 bits (protein),
-under half the standard deviation of the mean of a single run (0.0020 and 0.0027 bits)<!-- docs-numbers:v509-means:end -->.
+the HIV-1 *pol* datasets its procedure, applied to the same k-mers, changes the means by less than
+0.00026 bits (DNA) and 0.0011 bits (protein), under half the standard deviation of the mean of a
+single run (0.0020 and 0.0027 bits)<!-- docs-numbers:v509-means:end -->. On the protein alignment v5.0.9 also
+counts the stop and frameshift symbols as residues, which changes its mean more than its
+procedure does (note 4 of [Comparison with the papers](/explanation/paper-comparison/#notes)).
+The HIV-1 *pol* figures are upper bounds. At each position, v5.0.9's expected value differs from
+DiMA's by the exact effect of its rounded-down sizes plus the rule's effect,
+$E[(\hat H - S)\,\mathbf{1}\{S < 0\}] \le \hat H \, P(S < 0) + E[\max(-S, 0)]$, where $S$ is
+the intercept of one of its runs before the rule. From the
+exact mean $\mu > 0$ and variance $\sigma^2$ of $S$, $P(S < 0)$ is at most
+$\sigma^2 / (\sigma^2 + \mu^2)$ by Cantelli's inequality [@ion2023, Theorem 2.1, eq. (4)], and
+$E[\max(-S, 0)]$ at most $(\sqrt{\sigma^2 + \mu^2} - \mu)/2$ [@gallego1993, Lemma 1, eq. (3)].
+Each is replaced by the bound of McDiarmid's inequality [@rio2013, eq. (1.3)] where that is
+smaller: the subsamples' sequences are drawn independently, and one sequence of a subsample of
+$n$ changes its plug-in entropy by at most $(n \log_2 n - (n - 1) \log_2 (n - 1))/n$ bits, and
+the intercept by that times the subsample's weight $w_j$.
 
 <!-- docs-numbers:population-study:start -->
 
@@ -602,6 +619,12 @@ of the paper differ from it, or from Wu's data (the numbers are in
 - Fig. 4's caption puts $H$ and $H_n$ in panel (a) and $H_\text{sim}$ and $H_\text{nsim}$ in
   panel (b); the panels and the text (Section 3.1) show $H$ and $H_\text{sim}$ in (a), $H_n$ and
   $H_\text{nsim}$ in (b).
+- Section 3.1 says that both metrics assign "weights based on genetic distance from the master
+  sequence", and Fig. 1c draws the weights as lines from the master to each variant. That
+  describes the illustration, whose master is 90% of the population. The definition
+  (Section 2.1) weighs each variant by its similarity to every other sequence, and only that
+  reproduces Supplementary File 1: for its distribution 1 at similarity 0.9 it gives the printed
+  0.45488, while weighing each variant by its similarity to the master alone gives 0.79159.
 - Fig. 5b's similarities (0.75, 0.50, 0.25 and 0.00) are those of 4-site sequences, while the
   printed $H_\text{sim} = 4.04$ and $H_\text{nsim} = 0.50$ of the theoretical UNNNNA pool need all
   six sites; exactly, they are 4.03125 and 0.50390625.

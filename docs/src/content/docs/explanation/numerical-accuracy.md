@@ -266,7 +266,8 @@ $$
 
 The numerators $kN - a_i$ are exact integers, summed per count class in 128-bit integers.
 Besides the entropy terms $-\hat p \log_2 \hat p$, which are those of observed entropy, the only
-rounding is one division and one multiplication per class and the compensated sum of the class
+rounding is the conversion of each class sum and of $kN$ to floating point (exact up to
+$2^{53}$), one division and one multiplication per class, and the compensated sum of the class
 terms, taken in the same order as for observed entropy. So when every weight is 1 ($k = 1$, or
 every pair of k-mers differs at every site) similarity-weighted entropy equals observed entropy
 bit for bit, as long as $f_c \cdot k \cdot N \le 2^{53}$ for every class of $f_c$ k-mers seen $c$
@@ -314,7 +315,8 @@ as an internal error (exit 1).
 
 The computation counts the residues of $26 \times \min(k, 2048)$ table entries at a time, in
 blocks of at most 2,048 sites, so its table stays at most 426 kB however long the k-mers are; it
-also needs about 48 bytes per distinct k-mer, for each position being computed.
+also needs about 40 to 80 bytes per distinct k-mer (the upper end when most k-mers have
+different counts), for each position being computed.
 
 ## What this means for testing
 

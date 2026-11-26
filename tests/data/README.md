@@ -77,9 +77,9 @@ duplicated here.
   listed sequences and reads are used as they are. Each unique sequence is written once per read,
   so that a run at $k = 6$ (one position) counts the reads; every record of a sequence is named
   `SeqN`, N being its place in the library's list. Retrieved from Europe PMC (PMC11020406,
-  supplementary files) on 2026-11-25 (`journal.ppat.1012142.s002.xlsx`, SHA-256
+  supplementary files) on 2026-11-25 (`ppat.1012142.s002.xlsx`, SHA-256
   `b1312329cd06ce56c2cbeaf61923d552658ab6db3ae6b7663b94cf159fe7388f`) and converted with
-  `python3 scripts/reference/pstvd_from_supplement.py journal.ppat.1012142.s002.xlsx DIR`, which
+  `python3 scripts/reference/pstvd_from_supplement.py ppat.1012142.s002.xlsx DIR`, which
   checks every row, then `bzip2 -9`. Used for the similarity-weighted entropy paper test.
 * **`results-schema-1.0.0.json.gz`.** The golden results of the `tiny` test input
   (`tests/golden/tiny/results.json`) as dima 1.0.0 wrote them, before schema 1.1.0, frozen to

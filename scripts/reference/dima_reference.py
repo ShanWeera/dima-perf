@@ -2168,6 +2168,21 @@ def _self_test_pipeline(t: _Checker) -> None:
     t.check(off["similarity_weighted_entropy_summary"] is None
             and all(p["similarity_weighted_entropy"] is None for p in off["positions"]),
             "pipeline: nothing without the option")
+    # The similarity-weighted summary's values, where observed and similarity-weighted entropy
+    # rank the two eligible positions oppositely: position 1 has AAA and AAC twice each (H = 1,
+    # H_sim = 2/3, H_nsim = 2/3), position 5 CCC three times and GGG once (every site differs,
+    # so H_sim = H); positions 2-4 cover the gap column.
+    fasta = b">a\nAAA-CCC\n>b\nAAA-CCC\n>c\nAAC-CCC\n>d\nAAC-GGG\n"
+    r = json.loads(analyse_to_string(fasta, Options(kmer_length=3, threshold=3, alphabet=DNA,
+                                                     similarity_weighted_entropy=True)))
+    h5 = 0.75 * math.log2(4 / 3) + 0.25 * 2
+    s = r["similarity_weighted_entropy_summary"]
+    t.check(r["positions"][0]["normalised_similarity_weighted_entropy"] == 2 / 3, "pipeline: H_nsim = H_sim / log2 D")
+    t.check(s["position_count"] == 2 and abs(s["average_entropy"] - (2 / 3 + h5) / 2) <= 1e-15
+            and abs(s["average_observed_entropy"] - (1 + h5) / 2) <= 1e-15, "pipeline: summary means")
+    t.check(s["lowest_entropy"]["position"] == 1 and s["lowest_entropy"]["entropy"] == 2 / 3, "pipeline: summary lowest")
+    t.check(s["highest_entropy"]["position"] == 5 and abs(s["highest_entropy"]["entropy"] - h5) <= 1e-15,
+            "pipeline: summary highest")
     # Whole pipeline on a small protein alignment.
     fasta = (
         ">s1|Human|2020\nMKTAYIAKQR\n"

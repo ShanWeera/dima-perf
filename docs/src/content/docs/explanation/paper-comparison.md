@@ -82,16 +82,18 @@ implementation (`scripts/reference/`) within a relative $10^{-13}$ (see
 DiMA v5.0.9 applies the negative-intercept rule to each random run, which raises its average at
 near-conserved positions; averaged over many of its runs, <!-- docs-numbers:v509-means:start -->
 the MERS-CoV spike protein means are 0.1417 bits ($T = 100$) and 0.1317 bits ($T = 30$) and the
-gene's 0.3842 bits (seeded Monte Carlo of 2,000, 2,000 and 200 runs, 95% intervals ±0.0001), and the
-HIV-1 *pol* means differ from DiMA's by less than 0.00026 bits (DNA) and 0.0011 bits (protein)<!-- docs-numbers:v509-means:end --> (see
-[the negative-intercept rule](/explanation/entropy/#the-negative-intercept-rule)).
+gene's 0.3842 bits (seeded Monte Carlo of 2,000, 2,000 and 200 runs, 95% intervals ±0.0001), and,
+applied to the same k-mers, its procedure changes the HIV-1 *pol* means by less than 0.00026 bits
+(DNA) and 0.0011 bits (protein)<!-- docs-numbers:v509-means:end --> (see
+[the negative-intercept rule](/explanation/entropy/#the-negative-intercept-rule)); on the protein
+alignment, v5.0.9's counting of stop and frameshift symbols changes its mean more (note 4).
 
 ## Similarity-weighted entropy (Wu 2025)
 
 Wu's paper introduces similarity-weighted entropy [@wu2025] (see
 [the methodology](/explanation/entropy/#similarity-weighted-entropy-opt-in)). Three of its examples
 come with their data. Supplementary File 1 prints the four metrics of further simulated
-populations (not those of Figs. 2 and 4). Supplementary File 2 lists the unique sequences, with
+populations (not those of Figs. 2 and 4), and of Fig. 3a's at further similarities. Supplementary File 2 lists the unique sequences, with
 their read counts, of two samples of tomato brown rugose fruit virus (ToBRFV): one from tomato
 plants with the susceptible tm-2 allele and one from plants with the resistant Tm-2² allele, both
 of the 5′-120nts region, the first 120 nucleotides at the 5′ end of the genome
@@ -120,9 +122,11 @@ five populations at similarities 0.999, 0.9, 0.5 and 0.001 (built as ten 1,000-r
 within $5 \times 10^{-6}$ of the printed values), and the reference implementation's self-test
 checks distribution 1 at 0.9. These populations are not those of Fig. 2: the sheet's
 distribution 1, for example, is 0.7, four times 0.05 and five times 0.02, Fig. 2's 0.9, 0.02 and
-eight times 0.01. In the "Figure 3 Extended
-Data" sheet the cell of D-1 at similarity 0.7 holds the values at 0.95 ($H_\text{sim}$ 0.01921 and
-$H_\text{nsim}$ 0.00578; at 0.7 they are 0.04363 and 0.01313 for the frequencies of Fig. 3a).
+eight times 0.01. Its "Figure 3 Extended Data" sheet gives the four values of Fig. 3a's nine
+distributions (D-1 to D-9) at similarities 0.7 to 0.1. With the frequencies of Fig. 3a, DiMA's
+formulas reproduce 250 of its 252 values (also checked once against the spreadsheet); the two
+others are the cell of D-1 at similarity 0.7, which holds the values at 0.95 ($H_\text{sim}$
+0.01921 and $H_\text{nsim}$ 0.00578; at 0.7 they are 0.04363 and 0.01313).
 
 **Fig. 4: saturated pools.** Every sequence of length $k$ (1 to 7), each once, gives
 $H = 2k$ bits, $H_n = 1$, $H_\text{nsim} = 3/4 + 4^{-k}$ and $H_\text{sim} = 2k(3/4 + 4^{-k})$:
@@ -175,11 +179,11 @@ has one position whose k-mer counts are the read counts:
 
 Fig. 5c plots one point for the pool and one for each of IR, LM and Sys, without error bars; Wu
 et al. give the IR, LM and Sys values of their own figures as means of the three replicates
-[@wu2024, Fig. 2 legend]. Read from the figure's pixels, the practical pool's point agrees with the pool above, and the IR,
+[@wu2024, Fig. 4 legend]. Read from the figure's pixels, the practical pool's point agrees with the pool above, and the IR,
 LM and Sys points with the means of their three plants, to within 0.06 bits for $H$ and
 $H_\text{sim}$ and 0.005 for $H_n$ and $H_\text{nsim}$: about what the figure can be read to,
 since its theoretical-pool points, whose values are exact, read up to 0.02 bits and 0.004 off.
-No single LM plant would match: the LM point is at about 1.30 bits. The pool's values use every
+No single LM plant would match: the LM point is at about 1.25 bits. The pool's values use every
 listed sequence, <!-- docs-numbers:pstvd-pool:start -->
 255 of them of the form UNNNNA and 88 others; the 255 alone would give $H_n = 0.9598$<!-- docs-numbers:pstvd-pool:end -->, against about 0.91 in the figure. As Section 3.2 reports
 [@wu2025, Section 3.2], all four values fall from the pool through IR and LM to Sys. From the
@@ -235,8 +239,8 @@ The tm-2 values match Fig. 6d, reading its $H_\text{nsim}$ axis as linear (its t
 the published data $H$ and $H_n$ are higher in Tm-2² than in tm-2, the opposite of Section 3.3,
 while $H_\text{sim}$ and $H_\text{nsim}$ are higher in Tm-2², as the paper reports. The mean and
 largest Hamming distances match Section 3.3, and the committed sequences reproduce every distance
-of Supplementary File 3 (2,304 pairs for tm-2 and 2,209 for Tm-2², the sequences taken by their
-`SeqN` IDs; checked once against the spreadsheet, when this page was written). As of 25 November 2026 Crossref lists no correction
+of Supplementary File 3 (all 2,304 cells of its 48 × 48 matrix for tm-2 and 2,209 of 47 × 47
+for Tm-2², the sequences taken by their `SeqN` IDs; checked once against the spreadsheet, when this page was written). As of 25 November 2026 Crossref lists no correction
 to the paper.
 
 ## References

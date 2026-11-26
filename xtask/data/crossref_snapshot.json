@@ -136,6 +136,56 @@
   "volume": "9",
   "year": 1966
  },
+ "10.1007/s11075-025-02299-z": {
+  "authors": [
+   [
+    "Filipuk",
+    "Galina"
+   ],
+   [
+    "Mañas-Mañas",
+    "Juan F."
+   ],
+   [
+    "Moreno-Balcázar",
+    "Juan J."
+   ],
+   [
+    "Rodríguez-Perales",
+    "Cristina"
+   ]
+  ],
+  "issue": "3",
+  "key": "filipuk2026",
+  "pages": "1891-1922",
+  "title": "Differential system related to generalised Krawtchouk polynomials: iterated regularisation and Painlevé equation",
+  "venue": "Numerical Algorithms",
+  "volume": "102",
+  "year": 2026
+ },
+ "10.1007/s11749-022-00844-9": {
+  "authors": [
+   [
+    "Ion",
+    "Roxana A."
+   ],
+   [
+    "Klaassen",
+    "Chris A. J."
+   ],
+   [
+    "van den Heuvel",
+    "Edwin R."
+   ]
+  ],
+  "issue": "2",
+  "key": "ion2023",
+  "pages": "566-601",
+  "title": "Sharp inequalities of Bienaymé–Chebyshev and Gauß type for possibly asymmetric intervals around the mean",
+  "venue": "TEST",
+  "volume": "32",
+  "year": 2023
+ },
  "10.1016/0022-5193(66)90013-0": {
   "authors": [
    [
@@ -1291,6 +1341,25 @@
   "venue": "Scientific Data",
   "volume": "3",
   "year": 2016
+ },
+ "10.1057/jors.1993.141": {
+  "authors": [
+   [
+    "Gallego",
+    "Guillermo"
+   ],
+   [
+    "Moon",
+    "Ilkyeong"
+   ]
+  ],
+  "issue": "8",
+  "key": "gallego1993",
+  "pages": "825-834",
+  "title": "The Distribution Free Newsboy Problem: Review and Extensions",
+  "venue": "Journal of the Operational Research Society",
+  "volume": "44",
+  "year": 1993
  },
  "10.1073/pnas.85.8.2444": {
   "authors": [
@@ -3438,6 +3507,21 @@
   "venue": "Journal of the American Medical Informatics Association",
   "volume": "13",
   "year": 2006
+ },
+ "10.1214/ECP.v18-2659": {
+  "authors": [
+   [
+    "Rio",
+    "Emmanuel"
+   ]
+  ],
+  "issue": null,
+  "key": "rio2013",
+  "pages": "44",
+  "title": "On McDiarmid's concentration inequality",
+  "venue": "Electronic Communications in Probability",
+  "volume": "18",
+  "year": 2013
  },
  "10.1214/aoms/1177730497": {
   "authors": [

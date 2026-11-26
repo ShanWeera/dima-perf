@@ -74,7 +74,7 @@ precision printed.
   trinomial in orthonormal Krawtchouk polynomials (canonical correlations rho^k, rho =
   -sqrt(p_i p_j / ((1 - p_i)(1 - p_j)))), which makes the sum over pairs separable; the series is
   summed until a Cauchy-Schwarz bound on the rest is below 1e-13 of the sum of the variants'
-  own variances (at most about 50 times the variance on the bundled data). Checked
+  own variances (at most about 60 times the variance on the bundled data). Checked
   against enumerating every multinomial outcome of toy profiles.
 * v5.0.9's fallback rates at positions with two k-mers: exact, by meet-in-the-middle over the
   independent subsample counts (the probability left out, at most 1e-6, bounds the error; checked
@@ -82,11 +82,17 @@ precision printed.
   and v5.0.9's averages over the MERS-CoV datasets: seeded Monte Carlo that simulates only the
   rule's effect, E[(H - S) 1{S < 0}], added to the exact expectation E[S] (a control variate).
   The Monte Carlo is checked against the exact two-k-mer results.
-* HIV-1 pol: v5.0.9's average differs from DiMA's mean by the exact effect of its rounding plus
-  the rule's effect, bounded above per position by min(Cantelli, McDiarmid) for P(S < 0) and
-  min(Scarf, McDiarmid) for E[max(-S, 0)], with the exact mean and variance of S and McDiarmid's
-  bounded differences (one draw changes a plug-in entropy of n draws by at most
-  (n log2 n - (n - 1) log2(n - 1)) / n).
+* HIV-1 pol: v5.0.9's procedure, applied to DiMA's k-mers, changes DiMA's mean by the exact
+  effect of its rounding plus the rule's effect (v5.0.9's symbol rules, which count the protein
+  alignment's stop and frameshift symbols as residues, are not modelled), bounded above per
+  position by min(Cantelli, McDiarmid) for P(S < 0) and min(Scarf, McDiarmid) for
+  E[max(-S, 0)], with the exact mean and variance of S and McDiarmid's bounded differences (one
+  draw changes a plug-in entropy of n draws by at most (n log2 n - (n - 1) log2(n - 1)) / n).
+  Cantelli's inequality: Ion, Klaassen & van den Heuvel 2023, TEST 32:566-601, Theorem 2.1,
+  eq. (4), with Z = (mu - S) / sigma and v = mu / sigma. Scarf's bound: Gallego & Moon 1993,
+  J Oper Res Soc 44:825-834, Lemma 1, eq. (3), with D = -S and Q = 0. McDiarmid's inequality:
+  Rio 2013, Electron Commun Probab 18:44, eq. (1.3), applied to -S; its integral over the tail
+  gives sqrt(pi v / 8) erfc(mu sqrt(2 / v)) for E[max(-S, 0)].
 * Population study: two-variant populations (minor frequency phi) sampled N times; the error of
   DiMA's exact expectation, of Miller-Madow and of the observed entropy against the
   population's entropy, averaged exactly over the binomial number of minor sequences; v5.0.9's
@@ -658,7 +664,9 @@ def plugin_moments(mult: dict[int, int], n_obs: int, n: int, rel: float = 1e-13)
         for cl in info:
             # sqrt(c_k) Q_k = (x - b_{k-1}) Q_{k-1} - sqrt(c_{k-1}) Q_{k-2}, b_j = (n - j) p + j q,
             # c_j = j (n - j + 1) p q: the three-term recurrence of the binomial's orthonormal
-            # (Krawtchouk) polynomials; xs holds x - n p, so x - b_{k-1} = xs - shift.
+            # (Krawtchouk) polynomials (Filipuk et al. 2026, Numer Algorithms 102:1891-1922,
+            # pp. 1892-1893, with N = n and theta = p); xs holds x - n p, so
+            # x - b_{k-1} = xs - shift.
             p, q = cl["p"], cl["q"]
             s_k = math.sqrt(k * (n - k + 1) * p * q)
             shift = (n - k + 1) * p + (k - 1) * q - n * p
@@ -716,9 +724,9 @@ def rule_effect_bound(mom: dict) -> float:
     if not mu > 0:
         # Every bound below is of the lower tail at distance mu from the mean.
         raise RuntimeError(f"the expected intercept {mu!r} is not positive, so the bounds do not apply")
-    p = var / (var + mu * mu)  # Cantelli
-    e = (math.sqrt(var + mu * mu) - mu) / 2  # Scarf
-    if v > 0:
+    p = var / (var + mu * mu)  # Cantelli (Ion et al. 2023, Theorem 2.1)
+    e = (math.sqrt(var + mu * mu) - mu) / 2  # Scarf (Gallego & Moon 1993, Lemma 1)
+    if v > 0:  # McDiarmid (Rio 2013, eq. (1.3)), v the sum of the squared bounded differences
         p = min(p, math.exp(-2 * mu * mu / v))
         e = min(e, math.sqrt(math.pi * v / 8) * math.erfc(mu * math.sqrt(2 / v)))
     return mom["H"] * p + e
@@ -1351,9 +1359,9 @@ def render_v509_means(s: dict) -> str:
     bd, bp, sdd, sdp = hiv_bounds(s)
     return (
         f"{f4(aa['value'])} bits averaged over v5.0.9 runs (seeded Monte Carlo of {thousands(aa['runs'])} runs, "
-        f"95% interval {half_width_text(aa['half_width'], 4)}); on the HIV-1 *pol* datasets the two differ by less "
-        f"than {bd} bits (DNA) and {bp} bits (protein), under half the standard deviation of the mean of a "
-        f"single run ({sdd} and {sdp} bits)"
+        f"95% interval {half_width_text(aa['half_width'], 4)}); on the HIV-1 *pol* datasets its procedure, applied "
+        f"to the same k-mers, changes the means by less than {bd} bits (DNA) and {bp} bits (protein), under half "
+        f"the standard deviation of the mean of a single run ({sdd} and {sdp} bits)"
     )
 
 
@@ -1537,8 +1545,8 @@ def render_v509_comparison(s: dict) -> str:
     return (
         f"the MERS-CoV spike protein means are {f4(a100['value'])} bits ($T = 100$) and {f4(a30['value'])} bits "
         f"($T = 30$) and the gene's {f4(nt['value'])} bits (seeded Monte Carlo of {thousands(a100['runs'])}, "
-        f"{thousands(a30['runs'])} and {thousands(nt['runs'])} runs, 95% intervals {hw}), and the HIV-1 *pol* means differ "
-        f"from DiMA's by less than {bd} bits (DNA) and {bp} bits (protein)"
+        f"{thousands(a30['runs'])} and {thousands(nt['runs'])} runs, 95% intervals {hw}), and, applied to the same "
+        f"k-mers, its procedure changes the HIV-1 *pol* means by less than {bd} bits (DNA) and {bp} bits (protein)"
     )
 
 

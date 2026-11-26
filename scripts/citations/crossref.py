@@ -73,6 +73,11 @@ CORRECTIONS = {
     "10.2307/3545749": {"pages": "70-82"},
     "10.1186/1471-2105-7-415": {"authors[0]": ["Raghava", "G. P. S."]},
     "10.1099/jgv.0.002306": {"pages": "002306"},
+    # An article number that Crossref gives as an issue "none" and pages 1-11 (the article: no. 44).
+    "10.1214/ECP.v18-2659": {"issue": None, "pages": "44"},
+    # Crossref splits a name particle into the given name and writes hyphens as en dashes.
+    "10.1007/s11749-022-00844-9": {"authors[2]": ["van den Heuvel", "Edwin R."]},
+    "10.1007/s11075-025-02299-z": {"authors[1]": ["Mañas-Mañas", "Juan F."], "authors[2]": ["Moreno-Balcázar", "Juan J."], "authors[3]": ["Rodríguez-Perales", "Cristina"]},
     # A group author and the publisher, which Crossref records as the institution only.
     "10.59161/AUEZ1291": {"authors": [["Bureau International des Poids et Mesures", ""]], "venue": "BIPM", "title": "The International System of Units (SI), 9th edition"},
 }

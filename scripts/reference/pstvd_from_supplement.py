@@ -4,7 +4,7 @@
 Wu J, Zhang Y, Nie Y, Yan F, Zirbel CL, Bisaro DM. "RNA three-dimensional structure drives the
 sequence organization of potato spindle tuber viroid quasispecies". PLoS Pathog
 2024;20(4):e1012142, doi:10.1371/journal.ppat.1012142, CC BY 4.0. Its S2 Table
-(``journal.ppat.1012142.s002.xlsx``; Europe PMC PMC11020406, supplementary files) lists the
+(``ppat.1012142.s002.xlsx``; Europe PMC PMC11020406, supplementary files) lists the
 unique sequences of each sequencing library with their read counts. Sheet "Loop27" holds the
 saturation-mutagenesis pool of loop 27 (wild type UUUUCA, mutated to UNNNNA; written in DNA
 letters, TTTTCA) and the populations it gave in three plants each: the inoculated region
@@ -28,7 +28,7 @@ the read counts: ``pstvd_loop27_<library>.fasta`` (library pool, ir1 .. ir3, lm1
 sys1 .. sys3). Every record of a sequence is named ``SeqN``, N being its place in the library's
 list (1 for row 2), so a file compresses to the size of the list. The output is deterministic.
 
-Usage: python3 pstvd_from_supplement.py journal.ppat.1012142.s002.xlsx OUTPUT_DIR
+Usage: python3 pstvd_from_supplement.py ppat.1012142.s002.xlsx OUTPUT_DIR
 """
 import math
 import re

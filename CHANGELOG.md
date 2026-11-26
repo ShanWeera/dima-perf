@@ -35,6 +35,9 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   `normalised_similarity_weighted_entropy` per position, `similarity_weighted_entropy_summary`
   (eligible positions, with their mean observed entropy) and the parameter
   `run.parameters.similarity_weighted_entropy`; three columns appended to the positions table.
+  `dima view`, `dima hcs` and `dima cite --from` refuse a file whose values break the rules of
+  the results reference (present exactly where they are defined, and no similarity-weighted
+  value above the observed entropy) as edited or damaged (exit 4).
   Without the option the keys are `null` (`NA` in the table); default results grow by 116 bytes
   per position (compact JSON and JSONL; 140 indented; 9 per positions-table row), and each
   position takes about 48 bytes more memory until the results are written.
@@ -89,15 +92,17 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
-- Desktop app: the filter bar's value fields show four decimals (two before, on most screens)
-  and keep their width as their values change. Dragging a value moves it by 1/200 of the range
-  per pixel, so the whole range takes 200 pixels whatever the metric's scale, but by at least
-  0.0001 per pixel, so a range below 0.02 bits takes fewer; it moved 0.01 bits per pixel before,
-  too coarse for similarity-weighted entropy, which is often a small fraction of a bit.
+- Desktop app: the filter bar's value fields show four decimals (two to four before, depending
+  on the value) and keep their width as their values change. Dragging a value moves it by 1/200
+  of the range per pixel, so the whole range takes 200 pixels whatever the metric's scale, but
+  by at least 0.0001 per pixel, so a range below 0.02 bits takes fewer; it moved 0.01 bits per
+  pixel before, too coarse for similarity-weighted entropy, which is often a small fraction of a
+  bit.
 - Results schema 1.1.0 (the conserved-sequences schema stays 1.0.0 and now has its own version
   constant). Results written by dima 1.0.0 are read as runs without similarity-weighted entropy;
   `dima view` notes this when it writes values their schema did not record, and keeps its
-  `newer_schema` warning for newer or unrecognised versions.
+  `newer_schema` warning for newer or unrecognised versions, now quoting a version that is not a
+  plain `MAJOR.MINOR.PATCH` (so that, for example, a stray space shows).
 - Documentation: "Comparison with the paper" is now "Comparison with the papers" (same address),
   since it also compares DiMA with Wu 2025.
 
@@ -192,12 +197,22 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   procedure on HIV-1 *pol* has a standard deviation of 0.0020 bits (it said "repeated runs give
   5.350–5.353"); DiMA v5.0.9's rule raises the average by 50% at N = 171 and 105% at N = 130 (it
   said 51% and 107%); its MERS-CoV spike mean is 0.1417 bits (it said "about 0.142"), and on
-  HIV-1 *pol* it differs from DiMA's by less than 0.00026 bits (DNA) and 0.0011 bits (protein)
-  (it said "the two agree"); in the population study the exact expectation underestimates by up
+  HIV-1 *pol* its procedure, applied to the same k-mers, changes the means by less than
+  0.00026 bits (DNA) and 0.0011 bits (protein), its counting of stop and frameshift symbols
+  changing the protein mean more (it said "the two agree"); in the population study the exact expectation underestimates by up
   to 6.4% when at least one minor-variant sequence is expected (it said "at most 3%"), and
   v5.0.9's rule overestimates by up to 31% with T = 100 and 20% with T = 30 (it said 19%).
 - Documentation: some rows of "Design rationale" cited sources for more than those sources say;
   each now cites the rule, section or table that supports it and states the rest in plain words.
+- Documentation: the methodology page now cites the classical results behind its exact standard
+  deviations and its bounds on DiMA v5.0.9's HIV-1 *pol* means (Cantelli's, Scarf's and
+  McDiarmid's inequalities and the Krawtchouk recurrence), and the v5.0.9 comparison says that it
+  applies v5.0.9's procedure to the same k-mers.
+- Documentation: "Large alignments" gave the memory of the results as a few hundred bytes per
+  position; it now also counts the variants they hold until they are written (each its k-mer and
+  about 72 bytes), which can be most of it on diverse alignments. The exit-code reference now
+  lists edited or damaged results files among the causes of exit status 4, and Troubleshooting
+  gives the message an unrecognised schema version stops with.
 
 ### Security
 
