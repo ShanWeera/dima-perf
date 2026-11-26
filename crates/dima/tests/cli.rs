@@ -1535,8 +1535,10 @@ fn view_reports_older_and_newer_schemas() {
     // The current version: nothing to say. Newer or unrecognised versions: a warning.
     for (version, expected) in [
         (dima_core::model::SCHEMA_VERSION, None),
-        ("1.9.0", Some("newer_schema")),
-        ("1.1.0-dev", Some("newer_schema")),
+        ("1.9.0", Some("schema 1.9.0;")),
+        ("1.1.0-dev", Some("schema \"1.1.0-dev\";")),
+        // An unrecognised version is quoted, so a stray space shows.
+        ("1.1.0 ", Some("schema \"1.1.0 \";")),
     ] {
         let mut v = json(&dir.join("new.json"));
         v["schema_version"] = version.into();
@@ -1545,7 +1547,10 @@ fn view_reports_older_and_newer_schemas() {
         assert_eq!(code(&o), 0, "{version}: {}", stderr(&o));
         let e = stderr(&o);
         match expected {
-            Some(code) => assert!(e.contains(code), "{version}: {e}"),
+            Some(shown) => assert!(
+                e.contains("warning[newer_schema]") && e.contains(shown),
+                "{version}: {e}"
+            ),
             None => assert!(
                 !e.contains("note:") && !e.contains("warning"),
                 "{version}: {e}"

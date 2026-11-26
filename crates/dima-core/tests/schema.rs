@@ -244,13 +244,20 @@ fn every_output_validates() {
         assert!(!results.is_valid(&bad), "{what}: {key}");
     }
     type Damage<'a> = (&'a str, &'a Value, fn(&mut Value, usize));
-    let damaged: [Damage<'_>; 6] = [
+    let damaged: [Damage<'_>; 8] = [
         ("off with a value", &off, |v, _| {
             v["results"][0]["similarity_weighted_entropy"] = Value::from(0.5);
         }),
         ("off with a normalised value", &off, |v, _| {
             v["results"][0]["normalised_observed_entropy"] = Value::from(0.5);
         }),
+        (
+            "off with a normalised similarity-weighted value",
+            &off,
+            |v, _| {
+                v["results"][0]["normalised_similarity_weighted_entropy"] = Value::from(0.5);
+            },
+        ),
         ("off with a summary", &off, |v, _| {
             v["similarity_weighted_entropy_summary"] = serde_json::json!({
                 "position_count": 0, "average_entropy": null, "lowest_entropy": null,
@@ -263,6 +270,13 @@ fn every_output_validates() {
         ("on without a normalised value", &on, |v, i| {
             v["results"][i]["normalised_observed_entropy"] = Value::Null;
         }),
+        (
+            "on without a normalised similarity-weighted value",
+            &on,
+            |v, i| {
+                v["results"][i]["normalised_similarity_weighted_entropy"] = Value::Null;
+            },
+        ),
         ("on without a summary", &on, |v, _| {
             v["similarity_weighted_entropy_summary"] = Value::Null;
         }),

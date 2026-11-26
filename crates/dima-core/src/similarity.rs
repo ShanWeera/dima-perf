@@ -32,8 +32,9 @@
 //! other k-mers (j ≠ i). The numerators k·N − a_i are exact integers (`u128`; k·N < 2¹²⁸),
 //! summed exactly per count class, and each class contributes `term(c, N) · (g_c / (k·N))` to
 //! a compensated sum in the same class order as observed entropy. Time O(D·k). Memory, per
-//! position being computed: about 48 bytes per distinct k-mer and a 26 × min(k, 2,048) table
-//! of `u64` (at most 426 kB), the sites being counted in blocks.
+//! position being computed: about 40 to 80 bytes per distinct k-mer (the upper end when most
+//! k-mers have different counts) and a 26 × min(k, 2,048) table of `u64` (at most 426 kB),
+//! the sites being counted in blocks.
 //!
 //! # Bounds and exactness
 //!
@@ -58,7 +59,7 @@ use crate::numeric::Neumaier;
 pub const DESCRIPTION: &str = "Similarity-weighted entropy (Wu 2025) weights each variant's \
     entropy term by how dissimilar it is to the other variants at the position, so \
     near-identical variants count for less. The similarity of two k-mers is the share of their \
-    k residues that are the same, (k - d)/k when they differ at d of them; every substitution \
+    k residues that are the same, (k-d)/k when they differ at d of them; every substitution \
     counts alike. Also reported: observed and similarity-weighted entropy divided \
     by log2 of the number of distinct k-mers (Index included), between 0 and 1; these \
     normalised values are undefined with one distinct k-mer. All three depend on k and the \
@@ -96,6 +97,15 @@ pub fn sample_size() -> String {
         ZHAO2019.short(),
         GREGORI2014.short()
     )
+}
+
+/// Whether a similarity-weighted entropy is at most the observed entropy of the same k-mers,
+/// as it always is (every weight is at most 1), allowing for rounding: the two are sums of the
+/// same rounded terms, so H_sim can exceed H only by a few units in the last place (measured:
+/// at most 2.2e-16 relative). The library's postcondition and the reader of results files
+/// apply the same rule.
+pub(crate) fn within_observed(weighted: f64, observed: f64) -> bool {
+    weighted <= observed * (1.0 + 1e-12)
 }
 
 /// Letters a canonical k-mer can hold: `A`–`Z`.

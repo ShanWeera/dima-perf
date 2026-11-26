@@ -30,10 +30,11 @@ pub fn about_long() -> String {
     format!(
         "DiMA quantifies the diversity of viral protein or nucleotide alignments: for every \
          k-mer position it counts the distinct k-mers, estimates their Shannon entropy with a \
-         correction for sample size, classifies variants into Index, Major, Minor and Unique \
-         motifs, and reports their incidence, optionally stratified by FASTA header metadata. \
-         Conserved stretches (historically conserved sequences) are reported separately.{}",
-        refs(&[c("tharanga2025")])
+         correction for sample size (and, on request, their similarity-weighted entropy), \
+         classifies variants into Index, Major, Minor and Unique motifs, and reports their \
+         incidence, optionally stratified by FASTA header metadata. Conserved stretches \
+         (historically conserved sequences) are reported separately.{}",
+        refs(&[c("tharanga2025"), c("wu2025")])
     )
 }
 

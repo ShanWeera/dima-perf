@@ -139,7 +139,9 @@ The formulas are in [Entropy and its correction](/explanation/entropy/) and
 all `null` at every position (the run did not request them) or given exactly where they are
 defined: `similarity_weighted_entropy` at every position with support, the two normalised
 values at every position with at least two distinct k-mers, and the summary is an object. The
-schema and every DiMA reader check this; a file that breaks it was edited or damaged.
+schema and every DiMA reader check this. DiMA's readers also check that no
+`similarity_weighted_entropy` is above the position's `observed_entropy` (it never is, since
+every weight is at most 1). A file that breaks either rule was edited or damaged.
 
 ### variant
 

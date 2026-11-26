@@ -357,6 +357,21 @@ fn similarity_weighted_values_follow_the_presence_rules() {
                 v["results"][multi]["normalised_observed_entropy"] = 1.5.into();
             }),
         ),
+        (
+            "on, above the observed entropy",
+            true,
+            Box::new(move |v| {
+                let observed = v["results"][multi]["observed_entropy"].as_f64().unwrap();
+                v["results"][multi]["similarity_weighted_entropy"] = (observed * 1.001).into();
+            }),
+        ),
+        (
+            "on, not zero at one k-mer",
+            true,
+            Box::new(move |v| {
+                v["results"][single]["similarity_weighted_entropy"] = 0.1.into();
+            }),
+        ),
     ];
     for (what, computed, f) in damage {
         let mut v = if computed { on.clone() } else { off.clone() };

@@ -93,8 +93,9 @@ fn report_schema(results: &dima_core::model::Results, plan: &outputs::Plan, ctx:
         ui::warning(
             "newer_schema",
             &format!(
-                "the results were written with schema {version}; this version writes {current} \
-                 and keeps only the fields it knows"
+                "the results were written with schema {}; this version writes {current} and \
+                 keeps only the fields it knows",
+                output::shown_schema_version(version)
             ),
             Some("use the DiMA version that wrote the file to keep every field"),
             ctx.verbosity,

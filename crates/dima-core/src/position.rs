@@ -126,9 +126,11 @@ impl Similarity {
             ids.iter().map(|&id| (counts.kmer(id), counts.count(id))),
         )?
         .ok_or_else(|| DimaError::internal("a position with an observed entropy has no k-mers"))?;
-        // Postcondition: 0 ≤ H_sim ≤ H. The weights are at most 1, so only rounding could
-        // exceed H, by a few units in the last place (measured: at most 2.2e-16 relative).
-        if !(weighted.is_finite() && weighted >= 0.0 && weighted <= observed * (1.0 + 1e-12)) {
+        // Postcondition: 0 ≤ H_sim ≤ H, up to rounding.
+        if !(weighted.is_finite()
+            && weighted >= 0.0
+            && similarity::within_observed(weighted, observed))
+        {
             return Err(DimaError::internal(format!(
                 "similarity-weighted entropy {weighted:?} is not a number between 0 and the \
                  observed entropy {observed:?}"

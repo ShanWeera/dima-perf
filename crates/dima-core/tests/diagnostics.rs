@@ -260,4 +260,7 @@ fn provenance_records_origins_and_defaults() {
         keys.contains(&"wu2025") && !keys.contains(&"grishin1995"),
         "{keys:?}"
     );
+    // The methods sentence cites what the references list: Grishin only for protein runs.
+    let s = dima_core::methods::sentence(&on);
+    assert!(s.contains("Wu (2025)") && !s.contains("Grishin"), "{s}");
 }

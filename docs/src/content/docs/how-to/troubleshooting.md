@@ -135,8 +135,9 @@ version, or its version is not a plain number, such as `01.1.0`. Re-run the anal
 **`position N: … is given, but …`**, **`… is missing`** or another message with the hint `the
 file was edited or damaged` (exit 4, from `dima view`, `dima hcs` or `dima cite --from`) — the
 results contradict themselves, for example a similarity-weighted value at a position without
-support, or no such value where the run computed them (`run.parameters.similarity_weighted_entropy`
-says whether it did). DiMA never writes such a file; it was changed after `dima analyze` wrote
+support, no such value where the run computed them (`run.parameters.similarity_weighted_entropy`
+says whether it did), or `position N: similarity_weighted_entropy is …, above the observed
+entropy …, which it cannot exceed`. DiMA never writes such a file; it was changed after `dima analyze` wrote
 it. Run the analysis again; if you edit results by hand, keep the rules of the
 [results reference](/reference/json/).
 
@@ -189,8 +190,9 @@ one this DiMA does not recognise (such as `1.1` or `1.1.0-dev`), so it may hold 
 version does not know, and the converted output leaves them out. To keep every key, convert
 the file with the DiMA version that wrote it (its `run.tool.version`) or a newer one. If the file
 also holds a value this version does not know, such as the name of a new estimator, reading stops
-instead (`written by a newer DiMA … with values this version … does not know`, exit 4), and the fix
-is the same.
+instead (exit 4), and the fix is the same. The message is `written by a newer DiMA … with values
+this version … does not know` when the version is a newer one, such as `1.2.0`, and `not a valid
+DiMA results file: unknown variant …` when it is not recognised.
 
 ## Other questions
 

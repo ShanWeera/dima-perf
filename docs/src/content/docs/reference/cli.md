@@ -13,14 +13,14 @@ This page is generated from the definitions `dima` itself parses, so it always m
 | `1` | Internal error (a bug; please report it) |
 | `2` | Usage error (invalid options) |
 | `3` | Input/output or system error (missing file, no permission, disk full, a thread the system refused) |
-| `4` | Invalid input data (not an aligned FASTA, unequal lengths, invalid characters in strict mode) |
+| `4` | Invalid input data (not an aligned FASTA, unequal lengths, invalid characters in strict mode; a results file of another schema version, or edited or damaged) |
 | `130`, `143`, `129` | Interrupted by SIGINT (Ctrl-C), SIGTERM or SIGHUP; unfinished outputs are removed, never left partial |
 
 ## `dima`
 
-DiMA quantifies the diversity of viral protein or nucleotide alignments: for every k-mer position it counts the distinct k-mers, estimates their Shannon entropy with a correction for sample size, classifies variants into Index, Major, Minor and Unique motifs, and reports their incidence, optionally stratified by FASTA header metadata. Conserved stretches (historically conserved sequences) are reported separately.
+DiMA quantifies the diversity of viral protein or nucleotide alignments: for every k-mer position it counts the distinct k-mers, estimates their Shannon entropy with a correction for sample size (and, on request, their similarity-weighted entropy), classifies variants into Index, Major, Minor and Unique motifs, and reports their incidence, optionally stratified by FASTA header metadata. Conserved stretches (historically conserved sequences) are reported separately.
 
-**References:** Tharanga et al. 2025, [doi:10.1093/bib/bbae607](https://doi.org/10.1093/bib/bbae607)
+**References:** Tharanga et al. 2025, [doi:10.1093/bib/bbae607](https://doi.org/10.1093/bib/bbae607); Wu 2025, [doi:10.1093/ve/veaf029](https://doi.org/10.1093/ve/veaf029)
 
 ```text
 dima [OPTIONS] [COMMAND]
@@ -102,7 +102,7 @@ Entropy estimator. 'dima' is the paper's correction: entropies of subsamples of 
 
 #### `--similarity-weighted-entropy`
 
-Similarity-weighted entropy (Wu 2025) weights each variant's entropy term by how dissimilar it is to the other variants at the position, so near-identical variants count for less. The similarity of two k-mers is the share of their k residues that are the same, (k - d)/k when they differ at d of them; every substitution counts alike. Also reported: observed and similarity-weighted entropy divided by log2 of the number of distinct k-mers (Index included), between 0 and 1; these normalised values are undefined with one distinct k-mer. All three depend on k and the alphabet.
+Similarity-weighted entropy (Wu 2025) weights each variant's entropy term by how dissimilar it is to the other variants at the position, so near-identical variants count for less. The similarity of two k-mers is the share of their k residues that are the same, (k-d)/k when they differ at d of them; every substitution counts alike. Also reported: observed and similarity-weighted entropy divided by log2 of the number of distinct k-mers (Index included), between 0 and 1; these normalised values are undefined with one distinct k-mer. All three depend on k and the alphabet.
 
 Published in 2025 and applied in its source study only to nucleotide sequences: simulated populations, a viroid mutant pool and the populations it gave within single plants, and one plant-virus dataset; its use on amino-acid k-mers and on sequences from many hosts is dima's extension.
 

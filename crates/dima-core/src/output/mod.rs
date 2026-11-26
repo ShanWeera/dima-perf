@@ -599,12 +599,7 @@ fn check_schema_major(version: &str, kind: Kind, name: &str) -> Result<()> {
     if major(version) == major(current) {
         return Ok(());
     }
-    // A version that is not a plain one is quoted, so spaces or odd characters show.
-    let shown = if parse_schema_version(version).is_some() {
-        version.to_owned()
-    } else {
-        format!("{version:?}")
-    };
+    let shown = shown_schema_version(version);
     Err(DimaError::input_data(
         Some(Location::new(name.to_owned())),
         format!(
@@ -644,6 +639,17 @@ pub fn parse_schema_version(version: &str) -> Option<[u64; 3]> {
         *slot = part.parse().ok()?;
     }
     parts.next().is_none().then_some(out)
+}
+
+/// A schema version as messages show it: as written when it is a plain `MAJOR.MINOR.PATCH`,
+/// otherwise quoted, so that spaces or odd characters show.
+#[must_use]
+pub fn shown_schema_version(version: &str) -> String {
+    if parse_schema_version(version).is_some() {
+        version.to_owned()
+    } else {
+        format!("{version:?}")
+    }
 }
 
 /// Up to `n` bytes from the start of `r` (fewer only at the end of the input).
@@ -758,6 +764,17 @@ fn check_consistent(r: &Results, name: &str) -> Result<()> {
                         p.position
                     )));
                 }
+            }
+        }
+        if let (Some(weighted), Some(observed)) =
+            (p.similarity_weighted_entropy, p.observed_entropy)
+        {
+            if !crate::similarity::within_observed(weighted, observed) {
+                return Err(invalid(format!(
+                    "position {}: similarity_weighted_entropy is {weighted}, above the observed \
+                     entropy {observed}, which it cannot exceed",
+                    p.position
+                )));
             }
         }
         if let Some(v) = p
