@@ -42,7 +42,7 @@ pub fn export(kind: crate::workers::export::ExportKind, metric: ChartMetric) -> 
         K::TsvFolder => format!(
             "Tidy tables <name>.positions/variants/metadata/hcs.tsv, as `dima analyze \
              --tsv-dir` writes them: one row per observation, tab-separated with RFC 4180 \
-             quoting, NA for undefined values.{}",
+             quoting, NA for undefined or not computed values.{}",
             refs(&TABLES)
         ),
         K::HcsJson => format!(

@@ -183,24 +183,57 @@ fn controls_above(h: &H, bottom: f32) -> Vec<(String, egui::Rect)> {
         .collect()
 }
 
-/// Where every label and control above `bottom` is, in tree order: its role, its top-left
-/// corner and, for a control whose text never names a metric (a button, check box or radio
-/// button), its whole rectangle. A label or a value field may change its text; none may move.
-fn places_above(h: &H, bottom: f32) -> Vec<(Role, egui::Pos2, Option<egui::Rect>)> {
+/// A label or control: its role, its text (a control's name, a label's or a field's value)
+/// and its rectangle.
+type Place = (Role, String, egui::Rect);
+
+/// Every label and control above `bottom`, in tree order.
+fn places_above(h: &H, bottom: f32) -> Vec<Place> {
     use egui_kittest::kittest::NodeT;
     h.root()
         .children_recursive()
         .filter_map(|n| {
-            let role = n.accesskit_node().role();
-            let whole = match role {
-                Role::Button | Role::CheckBox | Role::RadioButton | Role::ComboBox => true,
-                Role::Label | Role::SpinButton | Role::TextInput => false,
-                _ => return None,
-            };
+            let a = n.accesskit_node();
+            let role = a.role();
+            if !(is_control(role)
+                || matches!(role, Role::Label | Role::SpinButton | Role::TextInput))
+            {
+                return None;
+            }
+            let text = a.label().or_else(|| a.value()).unwrap_or_default();
             let r = n.rect();
-            (r.top() < bottom).then_some((role, r.min, whole.then_some(r)))
+            (r.top() < bottom).then(|| (role, text.to_owned(), r))
         })
         .collect()
+}
+
+/// A button, check box, radio button or combo box.
+fn is_control(role: Role) -> bool {
+    matches!(
+        role,
+        Role::Button | Role::CheckBox | Role::RadioButton | Role::ComboBox
+    )
+}
+
+/// Panics unless every label and control of `now` is where it was in `before`: a control keeps
+/// its whole rectangle, and so does a text that did not change; a text that changed keeps its
+/// top and the edge it is aligned to (the left, or the right for the count at the end of the
+/// filter bar).
+fn assert_in_place(before: &[Place], now: &[Place], context: &str) {
+    let roles = |p: &[Place]| p.iter().map(|(role, ..)| *role).collect::<Vec<_>>();
+    assert_eq!(
+        roles(now),
+        roles(before),
+        "{context}: the same labels and controls"
+    );
+    for (b, n) in before.iter().zip(now) {
+        let kept = if is_control(b.0) || b.1 == n.1 {
+            b.2 == n.2
+        } else {
+            b.2.top() == n.2.top() && (b.2.left() == n.2.left() || b.2.right() == n.2.right())
+        };
+        assert!(kept, "{context}: {b:?} moved to {n:?}");
+    }
 }
 
 /// Panics naming the first two of `items` whose rectangles overlap.
@@ -761,19 +794,21 @@ fn the_similarity_weighted_option_is_counted_remembered_and_run() {
 /// state and their tooltip as AccessKit description. A switch re-plots the chart under its new
 /// name and moves no label or control above it, nor the chart: at the smallest window, at a
 /// common one, at a width where the filter bar fits one row only with the shorter metric name,
-/// and on screens of 2 and 1.5 pixels per point, where a value field would otherwise show
-/// another number of decimals for each metric.
+/// on screens of 2 and 1.5 pixels per point, where a value field would otherwise show another
+/// number of decimals for each metric, and after a narrowed range, whose short count would let
+/// the count and Reset fit at the end of the bar's row until the switch lengthens it.
 #[test]
 fn the_metric_switch_moves_no_control() {
     use crate::charts::metric::ChartMetric;
     use egui::accesskit::Toggled;
     use egui_kittest::kittest::NodeT;
-    for (size, ppp) in [
-        (MIN_WINDOW, 1.0),
-        (egui::vec2(1300.0, 800.0), 1.0),
-        (egui::vec2(1200.0, 800.0), 1.0),
-        (MIN_WINDOW, 2.0),
-        (egui::vec2(1300.0, 800.0), 1.5),
+    for (size, ppp, narrowed) in [
+        (MIN_WINDOW, 1.0, false),
+        (egui::vec2(1300.0, 800.0), 1.0, false),
+        (egui::vec2(1200.0, 800.0), 1.0, false),
+        (MIN_WINDOW, 2.0, false),
+        (egui::vec2(1300.0, 800.0), 1.5, false),
+        (egui::vec2(1250.0, 800.0), 1.0, true),
     ] {
         let mut h = harness_with(size, ppp);
         load(&mut h, &fixtures::mers());
@@ -807,6 +842,20 @@ fn the_metric_switch_moves_no_control() {
                 Some(crate::panels::help_text::chart_metric(m))
             );
         }
+        if narrowed {
+            // The five highest entropies: a count of one digit.
+            let session = h.state_mut().state.session.as_mut().unwrap();
+            let mut values: Vec<f64> = session
+                .results
+                .results
+                .iter()
+                .filter_map(|p| p.entropy)
+                .collect();
+            values.sort_by(|a, b| b.total_cmp(a));
+            session.filter.value_range.0 = values[4];
+            session.apply_filters();
+            assert!(session.shown.len() < 10, "{}", session.shown.len());
+        }
         // No tooltip in the way: the pointer leaves the window before each look.
         h.event(egui::Event::PointerGone);
         h.run_steps(2);
@@ -835,10 +884,10 @@ fn the_metric_switch_moves_no_control() {
             h.run_steps(3);
             assert_eq!(h.state().state.session.as_ref().unwrap().metric, to);
             assert_eq!(state(&h, to), Some(Toggled::True));
-            assert_eq!(
-                places_above(&h, chart.top()),
-                before,
-                "{size:?} at {ppp} pixels per point: nothing moved switching to {to:?}"
+            assert_in_place(
+                &before,
+                &places_above(&h, chart.top()),
+                &format!("{size:?} at {ppp} pixels per point, switching to {to:?}"),
             );
             assert_eq!(
                 h.get_by_label_contains(name).rect(),
@@ -1036,10 +1085,94 @@ fn the_table_scrolls_sideways_at_the_smallest_window() {
     );
 }
 
+/// The keyboard route to the metric switch that the guide gives: Tab from the top of the
+/// Results screen reaches the "Metric:" row through the filter bar's value fields, and Space
+/// selects. Leaving a value field that shows the full range keeps the range exactly: egui
+/// stores the text a field showed when it loses the focus, and the rounded maximum hid the
+/// highest position, enabled Reset and made a later switch say the range had been reset.
+#[test]
+fn the_metric_switch_by_tab_and_space_keeps_the_value_range() {
+    use crate::charts::metric::ChartMetric;
+    use egui_kittest::kittest::NodeT;
+    fn session(h: &H) -> &crate::state::session::Session {
+        h.state().state.session.as_ref().unwrap()
+    }
+    let mut h = harness();
+    load(&mut h, &fixtures::mers_swe());
+    let total = session(&h).results.results.len();
+    let max = session(&h).bounds.max_entropy;
+    let shown = format!("{max:.4}");
+    assert_ne!(
+        shown.parse::<f64>().ok(),
+        Some(max),
+        "the field rounds the maximum"
+    );
+    let focused = |h: &H| {
+        h.root()
+            .children_recursive()
+            .find(|n| n.is_focused())
+            .map(|n| {
+                let a = n.accesskit_node();
+                let text = a.label().or_else(|| a.value()).unwrap_or_default();
+                (a.role(), text.to_owned())
+            })
+    };
+    // Nothing changed, nothing hidden, Reset off and no note.
+    let unchanged = |h: &H, metric: ChartMetric, step: &str| {
+        let s = session(h);
+        assert_eq!(s.metric, metric, "{step}");
+        assert_eq!(
+            s.filter.value_range,
+            (0.0, s.bounds.max_for(metric)),
+            "{step}: the full range, exactly"
+        );
+        assert_eq!(s.shown.len(), total, "{step}: every position shown");
+        let reset = h.get_by_role_and_label(Role::Button, "Reset");
+        assert!(reset.accesskit_node().is_disabled(), "{step}: Reset is off");
+        assert!(h.state().state.toasts.is_empty(), "{step}: no note");
+    };
+    let entropy = Some((Role::RadioButton, "Entropy".to_owned()));
+    let mut crossed = Vec::new();
+    while focused(&h) != entropy {
+        assert!(
+            crossed.len() < 100,
+            "Tab never reached the switch: {crossed:?}"
+        );
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        crossed.push(focused(&h));
+    }
+    let fields = |text: &str| crossed.iter().flatten().any(|(_, t)| t.as_str() == text);
+    assert!(
+        fields("0.0000") && fields(&shown),
+        "the route crosses both value fields: {crossed:?}"
+    );
+    unchanged(&h, ChartMetric::Entropy, "Tab to the switch");
+    h.key_press(egui::Key::Space);
+    h.run_steps(3);
+    unchanged(&h, ChartMetric::Entropy, "Space on the metric shown");
+    h.key_press(egui::Key::Tab);
+    h.run_steps(2);
+    h.key_press(egui::Key::Space);
+    h.run_steps(3);
+    unchanged(
+        &h,
+        ChartMetric::SimilarityWeighted,
+        "Tab and Space on the other metric",
+    );
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Tab);
+    h.run_steps(2);
+    assert_eq!(focused(&h), entropy);
+    h.key_press(egui::Key::Space);
+    h.run_steps(3);
+    unchanged(&h, ChartMetric::Entropy, "Shift+Tab and Space back");
+}
+
 /// The metric switch from the keyboard and the command palette: Space selects the radio that
-/// has the focus; while a control has the focus the arrow keys move between controls, not
-/// along the table, until Esc gives them back; the palette offers the metric not shown. The
-/// keyboard help lists these keys.
+/// has the focus (given here directly; Tab reaches it in
+/// `the_metric_switch_by_tab_and_space_keeps_the_value_range`); while a radio button has the
+/// focus the arrow keys move between controls, not along the table, until Esc gives them back;
+/// the palette offers the metric not shown. The keyboard help lists these keys.
 #[test]
 fn the_metric_from_the_keyboard_and_the_palette() {
     use crate::charts::metric::ChartMetric;

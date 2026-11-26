@@ -46,10 +46,10 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
 - Desktop app: when the run computed similarity-weighted entropy, a **Metric:** switch above the
   chart plots **Entropy** or **Similarity-weighted entropy**. Each has its own value axis,
   heading, legend and mean line, and the filter bar's value range applies to the metric shown. A
-  switch keeps the zoom and the selection and resets the value range (with a note when it had
-  been narrowed); no control moves (the filter bar's value fields show four decimals for either
-  metric). Every dataset opens showing entropy. Exported figures show
-  the metric on screen, with its title, axis title, legend and mean.
+  switch keeps the zoom and the selection and resets the value range (with a note, and the
+  position table scrolled back to the selected row, when it had been narrowed); no control
+  moves. Every dataset opens showing entropy. Exported figures show the metric on screen, with
+  its title, axis title, legend and mean.
 - Desktop app, when the run computed similarity-weighted entropy: a chip "similarity-weighted
   mean X bits (observed Y)" after the mean chip (0.0363 and 0.1207 bits for the bundled MERS
   spike sample); a sortable **Similarity-weighted** column right after **Entropy** in the
@@ -83,10 +83,11 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
-- Desktop app: dragging a value of the filter bar's range moves it by 1/200 of the range per
-  pixel (the whole range in 200 pixels), whatever the metric's scale; it moved 0.01 bits per
-  pixel before, too coarse for similarity-weighted entropy, which is often a small fraction of a
-  bit.
+- Desktop app: the filter bar's value fields show four decimals (two before, on most screens)
+  and keep their width as their values change. Dragging a value moves it by 1/200 of the range
+  per pixel, so the whole range takes 200 pixels whatever the metric's scale, but by at least
+  0.0001 per pixel, so a range below 0.02 bits takes fewer; it moved 0.01 bits per pixel before,
+  too coarse for similarity-weighted entropy, which is often a small fraction of a bit.
 - Results schema 1.1.0 (the conserved-sequences schema stays 1.0.0 and now has its own version
   constant). Results written by dima 1.0.0 are read as runs without similarity-weighted entropy;
   `dima view` notes this when it writes values their schema did not record, and keeps its
@@ -154,8 +155,17 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   ("plug_in; fallback: support at or below threshold"), at the panel's edge; it now wraps.
 - In narrow desktop-app windows the filter bar's position count was drawn over the low-support
   switch, and the chart's "drag: pan" hint over its legend. Both now move to a row of their own
-  when their row is full, and the chart's Fit, + and − buttons stay at the top right of the
-  chart.
+  when their row is full (for the count and Reset, when it could not hold the longest count, so
+  a count that changes with a filter or a metric switch never moves them to another row), and
+  the chart's Fit, + and − buttons stay at the top right of the chart.
+- Moving the keyboard focus through a value field of the desktop app's filter bar, with Tab for
+  example, stored the value as the field showed it, rounded. When the field rounded the largest
+  value down, the range then hid the positions above the rounded value, the one with the largest
+  value among them, and turned Reset on, although nothing had been changed. A minimum that reads
+  as 0 is now 0, and a maximum that reads as the largest value is that value exactly.
+- The command line's `--table` help and the desktop app's tooltip of the TSV-folder export said
+  that `NA` marks undefined values; it also marks values that were not computed, such as the
+  similarity-weighted columns without the option, and both now say so.
 - Documentation: the numbers that came from random runs and simulations are now exact wherever
   an exact form exists, and seeded and stated with their precision otherwise. Among the changes:
   the paper's 1.38 bits at MERS-CoV spike position 25 lies 0.29 standard deviations below the

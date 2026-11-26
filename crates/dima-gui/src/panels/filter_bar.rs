@@ -1,10 +1,18 @@
 //! The filter bar: position range, the value range of the metric the chart plots (entropy, or
 //! similarity-weighted entropy), motif classes and the low-support switch, with the shown/total
 //! count and "Reset". Changes are applied when the pointer is released (a drag does not
-//! refilter on every tick). When the metric can be switched, the bar does not rearrange on a
-//! switch: the value label keeps the width of the longer name, and the two value fields show
-//! four decimals in slots as wide as the wider of the two metrics' maxima (a drag value
-//! otherwise picks its decimals from its speed and the screen's pixel size).
+//! refilter on every tick).
+//!
+//! The two value fields show four decimals (a drag value otherwise picks its decimals from its
+//! speed and the screen's pixel size), a minimum that reads as 0 is 0 and a maximum that reads
+//! as the metric's largest value is that value exactly: a drag value stores the text it showed
+//! when it loses the focus, so tabbing through a field would otherwise narrow the range by the
+//! rounding.
+//!
+//! The bar does not rearrange when its texts change: the value fields sit in slots as wide as
+//! the widest value of the metrics the results hold, the count and Reset start a row of their
+//! own whenever the longest count would not fit at the end of the last one, and when the metric
+//! can be switched the value label keeps the width of the longer name.
 
 use egui::{RichText, Ui};
 
@@ -49,32 +57,25 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
         let v = &mut s.filter.value_range;
         let max = b.max_for(metric).max(0.0);
         let speed = drag_speed(max);
-        if ChartMetric::SimilarityWeighted.available(&s.results) {
-            let widths = ["min ", "max "].map(|prefix| {
-                ChartMetric::ALL
-                    .map(|m| value_field_width(ui, prefix, b.max_for(m).max(0.0)))
-                    .into_iter()
-                    .fold(0.0, f32::max)
-            });
-            for ((value, prefix), width) in [(&mut v.0, "min "), (&mut v.1, "max ")]
+        let before = *v;
+        for (bound, prefix, end) in [(&mut v.0, "min ", 0.0), (&mut v.1, "max ", max)] {
+            let width = ChartMetric::ALL
                 .into_iter()
-                .zip(widths)
-            {
-                let field = egui::DragValue::new(value)
-                    .prefix(prefix)
-                    .speed(speed)
-                    .range(0.0..=max)
-                    .fixed_decimals(VALUE_DECIMALS);
-                changed |= fixed_width_slot(ui, width, |ui| ui.add(field)).changed();
+                .filter(|m| m.available(&s.results))
+                .map(|m| value_field_width(ui, prefix, b.max_for(m).max(0.0)))
+                .fold(0.0, f32::max);
+            let field = egui::DragValue::new(&mut *bound)
+                .prefix(prefix)
+                .speed(speed)
+                .range(0.0..=max)
+                .fixed_decimals(VALUE_DECIMALS);
+            // Not while the field is being typed in, which would replace the text being typed.
+            if !fixed_width_slot(ui, width, |ui| ui.add(field)).has_focus() {
+                *bound = snapped(*bound, end);
             }
-        } else {
-            changed |= ui
-                .add(egui::DragValue::new(&mut v.0).prefix("min ").speed(speed).range(0.0..=max).max_decimals(VALUE_DECIMALS))
-                .changed();
-            changed |= ui
-                .add(egui::DragValue::new(&mut v.1).prefix("max ").speed(speed).range(0.0..=max).max_decimals(VALUE_DECIMALS))
-                .changed();
         }
+        // Only a change of the bounds themselves: leaving a field changes nothing by itself.
+        changed |= *v != before;
         ui.add_space(t.space_12);
         ui.label("Motifs")
             .on_hover_text("Show positions with at least one variant of a checked motif");
@@ -89,8 +90,11 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
         let (shown, total) = (s.shown.len(), s.results.results.len());
         let count = format!("{shown} of {total} positions");
         // The count and Reset end the last row; a row without room for them would put them
-        // over its controls, so they start a row of their own instead.
-        if ui.available_size_before_wrap().x < right_group_width(ui, &count) {
+        // over its controls, so they start a row of their own instead. The room is that of the
+        // longest count (the interface's digits are all as wide), so a count that changes with
+        // a filter or a metric switch never moves them to another row.
+        let longest = format!("{total} of {total} positions");
+        if ui.available_size_before_wrap().x < right_group_width(ui, &longest) {
             ui.end_row();
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -113,9 +117,21 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
     }
 }
 
-/// Decimals of the value fields: at most this many, exactly this many when the metric can be
-/// switched.
+/// Decimals of the value fields.
 const VALUE_DECIMALS: usize = 4;
+
+/// Half the value of the fields' last decimal: a bound nearer than this to its end of the range
+/// (0 for the minimum, the largest value for the maximum) reads as that end.
+const HALF_STEP: f64 = 0.5e-4;
+
+/// `bound`, or `end` when the bound reads as it (see [`HALF_STEP`]).
+fn snapped(bound: f64, end: f64) -> f64 {
+    if (bound - end).abs() < HALF_STEP {
+        end
+    } else {
+        bound
+    }
+}
 
 /// The width of a value field showing `prefix` and `max` with [`VALUE_DECIMALS`] decimals: its
 /// text in the drag-value style, the button's padding on both sides, and one digit to spare
@@ -157,6 +173,33 @@ fn right_group_width(ui: &Ui, text: &str) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    use super::{HALF_STEP, VALUE_DECIMALS, snapped};
+
+    /// A bound that reads as its end of the range is that end, so a field that is left without
+    /// a change keeps the full range exactly; one that reads otherwise is kept.
+    #[test]
+    fn a_bound_that_reads_as_an_end_is_that_end() {
+        // The largest entropy of the MERS spike sample, and maxima that round up and down.
+        for max in [1.587_825_175_645_670_3, 0.454_776, 0.454_74, 2.0, 0.000_03] {
+            let shown: f64 = format!("{max:.VALUE_DECIMALS$}").parse().unwrap();
+            assert_eq!(snapped(shown, max), max, "{max}");
+            assert_eq!(snapped(max, max), max);
+        }
+        assert_eq!(snapped(1.5877, 1.587_825_175_645_670_3), 1.5877);
+        assert_eq!(snapped(0.0, 0.0), 0.0);
+        assert_eq!(snapped(0.4 * HALF_STEP, 0.0), 0.0);
+        assert_eq!(
+            snapped(0.0001, 0.0),
+            0.0001,
+            "the smallest step shown is kept"
+        );
+        assert_eq!(
+            format!("{:.VALUE_DECIMALS$}", 2.0 * HALF_STEP),
+            format!("0.{}1", "0".repeat(VALUE_DECIMALS - 1)),
+            "half the last decimal shown"
+        );
+    }
+
     #[test]
     fn dragging_crosses_the_range_in_200_pixels() {
         assert!((super::drag_speed(1.6) - 0.008).abs() < 1e-12);

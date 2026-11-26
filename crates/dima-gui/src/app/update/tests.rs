@@ -984,7 +984,8 @@ fn an_appended_extension_never_replaces_a_file_unasked() {
 
 /// The chart's metric: entropy on every load; a metric the results lack is refused, the metric
 /// shown is a no-op; a switch keeps the zoom and the selection, resets the value range to the
-/// new metric's full range, and says so only when the user had narrowed it.
+/// new metric's full range, and says so only when the user had narrowed it, in which case the
+/// table also brings the selected row back into view.
 #[test]
 fn the_chart_metric_switch() {
     use crate::charts::metric::ChartMetric::{Entropy, SimilarityWeighted};
@@ -1007,6 +1008,8 @@ fn the_chart_metric_switch() {
     session.apply_filters();
     session.viewport = Some((100.5, 200.5));
     session.select(150, SelectSource::Chart);
+    // The table has drawn since, and scrolled to the row.
+    session.selection.scroll_to_row = false;
     let (shown, version) = (session.shown.len(), session.version);
     assert!(shown < 1345, "a narrowed range");
     // The metric shown: nothing changes.
@@ -1031,6 +1034,10 @@ fn the_chart_metric_switch() {
         Some(150),
         "the selection is kept"
     );
+    assert!(
+        session.selection.scroll_to_row,
+        "the positions that came back can push its row out of view"
+    );
     assert_ne!(session.version, version, "the chart's lines are recomputed");
     assert_eq!(session.series.y_max, Some(max), "its own axis");
     let notes: Vec<_> = s.toasts.items().iter().collect();
@@ -1040,8 +1047,9 @@ fn the_chart_metric_switch() {
         notes[0].text,
         "Value range reset to the full range of similarity-weighted entropy"
     );
-    // Back without narrowing: no note.
+    // Back without narrowing: no note, and the same rows, so the table does not move.
     s.toasts = crate::state::toasts::Toasts::default();
+    s.session.as_mut().unwrap().selection.scroll_to_row = false;
     update(&mut s, Msg::ChartMetric(Entropy));
     let session = s.session.as_ref().unwrap();
     assert_eq!(session.metric, Entropy);
@@ -1050,6 +1058,7 @@ fn the_chart_metric_switch() {
         (0.0, session.bounds.max_entropy)
     );
     assert_eq!(session.viewport, Some((100.5, 200.5)));
+    assert!(!session.selection.scroll_to_row);
     assert!(s.toasts.is_empty());
     // Entropy narrowed, then switched to similarity-weighted entropy and back: only the
     // narrowed range is told.

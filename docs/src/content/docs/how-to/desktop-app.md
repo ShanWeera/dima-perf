@@ -83,7 +83,7 @@ details** says *Similarity-weighted entropy: computed* or *not computed*, also f
 from a file; a file written by dima 1.0.0 reads as *not computed*.
 
 Without the option nothing of it is computed and the Results screen shows nothing of it; the
-exported results hold `null` (`NA` in the tables) where the values would be.
+exported results hold `null` (`NA` in the positions table) where the values would be.
 
 The app saves this choice in its settings only while the option is ticked, so the settings of
 anyone who never ticks it stay readable by dima 1.0.0. If you go back to dima 1.0.0 with the
@@ -100,9 +100,9 @@ character — and that no results were written; **Copy details** copies it for a
 ## Explore the results
 
 The Results screen shows the run's facts across the top — sequences, positions, k, T, the mean,
-lowest and highest entropy over eligible positions, the low-support counts and, when the run
-computed it, the similarity-weighted mean — and a badge with the number of warnings, which opens
-the diagnostics.
+lowest and highest entropy over [eligible positions](/reference/glossary/#eligible-position), the
+low-support counts and, when the run computed it, the similarity-weighted mean — and a badge
+with the number of warnings, which opens the diagnostics.
 
 In a small window the chart, the conserved regions and the position table do not all fit. The
 column that holds them then scrolls: drag the scroll bar at its right edge, or turn the mouse
@@ -143,28 +143,33 @@ chart offers **Entropy** and **Similarity-weighted entropy**; without it there i
 switch:
 
 1. Click **Similarity-weighted entropy** in the **Metric:** row.
-2. The chart redraws the same positions with similarity-weighted entropy. Its heading and value
-   axis read *Similarity-weighted entropy* and *Similarity-weighted entropy (bits)*, and the axis
-   follows the largest similarity-weighted value shown (the same rule as above). The dashed
-   horizontal line is now the mean similarity-weighted entropy of eligible positions. The legend
-   reads *support > T* for the solid line and *support ≤ T, not in the summary* for the dashed
-   one: no similarity-weighted value is corrected, and positions with support at or below T are
-   left out of its summary.
+2. The chart redraws the same positions (more if you had narrowed the value range) with
+   similarity-weighted entropy. Its heading and value axis read *Similarity-weighted entropy* and
+   *Similarity-weighted entropy (bits)*, and the axis follows the largest similarity-weighted
+   value shown (the same rule as above). The dashed horizontal line is now the mean
+   similarity-weighted entropy of eligible positions. The legend reads *support > T* for the
+   solid blue line and *support ≤ T, not in the summary* for the dashed vermillion line: no
+   similarity-weighted value is corrected, and positions with support at or below T are left out
+   of its summary.
 3. The zoom and the selected position stay as they were. The value range of the filter bar now
    applies to similarity-weighted entropy and starts at its full range. If you had narrowed the
    entropy range, a note says *Value range reset to the full range of similarity-weighted
-   entropy*.
+   entropy*, and the position table scrolls back to the selected row, which the positions shown
+   again may have pushed out of view.
 
 Click **Entropy** to go back (the note then names entropy). From the keyboard, press Tab until a
 button of the **Metric:** row has the focus (Tab / Shift+Tab: move between controls) and press
-Space to select it (Space: press or select). While a control has the focus, the arrow keys move
-between controls instead of along the position table; press Esc to give them back to the table.
-The command palette (below) offers the switch too. Every dataset you open or analyse starts with
-entropy. Nothing you can click moves when you switch, so you can switch back and forth in one
-place to compare the two lines: the filter bar's two value fields, for example, keep their width
-and show four decimals for either metric. Each metric has its own value axis, so compare their
-shapes, not their heights: similarity-weighted entropy is never more than the observed entropy
-and is often much smaller.
+Space to select it (Space: press or select). On the way, Tab passes through the filter bar's
+fields; passing through a field without typing in it keeps the range it shows. While a button,
+check box or radio button has the focus, the arrow keys move between controls instead of along
+the position table. In a value field, Up and Down change the value and Left and Right move the
+text cursor; in a text field, the arrow keys move the text cursor. Press Esc to give the arrow
+keys back to the table. The command palette (below) offers the switch too. Every dataset you
+open or analyse starts with entropy. Nothing you can click moves when you switch, so you can
+switch back and forth in one place to compare the two lines: the filter bar's two value fields,
+for example, keep their width for either metric. Each metric has its own value axis, so compare
+their shapes, not their heights: similarity-weighted entropy is never more than the observed
+entropy and is often much smaller.
 
 **Conserved regions** appear as a strip under the chart, aligned with it at every zoom. The
 threshold and the "eligible positions only" switch recompute them at once; flagged regions
@@ -176,7 +181,13 @@ any column; the panels on the right describe the selected position (class, entro
 method that produced them, support, incidences, coverage), its motif composition, its variants
 (searchable, filterable by incidence) and, for the selected variant, its counts per header value.
 The filter bar restricts the view by position range, entropy range (the range of
-similarity-weighted entropy while the chart shows it), motif class and support class.
+similarity-weighted entropy while the chart shows it), motif class and support class. To change a
+bound of the value range, drag its field right or up to raise it, left or down to lower it, or
+click the field and type a value. Each pixel of a drag moves the bound by 1/200 of the metric's
+full range, so 200 pixels cross the whole range; a range below 0.02 bits moves by 0.0001 per
+pixel instead, and takes fewer. The fields show four decimals; a minimum that reads 0.0000 is 0,
+and a maximum that reads as the largest value is that value exactly, so the full range hides no
+position.
 
 When the table's columns do not fit the window, the table scrolls sideways: drag its horizontal
 scroll bar, scroll sideways on a touchpad, or hold Shift and turn the mouse wheel over the table.
@@ -195,8 +206,9 @@ screen also shows:
 - a chip right after the *mean* chip, **similarity-weighted mean X bits (observed Y)**: the mean
   similarity-weighted entropy of the eligible positions and, in parentheses, the mean observed
   (uncorrected) entropy of the same positions, so the two are compared like for like. The *mean*
-  chip before it is the run's entropy, corrected by the paper's estimator. For the bundled MERS
-  spike sample (`samples/mers_spike_aa.fasta`, default options) the chip reads
+  chip before it is the run's entropy, estimated with the run's estimator (the paper's correction
+  by default). For the bundled MERS spike sample (`samples/mers_spike_aa.fasta`, default options
+  with **Compute similarity-weighted entropy (Wu 2025)** ticked) the chip reads
   *similarity-weighted mean 0.0363 bits (observed 0.1207)*, next to *mean 0.1261 bits*: the
   similarity-weighted mean is about 30% of the observed mean of the same positions. With no
   eligible position it reads *similarity-weighted mean —*;

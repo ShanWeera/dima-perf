@@ -365,9 +365,11 @@ pub struct ChartKey {
 
 /// The key of the lines of a session's series: the session id (unique per load, G23; a new
 /// load restarts the version, so the version alone cannot tell two results apart), the
-/// session's version (bumped whenever the shown positions change), the view `(lo, hi)` and the
-/// pixel columns the lines are reduced to. The value range is not part of it: strokes and
-/// vertices are in data units, and the axis maximum is only a uniform of the line shader.
+/// session's version (bumped whenever its series is rebuilt: by a filter, and by a metric switch
+/// even when the same positions are shown, so the lines of one metric are never drawn for the
+/// other), the view `(lo, hi)` and the pixel columns the lines are reduced to. The value range
+/// is not part of it: strokes and vertices are in data units, and the axis maximum is only a
+/// uniform of the line shader.
 #[must_use]
 pub fn chart_cache_key(session: u64, version: u64, view: (f64, f64), columns: usize) -> ChartKey {
     ChartKey {

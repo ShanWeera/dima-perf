@@ -344,7 +344,12 @@ impl Session {
             .viewport
             .zip(self.extent())
             .and_then(|(v, full)| viewport::normalise(v, full));
-        if !self.selection.position.is_some_and(|p| self.is_shown(p)) {
+        if self.selection.position.is_some_and(|p| self.is_shown(p)) {
+            // The positions a narrowed range hid are back, so the selected row can be out of
+            // the table's view; a range that was not narrowed shows the same rows and moves
+            // nothing.
+            self.selection.scroll_to_row |= narrowed;
+        } else {
             self.select_first(SelectSource::Auto);
         }
         narrowed
