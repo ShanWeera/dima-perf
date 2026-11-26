@@ -374,6 +374,26 @@ pub fn similarity_weighted_mean(eligible: u64) -> String {
     )
 }
 
+/// The chart's "eligible mean" legend entry: which positions the mean line covers, that it is
+/// the run's value (the mean chip, or the first number of the similarity-weighted chip) and
+/// that zooming and the filters leave it where it is.
+#[must_use]
+pub fn eligible_mean(metric: ChartMetric, threshold: u64, eligible: u64) -> String {
+    let chip = match metric {
+        ChartMetric::Entropy => "the mean chip above",
+        ChartMetric::SimilarityWeighted => {
+            "the first number of the similarity-weighted mean chip above"
+        }
+    };
+    format!(
+        "Eligible mean: the average {} over {} (support > {threshold}), each position counted \
+         once. It is the run's value, shown by {chip}, so zooming and the filters do not move \
+         it. Positions with support \u{2264} {threshold} are not in it.",
+        metric.in_sentence(),
+        dima_core::human::plural(eligible, "eligible position", "eligible positions"),
+    )
+}
+
 /// The filter bar's value range, for the metric shown.
 #[must_use]
 pub fn value_range(metric: ChartMetric) -> String {
@@ -466,5 +486,31 @@ mod tests {
             super::export(K::Svg, ChartMetric::SimilarityWeighted)
                 .starts_with("The similarity-weighted entropy chart as shown")
         );
+    }
+
+    /// The mean line's legend tooltip names the metric, the positions it covers and the chip
+    /// that shows the same value, and says that zooming and filtering leave it in place.
+    #[test]
+    fn the_eligible_mean_tooltip() {
+        assert_eq!(
+            super::eligible_mean(ChartMetric::Entropy, 100, 1345),
+            "Eligible mean: the average entropy over 1345 eligible positions (support > 100), \
+             each position counted once. It is the run's value, shown by the mean chip above, so \
+             zooming and the filters do not move it. Positions with support \u{2264} 100 are not \
+             in it."
+        );
+        let swe = super::eligible_mean(ChartMetric::SimilarityWeighted, 30, 1);
+        assert!(
+            swe.starts_with(
+                "Eligible mean: the average similarity-weighted entropy over 1 eligible position \
+                 (support > 30),"
+            ),
+            "{swe}"
+        );
+        assert!(
+            swe.contains("the first number of the similarity-weighted mean chip above"),
+            "{swe}"
+        );
+        assert!(swe.ends_with("support \u{2264} 30 are not in it."), "{swe}");
     }
 }

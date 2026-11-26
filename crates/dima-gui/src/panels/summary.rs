@@ -62,7 +62,8 @@ pub fn chips(r: &Results, session: &Session) -> Vec<(String, String)> {
                 )
             ),
             format!(
-                "Mean entropy over the {} eligible positions",
+                "Mean entropy over the {} eligible positions (support > T), each position \
+                 counted once: the line labelled eligible mean on the entropy chart",
                 r.eligible_position_count
             ),
         ),

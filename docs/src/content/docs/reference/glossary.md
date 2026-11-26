@@ -59,6 +59,17 @@ See [the support threshold](/explanation/method/#the-support-threshold-and-the-l
 A position with support above the support threshold. Only eligible positions receive the paper's
 corrected entropy and enter the summary statistics.
 
+### Eligible mean
+
+The average entropy of the eligible positions: their entropies added up and divided by how many
+there are, each position counting once whatever its support. It is one number for the whole
+alignment, and it uses the run's reported entropy (`entropy`: the corrected entropy by default).
+It appears as `average_entropy` in the results, `entropy mean` in the line `dima analyze` prints
+at the end, the *mean* chip of the desktop app and, on the app's entropy chart, the dashed grey
+line labelled *eligible mean*: 0.1261 bits for the bundled MERS-CoV spike sample. Positions with
+support at or below the threshold are not in it, and it is `null` (— in the app) when no position
+is eligible. See [the eligible mean](/explanation/motifs/#the-eligible-mean).
+
 ### NS, LS and ELS
 
 The labels (`low_support`) of positions that are not eligible: NS, no support (N = 0); LS, low

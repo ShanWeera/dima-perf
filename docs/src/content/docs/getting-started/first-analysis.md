@@ -56,9 +56,10 @@ jq '{sequence_count, position_count, eligible_position_count,
 
 The alignment has 1,353 columns, so there are $1{,}353 - 9 + 1 = 1{,}345$ positions of 9-mers.
 Every position is supported by more than 100 sequences, so all are **eligible**: their entropy is
-corrected for sample size and they count in the summary. The spike protein is mostly conserved —
-mean entropy 0.13 bits, 455 positions with a single variant — with the highest diversity at
-position 26.
+corrected for sample size and they count in the summary. `average_entropy` is the
+[eligible mean](/reference/glossary/#eligible-mean): the average entropy of the eligible
+positions, each counted once. The spike protein is mostly conserved — mean entropy 0.13 bits,
+455 positions with a single variant — with the highest diversity at position 26.
 
 ## 4. Look at one position
 

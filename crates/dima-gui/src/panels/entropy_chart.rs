@@ -334,10 +334,9 @@ fn legend_entries(
         .on_hover_text(&tip);
     }
     if s.metric.mean(&s.results).is_some() {
-        legend_entry(ui, t, "eligible mean", Swatch::Dashed(t.mean_line)).on_hover_text(format!(
-            "Mean {} over the eligible positions (support > T), as in the summaries",
-            s.metric.in_sentence()
-        ));
+        legend_entry(ui, t, "eligible mean", Swatch::Dashed(t.mean_line)).on_hover_text(
+            help_text::eligible_mean(s.metric, threshold, s.results.eligible_position_count),
+        );
     }
     if let (Some(c), false) = (
         s.results.coverage_summary.min_coverage,

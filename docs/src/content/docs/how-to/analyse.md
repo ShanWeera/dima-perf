@@ -34,7 +34,17 @@ Without `-o` (and without `--tsv-dir` or `--hcs-output`), the results go to stan
 JSON. DiMA prints warnings and a one-line summary on standard error; add `-v` for progress
 milestones and a performance report, or `-q` for errors only. The summary gives entropies to four
 decimals; a value that is not zero never reads `0.0000` there, but `< 0.0001`. The results keep
-every digit.
+every digit. For the bundled MERS-CoV spike sample (`samples/mers_spike_aa.fasta`) the summary
+reads:
+
+```text
+analysed 191 sequences, 1345 positions (1345 eligible) in 0.01 s; entropy mean 0.1261, min 0.0000, max 1.5878 bits
+```
+
+Its `entropy mean`, `min` and `max` cover the eligible positions only (support above the support
+threshold, here all 1,345). The mean is the [eligible mean](/reference/glossary/#eligible-mean),
+`average_entropy` in the results: the average entropy of the eligible positions, each counted
+once.
 
 ## Choose the k-mer length
 
@@ -197,7 +207,8 @@ The formulas and the sources are in
 
 ## Read the results
 
-The summary keys at the top of the JSON answer the paper's questions directly:
+The summary keys at the top of the JSON answer the paper's questions directly; `average_entropy`
+is the [eligible mean](/reference/glossary/#eligible-mean):
 
 ```sh
 jq '{query_name, sequence_count, position_count, eligible_position_count,

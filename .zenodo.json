@@ -30,5 +30,5 @@
   ],
   "title": "dima: sequence diversity dynamics analyser for viruses (Rust implementation)",
   "upload_type": "software",
-  "version": "1.1.0"
+  "version": "1.1.1"
 }

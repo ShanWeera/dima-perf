@@ -58,7 +58,7 @@ without the summaries and `run`).
 | `support_threshold` | integer ≥ 1 | The support threshold $T$ |
 | `kmer_length` | integer ≥ 1 | $k$ |
 | `low_support_count` | integer | Positions with support ≤ $T$ (NS + LS + ELS) |
-| `average_entropy` | number or null | Mean entropy over eligible positions (support > $T$) |
+| `average_entropy` | number or null | Mean entropy over eligible positions (support > $T$), each position counted once: the [eligible mean](/reference/glossary/#eligible-mean) |
 | `lowest_entropy` | [extremum](#extremum) or null | Lowest entropy among eligible positions |
 | `highest_entropy` | [extremum](#extremum) or null | Highest entropy among eligible positions |
 | `position_count` | integer | Positions, $L - k + 1$ |
@@ -105,7 +105,7 @@ so the two can be compared like for like. The normalised values are not summaris
 | Key | Type | Meaning |
 |---|---|---|
 | `position_count` | integer | Eligible positions |
-| `average_entropy` | number or null | Mean similarity-weighted entropy, in bits; null when no position is eligible |
+| `average_entropy` | number or null | Mean similarity-weighted entropy, in bits, each eligible position counted once (the desktop app's *eligible mean* line when its chart shows similarity-weighted entropy); null when no position is eligible |
 | `lowest_entropy`, `highest_entropy` | [extremum](#extremum) or null | Lowest and highest similarity-weighted entropy (first position, tie count) |
 | `average_observed_entropy` | number or null | Mean observed (plug-in) entropy of the same positions, in bits |
 

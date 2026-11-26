@@ -204,6 +204,23 @@ fig.savefig("entropy.svg", bbox_inches="tight")
 Only eligible positions carry the corrected entropy. To show the others, mark the positions whose
 `low_support` is not `NA` (NS, LS or ELS).
 
+To add the desktop app's dashed *eligible mean* line, draw a horizontal line at the
+[eligible mean](/reference/glossary/#eligible-mean), the mean entropy of the eligible positions
+(those whose `low_support` is `NA`). It equals `average_entropy` in the results JSON:
+
+```r
+abline(h = mean(positions$entropy[is.na(positions$low_support)]), lty = 2)
+```
+
+```python
+eligible_mean = positions.loc[positions["low_support"].isna(), "entropy"].mean()
+ax.axhline(eligible_mean, linestyle="--", linewidth=0.8, color="grey")
+```
+
+Add the line before `fig.savefig` in Python, after `plot` in R. For the HIV-1 *pol* protein data
+set (`tests/data/HIV1_ALL_2020_pol_PRO.fasta.bz2`, default options) it is at 1.9072 bits; the
+mean of every non-`NA` value of the `entropy` column, LS positions included, would be 1.5708.
+
 To plot similarity-weighted entropy instead, run the analysis with
 `--similarity-weighted-entropy` and plot the `similarity_weighted_entropy` column in place of
 `entropy`; it too is `NA` at positions without support.

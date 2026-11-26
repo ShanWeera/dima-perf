@@ -228,7 +228,7 @@ percentage points, so those rows give whole percentages).
 With fewer points ($N$ close to $T$) the effect is larger: <!-- docs-numbers:v509-few-points:start -->
 one sequence differing raises the average by 50% at $N = 171$ and by 105% at $N = 130$ ($T = 100$;
 exact)<!-- docs-numbers:v509-few-points:end -->.
-On the MERS-CoV spike protein ($T = 100$) the eligible mean is 0.1261 bits here and <!-- docs-numbers:v509-means:start -->
+On the MERS-CoV spike protein ($T = 100$) the [eligible mean](/explanation/motifs/#the-eligible-mean) is 0.1261 bits here and <!-- docs-numbers:v509-means:start -->
 0.1417 bits averaged over v5.0.9 runs (seeded Monte Carlo of 2,000 runs, 95% interval ±0.0001); on
 the HIV-1 *pol* datasets its procedure, applied to the same k-mers, changes the means by less than
 0.00026 bits (DNA) and 0.0011 bits (protein), under half the standard deviation of the mean of a
