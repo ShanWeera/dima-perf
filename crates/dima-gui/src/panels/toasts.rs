@@ -7,7 +7,7 @@
 
 use egui::RichText;
 
-use super::common::{CLOSE, row_with_trailing, with_name};
+use super::common::{CLOSE, row_with_trailing, text_width, with_name};
 use crate::app::msg::Msg;
 use crate::state::toasts::{MAX_VISIBLE, Severity, Toast, Toasts};
 use crate::theme::DesignTokens;
@@ -65,15 +65,22 @@ fn toast_frame(ui: &mut egui::Ui, toast: &Toast, t: &DesignTokens, out: &mut Vec
         .corner_radius(t.panel_rounding)
         .inner_margin(t.space_8)
         .show(ui, |ui| {
-            ui.set_max_width(MAX_WIDTH);
             let mut text = format!("{}: {}", toast.severity.label(), toast.text);
             if toast.count > 1 {
                 text.push_str(&format!(" (\u{00D7}{})", toast.count));
             }
+            let dismiss = !toast.auto_dismiss();
+            let buttons: Vec<&str> = [
+                dismiss.then_some(CLOSE),
+                toast.details.as_ref().map(|_| "Copy details"),
+            ]
+            .into_iter()
+            .flatten()
+            .collect();
+            ui.set_max_width(content_width(ui, &text, &buttons));
             let message = |ui: &mut egui::Ui| {
                 ui.add(egui::Label::new(RichText::new(text).color(t.text_primary)).wrap());
             };
-            let dismiss = !toast.auto_dismiss();
             if toast.details.is_none() && !dismiss {
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), message);
                 return;
@@ -89,4 +96,22 @@ fn toast_frame(ui: &mut egui::Ui, toast: &Toast, t: &DesignTokens, out: &mut Vec
                 }
             });
         });
+}
+
+/// The width a toast's contents need, so that it is no wider than its message and buttons: the
+/// message on one line and each button with the gap before it, at most [`MAX_WIDTH`] (a longer
+/// message wraps). A button is its label with egui's padding on both sides.
+fn content_width(ui: &egui::Ui, text: &str, buttons: &[&str]) -> f32 {
+    let spacing = ui.spacing();
+    let visuals = &ui.visuals().widgets;
+    let padding = 2.0
+        * (spacing.button_padding.x + visuals.inactive.expansion.max(visuals.hovered.expansion));
+    let button_font = egui::TextStyle::Button.resolve(ui.style());
+    let buttons: f32 = buttons
+        .iter()
+        .map(|b| spacing.item_spacing.x + text_width(ui, b, button_font.clone()) + padding)
+        .sum();
+    let message = text_width(ui, text, egui::TextStyle::Body.resolve(ui.style()));
+    // One pixel to spare, so rounding never wraps a message that fits.
+    (message + 1.0 + buttons).min(MAX_WIDTH)
 }

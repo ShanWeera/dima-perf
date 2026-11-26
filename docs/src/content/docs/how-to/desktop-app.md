@@ -184,8 +184,8 @@ moves through the screen in this order: the top bar, the filter bar, the panel o
 variant search, the minimum incidence, the variant table's column headers and the variants it
 shows), then the **Metric:** row, the zoom buttons, the chart, the conserved regions and the
 position table's column headers; that is about 30 presses from the top to the **Metric:** row.
-A few stops show no outline while they have the focus: the handles between the columns of each
-table (they resize the columns), the chart and the strip of conserved regions. Passing through a
+Every stop is outlined while it has the focus, except the handles between the columns of each
+table (they resize the columns), which egui's tables make keyboard stops. Passing through a
 field of the filter bar without typing in it keeps the range it shows. While a button, check box
 or radio button has the focus, the arrow keys move between controls instead of along the position
 table. In a value field, Up and Down change the value and Left and Right move the text cursor; in
@@ -289,8 +289,9 @@ Read them with care:
 k-mer, or runs a command. On the Results screen of a run with similarity-weighted entropy it also
 offers **Show similarity-weighted entropy** or **Show entropy**, whichever the chart does not
 show. **Help ▸ Keyboard shortcuts** lists the other keys, among them Tab / Shift+Tab: move between
-controls; Space: press or select; and Esc, which closes the palette and also gives the arrow keys
-back to the table.
+controls; Space or Enter: press or select; Enter in a filter field: apply the value typed; a right
+click on a table row: copy it; and Esc, which closes the palette, leaves a filter field unchanged
+and also gives the arrow keys back to the table.
 
 ## Export
 

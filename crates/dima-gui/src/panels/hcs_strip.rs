@@ -110,6 +110,8 @@ pub fn show(
         egui::vec2(ui.available_width(), STRIP_HEIGHT),
         egui::Sense::click(),
     );
+    // A Tab stop, for its description; outlined while it has the focus.
+    super::common::focus_outline(ui, &response);
     let strip = egui::Rect::from_min_max(
         egui::pos2(rect.left() + LEFT_MARGIN, rect.top()),
         egui::pos2(rect.right() - RIGHT_MARGIN, rect.bottom()),

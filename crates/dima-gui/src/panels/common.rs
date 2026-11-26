@@ -28,21 +28,22 @@ pub fn sub_heading(ui: &mut Ui, text: impl Into<String>) {
 /// A label for an option, with a dot and a "default: X" tooltip when its value differs from
 /// the default (D73). The dot's place is kept when there is no dot, so the column of labels
 /// keeps its width and no control moves when an option is changed (a second click at the same
-/// place reaches the same control).
+/// place reaches the same control). Returns the label's id, by which the option's control is
+/// named for screen readers (`labelled_by`).
 pub fn option_label(
     ui: &mut Ui,
     t: &DesignTokens,
     text: &str,
     help: &str,
     default: Option<String>,
-) {
+) -> egui::Id {
     const DOT: egui::Vec2 = egui::vec2(8.0, 8.0);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        ui.label(text).on_hover_text(help);
+        let label = ui.label(text).on_hover_text(help).id;
         let Some(d) = default else {
             ui.allocate_space(DOT);
-            return;
+            return label;
         };
         let (rect, response) = ui.allocate_exact_size(DOT, egui::Sense::hover());
         ui.painter().circle_filled(rect.center(), 3.5, t.accent);
@@ -55,7 +56,9 @@ pub fn option_label(
                     format!("{text} changed; default: {d}"),
                 )
             });
-    });
+        label
+    })
+    .inner
 }
 
 /// Width of a legend swatch.
@@ -254,10 +257,16 @@ pub fn with_help(response: egui::Response, text: &str) -> egui::Response {
 /// `name` is its AccessKit name, which a screen reader says first, and its hover text. Call it
 /// after the control is added, whose own AccessKit node it completes.
 pub fn with_name(response: egui::Response, name: &str) -> egui::Response {
+    named(response, name).on_hover_text(name)
+}
+
+/// Gives a control `name` as its AccessKit name only (it has a tooltip or hint of its own, and
+/// no visible label beside it to be named by).
+pub fn named(response: egui::Response, name: &str) -> egui::Response {
     response
         .ctx
         .accesskit_node_builder(response.id, |node| node.set_label(name));
-    response.on_hover_text(name)
+    response
 }
 
 /// Draws a keyboard-focus outline around a control that draws none of its own (a frameless
@@ -266,12 +275,19 @@ pub fn focus_outline(ui: &Ui, response: &egui::Response) {
     if response.has_focus() {
         let visuals = ui.visuals();
         ui.painter().rect_stroke(
-            response.rect.expand(2.0),
+            outline_rect(response.rect, ui.clip_rect()),
             visuals.widgets.active.corner_radius,
             visuals.widgets.active.bg_stroke,
-            egui::StrokeKind::Outside,
+            egui::StrokeKind::Inside,
         );
     }
+}
+
+/// Where a focus outline goes: 2 px around the control, but within what is visible of it (a
+/// table cell clips at its edges), the stroke being drawn inside this rectangle, so every side
+/// of the outline shows.
+fn outline_rect(control: egui::Rect, clip: egui::Rect) -> egui::Rect {
+    control.expand(2.0).intersect(clip)
 }
 
 /// One row as wide as the space left: `trailing` (controls such as buttons) at its top right,
@@ -402,6 +418,21 @@ pub fn sort_header(ui: &mut Ui, name: &str, sort_name: &str, arrow: &str) -> egu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A focus outline lies within what is visible of its control, so a header or a variant at
+    /// a clipped edge of a table (its last column clips) shows all four sides; with room around
+    /// the control it is 2 px outside it.
+    #[test]
+    fn focus_outlines_stay_in_the_visible_area() {
+        let cell = egui::Rect::from_min_max(egui::pos2(100.0, 50.0), egui::pos2(300.0, 72.0));
+        let control = egui::Rect::from_min_max(egui::pos2(100.0, 50.5), egui::pos2(180.0, 71.5));
+        let outline = outline_rect(control, cell);
+        assert!(cell.contains_rect(outline), "{outline:?} outside {cell:?}");
+        assert_eq!(outline.left(), cell.left());
+        assert_eq!(outline.right(), control.right() + 2.0);
+        let roomy = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(500.0, 500.0));
+        assert_eq!(outline_rect(control, roomy), control.expand(2.0));
+    }
 
     #[test]
     fn elision_fits_and_never_panics() {

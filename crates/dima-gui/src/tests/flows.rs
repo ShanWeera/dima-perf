@@ -1256,8 +1256,12 @@ fn the_metric_from_the_keyboard_and_the_palette() {
     for line in [
         "Tab / Shift+Tab",
         "Move between controls",
+        "Space / Enter",
         "Press or select",
-        "Close the palette; also gives the arrow keys back to the table",
+        "In a filter field: apply the value typed (Tab or a click elsewhere does too)",
+        "Copy row, or a variant's k-mer",
+        "Close the palette; in a filter field, leave it unchanged; also gives the arrow keys \
+         back to the table",
     ] {
         assert!(has_label(&h, line), "{line:?}");
     }
@@ -1712,6 +1716,66 @@ fn notifications_stay_in_the_window() {
             "read first"
         );
     }
+}
+
+/// A notification is as wide as its message and buttons, as in 1.0.0, so a short one covers
+/// no more of the window than it needs; a long one wraps at its widest (380 px of contents).
+#[test]
+fn a_notification_is_as_wide_as_its_text() {
+    use crate::state::toasts::Severity;
+    // The left edge of a toast's message, and the window's right edge less the 16 px gap and
+    // the frame's margin and stroke: the right edge of every toast's contents.
+    let left = |text: &str, severity: Severity| {
+        let mut h = harness();
+        assert!(h.state().state.toasts.is_empty());
+        let now = h.state().state.now;
+        h.state_mut()
+            .state
+            .toasts
+            .push(severity, text.to_owned(), None, now);
+        h.run_steps(4);
+        let right = h.ctx.content_rect().right() - 16.0 - 9.0;
+        (h.get_by_label_contains(text).rect().left(), right)
+    };
+    for (text, severity) in [
+        ("Opened results.json", Severity::Info),
+        ("Short warning", Severity::Warning),
+    ] {
+        let (left, right) = left(text, severity);
+        assert!(right - left < 200.0, "{text}: {left} to {right}");
+    }
+    let (left, right) = left(
+        &"A long warning that has to wrap. ".repeat(6),
+        Severity::Warning,
+    );
+    assert!((right - left - 380.0).abs() < 1.0, "{left} to {right}");
+}
+
+/// Every field, menu, slider and check box of the Setup screen has a name for screen readers:
+/// the option it sets (its label beside it), or what it is for where it has no label.
+#[test]
+fn every_setup_control_has_a_name() {
+    use egui_kittest::kittest::NodeT;
+    let mut h = harness();
+    open(&mut h, &fixtures::mers_path());
+    h.get_by_role_and_label(Role::Button, "Advanced").click();
+    h.run_steps(2);
+    h.get_by_label("Stratify variants by FASTA header fields")
+        .click();
+    h.run_steps(3);
+    let unnamed: Vec<String> = h
+        .root()
+        .children_recursive()
+        .map(|n| n.accesskit_node())
+        .filter(|a| {
+            matches!(
+                a.role(),
+                Role::SpinButton | Role::TextInput | Role::ComboBox | Role::Slider | Role::CheckBox
+            ) && a.label().is_none_or(|l| l.trim().is_empty())
+        })
+        .map(|a| format!("{:?} {:?}", a.role(), a.value()))
+        .collect();
+    assert!(unnamed.is_empty(), "unnamed: {unnamed:?}");
 }
 
 /// Ticking an option that is the widest row of its grid adds its dot without moving any

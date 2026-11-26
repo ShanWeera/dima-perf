@@ -141,6 +141,8 @@ pub fn show(
         egui::vec2(ui.available_width(), height + BOTTOM_MARGIN + TOP_MARGIN),
         egui::Sense::click_and_drag(),
     );
+    // A Tab stop, for its description; outlined while it has the focus.
+    super::common::focus_outline(ui, &response);
     let plot = Rect::from_min_max(
         egui::pos2(full_rect.left() + LEFT_MARGIN, full_rect.top() + TOP_MARGIN),
         egui::pos2(

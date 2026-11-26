@@ -35,8 +35,8 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   `normalised_similarity_weighted_entropy` per position, `similarity_weighted_entropy_summary`
   (eligible positions, with their mean observed entropy) and the parameter
   `run.parameters.similarity_weighted_entropy`; three columns appended to the positions table.
-  `dima view`, `dima hcs` and `dima cite --from` refuse a file whose values break the rules of
-  the results reference (present exactly where they are defined, and no similarity-weighted
+  `dima view`, `dima hcs`, `dima cite --from` and the desktop app refuse a file whose values break
+  the rules of the results reference (present exactly where they are defined, and no similarity-weighted
   value above the observed entropy) as edited or damaged (exit 4).
   Without the option the keys are `null` (`NA` in the table); default results grow by 116 bytes
   per position (compact JSON and JSONL; 140 indented; 9 per positions-table row), and each
@@ -105,7 +105,6 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   plain `MAJOR.MINOR.PATCH` (so that, for example, a stray space shows).
 - Documentation: "Comparison with the paper" is now "Comparison with the papers" (same address),
   since it also compares DiMA with Wu 2025.
-
 - Desktop app: a value typed into a field of the filter bar (a position or a bound of the value
   range) is applied when you press Enter or Tab or click elsewhere, no longer at every key, and
   Esc leaves the field as it was. Typing 0.2 as the maximum applied 0 at the first key, which
@@ -116,15 +115,20 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   MERS spike sample, 52 on the HIV-1 pol protein data set). Positions move with the arrow keys
   as before; a variant the table shows whole is one stop, on its sequence, which is outlined, and
   Space or Enter selects it, as does a click on the sequence (a click on the text did nothing). A
-  column header that has the keyboard focus is outlined too.
+  column header, the chart and the strip of conserved regions are outlined too while they have
+  the keyboard focus (the chart and the strip showed nothing), also at the clipped edge of a
+  table.
 - Desktop app: a click anywhere in a row of the position or variant table selects it, its text
   included; the text in the tables can no longer be selected, which took the click (a click on
   the "5" of position 5 left the selection where it was, in 1.0.0 too). Instead, right-click a
   row to copy it: **Copy row** copies its cells as shown, separated by tabs (they paste into a
   spreadsheet as one row), and **Copy k-mer** a variant's k-mer.
 - Desktop app: notifications stack upwards from 16 px above the window's bottom-right corner,
-  the newest nearest the corner. A message wraps beside its buttons, which sit at its top right
-  (× and Copy details), and screen readers read the message before them.
+  the newest nearest the corner, each as wide as its message and buttons (at most 380 px). A
+  message wraps beside its buttons, which sit at its top right (× and Copy details), and screen
+  readers read the message before them.
+- Desktop app: **Help ▸ Keyboard shortcuts** also lists Enter (press or select; in a filter field,
+  apply the value typed), Esc in a filter field and the right click that copies a table row.
 
 ### Fixed
 
@@ -236,10 +240,15 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
 - Desktop app: the explanations of the results header's chips were tooltips only; screen readers
   now read them too, as the facts' explanations.
 - Desktop app: the close buttons of notifications and of the recent-files list showed an empty
-  box (✕ is in none of the app's fonts); they show × and are named "Dismiss" and "Remove from
-  recent files" for screen readers. The ▸ of "Export ▸ Methods & references" in the Cite window
+  box (✕ is in none of the app's fonts); they show × and are named "Dismiss" and "Remove <file>
+  from recent files" for screen readers. The ▸ of "Export ▸ Methods & references" in the Cite window
   and the ▼ that marks a coverage below the minimum in the position table also showed as empty
   boxes since 1.0.0; they are now drawn.
+- Desktop app: the Setup screen's fields, menus and sliders (alphabet, k, T, the query name, the
+  conserved-region threshold, the Advanced options, the path field and the header-format editor),
+  the Preferences' figure size and the command palette had no accessible name, so a screen
+  reader announced only their values ("9", "100"); each is now named by the label beside it or
+  by what it is for (since 1.0.0).
 - Documentation: the precision of large runs was given as measured at 2,208,211 and 17,500,000
   sequences per position, but the rounding error changes from one number of sequences to the
   next. "Numerical accuracy" now gives the largest error, which follows from rounding the most

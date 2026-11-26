@@ -54,7 +54,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
             .spacing([t.space_16, t.space_8])
             .show(ui, |ui| {
                 // Alphabet.
-                option_label(
+                let label = option_label(
                     ui,
                     t,
                     "Alphabet",
@@ -82,12 +82,14 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                                 .selectable_value(&mut o.alphabet, choice, label)
                                 .changed();
                         }
-                    });
+                    })
+                    .response
+                    .labelled_by(label);
                 ui.end_row();
 
                 // k.
                 let default_k = o.default_kmer(detected);
-                option_label(
+                let label = option_label(
                     ui,
                     t,
                     "k-mer length",
@@ -101,6 +103,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                     let max = alignment_length.unwrap_or(usize::MAX / 2).max(1);
                     if ui
                         .add(egui::DragValue::new(&mut k).range(1..=max).speed(0.2))
+                        .labelled_by(label)
                         .on_hover_text(help::kmer_length())
                         .changed()
                     {
@@ -124,7 +127,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                 ui.end_row();
 
                 // T.
-                option_label(
+                let label = option_label(
                     ui,
                     t,
                     "Support threshold T",
@@ -139,6 +142,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                                 .range(1..=u64::MAX)
                                 .speed(1.0),
                         )
+                        .labelled_by(label)
                         .on_hover_text(help::support_threshold())
                         .changed();
                     ui.weak("positions with support > T are eligible");
@@ -146,7 +150,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                 ui.end_row();
 
                 // Query name.
-                option_label(
+                let label = option_label(
                     ui,
                     t,
                     "Query name",
@@ -162,6 +166,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                             .hint_text(hint)
                             .desired_width(260.0),
                     )
+                    .labelled_by(label)
                     .on_hover_text(help::query_name())
                     .changed();
                 ui.end_row();
@@ -197,7 +202,7 @@ pub fn hcs_controls(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &m
     let h = &mut state.hcs;
     ui.horizontal_wrapped(|ui| {
         let default = dima_core::config::DEFAULT_HCS_THRESHOLD;
-        option_label(
+        let label = option_label(
             ui,
             t,
             "Conserved regions (HCS) at",
@@ -212,6 +217,7 @@ pub fn hcs_controls(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &m
                     .suffix("%")
                     .text("Index incidence"),
             )
+            .labelled_by(label)
             .on_hover_text(help::hcs_threshold());
         if slider.changed()
             && let Ok(p) = Percent::hcs_threshold(&format!("{value}"))
@@ -221,6 +227,7 @@ pub fn hcs_controls(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &m
         }
         let field = ui
             .add(egui::TextEdit::singleline(&mut h.text).desired_width(64.0))
+            .labelled_by(label)
             .on_hover_text("Exact value, e.g. 95.25");
         if field.changed() {
             out.push(Msg::HcsEdited);
@@ -305,7 +312,7 @@ fn advanced(
         .num_columns(2)
         .spacing([t.space_16, t.space_8])
         .show(ui, |ui| {
-            option_label(
+            let label = option_label(
                 ui,
                 t,
                 "Entropy estimator",
@@ -320,10 +327,12 @@ fn advanced(
                             .selectable_value(&mut o.estimator, e, estimator_label(e))
                             .changed();
                     }
-                });
+                })
+                .response
+                .labelled_by(label);
             ui.end_row();
 
-            option_label(
+            let label = option_label(
                 ui,
                 t,
                 "Validation",
@@ -342,16 +351,19 @@ fn advanced(
                             .selectable_value(&mut o.validation, v, validation_label(v))
                             .changed();
                     }
-                });
+                })
+                .response
+                .labelled_by(label);
             ui.end_row();
 
-            option_label(ui, t, "Fill value", &help::fill(), defaults.fill.clone());
+            let label = option_label(ui, t, "Fill value", &help::fill(), defaults.fill.clone());
             ui.horizontal(|ui| {
                 changed |= ui
                     .add_enabled(
                         metadata,
                         egui::TextEdit::singleline(&mut o.fill).desired_width(140.0),
                     )
+                    .labelled_by(label)
                     .on_hover_text(help::fill())
                     .on_disabled_hover_text(
                         "Used only when variants are stratified by header fields",
@@ -363,7 +375,7 @@ fn advanced(
             });
             ui.end_row();
 
-            option_label(
+            let label = option_label(
                 ui,
                 t,
                 "Minimum coverage",
@@ -388,6 +400,7 @@ fn advanced(
                                 .speed(0.005)
                                 .max_decimals(3),
                         )
+                        .labelled_by(label)
                         .changed();
                 }
             });
@@ -410,7 +423,7 @@ fn advanced(
 
             let cpus = crate::workers::analysis::cpus();
             let default = default_threads().get();
-            option_label(
+            let label = option_label(
                 ui,
                 t,
                 "Worker threads",
@@ -422,6 +435,7 @@ fn advanced(
                     crate::workers::analysis::worker_threads(state.settings.threads, cpus).get();
                 if ui
                     .add(egui::Slider::new(&mut n, 1..=cpus.max(1)).text(format!("of {cpus} CPUs")))
+                    .labelled_by(label)
                     .on_hover_text(help::threads())
                     .changed()
                 {

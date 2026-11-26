@@ -41,11 +41,12 @@ pub fn window(ctx: &egui::Context, open: &mut bool, settings: &mut Settings, out
                             .changed();
                     });
                     ui.end_row();
-                    ui.label("Exported figures");
+                    let figures = ui.label("Exported figures").id;
                     ui.horizontal(|ui| {
                         let (w, h) = &mut settings.figure_size;
                         changed |= ui
                             .add(egui::DragValue::new(w).range(FIGURE_WIDTH).suffix(" px"))
+                            .labelled_by(figures)
                             .on_hover_text(format!(
                                 "Width of the PNG and SVG chart exports: at least {} px, so \
                                  the title, legend and axes fit",
@@ -55,6 +56,7 @@ pub fn window(ctx: &egui::Context, open: &mut bool, settings: &mut Settings, out
                         ui.label("\u{D7}");
                         changed |= ui
                             .add(egui::DragValue::new(h).range(FIGURE_HEIGHT).suffix(" px"))
+                            .labelled_by(figures)
                             .on_hover_text(format!(
                                 "Height of the PNG and SVG chart exports: at least {} px, so \
                                  the title, legend and axes fit",

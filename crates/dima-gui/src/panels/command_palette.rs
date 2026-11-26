@@ -165,10 +165,13 @@ impl CommandPalette {
                     .inner_margin(t.space_12)
                     .show(ui, |ui| {
                         ui.set_width(520.0);
-                        let field = ui.add(
-                            egui::TextEdit::singleline(&mut self.query)
-                                .hint_text("Position number, k-mer, or command")
-                                .desired_width(f32::INFINITY),
+                        let field = super::common::named(
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.query)
+                                    .hint_text("Position number, k-mer, or command")
+                                    .desired_width(f32::INFINITY),
+                            ),
+                            "Command palette",
                         );
                         if self.just_opened {
                             field.request_focus();
