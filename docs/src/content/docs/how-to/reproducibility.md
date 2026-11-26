@@ -31,7 +31,7 @@ values carry a small rounding error. On the bundled datasets it is in the last o
 the 17 significant digits (the last three or four for the opt-in similarity-weighted entropy). It
 grows with the number of sequences at a position, to at most the 11th digit at 17.5 million
 sequences (the 10th for similarity-weighted entropy). That is always at least $10^{10}$ times
-smaller than the sampling error of an entropy estimate ($3 \times 10^9$ times for
+smaller than the sampling error of an entropy estimate ($1.9 \times 10^9$ times for
 similarity-weighted entropy).
 A future version may correct these last digits, so compare results across versions at about nine
 significant digits. Results from the same version match exactly. The measurements are in

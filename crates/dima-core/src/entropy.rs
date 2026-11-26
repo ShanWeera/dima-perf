@@ -211,8 +211,9 @@ pub(crate) fn term(count: u64, support: u64) -> f64 {
 }
 
 /// An entropy divided by log₂ D, the largest observed entropy possible with D distinct k-mers:
-/// x = H / log₂ D (Wu 2025, Section 2.1, H_n and H_nsim; the form of Pielou's J′ with the
-/// observed D). `None` when D ≤ 1, where the maximum is 0 and the ratio is undefined.
+/// x = H / log₂ D (Wu 2025, Section 2.1 and Supplementary File 1, H_n and H_nsim; the form of
+/// Pielou's J′ with the observed D). `None` when D ≤ 1, where the maximum is 0 and the ratio is
+/// undefined.
 ///
 /// A ratio that rounding put just above 1 is capped at 1: the entropy and log₂ D each carry
 /// rounding (the logarithm need not be correctly rounded; Goldberg 1991, §2.1.4), so a quotient

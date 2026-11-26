@@ -91,7 +91,7 @@ Numbers are written at full double precision. As in any floating-point program t
 small rounding error: about the 14th significant digit on alignments of thousands of sequences,
 and no earlier than the 11th at 17.5 million sequences per position (the 10th for the opt-in
 similarity-weighted entropy). That is at least 10¹⁰ times smaller than the sampling error
-(3 × 10⁹ times for similarity-weighted entropy).
+(2 × 10⁹ times for similarity-weighted entropy).
 [Numerical accuracy](https://shanweera.github.io/dima-perf/latest/explanation/numerical-accuracy/)
 has the measurements, and explains why a prototyped fix for the last digits is deferred.
 

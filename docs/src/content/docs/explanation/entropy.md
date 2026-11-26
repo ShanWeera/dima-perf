@@ -418,7 +418,8 @@ $H_\text{sim} = (k + d)/(2k)$ bits, against $\hat H = 1$ bit.
 
 DiMA also reports both entropies divided by $\log_2 D$, the largest observed entropy possible
 with the $D$ distinct k-mers at the position (the Index included): $H_n = \hat H / \log_2 D$ and
-$H_\text{nsim} = H_\text{sim} / \log_2 D$, each between 0 and 1 [@wu2025, Section 2.1].
+$H_\text{nsim} = H_\text{sim} / \log_2 D$, each between 0 and 1 [@wu2025, Section 2.1 and
+Supplementary File 1].
 $H_\text{nsim}$ reaches 1 only when every pair of k-mers differs at every site, which needs no
 more distinct k-mers than letters. Wu notes
 that entropy is commonly normalised by $\log_2$ of the number of clones, or by $\log_2$ of "the
@@ -566,8 +567,8 @@ without bound as $p \to 0$, which a polynomial's never does.
 **Comparing positions.** Because the values depend on support, positions of very different
 support can rank differently from their populations, as shown for observed and normalised entropy
 [@zhao2019, Section 3.1; @gregori2014, Section 3.2]. Compare positions of similar support and
-similar sample coverage (both are reported): equally complete samples can be compared directly
-[@chao2012, p. 2538]. For quasispecies data, Gregori et al. recommend rarefying the larger sample
+similar sample coverage (both are reported): equally complete samples can be compared directly,
+as shown for species richness [@chao2012, p. 2538]. For quasispecies data, Gregori et al. recommend rarefying the larger sample
 to the size of the smaller by repeated subsampling without replacement [@gregori2014, Sections
 2.5 and 3.2]; DiMA does not.
 
@@ -623,7 +624,7 @@ $5 \times 10^{-15}$ of the exact value (relative), and at the 2.2 million sequen
 of the paper's SARS-CoV-2 analysis within $2.2 \times 10^{-12}$. That is $10^{10}$ to
 $10^{12}$ times smaller than the sampling error of the estimate. Similarity-weighted entropy has
 the same absolute error as observed entropy, but is smaller, so its relative error is larger: up
-to $2 \times 10^{-14}$ on the bundled datasets and $2.2 \times 10^{-11}$ at 2.2 million sequences.
+to $2 \times 10^{-14}$ on the bundled datasets and $3.4 \times 10^{-11}$ at 2.2 million sequences.
 [Numerical accuracy](/explanation/numerical-accuracy/) gives the measurements, the one limit
 (more than $9 \times 10^{15}$ sequences at a position) and why a prototyped fix for the last
 digits is deferred.

@@ -308,8 +308,8 @@ Limits of the comparison at large N:
   place at any N, because the Rust code evaluates its second term exactly (a hypergeometric
   series or continued fraction) while the oracle sums it in 80-digit `Decimal`; the two
   share no derivation. Similarity-weighted entropy shares the entropy terms' rounding but
-  is smaller, so its relative difference is larger: up to about 2e-11 at 2.2 million
-  sequences and 3.3e-10 at 17.5 million.
+  is smaller, so its relative difference is larger: up to about 3.4e-11 at 2.2 million
+  sequences and 5.3e-10 at 17.5 million (the longer the k-mers, the larger).
 * **What the tests can detect.** A differential test at that scale could not separate a
   bug smaller than those numbers from rounding. No test runs at that scale. On the
   bundled datasets the Rust values are within about 5e-15 of the oracle's
@@ -317,7 +317,7 @@ Limits of the comparison at large N:
   MERS-CoV spike protein).
 
 The measurements, why the rounding never matters scientifically (it is at least 10^10 times
-smaller than the sampling error, 3e9 times for similarity-weighted entropy), and why the prototyped fix is deferred are in the
+smaller than the sampling error, 1.9e9 times for similarity-weighted entropy), and why the prototyped fix is deferred are in the
 documentation page "Numerical accuracy" (`docs/src/content/docs/explanation/numerical-accuracy.md`).
 For one differing sequence at N = 2,208,211 (`N − 1` copies of `A` and one `C`, run with
 `-a dna -k 1`), `observed_entropy` differs from the oracle by 2.2e-12 relative and `entropy` by

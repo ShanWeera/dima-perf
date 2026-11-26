@@ -746,7 +746,7 @@ pub(super) static DOI_CITATIONS: &[Citation] = &[
         authors: &[("Gotoh", "Osamu")],
         year: 1994,
         title: "Further improvement in methods of group-to-group sequence alignment with generalized profile operations",
-        venue: "Bioinformatics",
+        venue: "Computer Applications in the Biosciences",
         volume: Some("10"),
         issue: Some("4"),
         pages: Some("379-387"),

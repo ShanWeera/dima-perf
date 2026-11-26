@@ -65,6 +65,8 @@ CORRECTIONS = {
     "10.1093/ve/vey041": {"pages": "vey041"},
     # Crossref runs the given name together ("NickV.") and has no pages (Europe PMC: 675-679).
     "10.1007/BF00175826": {"authors": [["Grishin", "Nick V."]], "pages": "675-679"},
+    # Published in CABIOS, which Crossref lists under its later name (the article's masthead).
+    "10.1093/bioinformatics/10.4.379": {"venue": "Computer Applications in the Biosciences"},
     # Initials run together or without points, and a first page only or no article number
     # (checked on the articles: J Theor Biol 13:131-144, Oikos 76:70-82, J Gen Virol 002306).
     "10.1016/0022-5193(66)90013-0": {"authors": [["Pielou", "E. C."]]},

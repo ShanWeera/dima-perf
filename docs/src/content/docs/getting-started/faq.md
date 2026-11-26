@@ -163,7 +163,7 @@ floating-point program, DiMA rounds. Its values are accurate to about 14 signifi
 alignments of thousands of sequences, and to at least 10 at 17.5 million sequences per
 position (the opt-in Chao–Wang–Jost estimator to about 15 digits at any size, the opt-in
 similarity-weighted entropy to at least 9). The error is at least $10^{10}$ times smaller than
-the sampling error of the estimate ($3 \times 10^9$ times for similarity-weighted entropy). [Numerical accuracy](/explanation/numerical-accuracy/)
+the sampling error of the estimate ($1.9 \times 10^9$ times for similarity-weighted entropy). [Numerical accuracy](/explanation/numerical-accuracy/)
 has the measurements.
 
 ### How long will an analysis take, and how much memory does it need?

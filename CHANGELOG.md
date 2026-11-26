@@ -17,8 +17,8 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   of the position, the similarity of two k-mers being their proportion of identical residues
   (Grishin 1995, [doi:10.1007/BF00175826](https://doi.org/10.1007/BF00175826), p. 675). Also the
   observed and similarity-weighted entropies normalised by log2 of the number of distinct
-  k-mers (the Index included); undefined with one distinct k-mer. Computed exactly from residue
-  counts per site instead of pairs of variants (the column-profile form of sum-of-pairs scores,
+  k-mers (the Index included); undefined with one distinct k-mer. The weights' sums are obtained
+  exactly from residue counts per site instead of pairs of variants (the column-profile form of sum-of-pairs scores,
   Gotoh 1994, [doi:10.1093/bioinformatics/10.4.379](https://doi.org/10.1093/bioinformatics/10.4.379),
   eqs. (1) and (4a)). Without the option nothing is computed and no existing value changes;
   with it, no existing value changes either.
