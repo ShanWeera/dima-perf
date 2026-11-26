@@ -713,6 +713,9 @@ def rule_effect_bound(mom: dict) -> float:
     mu, var, v = mom["mean"], mom["var"], mom["mcd"]
     if var == 0.0:
         return 0.0
+    if not mu > 0:
+        # Every bound below is of the lower tail at distance mu from the mean.
+        raise RuntimeError(f"the expected intercept {mu!r} is not positive, so the bounds do not apply")
     p = var / (var + mu * mu)  # Cantelli
     e = (math.sqrt(var + mu * mu) - mu) / 2  # Scarf
     if v > 0:
