@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). The
 "Methodology" group lists every change that can alter a result, with the sources behind it.
 
+## [1.1.1] - 2026-11-26
+
+No result changes: the same inputs and options give the same values as 1.1.0; only the version
+recorded in the outputs differs.
+
+### Changed
+
+- Documentation: the *eligible mean* is now defined and explained. It is the mean entropy of the
+  eligible positions (support above T), each position counted once: `average_entropy` in the
+  results, `entropy mean` in the end-of-run line, the desktop app's *mean* chip and the dashed
+  line labelled "eligible mean" on its chart, which shows the eligible mean of
+  similarity-weighted entropy when the chart does. The Glossary and the FAQ define it;
+  "Diversity motifs and summaries" gives its formula, a worked example on the HIV-1 *pol* protein
+  data set that compares it with the other averages of the same run (1.9072 bits, against 1.5708
+  over the positions the chart draws) and how it changes with the estimator and T; the
+  desktop-app guide explains how to read the line ("Read the eligible mean line": zooming and
+  the filters do not change its value, a filter can rescale the value axis and so move it,
+  positions with support ≤ T are not in it, and when it is not drawn); "Your first analysis",
+  "Analyse an alignment" and the JSON reference name it where they describe `average_entropy`
+  and the end-of-run line; and "Choose and read outputs" shows how to draw the same line from
+  the positions table in R and Python.
+- Desktop app: the tooltip of the chart's *eligible mean* legend entry says which positions the
+  line averages (support > T, each counted once), that it is the value of the *mean* chip (with
+  similarity-weighted entropy, the first number of the similarity-weighted chip) and that
+  zooming and the filters do not change it, with its reference; it said only "Mean entropy over
+  the eligible positions (support > T), as in the summaries". The tooltips of the *mean* and
+  similarity-weighted chips name the line, count "1 eligible position" in the singular, and,
+  when no position is eligible, say that there is no mean and no line.
+- Desktop app: screen readers read each legend entry of the chart with the explanation its
+  tooltip shows, as they do the chips; they read only its caption before.
+
 ## [1.1.0] - 2026-11-26
 
 ### Methodology

@@ -363,14 +363,63 @@ pub fn normalised_similarity_weighted_fact() -> String {
     )
 }
 
-/// The summary chip of similarity-weighted entropy.
+/// The summary chip of the mean entropy: the eligible positions it averages and the chart line
+/// that shows it, or, with no eligible position, why there is neither.
 #[must_use]
-pub fn similarity_weighted_mean(eligible: u64) -> String {
+pub fn mean_chip(eligible: u64, has_mean: bool) -> String {
+    if has_mean {
+        format!(
+            "Mean entropy over {} (support > T), each position counted once: the eligible mean, \
+             the line labelled eligible mean on the chart when it shows entropy",
+            dima_core::human::plural(eligible, "eligible position", "eligible positions")
+        )
+    } else {
+        "No position has support above T, so there is no mean entropy and no eligible-mean line \
+         on the chart"
+            .to_owned()
+    }
+}
+
+/// The summary chip of similarity-weighted entropy: the eligible positions it averages, the
+/// observed mean beside it and the chart line that shows it, or, with no eligible position, why
+/// there is neither.
+#[must_use]
+pub fn similarity_weighted_mean(eligible: u64, has_mean: bool) -> String {
+    let what = if has_mean {
+        format!(
+            "Mean similarity-weighted entropy over {}, each position counted once, and in \
+             parentheses the mean observed (uncorrected) entropy of the same positions, for a \
+             like-for-like comparison. The first number is the line labelled eligible mean on \
+             the chart when it shows similarity-weighted entropy.",
+            dima_core::human::plural(eligible, "eligible position", "eligible positions")
+        )
+    } else {
+        "No position has support above T, so there is no mean similarity-weighted entropy and no \
+         eligible-mean line on the chart."
+            .to_owned()
+    };
+    format!("{what}{}", refs(&[dima_core::similarity::WU2025]))
+}
+
+/// The chart's "eligible mean" legend entry: which positions the mean line covers, and that it
+/// is the run's value (the mean chip's, or the first number of the similarity-weighted chip),
+/// which zooming and the filters do not change (a filter can rescale the value axis, and so move
+/// the line, but not change its value).
+#[must_use]
+pub fn eligible_mean(metric: ChartMetric, threshold: u64, eligible: u64) -> String {
+    let chip = match metric {
+        ChartMetric::Entropy => "the mean chip above",
+        ChartMetric::SimilarityWeighted => {
+            "the first number of the similarity-weighted mean chip above"
+        }
+    };
     format!(
-        "Mean similarity-weighted entropy over the {eligible} eligible positions, and in \
-         parentheses the mean observed (uncorrected) entropy of the same positions, for a \
-         like-for-like comparison.{}",
-        refs(&[dima_core::similarity::WU2025])
+        "Eligible mean: the average {} over {} (support > {threshold}), each position counted \
+         once. It is the run's value, the one {chip} shows: zooming and the filters do not \
+         change it. Positions with support \u{2264} {threshold} are not in it.{}",
+        metric.in_sentence(),
+        dima_core::human::plural(eligible, "eligible position", "eligible positions"),
+        refs(&[c("tharanga2025").at("Results")])
     )
 }
 
@@ -408,7 +457,10 @@ mod tests {
             super::similarity_weighted_fact(),
             super::normalised_observed_fact(),
             super::normalised_similarity_weighted_fact(),
-            super::similarity_weighted_mean(1345),
+            super::similarity_weighted_mean(1345, true),
+            super::similarity_weighted_mean(0, false),
+            super::eligible_mean(ChartMetric::Entropy, 100, 1345),
+            super::eligible_mean(ChartMetric::SimilarityWeighted, 100, 1345),
         ] {
             assert!(text.contains("\n\nRef: "), "{text}");
         }
@@ -465,6 +517,74 @@ mod tests {
         assert!(
             super::export(K::Svg, ChartMetric::SimilarityWeighted)
                 .starts_with("The similarity-weighted entropy chart as shown")
+        );
+    }
+
+    /// The mean line's legend tooltip names the metric, the positions it covers and the chip
+    /// that shows the same value, and says that zooming and filtering do not change it.
+    #[test]
+    fn the_eligible_mean_tooltip() {
+        assert_eq!(
+            super::eligible_mean(ChartMetric::Entropy, 100, 1345),
+            "Eligible mean: the average entropy over 1345 eligible positions (support > 100), \
+             each position counted once. It is the run's value, the one the mean chip above \
+             shows: zooming and the filters do not change it. Positions with support \u{2264} \
+             100 are not in it.\n\nRef: Tharanga et al. 2025, Results"
+        );
+        let swe = super::eligible_mean(ChartMetric::SimilarityWeighted, 30, 1);
+        assert!(
+            swe.starts_with(
+                "Eligible mean: the average similarity-weighted entropy over 1 eligible position \
+                 (support > 30),"
+            ),
+            "{swe}"
+        );
+        assert!(
+            swe.contains("the first number of the similarity-weighted mean chip above"),
+            "{swe}"
+        );
+        assert!(swe.contains("support \u{2264} 30 are not in it."), "{swe}");
+    }
+
+    /// The two mean chips' tooltips name the chart line that shows their value, count the
+    /// positions in words that fit one, and say why there is neither mean nor line without an
+    /// eligible position.
+    #[test]
+    fn the_mean_chip_tooltips() {
+        assert_eq!(
+            super::mean_chip(1345, true),
+            "Mean entropy over 1345 eligible positions (support > T), each position counted \
+             once: the eligible mean, the line labelled eligible mean on the chart when it shows \
+             entropy"
+        );
+        assert!(
+            super::mean_chip(1, true).starts_with("Mean entropy over 1 eligible position ("),
+            "{}",
+            super::mean_chip(1, true)
+        );
+        assert_eq!(
+            super::mean_chip(0, false),
+            "No position has support above T, so there is no mean entropy and no eligible-mean \
+             line on the chart"
+        );
+        let swe = super::similarity_weighted_mean(1345, true);
+        assert!(
+            swe.starts_with("Mean similarity-weighted entropy over 1345 eligible positions,"),
+            "{swe}"
+        );
+        assert!(
+            swe.contains(
+                "The first number is the line labelled eligible mean on the chart when it shows \
+                 similarity-weighted entropy."
+            ),
+            "{swe}"
+        );
+        let none = super::similarity_weighted_mean(0, false);
+        assert!(
+            none.starts_with(
+                "No position has support above T, so there is no mean similarity-weighted entropy"
+            ),
+            "{none}"
         );
     }
 }

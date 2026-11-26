@@ -110,7 +110,8 @@ character — and that no results were written; **Copy details** copies it for a
 ## Explore the results
 
 The Results screen shows the run's facts across the top — sequences, positions, k, T, the mean,
-lowest and highest entropy over [eligible positions](/reference/glossary/#eligible-position), the
+lowest and highest entropy over [eligible positions](/reference/glossary/#eligible-position) (the
+mean is the [eligible mean](/reference/glossary/#eligible-mean)), the
 low-support counts and, when the run computed it, the similarity-weighted mean — and a badge
 with the number of warnings, which opens the diagnostics. Each fact's tooltip explains it, and
 screen readers read that explanation too.
@@ -145,7 +146,8 @@ colour alone:
 - **hatched bands**: positions without usable support, which have no entropy — never drawn as 0.
   A position that has support but no value (possible only in a results file edited by hand)
   breaks the line instead;
-- a horizontal line at the mean entropy of eligible positions.
+- a thin dashed grey horizontal line labelled **eligible mean** and its value, the average
+  entropy of the eligible positions (see [Read the eligible mean line](#read-the-eligible-mean-line)).
 
 The value axis runs from 0 to 5% above the largest value shown, and is at least 0.005 bits tall
 (1 bit when every value shown is 0).
@@ -164,11 +166,12 @@ switch:
 2. The chart redraws the same positions (more if you had narrowed the value range) with
    similarity-weighted entropy. Its heading and value axis read *Similarity-weighted entropy* and
    *Similarity-weighted entropy (bits)*, and the axis follows the largest similarity-weighted
-   value shown (the same rule as above). The dashed horizontal line is now the mean
-   similarity-weighted entropy of eligible positions. The legend reads *support > T* for the
-   solid blue line and *support ≤ T, not in the summary* for the dashed vermillion line: no
-   similarity-weighted value is corrected, and positions with support at or below T are left out
-   of its summary.
+   value shown (the same rule as above). The dashed grey line, still labelled *eligible mean*,
+   is now the average similarity-weighted entropy of the eligible positions, the first number of
+   the similarity-weighted chip: *eligible mean 0.0363* on the MERS spike sample. The legend
+   reads *support > T* for the solid blue line and *support ≤ T, not in the summary* for the
+   dashed vermillion line: no similarity-weighted value is corrected, and positions with support
+   at or below T are left out of its summary.
 3. The zoom and the selected position stay as they were. The value range of the filter bar now
    applies to similarity-weighted entropy and starts at its full range. If you had narrowed the
    entropy range, a note says *Value range reset to the full range of similarity-weighted
@@ -292,6 +295,46 @@ show. **Help ▸ Keyboard shortcuts** lists the other keys, among them Tab / Shi
 controls; Space or Enter: press or select; Enter in a filter field: apply the value typed; a right
 click on a table row: copy it; and Esc, which closes the palette, leaves a filter field unchanged
 and also gives the arrow keys back to the table.
+
+### Read the eligible mean line
+
+The dashed grey line across the chart is the
+[eligible mean](/reference/glossary/#eligible-mean): the average entropy of the run's eligible
+positions, the positions with support above T. Each eligible position counts once, whatever its
+support. The line's value is written at its right end, and the legend lists it as *eligible
+mean*; hover over that legend entry for a short explanation, which screen readers read too, as
+for every legend entry. For the bundled MERS spike sample
+(`samples/mers_spike_aa.fasta`, default options) the line reads *eligible mean 0.1261*, the same
+number as the *mean 0.1261 bits* chip above the chart and `average_entropy` in the exported
+results.
+
+Use it as a reference level: a point above the line is a position with more entropy than the
+average eligible position, a point below it one with less. Keep in mind:
+
+- **It is the run's value, not that of the positions shown.** Zooming and panning do not move
+  it, and the filters do not change its value. The value axis follows the largest value shown,
+  though, so a filter can rescale the axis and move the line with it. If the filters hide the
+  larger values, the line can lie above the top of the axis; it is then not drawn, but the
+  legend still lists it.
+- **Only eligible positions are in it.** The dashed vermillion stretches (support at or below T)
+  are drawn but left out, and positions without support (hatched) have no entropy to add. In the
+  HIV-1 *pol* protein data set (`tests/data/HIV1_ALL_2020_pol_PRO.fasta.bz2`, default options),
+  476 of the 1,189 positions are eligible and the line reads *eligible mean 1.9072*; the 162
+  positions drawn dashed, whose mean entropy is 0.5823 bits, are not in it. The mean of every
+  point the chart draws there would be 1.5708 bits.
+- **It does not show where the diversity is.** On the MERS spike sample 455 of the 1,345
+  positions have entropy 0 and the highest, at position 26, has 1.5878 bits; the *lowest* and
+  *highest* chips and the chart itself show that.
+- **It depends on the run's settings.** It uses the run's estimator and T: on the MERS spike
+  sample it is 0.1207 bits with the **Entropy estimator** *Raw (plug-in)* and 0.1235 bits with
+  **Support threshold T** set to 30. Before you compare it between alignments, see
+  [Can I compare diversity between proteins or datasets?](/getting-started/faq/#can-i-compare-diversity-between-proteins-or-datasets)
+
+When the chart shows similarity-weighted entropy, the line is the eligible mean of
+similarity-weighted entropy instead (see **Plot similarity-weighted entropy** above). An exported
+figure of the chart has the same line, value and legend entry. When no position is eligible
+there is no eligible mean: the *mean* chip reads *mean —*, and the chart has no such line and no
+legend entry for it.
 
 ## Export
 

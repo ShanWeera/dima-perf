@@ -318,38 +318,40 @@ fn legend_entries(
     };
     if series.has(Style::Eligible) {
         let swatch = Swatch::Line(t.series_eligible);
-        legend_entry_at_least(ui, t, &solid, swatch, slots[0]).on_hover_text(&tip);
+        with_help(legend_entry_at_least(ui, t, &solid, swatch, slots[0]), &tip);
     }
     if series.has(Style::LowSupport) {
         let swatch = Swatch::Dashed(t.series_uncorrected);
-        legend_entry_at_least(ui, t, &dashed, swatch, slots[1]).on_hover_text(&tip);
+        with_help(
+            legend_entry_at_least(ui, t, &dashed, swatch, slots[1]),
+            &tip,
+        );
     }
     if !series.ns_spans.is_empty() {
-        legend_entry(
+        let entry = legend_entry(
             ui,
             t,
             &format!("NS: {NS_LABEL}"),
             Swatch::Hatched(t.ns_band_fill, t.ns_hatch),
-        )
-        .on_hover_text(&tip);
+        );
+        with_help(entry, &tip);
     }
     if s.metric.mean(&s.results).is_some() {
-        legend_entry(ui, t, "eligible mean", Swatch::Dashed(t.mean_line)).on_hover_text(format!(
-            "Mean {} over the eligible positions (support > T), as in the summaries",
-            s.metric.in_sentence()
-        ));
+        let entry = legend_entry(ui, t, "eligible mean", Swatch::Dashed(t.mean_line));
+        let help = help_text::eligible_mean(s.metric, threshold, s.results.eligible_position_count);
+        with_help(entry, &help);
     }
     if let (Some(c), false) = (
         s.results.coverage_summary.min_coverage,
         series.low_coverage.is_empty(),
     ) {
-        legend_entry(
+        let entry = legend_entry(
             ui,
             t,
             &format!("sample coverage < {c}"),
             Swatch::Tick(t.coverage_mark),
-        )
-        .on_hover_text(help_text::min_coverage());
+        );
+        with_help(entry, &help_text::min_coverage());
     }
 }
 

@@ -143,6 +143,19 @@ command-line tool and the desktop app are built on.
 
 ## Results and versions
 
+### What is the eligible mean?
+
+The average entropy of the eligible positions, the positions with support above the support
+threshold $T$, each position counted once. It is the run's mean entropy: `average_entropy` in the
+results, `entropy mean` in the line `dima analyze` prints at the end, the *mean* chip of the
+desktop app and the dashed grey line labelled *eligible mean* on the app's entropy chart. For the
+bundled MERS-CoV spike sample it is 0.1261 bits. Positions with support at or below $T$ are not in
+it, so it is not the mean of every point the chart draws. When the chart shows
+similarity-weighted entropy, the same line is the eligible mean of similarity-weighted entropy
+(0.0363 bits for the same sample). See
+[the eligible mean](/explanation/motifs/#the-eligible-mean) for the formula and a worked example,
+and [Read the eligible mean line](/how-to/desktop-app/#read-the-eligible-mean-line) for the chart.
+
 ### Why do my results differ from the paper or from dima-cli 5.x?
 
 [Comparison with the papers](/explanation/paper-comparison/) reproduces the paper's results, and
