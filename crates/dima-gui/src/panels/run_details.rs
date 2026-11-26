@@ -1,7 +1,8 @@
 //! The run details window (D103): how the analysis ran — the equivalent command, worker
 //! threads and their source, platform, phase times, time waiting for input, records and
-//! positions, the input's identity and the exported files — with "Save run report…". Results
-//! opened from a file show their recorded provenance instead.
+//! positions, whether similarity-weighted entropy was computed, the input's identity and the
+//! exported files — with "Save run report…". Results opened from a file show their recorded
+//! provenance instead.
 
 use egui::{RichText, Ui};
 
@@ -86,6 +87,12 @@ fn contents(ui: &mut Ui, s: &Session, t: &DesignTokens, out: &mut Vec<Msg>) {
                     fact(
                         ui,
                         t,
+                        SIMILARITY_WEIGHTED,
+                        similarity_weighted(r).to_owned(),
+                    );
+                    fact(
+                        ui,
+                        t,
                         "Input",
                         format!(
                             "{}{}{}",
@@ -114,7 +121,7 @@ fn contents(ui: &mut Ui, s: &Session, t: &DesignTokens, out: &mut Vec<Msg>) {
             ui.add_space(t.space_8);
             if ui
                 .button("Save run report\u{2026}")
-                .on_hover_text(super::help_text::export(ExportKind::RunReport))
+                .on_hover_text(super::help_text::export(ExportKind::RunReport, s.metric))
                 .clicked()
             {
                 out.push(Msg::Export(ExportKind::RunReport));
@@ -149,8 +156,27 @@ fn contents(ui: &mut Ui, s: &Session, t: &DesignTokens, out: &mut Vec<Msg>) {
                     "Estimator",
                     r.run.parameters.estimator.value.as_str().to_owned(),
                 );
+                fact(
+                    ui,
+                    t,
+                    SIMILARITY_WEIGHTED,
+                    similarity_weighted(r).to_owned(),
+                );
             });
         }
+    }
+}
+
+/// The fact naming whether similarity-weighted entropy was computed.
+const SIMILARITY_WEIGHTED: &str = "Similarity-weighted entropy";
+
+/// `computed` or `not computed`: whether the run asked for similarity-weighted entropy (a file
+/// written by dima 1.0.0 reads as not computed).
+fn similarity_weighted(r: &dima_core::model::Results) -> &'static str {
+    if r.run.parameters.similarity_weighted_entropy.value {
+        "computed"
+    } else {
+        "not computed"
     }
 }
 
@@ -162,5 +188,23 @@ fn threads(f: &RunFacts) -> String {
             f.threads
         ),
         _ => format!("{} (settings)", f.threads),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::fixtures;
+
+    /// Both branches of the window say whether the run computed similarity-weighted entropy.
+    #[test]
+    fn similarity_weighted_entropy_is_named_computed_or_not() {
+        assert_eq!(
+            super::similarity_weighted(&fixtures::mers()),
+            "not computed"
+        );
+        assert_eq!(
+            super::similarity_weighted(&fixtures::mers_swe()),
+            "computed"
+        );
     }
 }

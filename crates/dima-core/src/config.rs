@@ -383,7 +383,8 @@ impl<'de> Deserialize<'de> for Percent {
     }
 }
 
-/// Parameters of one analysis. `None` means "use the default" (or derive from the data).
+/// Parameters of one analysis. For the optional fields `None` means "use the default" (or
+/// derive from the data); the switches are off by default.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AnalysisParams {
     /// Sequence alphabet; `None` detects it from the data.
@@ -394,6 +395,9 @@ pub struct AnalysisParams {
     pub support_threshold: Option<u64>,
     /// Entropy estimator.
     pub estimator: Option<Estimator>,
+    /// Also compute similarity-weighted entropy and the two normalised entropies (Wu 2025);
+    /// off by default.
+    pub similarity_weighted_entropy: bool,
     /// Handling of characters outside the alphabet.
     pub validation: Option<ValidationMode>,
     /// Flag positions whose sample coverage is below this value (0–1).
@@ -440,6 +444,9 @@ impl AnalysisParams {
             self.metadata_fields.as_ref().map(|f| f.join("|")),
         );
         opt("header-fillna", self.header_fill.clone());
+        if self.similarity_weighted_entropy {
+            args.push("--similarity-weighted-entropy".to_owned());
+        }
         args
     }
 
@@ -504,6 +511,17 @@ impl AnalysisParams {
         Param::resolve(self.estimator, Estimator::default, Origin::Default)
     }
 
+    /// Whether similarity-weighted entropy is computed, with its origin: set by the user when
+    /// requested, the default (off) otherwise.
+    #[must_use]
+    pub fn similarity_weighted_entropy(&self) -> Param<bool> {
+        Param::resolve(
+            self.similarity_weighted_entropy.then_some(true),
+            || false,
+            Origin::Default,
+        )
+    }
+
     /// The validation mode with its origin.
     #[must_use]
     pub fn validation(&self) -> Param<ValidationMode> {
@@ -544,6 +562,7 @@ mod tests {
             estimator: Some(Estimator::ChaoWangJost),
             min_coverage: Some(0.95),
             header_format: Some(vec!["Accession".into(), "Host".into()]),
+            similarity_weighted_entropy: true,
             ..AnalysisParams::default()
         };
         assert_eq!(
@@ -558,7 +577,8 @@ mod tests {
                 "--min-coverage",
                 "0.95",
                 "--header-format",
-                "Accession|Host"
+                "Accession|Host",
+                "--similarity-weighted-entropy"
             ]
         );
     }
@@ -675,6 +695,21 @@ mod tests {
         assert_eq!(p.estimator().value, Estimator::Dima);
         assert_eq!(p.validation().value, ValidationMode::Strict);
         assert_eq!(p.header_fill().value, "Unknown");
+        assert_eq!(
+            p.similarity_weighted_entropy(),
+            Param {
+                value: false,
+                origin: Origin::Default
+            }
+        );
+        p.similarity_weighted_entropy = true;
+        assert_eq!(
+            p.similarity_weighted_entropy(),
+            Param {
+                value: true,
+                origin: Origin::User
+            }
+        );
         p.support_threshold = Some(30);
         assert_eq!(
             p.support_threshold(),

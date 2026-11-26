@@ -14,16 +14,27 @@ is its published address:
 
 Conventions shared by all three:
 
-- **Versioned.** `schema_version` is `"1.0.0"` for the results and conserved sequences and
-  `"1.1.0"` for the run report (SemVer). A new minor version may add keys, diagnostic codes or
+- **Versioned.** `schema_version` is `"1.1.0"` for the results, `"1.0.0"` for the conserved
+  sequences and `"1.1.0"` for the run report (SemVer); each changes only when its own schema
+  does. Results schema 1.1.0 added
+  [similarity-weighted entropy](/explanation/entropy/#similarity-weighted-entropy-opt-in): three
+  values per position, a summary and a parameter. A new minor version may add keys, diagnostic codes or
   values of an enumerated field (an estimator, method or fallback name); a new major version
   may change the meaning of existing ones. `dima view`, `dima hcs`, `dima cite` and the desktop
   app refuse results of another major version. Results of a newer minor version are read,
   leaving out keys this version does not know (`dima view` warns when it writes them back); a
   value it does not know stops the reading with a message naming the newer schema, because
-  guessing its meaning could mislead.
-- **Undefined is `null`.** A value that cannot be computed (an entropy without support, a $0/0$
-  ratio, a summary without eligible positions) is `null`, never 0 or NaN. Every number is finite.
+  guessing its meaning could mislead. Results of an older minor version are read as runs
+  without the options their schema did not have: results written by dima 1.0.0 (schema 1.0.0)
+  are read as runs without similarity-weighted entropy, so writing them again gives `null` for
+  its values and `false` for its option (`dima view` says so in a note). Such files validate
+  against the 1.0.0 schema, `schemas/results.schema.json` of release 1.0.0 (tag `v1.0.0`), not
+  against the schema now published at the address in its `$id`, which is 1.1.0 and requires the
+  keys 1.1.0 added (see [Comparing versions](/how-to/reproducibility/#comparing-versions)).
+- **Undefined or not requested is `null`.** A value that cannot be computed (an entropy without
+  support, a $0/0$ ratio, a summary without eligible positions) or that was not requested (the
+  similarity-weighted values of a run without `--similarity-weighted-entropy`) is `null`, never
+  0 or NaN. Every number is finite.
 - **Positions are 1-based** alignment columns.
 - **Entropies are in bits**; incidences are percentages (0–100); coverages and lower bounds are
   proportions (0–1).
@@ -41,7 +52,7 @@ without the summaries and `run`).
 
 | Key | Type | Meaning |
 |---|---|---|
-| `schema_version` | string | `"1.0.0"` |
+| `schema_version` | string | `"1.1.0"` |
 | `query_name` | string | Name of the analysed protein or gene (see [the query name](/explanation/input/#the-query-name)) |
 | `sequence_count` | integer | Sequences in the alignment |
 | `support_threshold` | integer ≥ 1 | The support threshold $T$ |
@@ -55,6 +66,7 @@ without the summaries and `run`).
 | `support_label_counts` | object | `{"NS": …, "LS": …, "ELS": …, "eligible": …}` |
 | `all_positions_summary` | object | [All-positions summary](#all_positions_summary) (DiMA v5.0.9's averaging) |
 | `coverage_summary` | object | [Coverage summary](#coverage_summary) |
+| `similarity_weighted_entropy_summary` | object or null | [Similarity-weighted entropy summary](#similarity_weighted_entropy_summary); null without `--similarity-weighted-entropy` |
 | `run` | object | [Provenance of the run](#run) |
 | `results` | array | One [position](#position) per k-mer position, in order |
 
@@ -84,6 +96,19 @@ without the summaries and `run`).
 | `min_coverage` | number or null | `--min-coverage`, if given |
 | `below_min_count` | integer or null | Positions below `--min-coverage`, if given |
 
+#### similarity_weighted_entropy_summary
+
+Present (not `null`) only with `--similarity-weighted-entropy`. It covers the eligible positions
+(support > $T$), like the top-level entropy summary, and gives their mean observed entropy too,
+so the two can be compared like for like. The normalised values are not summarised.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `position_count` | integer | Eligible positions |
+| `average_entropy` | number or null | Mean similarity-weighted entropy, in bits; null when no position is eligible |
+| `lowest_entropy`, `highest_entropy` | [extremum](#extremum) or null | Lowest and highest similarity-weighted entropy (first position, tie count) |
+| `average_observed_entropy` | number or null | Mean observed (plug-in) entropy of the same positions, in bits |
+
 ### position
 
 One entry of `results[]` (and one line of JSONL output).
@@ -102,10 +127,23 @@ One entry of `results[]` (and one line of JSONL output).
 | `total_variants_incidence` | number or null | Non-Index sequences per 100 supporting sequences; null without support |
 | `sample_coverage` | number or null | Estimated sample coverage; null when support < 2 |
 | `below_min_coverage` | boolean or null | Coverage below `--min-coverage`; null without the option or without coverage |
+| `similarity_weighted_entropy` | number or null | [Similarity-weighted entropy](/explanation/entropy/#similarity-weighted-entropy-opt-in) $H_\text{sim}$ in bits; null without `--similarity-weighted-entropy` or without support |
+| `normalised_observed_entropy` | number or null | Observed entropy divided by $\log_2$ of the number of distinct k-mers $D$, the Index included ($H_n$, between 0 and 1); null without the option or when $D < 2$ |
+| `normalised_similarity_weighted_entropy` | number or null | Similarity-weighted entropy divided by $\log_2 D$ ($H_\text{nsim}$, between 0 and 1); null without the option or when $D < 2$ |
 | `diversity_motifs` | array | The [variants](#variant), most frequent first; empty without support |
 
 The formulas are in [Entropy and its correction](/explanation/entropy/) and
 [Diversity motifs](/explanation/motifs/).
+
+**Presence rule.** In every 1.x results file the three similarity-weighted values are either
+all `null` at every position (the run did not request them) or given exactly where they are
+defined: `similarity_weighted_entropy` at every position with support, the two normalised
+values at every position with at least two distinct k-mers, and the summary is an object. The
+schema and every DiMA reader check this. DiMA's readers also check that no
+`similarity_weighted_entropy` is above the position's `observed_entropy` by more than rounding
+(a relative $10^{-12}$): every weight is at most 1, so only rounding can make it exceed the
+observed entropy, by a few units in the last digit. A file that breaks either rule was edited or
+damaged.
 
 ### variant
 
@@ -145,7 +183,7 @@ those are in the [run report](#run-report)).
 | Key | Meaning |
 |---|---|
 | `tool` | `{"name": "dima", "version": …}`: the DiMA version that wrote the file |
-| `parameters` | Every analysis parameter as `{"value": …, "origin": …}`, where origin is `default`, `user` (given on the command line or in the app) or `derived` (from the data, such as the alphabet and the default k): `alphabet`, `kmer_length`, `support_threshold`, `estimator`, `validation`, `min_coverage`, `query_name`, `header_format`, `metadata_fields`, `header_fill` |
+| `parameters` | Every analysis parameter as `{"value": …, "origin": …}`, where origin is `default`, `user` (given on the command line or in the app) or `derived` (from the data, such as the alphabet and the default k): `alphabet`, `kmer_length`, `support_threshold`, `estimator`, `similarity_weighted_entropy` (`true` with `--similarity-weighted-entropy`; `false`, origin `default`, otherwise and in files of schema 1.0.0), `validation`, `min_coverage`, `query_name`, `header_format`, `metadata_fields`, `header_fill` |
 | `alphabet` | The alphabet decision: `resolved` (`protein`, `dna`, `rna`), `method` (`detected` or `user`), `records_examined`, `residues_examined`, `t_u_folded` (T or U letters folded to the alphabet's spelling) and `contradiction` (why the data disagree with an explicit `--alphabet`, or null) |
 | `alignment_length` | Alignment columns $L$ |
 | `input` | The input: `name` (file name without directories, `-` for standard input), `size_bytes` (stored size), `checksum` (`{"type": "sha-256", "value": …}` of the stored, possibly compressed, bytes) and `compression` (`none`, `gzip`, `bzip2`, `zstd`) |

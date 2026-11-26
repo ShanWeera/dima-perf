@@ -1,12 +1,13 @@
 //! Turns the counts of one position into its result: support class, entropy estimate, sample
-//! coverage, diversity motifs, incidences and per-variant metadata.
+//! coverage, diversity motifs, incidences, per-variant metadata and, when requested,
+//! similarity-weighted entropy and the normalised entropies (Wu 2025).
 
 use crate::config::Estimator;
 use crate::engine::PositionCounts;
 use crate::entropy::{self, CountProfile};
-use crate::error::Result;
+use crate::error::{DimaError, Result};
 use crate::model::{FieldCounts, Metadata, PositionResult, Variant};
-use crate::stats;
+use crate::{similarity, stats};
 
 /// Everything needed to finalise positions, shared by all of them.
 #[derive(Debug)]
@@ -17,6 +18,8 @@ pub struct Finaliser<'a> {
     pub estimator: Estimator,
     /// `--min-coverage`, if given.
     pub min_coverage: Option<f64>,
+    /// `--similarity-weighted-entropy`: also compute H_sim, H_n and H_nsim.
+    pub similarity_weighted_entropy: bool,
     /// Stratified field names, in header order (empty without metadata).
     pub fields: &'a [String],
     /// For each header value id: (stratified field index, value).
@@ -37,6 +40,11 @@ impl Finaliser<'_> {
         let profile = CountProfile::from_counts(ordered.iter().copied())?;
         let estimate = entropy::estimate(&profile, self.estimator, self.threshold)?;
         let coverage = entropy::sample_coverage(&profile);
+        let similarity = if self.similarity_weighted_entropy {
+            Similarity::of(counts, &ids, &profile, estimate.observed)?
+        } else {
+            Similarity::default()
+        };
         let diversity_motifs = ids
             .iter()
             .zip(&ordered)
@@ -63,6 +71,9 @@ impl Finaliser<'_> {
             total_variants_incidence: diversity.total_variants_incidence,
             sample_coverage: coverage,
             below_min_coverage: self.min_coverage.and_then(|m| coverage.map(|c| c < m)),
+            similarity_weighted_entropy: similarity.weighted,
+            normalised_observed_entropy: similarity.normalised_observed,
+            normalised_similarity_weighted_entropy: similarity.normalised_weighted,
             diversity_motifs,
         })
     }
@@ -86,5 +97,50 @@ impl Finaliser<'_> {
                 })
                 .collect(),
         )
+    }
+}
+
+/// Similarity-weighted entropy and the normalised entropies of one position (Wu 2025, Section
+/// 2.1); all `None` when not requested.
+#[derive(Debug, Default)]
+struct Similarity {
+    weighted: Option<f64>,
+    normalised_observed: Option<f64>,
+    normalised_weighted: Option<f64>,
+}
+
+impl Similarity {
+    /// The three values of a position whose observed entropy is `observed` (`None` without
+    /// support, where all three are `None` too). Normalisation divides by log₂ of the number of
+    /// distinct k-mers, the Index included (Wu's number of unique sequences).
+    fn of(
+        counts: &PositionCounts,
+        ids: &[u32],
+        profile: &CountProfile,
+        observed: Option<f64>,
+    ) -> Result<Self> {
+        let Some(observed) = observed else {
+            return Ok(Self::default());
+        };
+        let weighted = similarity::similarity_weighted_entropy(
+            ids.iter().map(|&id| (counts.kmer(id), counts.count(id))),
+        )?
+        .ok_or_else(|| DimaError::internal("a position with an observed entropy has no k-mers"))?;
+        // Postcondition: 0 ≤ H_sim ≤ H, up to rounding.
+        if !(weighted.is_finite()
+            && weighted >= 0.0
+            && similarity::within_observed(weighted, observed))
+        {
+            return Err(DimaError::internal(format!(
+                "similarity-weighted entropy {weighted:?} is not a number between 0 and the \
+                 observed entropy {observed:?}"
+            )));
+        }
+        let distinct = profile.distinct();
+        Ok(Self {
+            weighted: Some(weighted),
+            normalised_observed: entropy::normalised(observed, distinct)?,
+            normalised_weighted: entropy::normalised(weighted, distinct)?,
+        })
     }
 }

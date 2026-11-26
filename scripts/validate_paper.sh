@@ -40,6 +40,12 @@ pro = load("hiv_protein.json")
 mers30 = load("mers_aa_t30.json")
 mers = load("mers_aa.json")
 
+# The spread of the paper's random procedure (exact), written by scripts/reference/docs_numbers.py.
+# <!-- docs-numbers:notes:start -->
+RANGE_NOTE = "the extremes of one random run vary (SD 0.0661 bits at positions 2176 and 2177)"
+FIG1C_NOTE = "1.38 is 0.29 SD below the exact expectation (SD 0.2241 bits)"
+# <!-- docs-numbers:notes:end -->
+
 rows = []
 add = lambda *r: rows.append(r)
 
@@ -50,8 +56,7 @@ add("HIV-1 pol DNA: NS positions", "680", f"{labels['NS']:,}", "")
 add("HIV-1 pol DNA: mean entropy (support > T)", "~5.35", f"{hiv['average_entropy']:.4f}",
     "paper: one random run; dima: the exact expectation of the procedure's intercept")
 lo, hi = hiv["lowest_entropy"], hiv["highest_entropy"]
-add("HIV-1 pol DNA: entropy range", "~0.86 to ~9.57", f"{lo['entropy']:.4f} to {hi['entropy']:.4f}",
-    "the extremes of one random run vary (SD about 0.07 bits at positions 2176 and 2177)")
+add("HIV-1 pol DNA: entropy range", "~0.86 to ~9.57", f"{lo['entropy']:.4f} to {hi['entropy']:.4f}", RANGE_NOTE)
 add("HIV-1 pol DNA: highest-entropy position", "2177", f"{hi['position']}",
     "positions 2176 and 2177 differ by less than the random procedure's spread")
 eligible = [p for p in hiv["results"] if p["low_support"] is None]
@@ -79,8 +84,7 @@ add("MERS spike position 25: Index", "SVKSACIEV 129 (75.88%)",
     f"{index['sequence']} {index['count']} ({index['incidence']:.2f}%)", "")
 add("MERS spike position 25: distinct-variants incidence", "22.0%",
     f"{p30['distinct_variants_incidence']:.1f}%", "")
-add("MERS spike position 25: entropy (T = 30)", "1.38", f"{p30['entropy']:.4f}",
-    "1.38 is within the random procedure's spread (SD 0.22)")
+add("MERS spike position 25: entropy (T = 30)", "1.38", f"{p30['entropy']:.4f}", FIG1C_NOTE)
 add("MERS spike position 25: entropy (T = 100)", "–", f"{p100['entropy']:.4f}", "")
 
 print("| Quantity | Paper | dima | Note |")

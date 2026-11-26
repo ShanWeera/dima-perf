@@ -6,6 +6,294 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). The
 "Methodology" group lists every change that can alter a result, with the sources behind it.
 
+## [1.1.0] - 2026-11-26
+
+### Methodology
+
+- **Similarity-weighted entropy (opt-in)**: Wu J. 2025, "Similarity-weighted entropy for
+  quantifying genetic diversity in viral quasispecies", *Virus Evolution* 11(1):veaf029
+  ([doi:10.1093/ve/veaf029](https://doi.org/10.1093/ve/veaf029)), Section 2.1 and
+  Supplementary File 1. Each variant's entropy term is weighted by its dissimilarity to the rest
+  of the position, the similarity of two k-mers being their proportion of identical residues
+  (Grishin 1995, [doi:10.1007/BF00175826](https://doi.org/10.1007/BF00175826), p. 675). Also the
+  observed and similarity-weighted entropies normalised by log2 of the number of distinct
+  k-mers (the Index included); undefined with one distinct k-mer. The weights' sums are obtained
+  exactly from residue counts per site instead of pairs of variants (the column-profile form of sum-of-pairs scores,
+  Gotoh 1994, [doi:10.1093/bioinformatics/10.4.379](https://doi.org/10.1093/bioinformatics/10.4.379),
+  eqs. (1) and (4a)). Without the option nothing is computed and no existing value changes;
+  with it, no existing value changes either.
+
+### Added
+
+- `dima analyze --similarity-weighted-entropy` computes similarity-weighted entropy and the two
+  normalised entropies (see "Methodology"); the end-of-run line then adds
+  `similarity-weighted mean X bits (observed Y)`, the mean observed entropy of the same eligible
+  positions for a like-for-like comparison. Without an output that holds the values (results
+  JSON or JSONL, or the positions table) the option warns (`flag_has_no_effect`) and is not
+  computed.
+- Results: `similarity_weighted_entropy`, `normalised_observed_entropy` and
+  `normalised_similarity_weighted_entropy` per position, `similarity_weighted_entropy_summary`
+  (eligible positions, with their mean observed entropy) and the parameter
+  `run.parameters.similarity_weighted_entropy`; three columns appended to the positions table.
+  `dima view`, `dima hcs`, `dima cite --from` and the desktop app refuse a file whose values break
+  the rules of the results reference (present exactly where they are defined, and no similarity-weighted
+  value above the observed entropy) as edited or damaged (exit 4).
+  Without the option the keys are `null` (`NA` in the table); default results grow by 116 bytes
+  per position (compact JSON and JSONL; 140 indented; 9 per positions-table row), and each
+  position takes about 48 bytes more memory until the results are written.
+- Desktop app: **Compute similarity-weighted entropy (Wu 2025)** in the Advanced options, off by
+  default, remembered between sessions and turned off by **Reset to defaults**. The closed
+  Advanced section's title counts the options inside it that differ from their defaults
+  ("Advanced (1 changed)"), and **Run details** says whether similarity-weighted entropy was
+  computed, for analyses run in the app and for results opened from a file. The new setting is
+  saved only when it is on, so default settings stay readable by dima 1.0.0.
+- Desktop app: when the run computed similarity-weighted entropy, a **Metric:** switch above the
+  chart plots **Entropy** or **Similarity-weighted entropy**. Each has its own value axis,
+  heading, legend and mean line, and the filter bar's value range applies to the metric shown. A
+  switch keeps the zoom and the selection and resets the value range (with a note, and the
+  position table scrolled back to the selected row, when it had been narrowed); no control
+  moves. Every dataset opens showing entropy. Exported figures show the metric on screen, with
+  its title, axis title, legend and mean.
+- Desktop app, when the run computed similarity-weighted entropy: a chip "similarity-weighted
+  mean X bits (observed Y)" after the mean chip (0.0363 and 0.1207 bits for the bundled MERS
+  spike sample); a sortable **Similarity-weighted** column right after **Entropy** in the
+  position table; and the selected position's similarity-weighted and normalised entropies in
+  its facts and in the chart's tooltip, the normalised values marked "(low support)" at support
+  ≤ T and reading "— (one variant)" where a single k-mer leaves them undefined.
+- Desktop app: the position table scrolls sideways when its columns do not fit the window, and
+  every sortable header has its "Sort by …" tooltip as its accessibility description.
+- Desktop app: the chart exports follow the metric shown. A similarity-weighted figure is
+  offered as `<query>.similarity-weighted-entropy.png` (or `.svg`), and its menu items read
+  "Similarity-weighted entropy chart (PNG)…"/"(SVG)…". A figure is not saved if the chart was
+  switched to the other metric while its save dialog was open; a warning says so. The command
+  palette offers "Show similarity-weighted entropy" or "Show entropy", whichever the chart does
+  not show, and the keyboard shortcuts list Tab / Shift+Tab, Space, and that Esc gives the arrow
+  keys back to the table.
+- Documentation: the methodology of similarity-weighted entropy on "Entropy and its correction"
+  (the definition, the similarity of two k-mers, the weights and their bounds, the normalised
+  values, a worked example at MERS-CoV spike position 25, how the values depend on k, the alphabet
+  and the number of sequences, with two tables of exact averages, what the evidence covers, and
+  where the paper and DiMA differ), a Wu 2025 section on "Comparison with the papers", and the
+  option in the guides, the references, the FAQ, the Glossary and Troubleshooting.
+- Test data: Wu 2025's ToBRFV samples (Supplementary File 2, CC BY 4.0) as
+  `tests/data/tobrfv_tm2.fasta.bz2` and `tobrfv_tm22.fasta.bz2`, written by
+  `scripts/reference/tobrfv_from_supplement.py`, and the ten PSTVd loop-27 libraries of Wu 2025's
+  Fig. 5c (the S2 Table of Wu et al. 2024, PLOS Pathogens,
+  [doi:10.1371/journal.ppat.1012142](https://doi.org/10.1371/journal.ppat.1012142), CC BY 4.0) as
+  `tests/data/pstvd_loop27_<library>.fasta.bz2`, written by
+  `scripts/reference/pstvd_from_supplement.py`; "Comparison with the papers" compares DiMA's
+  values on them with Fig. 5c. The reference implementation
+  (`scripts/reference/dima_reference.py`) computes similarity-weighted entropy pair by pair, as Wu
+  defines it, with `--similarity-weighted-entropy`.
+- `scripts/reference/docs_numbers.py` computes the documentation's numbers that come from
+  expectations and simulations rather than from a dima run, exactly wherever an exact form exists
+  and otherwise by seeded Monte Carlo, and writes them into the pages and
+  `scripts/validate_paper.sh`; CI fails when they disagree.
+
+### Changed
+
+- Desktop app: the filter bar's value fields show four decimals (two to four before, depending
+  on the value) and keep their width as their values change. Dragging a value moves it by 1/200
+  of the range per pixel, so the whole range takes 200 pixels whatever the metric's scale, but
+  by at least 0.0001 per pixel, so a range below 0.02 bits takes fewer; it moved 0.01 bits per
+  pixel before, too coarse for similarity-weighted entropy, which is often a small fraction of a
+  bit.
+- Results schema 1.1.0 (the conserved-sequences schema stays 1.0.0 and now has its own version
+  constant). Results written by dima 1.0.0 are read as runs without similarity-weighted entropy;
+  `dima view` notes this when it writes values their schema did not record, and keeps its
+  `newer_schema` warning for newer or unrecognised versions, now quoting a version that is not a
+  plain `MAJOR.MINOR.PATCH` (so that, for example, a stray space shows).
+- Documentation: the methodology page explains how DiMA applies Wu's similarity, defined and
+  tested on nucleotide sequences, to amino-acid k-mers: the same identity-based computation,
+  which residues are compared, why identity is used rather than a substitution matrix, and how to
+  read and compare the values ("Amino-acid k-mers (DiMA's extension)").
+- Documentation: "Comparison with the paper" is now "Comparison with the papers" (same address),
+  since it also compares DiMA with Wu 2025.
+- Desktop app: a value typed into a field of the filter bar (a position or a bound of the value
+  range) is applied when you press Enter or Tab or click elsewhere, no longer at every key, and
+  Esc leaves the field as it was. Typing 0.2 as the maximum applied 0 at the first key, which
+  hid the selected position and moved the selection away for good. Dragging and the Up and Down
+  keys still apply at once.
+- Desktop app: the cells of the position and variant tables are no longer keyboard stops. Tab
+  stopped at every cell without showing it (16 cells before the metric switch on the bundled
+  MERS spike sample, 52 on the HIV-1 pol protein data set). Positions move with the arrow keys
+  as before; a variant the table shows whole is one stop, on its sequence, which is outlined, and
+  Space or Enter selects it, as does a click on the sequence (a click on the text did nothing). A
+  column header, the chart and the strip of conserved regions are outlined too while they have
+  the keyboard focus (the chart and the strip showed nothing), also at the clipped edge of a
+  table.
+- Desktop app: a click anywhere in a row of the position or variant table selects it, its text
+  included; the text in the tables can no longer be selected, which took the click (a click on
+  the "5" of position 5 left the selection where it was, in 1.0.0 too). Instead, right-click a
+  row to copy it: **Copy row** copies its cells as shown, separated by tabs (they paste into a
+  spreadsheet as one row), and **Copy k-mer** a variant's k-mer.
+- Desktop app: notifications stack upwards from 16 px above the window's bottom-right corner,
+  the newest nearest the corner, each as wide as its message and buttons (at most 380 px). A
+  message wraps beside its buttons, which sit at its top right (× and Copy details), and screen
+  readers read the message before them.
+- Desktop app: **Help ▸ Keyboard shortcuts** also lists Enter (press or select; in a filter field,
+  apply the value typed), Esc in a filter field and the right click that copies a table row.
+
+### Fixed
+
+- The end-of-run line showed a positive mean or minimum below 0.00005 bits as `0.0000`; it now
+  reads `< 0.0001`, as in the desktop app.
+- The hint of the `--hcs-min-incidence`/`--hcs-eligible-only` warning suggested `--table hcs`
+  alone, which also needs `-o PATH.tsv`; it now reads "add --hcs-output PATH or --tsv-dir DIR,
+  or write the table with -o PATH.tsv --table hcs".
+- The counter-overflow message said "64-bit" for counters that are 32-bit (distinct k-mers at
+  one position, distinct header values); it now reads "… exceeds the range of DiMA's counters".
+- `dima view`, `dima hcs` and `dima cite --from` checked the ranges of every value of a position
+  but not of the summaries, so a results file edited to hold, for example, a negative mean or a
+  coverage above 1 was read and written on. Such a file is now refused as edited or damaged
+  (exit 4), like one with an impossible value at a position.
+- Messages about the schema version of a conserved-sequences file no longer call it a results
+  schema, and the hint for one written by a newer DiMA names its `tool.version` (results files
+  have `run.tool.version`).
+- The desktop app's entropy chart could keep drawing the solid line of the previous results
+  when new results showed the same positions, zoom and highest entropy (for example the same
+  alignment analysed again with the raw estimator and another support threshold); the line is
+  now redrawn for every new set of results.
+- The desktop app's entropy axis repeated its labels (0.00, 0.01, 0.01, 0.02) when the highest
+  shown entropy was below about 0.024 bits, on screen and in exported figures. Ticks less than
+  0.01 bits apart now get three decimals, and the axis is at least 0.005 bits tall (1 bit, as
+  before, when every shown value is 0).
+- Sorting the desktop app's position table by Top variant copied both k-mers in every
+  comparison; it now compares them in place, in the same order and more than twice as fast
+  (half a million positions: 0.3–0.4 s instead of 0.8–0.9 s).
+- The desktop app reduced the chart's line and scanned every shown position on every frame
+  it drew; the line is now computed once per change of the shown positions, zoom or chart
+  width, so drawing a frame no longer goes through every shown position (half a million
+  positions: 0.09 ms instead of 5.2 ms per frame). As in 1.0.0, each frame still goes through
+  every separate piece of the line, every no-support band and every coverage mark, so a chart
+  with many of them still takes longer to draw.
+- The desktop app's exported PNG figures drew their text about a quarter smaller than the SVG
+  and the screen, and their title in the regular weight; the legend was spaced for that
+  smaller text, so in SVG figures its labels ran into the next entry. Text is now sized alike
+  in both formats, with a SemiBold title. Exported figures are at least 720 × 320 px and at most
+  20,000 × 20,000 px (a saved size outside that range is moved into it once, with a note, where
+  a size above the maximum used to reset every setting), the legend continues on further rows when it is
+  wider than the figure, and a title, subtitle or legend label too long for the figure is
+  shortened with "…".
+- The desktop app showed a positive value too small for its decimals as `0.0000` (or `0.0%`),
+  and a coverage, incidence, conservation bound or share of a variant's sequences just below
+  its maximum as `1.0000` (or `100.0%`). Tables (the metadata table included), panels,
+  tooltips, chips and exported figures now read less or more than the smallest step they
+  show, for example `< 0.0001`, `< 0.01%`, `> 0.9999` and `> 99.9%`; sorting and exports keep
+  full precision.
+- In a narrow desktop-app window (980 px, the smallest allowed) the results header broke its
+  fact chips into columns a few characters wide, hundreds of pixels tall, which pushed the
+  chart and the position table out of the window. Each chip now stays on one line and the row
+  wraps between chips. When the chart, the conserved regions and the table still do not all fit,
+  their column scrolls (the mouse wheel over the chart keeps zooming it), and the table keeps at
+  least four rows.
+- The desktop app's chart drew a position that has support but no entropy (possible only in a
+  results file edited by hand) as a hatched band labelled "no usable support". The band now
+  marks positions with support 0 only; a missing value just breaks the line.
+- The desktop app's position facts cut a long value, such as a method with its fallback
+  ("plug_in; fallback: support at or below threshold"), at the panel's edge; it now wraps.
+- In narrow desktop-app windows the filter bar's position count was drawn over the low-support
+  switch, and the chart's "drag: pan" hint over its legend. Both now move to a row of their own
+  when their row is full (for the count and Reset, when it could not hold the longest count, so
+  a count that changes with a filter or a metric switch never moves them to another row), and
+  the chart's Fit, + and − buttons stay at the top right of the chart, where screen readers meet
+  them after the chart's heading and legend, as in 1.0.0.
+- Moving the keyboard focus through a value field of the desktop app's filter bar, with Tab for
+  example, stored the value as the field showed it, rounded. When the field rounded the largest
+  value down, the range then hid the positions above the rounded value, the one with the largest
+  value among them, and turned Reset on, although nothing had been changed. A minimum that reads
+  as 0 is now 0, and a maximum that reads as the largest value is that value exactly.
+- The command line's `--table` help and the desktop app's tooltip of the TSV-folder export said
+  that `NA` marks undefined values; it also marks values that were not computed, such as the
+  similarity-weighted columns without the option, and both now say so.
+- The methods text (`dima cite --from`, and **Methods & references** in the desktop app) of a run
+  with one position read "the overlapping 120-mers at each of the 1 position were counted"; it
+  now reads "at its one position".
+- Desktop app: a figure export did nothing, and said nothing, when the filters hid every position
+  while its save dialog was open; a warning now says that nothing was saved and why.
+- Desktop app: the filter bar's fields and the variant table's minimum incidence had no
+  accessible name, so a screen reader announced only "max 1.5878", "from 1" or "0.0%"; each now
+  has one that says what it bounds ("First position shown", "Last position shown", "Minimum
+  incidence", and for the value fields the bound and the metric, for example "Highest entropy
+  shown, in bits"), which is also the filter bar fields' tooltip.
+- Desktop app: a value typed into a value field with more decimals than the field shows was kept
+  whole, and the field read its rounded text back the next time the keyboard focus passed
+  through it: a minimum typed as 0.111293 (shown as 0.1113) became 0.1113, hid position 1 of the
+  MERS spike sample (entropy 0.111294) and reset the zoom, with nothing edited. A typed value is
+  now kept to the four decimals the field shows.
+- Desktop app: switching the chart's metric in the same frame as a filter edit (a field left by
+  clicking the switch) applied the edit again on the next frame and lost the zoom, although the
+  switch keeps it. The switch now applies the edit itself.
+- Desktop app: a notification of three lines or more grew past the bottom of the window, its
+  close button half off it (for example the warning "Nothing was saved: the chart was switched
+  to …"), and the text of a wrapped notification was right-aligned with its buttons on its left.
+- Desktop app: the filter bar's position fields moved every control after them when one was
+  focused (it then shows its number without "from"/"to") or showed a shorter number ("to 500");
+  they now keep their width.
+- Desktop app: results written with a newer schema (or one this version does not recognise)
+  opened without a word, and an export from them left out the fields this version does not
+  know. The app now shows the warning `dima view` gives: "The results were written with schema
+  1.2.0; this version writes 1.1.0 and keeps only the fields it knows. Use the DiMA version that
+  wrote the file to keep every field." (an unrecognised version is quoted).
+- Desktop app: the dot that marks an option changed from its default moved every control of
+  its grid by 12 px when it appeared on the widest option name (ticking **Compute
+  similarity-weighted entropy** or changing T), so a second click at the same place missed. Its
+  place is now kept free.
+- Desktop app: the end of a long fact of the selected position (a method with its fallback) ran
+  under the panel's scroll bar; the facts now wrap before it.
+- Desktop app: the explanations of the results header's chips were tooltips only; screen readers
+  now read them too, as the facts' explanations.
+- Desktop app: the close buttons of notifications and of the recent-files list showed an empty
+  box (✕ is in none of the app's fonts); they show × and are named "Dismiss" and "Remove <file>
+  from recent files" for screen readers. The ▸ of "Export ▸ Methods & references" in the Cite window
+  and the ▼ that marks a coverage below the minimum in the position table also showed as empty
+  boxes since 1.0.0; they are now drawn.
+- Desktop app: the Setup screen's fields, menus and sliders (alphabet, k, T, the query name, the
+  conserved-region threshold, the Advanced options, the path field and the header-format editor),
+  the Preferences' figure size and the command palette had no accessible name, so a screen
+  reader announced only their values ("9", "100"); each is now named by the label beside it or
+  by what it is for (since 1.0.0).
+- Documentation: the precision of large runs was given as measured at 2,208,211 and 17,500,000
+  sequences per position, but the rounding error changes from one number of sequences to the
+  next. "Numerical accuracy" now gives the largest error, which follows from rounding the most
+  common k-mer's frequency: about 8e-12 relative at 2.2 million sequences and 6e-11 at 17.5 million
+  (it said 2.2e-12 and 5e-11), still at least 10^10 times below the sampling error.
+- Documentation: the numbers that came from random runs and simulations are now exact wherever
+  an exact form exists, and seeded and stated with their precision otherwise. Among the changes:
+  the paper's 1.38 bits at MERS-CoV spike position 25 lies 0.29 standard deviations below the
+  exact expectation (it said "about its 39th percentile"); the mean of one run of the random
+  procedure on HIV-1 *pol* has a standard deviation of 0.0020 bits (it said "repeated runs give
+  5.350–5.353"); DiMA v5.0.9's rule raises the average by 50% at N = 171 and 105% at N = 130 (it
+  said 51% and 107%); its MERS-CoV spike mean is 0.1417 bits (it said "about 0.142"), and on
+  HIV-1 *pol* its procedure, applied to the same k-mers, changes the means by less than
+  0.00026 bits (DNA) and 0.0011 bits (protein), its counting of stop and frameshift symbols
+  changing the protein mean more (it said "the two agree"); in the population study the exact expectation underestimates by up
+  to 6.4% when at least one minor-variant sequence is expected (it said "at most 3%"), and
+  v5.0.9's rule overestimates by up to 31% with T = 100 and 20% with T = 30 (it said 19%).
+- Documentation: some rows of "Design rationale" cited sources for more than those sources say;
+  each now cites the rule, section or table that supports it and states the rest in plain words.
+- Documentation: the methodology page now cites the classical results behind its exact standard
+  deviations and its bounds on DiMA v5.0.9's HIV-1 *pol* means (Cantelli's, Scarf's and
+  McDiarmid's inequalities, and the Krawtchouk expansion and recurrence), and the v5.0.9
+  comparison says that it applies v5.0.9's procedure to the same k-mers.
+- Documentation: the desktop-app guide said that the position table can be sorted by any column
+  and that the similarity-weighted column is sortable like the others; the Coverage column
+  cannot be sorted, and the guide now says so.
+- Documentation: "Large alignments" gave the memory of the results as a few hundred bytes per
+  position; it now also counts the variants they hold until they are written (each its k-mer and
+  about 72 bytes), which can be most of it on diverse alignments. The exit-code reference now
+  lists edited or damaged results files among the causes of exit status 4, and Troubleshooting
+  gives the message an unrecognised schema version stops with.
+
+### Security
+
+- Dependencies updated for RustSec advisories, none of which affects how DiMA uses them: zstd
+  0.13.4, zstd-safe 7.4.0 and zstd-sys 2.1.3 (RUSTSEC-2026-0391, -0398, -0403 and -0410:
+  context reuse, seekable archives, legacy frames and WebAssembly, none of which DiMA uses; the
+  bundled zstd library stays 1.5.7, so compressed outputs are unchanged), and, in the desktop
+  app, url 2.5.9 (RUSTSEC-2026-0592) and the yanked async-executor 1.14.0 and clipboard-win
+  5.4.1. The zstd crates are now BSD-3-Clause licensed (THIRD-PARTY-NOTICES.md).
+
 ## [1.0.0] - 2026-10-07
 
 First release of the Rust implementation of DiMA (Tharanga et al. 2025, *Briefings in

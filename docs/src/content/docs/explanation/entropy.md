@@ -1,13 +1,14 @@
 ---
 title: Entropy and its correction
-description: Shannon entropy of k-mer variants, the paper's sample-size correction (Fig. 2) and why DiMA computes its exact expectation, the alternative estimators, sample coverage, and why positions without support have no entropy.
+description: Shannon entropy of k-mer variants, the paper's sample-size correction (Fig. 2) and why DiMA computes its exact expectation, the alternative estimators, sample coverage, why positions without support have no entropy, and the optional similarity-weighted entropy (Wu 2025).
 ---
 
 At every position DiMA summarises the distribution of variants by its Shannon entropy
 [@shannon1948]: 0 bits when every sequence carries the same k-mer, more as variants become more
 numerous and more even. This page derives the observed entropy, the paper's correction for small
 samples [@tharanga2025], the way DiMA evaluates that correction exactly, the optional
-alternative estimators, and the sample coverage reported next to them.
+alternative estimators, the sample coverage reported next to them, and the optional
+[similarity-weighted entropy](#similarity-weighted-entropy-opt-in).
 
 Notation: a position has support $N$ (sequences with a valid k-mer) and $D$ distinct variants with
 counts $c_1, \dots, c_D$; $f_c$ is the number of variants seen exactly $c$ times (so $f_1$ counts
@@ -155,13 +156,25 @@ the AVANA tool extrapolated from 100 random sub-alignments by default [@khan2017
 
 - Results are reproducible bit for bit; no random seed is involved.
 - On the paper's HIV-1 *pol* dataset the mean corrected entropy is 5.3504 bits; the paper reports
-  about 5.35, and repeated runs of the random procedure give 5.350–5.353 (see
-  [Comparison with the paper](/explanation/paper-comparison/)).
-- **Fig. 1C.** At MERS-CoV spike position 25 the paper shows 1.38 bits ($T = 30$). The exact
-  expectation is 1.4451 bits. A simulation of the paper's random procedure at that position
-  (20,000 runs) has a standard deviation of 0.22 bits, and 1.38 lies at about its 39th
-  percentile: an ordinary draw of the random procedure, not a different method. With $T = 100$
-  the expectation is 1.4617 bits (standard deviation of the random procedure 0.30 bits).
+  about 5.35, <!-- docs-numbers:hiv-run-mean:start -->
+  and the mean intercept of one run of the random procedure, before its negative-intercept rule, has
+  a standard deviation of 0.0020 bits around it<!-- docs-numbers:hiv-run-mean:end --> (see
+  [Comparison with the papers](/explanation/paper-comparison/)).
+- **Fig. 1C.** At MERS-CoV spike position 25 the paper shows 1.38 bits ($T = 30$). <!-- docs-numbers:fig1c:start -->
+  The exact expectation is 1.4451 bits, and the intercept of one run of the random procedure has a
+  standard deviation of 0.2241 bits there, so 1.38 lies 0.29 standard deviations below the
+  expectation: an ordinary draw of the random procedure, not a different method. With $T = 100$ the
+  expectation is 1.4617 bits and the standard deviation 0.3047 bits.<!-- docs-numbers:fig1c:end -->
+
+These standard deviations are exact too: the subsamples are drawn independently, so the variance
+of the random intercept is $\sum_j w_j^2 \operatorname{Var}(\hat H_{n_j})$, and each variance
+follows from the multinomial distribution of the subsample counts. The counts of two k-mers are
+the margins of the 2 × 2 table "this k-mer or not" by "that one or not", whose joint distribution
+is a series in orthonormal Krawtchouk polynomials [@diaconis2019, Section 2, eqs. (7), (11) and
+(12)] with the table's correlation $\rho = -\sqrt{p_i p_j / ((1 - p_i)(1 - p_j))}$; that gives
+their covariance, and the polynomials are evaluated with their three-term recurrence
+[@filipuk2026, pp. 1892–1893]. `docs_numbers.py` checks the result against every outcome of
+small cases.
 
 ### The negative-intercept rule
 
@@ -186,20 +199,66 @@ only come from a bug, and it stops the run as an internal error (exit 1) instead
 replaced by another value [@wilson2014, Practice 5a; @hunterzinck2021, Rule 5]. A property test
 confirms the three steps above on random and adversarial count profiles.
 
-DiMA v5.0.9 applies the rule to each random run instead. Where one or a few sequences carry a
-variant other than the Index, a single run's intercept is often negative and is then replaced by
-the larger observed entropy, so v5.0.9's average over many runs is higher there. With the full
-eleven-point grid, about 20% of runs fall back when one sequence differs, raising the average by
-34–41%; 12–15% with two sequences (17–23%); and 3–5% with five (3–6%), on values of a few
-hundredths of a bit. With fewer points ($N$ close to $T$) the effect is larger: one sequence
-differing raises the average by 51% at $N = 171$ and by 107% at $N = 130$ ($T = 100$).
-On the MERS-CoV spike protein ($T = 100$) the eligible mean is 0.1261 bits here and about 0.142
-bits averaged over v5.0.9 runs; on the HIV-1 *pol* datasets the two agree. In simulations of
-two-variant populations with a known entropy ($N$ from 171 to 3,000, minor-variant frequency
-0.05% to 5%), the per-run rule overestimated by up to 19% on average, while the expectation
-underestimated, by up to 27% when less than one minor-variant sequence was expected and by at
-most 3% otherwise, with an error close to that of the Miller–Madow correction; neither had the
-smaller error everywhere.
+DiMA v5.0.9 applies the rule to each random run instead, and rounds the subsample sizes down (see
+[Differences from DiMA v5.0.9](/explanation/differences/#method)). Where one or a few sequences
+carry a variant other than the [Index](/reference/glossary/#index-major-minor-and-unique), a
+single run's intercept is often negative and is then replaced by the larger observed entropy, so
+v5.0.9's average over many runs is higher there. The
+table gives the share of runs that fall back and how far they raise the average above DiMA's
+value, at positions where every other sequence carries the Index:
+
+<!-- docs-numbers:v509-fallbacks:start -->
+
+| Sequences that differ from the Index | Runs that fall back | Average raised by | DiMA's value |
+|---|---|---|---|
+| one | 20.2–21.6% | 34.7–39.2% | 0.0044–0.0469 bits |
+| two, both carrying the same k-mer | 12.7–14.4% | 17.9–21.6% | 0.0082–0.0834 bits |
+| two, carrying two different k-mers | 12–14% | 18–21% | 0.0089–0.0937 bits |
+| five, all carrying the same k-mer | 3.0–4.7% | 3.5–5.9% | 0.0180–0.1715 bits |
+| five, all carrying different k-mers | 3–5% | 4–6% | 0.0221–0.2341 bits |
+
+Each range is over $N$ = 200, 300, 500, 1,000, 2,000 and 3,000 sequences ($T = 100$), where the grid
+has all eleven points and the subsample sizes need no rounding, so v5.0.9's runs differ from the
+paper's procedure only by the rule. Exact where the differing sequences carry one k-mer; seeded
+Monte Carlo of 100,000 runs per $N$ where they carry different ones (95% intervals within ±0.4
+percentage points, so those rows give whole percentages).
+
+<!-- docs-numbers:v509-fallbacks:end -->
+
+With fewer points ($N$ close to $T$) the effect is larger: <!-- docs-numbers:v509-few-points:start -->
+one sequence differing raises the average by 50% at $N = 171$ and by 105% at $N = 130$ ($T = 100$;
+exact)<!-- docs-numbers:v509-few-points:end -->.
+On the MERS-CoV spike protein ($T = 100$) the eligible mean is 0.1261 bits here and <!-- docs-numbers:v509-means:start -->
+0.1417 bits averaged over v5.0.9 runs (seeded Monte Carlo of 2,000 runs, 95% interval ±0.0001); on
+the HIV-1 *pol* datasets its procedure, applied to the same k-mers, changes the means by less than
+0.00026 bits (DNA) and 0.0011 bits (protein), under half the standard deviation of the mean of a
+single run (0.0020 and 0.0027 bits)<!-- docs-numbers:v509-means:end -->. On the protein alignment v5.0.9 also
+counts the stop and frameshift symbols as residues, which changes its mean more than its
+procedure does (note 4 of [Comparison with the papers](/explanation/paper-comparison/#notes)).
+The HIV-1 *pol* figures are upper bounds. At each position, v5.0.9's expected value differs from
+DiMA's by the exact effect of its rounded-down sizes plus the rule's effect,
+$E[(\hat H - S)\,\mathbf{1}\{S < 0\}] \le \hat H \, P(S < 0) + E[\max(-S, 0)]$, where $S$ is
+the intercept of one of its runs before the rule. From the
+exact mean $\mu > 0$ and variance $\sigma^2$ of $S$, $P(S < 0)$ is at most
+$\sigma^2 / (\sigma^2 + \mu^2)$ by Cantelli's inequality [@ion2023, Theorem 2.1, eq. (4)], and
+$E[\max(-S, 0)]$ at most $(\sqrt{\sigma^2 + \mu^2} - \mu)/2$ [@gallego1993, Lemma 1, eq. (3)].
+Each is replaced by the bound of McDiarmid's inequality [@rio2013, eq. (1.3)] where that is
+smaller: the subsamples' sequences are drawn independently, and one sequence of a subsample of
+$n$ changes its plug-in entropy by at most $(n \log_2 n - (n - 1) \log_2 (n - 1))/n$ bits, and
+the intercept by that times the subsample's weight $w_j$.
+
+<!-- docs-numbers:population-study:start -->
+
+In samples of $N$ = 171, 200, 300, 500, 1,000, 2,000 and 3,000 sequences from two-variant
+populations with a known entropy (minor-variant frequency 0.05, 0.1, 0.2, 0.5, 1, 2 and 5%; $T$ = 30
+and 100), v5.0.9's per-run rule overestimated the entropy by up to 31% on average with $T = 100$ and
+20% with $T = 30$ (seeded Monte Carlo of 100,000 runs per case, 95% intervals within ±0.5 percentage
+points). The exact expectation underestimated it by up to 27% when less than one minor-variant
+sequence was expected and by up to 6.4% otherwise (and overestimated it by at most 0.14%), within
+3.3 percentage points of the error of the Miller–Madow correction. Neither v5.0.9's per-run rule nor
+the exact expectation had the smaller error everywhere.
+
+<!-- docs-numbers:population-study:end -->
 
 ## Alternative estimators
 
@@ -306,6 +365,312 @@ positions) the mean over all positions with NS counted as 0 — DiMA v5.0.9's ru
 as `all_positions_summary` for comparison — is 3.443 bits, against 5.350 bits over the eligible
 positions.
 
+## Similarity-weighted entropy (opt-in)
+
+Shannon entropy treats two variants that differ at one residue exactly like two unrelated ones.
+Similarity-weighted entropy [@wu2025, Section 2.1 and Supplementary File 1] weights each
+variant's entropy term by how *dissimilar* it is to the rest of the position, so near-identical
+variants count for less. It is not part of the DiMA method and is computed only on request:
+`dima analyze --similarity-weighted-entropy`, or **Compute similarity-weighted entropy (Wu 2025)**
+under **Advanced** in the [desktop app](/how-to/desktop-app/#similarity-weighted-entropy).
+Without it, the three values below are `null` (`NA` in the positions table); with it, nothing else
+changes.
+
+At a position with support $N$, let variant $i$ (a distinct k-mer, the
+[Index](/reference/glossary/#index-major-minor-and-unique) included) be carried
+by $c_i$ sequences, so its frequency is $\hat p_i = c_i/N$, and let $s_{ij}$ be the similarity of
+variants $i$ and $j$ (below). Then [@wu2025, Section 2.1 and Supplementary File 1]
+
+$$
+\begin{equation}
+S_i = \sum_{j \ne i} \hat p_j\, s_{ij}, \qquad
+H_\text{sim} = \sum_i \left(-\hat p_i \log_2 \hat p_i\right)\left(1 - S_i\right) .
+\end{equation}
+$$
+
+$S_i$ is the average, over all $N$ sequences at the position, of their similarity to variant
+$i$, with the variant's own sequences counted as 0; $1 - S_i$ is the variant's weight. Wu uses
+other letters for two of these quantities [@wu2025, Sections 1 and 2.1]:
+
+| Quantity | This page | Wu 2025 |
+|---|---|---|
+| Sequences at the position (support) | $N$ | $T$ (clones) |
+| Distinct k-mers at the position | $D$ | $N$ (unique sequences) |
+| Support threshold | $T$ | — |
+
+### The similarity of two k-mers
+
+Each of the $k$ sites of a k-mer holds one residue. The similarity of two k-mers is the proportion
+of their $k$ sites that carry the same residue, $s_{ij} = (k - d_{ij})/k$, where $d_{ij}$ is the
+number of sites at which they differ [@wu2025, Section 2.1, Fig. 5b and Supplementary File 1]
+(Section 2.1's wording describes a distance; the reading $1 - d/k$ comes from Wu's printed
+values). For amino acids this is the fraction of identical residues of two aligned protein
+sequences [@grishin1995, p. 675]. Because k-mers have equal length and no gaps, the usual
+definitions of percentage identity, which differ only in how they count gaps and unequal lengths,
+all give this value [@raghava2006, Methods, Eqs. 2–5]. Identity treats every substitution alike: a
+conservative exchange lowers the similarity as much as a radical one, and percentage identity is
+"a poor substitute for more sophisticated scoring methods that take account of the
+physico-chemical properties of the amino acids" [@raghava2006, Conclusion]. It is not an
+evolutionary distance either: it counts the sites that differ now, not the substitutions that
+occurred, some of which may have been reversed [@grishin1995, pp. 675–676].
+
+Wu computes each variant's weight from the similarity of every pair of distinct sequences
+[@wu2025, Sections 2.1 and 2.3]; DiMA obtains exactly the same sums from the residue counts at
+each site of the k-mer, without forming pairs (see
+[Numerical accuracy](/explanation/numerical-accuracy/#similarity-weighted-entropy)).
+
+### Amino-acid k-mers (DiMA's extension)
+
+Wu defined the metric for nucleotide sequences and applied it only to them [@wu2025, Sections 2.1
+and 3.1–3.3]. DiMA also computes it for amino-acid k-mers, in the same way:
+
+- **The same computation.** Nothing in Wu's definition depends on the alphabet: the similarity of
+  two k-mers counts the sites that carry the same residue, whatever the residues are. DiMA uses
+  this definition unchanged for amino acids, where it is the fraction of identical residues of
+  two aligned protein sequences [@grishin1995, p. 675]. Nothing is added: no substitution matrix,
+  no grouping of similar amino acids, no other weighting.
+- **What is compared.** Every site of a k-mer that is counted holds a definite residue: for
+  proteins one of the 20 standard amino acids, selenocysteine (U) or pyrrolysine (O). A k-mer
+  with an ambiguity code (X, B, Z or J), a gap, or a stop or frameshift symbol is not counted at
+  that position, for similarity-weighted entropy as for observed entropy (see
+  [Valid k-mers and support](/explanation/method/#valid-k-mers-and-support) and the
+  [symbol tables](/reference/symbols/)). So two k-mers are never compared at an ambiguous site.
+- **Why identity, and not a substitution matrix.** Identity treats every exchange of amino acids
+  alike, and percentage identity is a poor substitute for scores that take the physico-chemical
+  properties of the amino acids into account [@raghava2006, Conclusion]. A matrix of such scores
+  would change Wu's method, however, and DiMA keeps the published methods
+  ([working agreement 1](/contributing/working-agreements/)): no variant of similarity-weighted
+  entropy with such scores has been published or validated. A conservative exchange therefore
+  lowers the similarity of two amino-acid k-mers as much as a radical one.
+- **Reading the values.** An amino-acid k-mer changes only when the encoded amino acids change,
+  and a k-mer of $k$ amino acids spans $3k$ nucleotides, so the values of a protein and of its
+  gene differ; compare them only between runs with the same alphabet and $k$ (see
+  [k and the alphabet](#k-and-the-alphabet)). Like every use outside Wu's nucleotide populations,
+  this use is untested (see [What the evidence covers](#what-the-evidence-covers)).
+
+### Weights and bounds
+
+Written with the distances, a variant's weight is its own frequency plus the average share of
+sites at which a sequence of the position differs from it:
+
+$$
+\begin{equation}
+1 - S_i = \hat p_i + \sum_j \hat p_j\, \frac{d_{ij}}{k} .
+\end{equation}
+$$
+
+Two distinct k-mers differ at one site at least and at most at all $k$, so every weight lies
+between $\hat p_i + (1 - \hat p_i)/k$ and 1. $H_\text{sim}$ is therefore never more than the
+observed entropy $\hat H$, and equals it when every pair of variants differs at every site (always
+for $k = 1$). Two equally common variants that differ at $d$ sites give
+$H_\text{sim} = (k + d)/(2k)$ bits, against $\hat H = 1$ bit.
+
+### Normalised values
+
+DiMA also reports both entropies divided by $\log_2 D$, the largest observed entropy possible
+with the $D$ distinct k-mers at the position (the Index included): $H_n = \hat H / \log_2 D$ and
+$H_\text{nsim} = H_\text{sim} / \log_2 D$, each between 0 and 1 [@wu2025, Section 2.1 and
+Supplementary File 1].
+$H_\text{nsim}$ reaches 1 only when every pair of k-mers differs at every site, which needs no
+more distinct k-mers than letters. Wu notes
+that entropy is commonly normalised by $\log_2$ of the number of clones, or by $\log_2$ of "the
+estimated number of unique sequences", the latter "particularly common in next generation
+sequencing (NGS) data analyses" [@wu2025, Section 1]; his $H_n$ divides by $\log_2$ of "the total
+number of unique sequences in the population" [@wu2025, Section 2.1], which DiMA takes as the
+observed number of distinct k-mers $D$. $H_n$ has the form of Pielou's evenness
+$J' = H'/\log s$, with $D$ in place of the number of species $s$ of the population
+[@pielou1966, pp. 141 and 143]; Sheldon already divided by the logarithm of the observed number of
+species [@sheldon1969, p. 467].
+
+With a single distinct k-mer ($D = 1$) the largest possible entropy is 0, so the normalised values
+are undefined (`null`) while $H_\text{sim} = 0$, as Pielou left the evenness of a quadrat (a
+sampling plot of a plant community) with a
+single species undefined [@pielou1966, p. 141]. Without support all three values are `null`.
+
+The normalised values depend on $D$ as well as on how evenly the sequences are spread, especially
+when $D$ is small: equitability indices (evenness measures such as $H_n$, with $S$ the number of
+species, here $D$) are "fairly stable for S > 20" [@sheldon1969, p. 467],
+while $J'$, the form of $H_n$, depends on the number of species "up to S = 25 or higher"
+[@smith1996, Requirement 1, p. 72].
+
+### Worked example
+
+At MERS-CoV spike position 25 ($k = 9$, support 170, 10 distinct 9-mers; Table 1 below lists
+their counts) the Index `SVKSACIEV`, carried by 129 sequences, has weight 0.786: its own
+frequency, 129/170 = 0.759, plus 0.027 for the 41 other sequences, 40 of which differ from it at
+one of the nine sites and one at two ($42/(170 \times 9)$). The eight
+variants one substitution from the Index have weights between 0.127 and 0.195, and `SAKSVCIEV`,
+two substitutions from it, 0.231. So $\hat H = 1.4224$ bits, $H_\text{sim} = 0.4275$ bits,
+$H_n = 1.4224/\log_2 10 = 0.4282$ and $H_\text{nsim} = 0.1287$. Over the whole protein (all 1,345
+positions eligible) the mean similarity-weighted entropy is 0.0363 bits, against a mean observed
+entropy of 0.1207 bits over the same positions; it is 0 at the 455 positions with a single 9-mer
+and highest, 0.4548 bits, at position 26. `dima analyze --similarity-weighted-entropy` ends its
+summary line with `similarity-weighted mean 0.0363 bits (observed 0.1207)`.
+
+### k and the alphabet
+
+The values depend on $k$ and on the alphabet. With $k = 1$ the similarity-weighted and observed
+entropies are equal; with longer k-mers, distinct k-mers usually differ at a smaller share of
+their sites, so the weights, and $H_\text{sim}$ relative to $\hat H$, are lower (on the MERS-CoV
+spike protein at $k = 9$, the mean similarity-weighted entropy is 30% of the mean observed
+entropy). A nucleotide and an amino-acid k-mer of the same $k$ cover different lengths of genome,
+and a synonymous change alters the nucleotide k-mer only. Compare values only between runs with
+the same $k$ and alphabet.
+
+### Relation to other measures
+
+$H_\text{sim}$ takes similarity into account, as the family of similarity-sensitive diversity
+measures of Leinster and Cobbold does [@leinster2012, p. 479], but it is not a member of that
+family: with their similarity matrix $Z_{ij} = s_{ij}$ ($Z_{ii} = 1$),
+$S_i = (Z\hat p)_i - \hat p_i$, and $H_\text{sim}$ is an entropy in bits, not an effective number
+of variants (the number of equally common, entirely dissimilar variants that would have the same
+diversity). It is also not to be confused with the "similarity-weighted entropy analysis" of
+Mo et al. [@mo2026, Methods, "Entropy of VP1 codons and physical property analyses of high-entropy
+codons", and Results], which gives near-identical sequences less weight and then computes Shannon
+entropy column by column.
+
+### What the evidence covers
+
+Wu defines a viral quasispecies as "a population of related viral sequences within an infected
+host" [@wu2025, Section 1], and applied the metric only to nucleotide sequences of equal length
+that differ by substitutions only: simulated populations, a potato spindle tuber viroid (PSTVd)
+mutant pool and the populations it gave within single plants, and two tomato brown rugose fruit
+virus (ToBRFV) samples [@wu2025, Sections 2.1 and 3.1–3.3]. DiMA's alignments usually hold sequences
+from many hosts, and DiMA applies the metric at every k-mer position, to amino-acid k-mers too
+(see [Amino-acid k-mers](#amino-acid-k-mers-dimas-extension)).
+Wu's reading, that a variant similar to the others adds less to a quasispecies' diversity, then
+becomes a statement about the k-mers sampled across hosts. These uses are DiMA's extension and are
+untested.
+
+As of 25 November 2026, searches of OpenAlex, Semantic Scholar, OpenCitations and Europe PMC
+(including full text; Crossref's citation count agrees) found no published application or
+evaluation of the metric by other authors; the works that cite it are reviews. The data of both
+of Wu's real examples are published as unique sequences with their read counts. With them DiMA
+reproduces his PSTVd values (Fig. 5c, as far as the figure can be read), and his ToBRFV values for
+one sample but not for the other (see [Comparison with the papers](/explanation/paper-comparison/#similarity-weighted-entropy-wu-2025)).
+
+### How the values change with the number of sequences
+
+The three values describe the k-mers observed at a position, not the population they were
+sampled from, and none of them is corrected for sample size. Observed entropy is lower on average
+with fewer sequences [@zhao2019, Section 3.1], normalised entropy also depends on sample size
+[@gregori2014, Sections 2.4 and 3.2], and similarity-weighted entropy changes too: with fewer
+sequences the values can be higher or lower. Table 1 shows this at MERS-CoV spike position 25 by
+averaging each value over every subset of $n$ of the position's sequences; its last row is the
+position itself. The observed and similarity-weighted entropies fall as $n$ falls, while the
+normalised values rise.
+
+<!-- docs-numbers:swe-subsets:start -->
+
+**Table 1.** MERS-CoV spike position 25 (170 sequences; its 10 distinct 9-mers are carried by 129,
+14, 9, 6, 4, 4, 1, 1, 1 and 1 of them): the average over all subsets of $n$ of its sequences,
+computed exactly. The normalised values are averaged over the subsets with at least two distinct
+9-mers.
+
+| $n$ | $\hat H$ | $H_\text{sim}$ | $H_n$ | $H_\text{nsim}$ | Distinct 9-mers | Subsets with one 9-mer |
+|---|---|---|---|---|---|---|
+| 10 | 0.9979 | 0.3812 | 0.6494 | 0.2537 | 2.99 | 5.80% |
+| 25 | 1.2126 | 0.4053 | 0.5372 | 0.1812 | 4.83 | 0.05% |
+| 50 | 1.3201 | 0.4164 | 0.4907 | 0.1553 | 6.52 | < 0.01% |
+| 100 | 1.3878 | 0.4236 | 0.4565 | 0.1395 | 8.29 | < 0.01% |
+| 170 | 1.4224 | 0.4275 | 0.4282 | 0.1287 | 10.00 | 0% |
+
+<!-- docs-numbers:swe-subsets:end -->
+
+Table 2 compares the averages with the values of two known populations instead, for samples
+drawn at random with replacement. With the population of Wu's Fig. 1b the normalised values rise
+as $n$ falls; with two equally common 9-mers they fall.
+
+<!-- docs-numbers:swe-populations:start -->
+
+**Table 2.** The values of two populations, and their average over samples of $n$ sequences drawn at
+random with replacement, computed exactly. (a) Quasispecies 2 of Wu's Fig. 1b [@wu2025, Fig. 1b]: a
+master sequence at 90% and four variants at 4%, 4%, 1% and 1% that differ from it at 2, 4, 2 and 4
+sites, no two variants at the same site, as drawn (so $k = 12$, the shortest length that holds
+them). (b) Two 9-mers at 50% each that differ at one site. The normalised values are averaged over
+the samples with at least two distinct k-mers.
+
+| Population | $n$ | $\hat H$ | $H_\text{sim}$ | $H_n$ | $H_\text{nsim}$ | Samples with one k-mer |
+|---|---|---|---|---|---|---|
+| (a) | 10 | 0.4328 | 0.2195 | 0.5474 | 0.2789 | 34.87% |
+| (a) | 25 | 0.5293 | 0.2453 | 0.3777 | 0.1756 | 7.18% |
+| (a) | 50 | 0.5791 | 0.2579 | 0.3214 | 0.1434 | 0.52% |
+| (a) | 100 | 0.6093 | 0.2654 | 0.2954 | 0.1288 | < 0.01% |
+| (a) | population | 0.6412 | 0.2733 | 0.2761 | 0.1177 | — |
+| (b) | 10 | 0.9235 | 0.4970 | 0.9253 | 0.4980 | 0.20% |
+| (b) | 25 | 0.9705 | 0.5318 | 0.9705 | 0.5318 | < 0.01% |
+| (b) | 50 | 0.9854 | 0.5437 | 0.9854 | 0.5437 | < 0.01% |
+| (b) | 100 | 0.9927 | 0.5496 | 0.9927 | 0.5496 | < 0.01% |
+| (b) | population | 1.0000 | 0.5556 | 1.0000 | 0.5556 | — |
+
+<!-- docs-numbers:swe-populations:end -->
+
+**Why DiMA reports no corrected values.** Wu defines plug-in values, and the published method is
+DiMA's specification ([working agreement 1](/contributing/working-agreements/)). No
+published or validated correction exists for $H_\text{sim}$, and all three values depend on
+support: observed and normalised entropy [@zhao2019, Section 3.1; @gregori2014, Sections 2.4 and
+3.2], and similarity-weighted entropy too (Tables 1 and 2). Nor can any of them be
+estimated without bias: from $n$ sequences drawn independently at random, only polynomials of the
+variant frequencies can be estimated without bias, and Shannon entropy is not one
+[@paninski2003, Appendix A.2, Proposition 8]. $H_\text{sim}$ is not one either: for two k-mers of
+similarity $s < 1$ at frequencies $p$ and $1 - p$,
+$H_\text{sim} = -p \log_2 p\,(1 - s + sp) - (1 - p)\log_2(1 - p)\,(1 - sp)$, whose slope grows
+without bound as $p \to 0$, which a polynomial's never does.
+
+**Comparing positions.** Because the values depend on support, positions of very different
+support can rank differently from their populations, as shown for observed and normalised entropy
+[@zhao2019, Section 3.1; @gregori2014, Section 3.2]. Compare positions of similar support and
+similar sample coverage (both are reported): equally complete samples can be compared directly,
+as shown for species richness [@chao2012, p. 2538]. For quasispecies data, Gregori et al. recommend rarefying the larger sample
+to the size of the smaller by repeated subsampling without replacement [@gregori2014, Sections
+2.5 and 3.2]; DiMA does not.
+
+The summary (`similarity_weighted_entropy_summary`: the mean, lowest and highest
+similarity-weighted entropy, and the mean observed entropy of the same positions) covers the
+eligible positions only (support above $T$), as the entropy summaries do; normalised values are
+not summarised. At positions with support at or below $T$ the desktop app marks the two
+normalised values *(low support)*: they come from few sequences, are less reliable and can be
+higher or lower than with more sequences. Where every sequence carries a different k-mer,
+$H_n = 1$ by arithmetic alone ($\hat H = \log_2 D$), whatever the sequences.
+
+### Where the paper and DiMA differ
+
+DiMA follows the reading of Wu's formulas that reproduces his Supplementary File 1. Some details
+of the paper differ from it, or from Wu's data (the numbers are in
+[Comparison with the papers](/explanation/paper-comparison/#similarity-weighted-entropy-wu-2025)):
+
+- Section 2.1 describes $S_{ij}$ as "the number of base substitutions between sequences i and j,
+  normalized by the sequence length", which is a distance; Wu's printed values use the similarity
+  $1 - d/k$.
+- Section 2.1 prints the average similarity as $\sum_{i \ne i} f_i s_{ij}$. Summed over the other
+  variants $j$ with the variant's own frequency $f_i$, as printed, it gives a negative
+  $H_\text{sim}$ for Fig. 2's Distributions 1 and 2 at similarity 0.999 (−0.39 and −0.88 bits);
+  weighted by $f_j$, as above, it reproduces Supplementary File 1.
+- Section 2.1 prints the formula of $H_\text{nsim}$ as that of $H$ and says it "normalizes
+  H_sim by log2(T)"; Supplementary File 1 divides by $\log_2$ of the number of distinct
+  sequences, as $H_n$ does.
+- Fig. 4's caption puts $H$ and $H_n$ in panel (a) and $H_\text{sim}$ and $H_\text{nsim}$ in
+  panel (b); the panels and the text (Section 3.1) show $H$ and $H_\text{sim}$ in (a), $H_n$ and
+  $H_\text{nsim}$ in (b).
+- Section 3.1 says that both metrics assign "weights based on genetic distance from the master
+  sequence", and Fig. 1c draws the weights as lines from the master to each variant. That
+  describes the illustration, whose master is 90% of the population. The definition
+  (Section 2.1) weighs each variant by its similarity to every other sequence, and only that
+  reproduces Supplementary File 1: for its distribution 1 at similarity 0.9 it gives the printed
+  0.45488, while weighing each variant by its similarity to the master alone gives 0.79159.
+- Fig. 5b's similarities (0.75, 0.50, 0.25 and 0.00) are those of 4-site sequences, while the
+  printed $H_\text{sim} = 4.04$ and $H_\text{nsim} = 0.50$ of the theoretical UNNNNA pool need all
+  six sites; exactly, they are 4.03125 and 0.50390625.
+- Two cells of Supplementary File 1 hold the values of another similarity: in the "Figure 2
+  Extended Data" sheet (whose five populations are further ones, not Fig. 2's), distribution 1's
+  values at similarity 0.3 are those at 0.4, and in the "Figure 3 Extended Data" sheet, D-1's
+  values at 0.7 are those at 0.95 (Fig. 3b).
+- From Wu's published ToBRFV data (the unique sequences with their read counts), $H$ and $H_n$
+  are higher in the Tm-2² sample than in the tm-2 sample, the opposite of Section 3.3.
+- Fig. 6's legend says that sequences below 0.1% of the reads were excluded, but the published
+  tm-2 data list eight sequences with 10 of 10,833 reads (0.092%); with all 48, the tm-2 values
+  of Fig. 6d are reproduced.
+
 ## Numerical details
 
 Logarithms come from the `libm` library, so they give the same bits on every platform; sums use
@@ -313,12 +678,15 @@ compensated (Neumaier) summation; each position is computed by one thread and su
 reduced in position order. Identical inputs therefore give byte-identical outputs.
 
 Rounding error is present in every value, as in any floating-point program, and grows with the
-number of sequences at a position. On the bundled datasets it is within about
-$5 \times 10^{-15}$ of the exact values (relative), and at the 2.2 million sequences per position
-of the paper's SARS-CoV-2 analysis within $2.2 \times 10^{-12}$. That is $10^{10}$ to
-$10^{12}$ times smaller than the sampling error of the estimate. [Numerical accuracy](/explanation/numerical-accuracy/)
-gives the measurements, the one limit (more than $9 \times 10^{15}$ sequences at a position) and
-why a prototyped fix for the last digits is deferred.
+number of sequences at a position. On the bundled datasets every entropy is within about
+$5 \times 10^{-15}$ of the exact value (relative), and at the 2.2 million sequences per position
+of the paper's SARS-CoV-2 analysis within about $8 \times 10^{-12}$. That is $10^{10}$ to
+$10^{12}$ times smaller than the sampling error of the estimate. Similarity-weighted entropy has
+the same absolute error as observed entropy, but is smaller, so its relative error is larger: up
+to $2 \times 10^{-14}$ on the bundled datasets and $1.2 \times 10^{-10}$ at 2.2 million sequences.
+[Numerical accuracy](/explanation/numerical-accuracy/) gives the measurements, the one limit
+(more than $9 \times 10^{15}$ sequences at a position) and why a prototyped fix for the last
+digits is deferred.
 
 ## References
 

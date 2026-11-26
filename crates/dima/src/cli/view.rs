@@ -30,19 +30,6 @@ pub fn run(a: &ViewArgs, ctx: &Context) -> Result<()> {
         None
     };
     let results = output::read_results(&a.input)?;
-    if results.schema_version != dima_core::model::SCHEMA_VERSION {
-        ui::warning(
-            "newer_schema",
-            &format!(
-                "the results were written with schema {}; this version writes {} and keeps \
-                 only the fields it knows",
-                results.schema_version,
-                dima_core::model::SCHEMA_VERSION
-            ),
-            Some("use the DiMA version that wrote the file to keep every field"),
-            ctx.verbosity,
-        );
-    }
     let named;
     let (plan, opened) = match early {
         Some(opened) => (&first, opened),
@@ -52,6 +39,7 @@ pub fn run(a: &ViewArgs, ctx: &Context) -> Result<()> {
             (&named, outputs::Opened::open(&named, &ctx.signals.cancel)?)
         }
     };
+    report_schema(&results, plan, ctx);
     let hcs = if plan.needs_hcs() {
         Some(hcs::compute(&results, &HcsParams::default())?)
     } else {
@@ -69,4 +57,48 @@ pub fn run(a: &ViewArgs, ctx: &Context) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Tells how a file of another schema version is written: an older 1.x file gets a note where
+/// the outputs hold values its schema did not record (unless the file holds them anyway, as an
+/// edited one can); a newer (or unrecognised) one a warning, since this version keeps only the
+/// fields it knows.
+fn report_schema(results: &dima_core::model::Results, plan: &outputs::Plan, ctx: &Context) {
+    let version = results.schema_version.as_str();
+    let current = dima_core::model::SCHEMA_VERSION;
+    if version == current {
+        return;
+    }
+    let older = matches!(
+        (
+            output::parse_schema_version(version),
+            output::parse_schema_version(current),
+        ),
+        (Some(file), Some(this)) if file < this
+    );
+    if older {
+        if plan.writes_position_values()
+            && !results.run.parameters.similarity_weighted_entropy.value
+        {
+            ui::note(
+                &format!(
+                    "results file written with schema {version}; values that schema did not \
+                     record are written as null (NA in the positions table), and options it \
+                     did not have as off"
+                ),
+                ctx.verbosity,
+            );
+        }
+    } else {
+        ui::warning(
+            "newer_schema",
+            &format!(
+                "the results were written with schema {}; this version writes {current} and \
+                 keeps only the fields it knows",
+                output::shown_schema_version(version)
+            ),
+            Some("use the DiMA version that wrote the file to keep every field"),
+            ctx.verbosity,
+        );
+    }
 }

@@ -125,9 +125,22 @@ or accept the mismatches with `--validation permissive` (they get the fill value
 **`header is not valid UTF-8`** — convert the file to UTF-8 (`iconv -f LATIN1 -t UTF-8`), or use
 `--validation permissive` to replace invalid bytes.
 
-**`written with results schema …`** (from `dima view`, `dima hcs` or `dima cite --from`) — the
-results were written by a DiMA version with another major schema version. Re-run the analysis, or
-use the version that wrote them.
+## Results files (exit 4)
+
+**`written with results schema …`** (or **`written with conserved-sequences schema …`**; from
+`dima view`, `dima hcs` or `dima cite --from`) — the major number of the file's schema version
+(before the first dot) is not `1`: it was written by a DiMA version with another major schema
+version, or its version is not a plain number, such as `01.1.0`. Re-run the analysis, or use the version that wrote the file.
+
+**`position N: … is given, but …`**, **`… is missing`** or another message with the hint `the
+file was edited or damaged` (exit 4, from `dima view`, `dima hcs` or `dima cite --from`; the
+desktop app shows the same message when it cannot open the file) — the
+results contradict themselves, for example a similarity-weighted value at a position without
+support, no such value where the run computed them (`run.parameters.similarity_weighted_entropy`
+says whether it did), or `position N: similarity_weighted_entropy is …, above the observed
+entropy …, which it cannot exceed`. DiMA never writes such a file; it was changed after `dima analyze` wrote
+it. Run the analysis again; if you edit results by hand, keep the rules of the
+[results reference](/reference/json/).
 
 ## Warnings worth acting on
 
@@ -143,16 +156,69 @@ identifier; the output becomes very large. Use the `--metadata-fields` option th
 **`hcs_low_support_regions`** — some conserved regions rest on few sequences; see
 [flagged regions](/how-to/conserved-sequences/#flagged-regions).
 
+**`flag_has_no_effect`: `--similarity-weighted-entropy has no effect without results (JSON,
+JSONL) or the positions table`** — the values of similarity-weighted entropy are written only
+to the results and the positions table, and none of your outputs is one of them (for example,
+only `-o variants.tsv --table variants`, or only `--hcs-output`). DiMA then does not compute
+them and writes the other outputs as usual. Add `-o PATH.json`, or the positions table with
+`-o PATH.tsv --table positions` or `--tsv-dir DIR`. The same code marks other options that do
+nothing with the chosen outputs; see
+[Diagnostics](/reference/diagnostics/#warnings-of-the-command-line).
+
 **`threads_refused`** — the system started fewer worker threads than requested, so the run was
 slower than it could be; the results are unaffected. Ask for fewer threads (`-t`) or raise the
 limit on processes and threads (`ulimit -u`, a container's pids limit).
 
 All diagnostics are explained in [Diagnostics](/reference/diagnostics/).
 
+## Results written by another DiMA version
+
+`dima view`, `dima hcs`, `dima cite --from` and the desktop app read results by their schema
+version (`schema_version`; see [Comparing versions](/how-to/reproducibility/#comparing-versions)).
+Results of another major schema version are refused (`written with results schema …`, above).
+
+**`note: results file written with schema 1.0.0; values that schema did not record are written
+as null (NA in the positions table), and options it did not have as off`** (from `dima view`) —
+the file was written by dima 1.0.0, before similarity-weighted entropy existed. `dima view`
+converts it as a run without that option: the new keys are `null` (`NA` in the positions table)
+and `run.parameters.similarity_weighted_entropy` is `false`. The note appears only when the output
+holds values per position (results JSON or JSONL, or the positions table). Nothing needs doing; to
+get the values, run the analysis again with `--similarity-weighted-entropy`.
+
+**`newer_schema`: `the results were written with schema …; this version writes … and keeps only
+the fields it knows`** (from `dima view`) — a newer DiMA wrote the file, or its 1.x version is
+one this DiMA does not recognise (such as `1.1` or `1.1.0-dev`), so it may hold keys that this
+version does not know, and the converted output leaves them out. To keep every key, convert
+the file with the DiMA version that wrote it (its `run.tool.version`) or a newer one. If the file
+also holds a value this version does not know, such as the name of a new estimator, reading stops
+instead (exit 4), and the fix is the same. The message is `written by a newer DiMA … with values
+this version … does not know` when the version is a newer one, such as `1.2.0`, and `not a valid
+DiMA results file: unknown variant …` when it is not recognised.
+
+**`Warning: The results were written with schema …; this version writes … and keeps only the
+fields it knows. Use the DiMA version that wrote the file to keep every field.`** (in the desktop
+app, when it opens a results file) — the same case as `newer_schema` above: a newer DiMA wrote
+the file, or its version is one this DiMA does not recognise (then shown in quotes, such as
+`"1.1.0-dev"`). The app shows the results as usual, but an export of them (results JSON, JSON
+Lines, the TSV folder) leaves out what only the newer version records. To keep everything, open
+the file in the DiMA version that wrote it (its `run.tool.version`) or a newer one. Press the
+warning's × to dismiss it.
+
 ## Other questions
 
 **The results differ from the paper or from DiMA v5.0.9.** See
 [the FAQ](/getting-started/faq/#why-do-my-results-differ-from-the-paper-or-from-dima-cli-5x).
+
+**The similarity-weighted values are `NA` (`null`).** There are three reasons. The run did not
+ask for them: they are computed only with `--similarity-weighted-entropy` (in the desktop app,
+**Compute similarity-weighted entropy (Wu 2025)** under **Advanced**), and
+`run.parameters.similarity_weighted_entropy` is then `false`; results written by dima 1.0.0,
+which predate the option, never have them. Or the position has no support (NS), and all three
+values are undefined. Or, for the two normalised
+values only, the position has a single distinct k-mer (a fully conserved position): its
+similarity-weighted entropy is 0, and the normalised values are undefined because the largest
+entropy possible there is 0. See
+[similarity-weighted entropy](/explanation/entropy/#similarity-weighted-entropy-opt-in).
 
 **The log is full of escape codes or progress lines.** The progress line appears only on
 terminals that can redraw a line (not with `TERM=dumb`), and uses no escape codes; if your
@@ -165,8 +231,33 @@ or `--progress off`; `DIMA_PROGRESS` sets the default. Colours follow `--color` 
 includes the version and platform), the command, and if possible the input; `RUST_BACKTRACE=1`
 adds a backtrace.
 
-For anything this page does not answer, see the [FAQ](/getting-started/faq/) or ask in
-[GitHub Discussions](https://github.com/ShanWeera/dima-perf/discussions).
-
 **The desktop app does not open** on macOS or Windows — the packages are not code-signed yet; see
 [first launch](/getting-started/install/#desktop-app).
+
+**Desktop app: "Nothing was saved: the chart was switched to similarity-weighted entropy while
+the dialog was open. Export again to save the chart now shown."** (or "…switched to entropy…")
+— the chart showed another metric when you chose the figure export than when you confirmed the
+file name, so the file would have held the other metric's figure under a name chosen for this
+one. Choose the export again; the save dialog then proposes the name of the chart now shown. See
+[Export](/how-to/desktop-app/#export).
+
+**Desktop app: "No positions are shown, so there is no chart to export (check the filters)"** —
+the filter bar hides every position, so the chart is empty. Widen the filters (or press
+**Reset**) and export again. When the filters were changed while the save dialog was open, the
+message starts with "Nothing was saved:" and nothing is written.
+
+**Desktop app: "Value range reset to the full range of similarity-weighted entropy"** (or "…of
+entropy") — you switched the chart's metric after narrowing the value range in the filter bar.
+Each metric has its own scale, so the range starts over at the new metric's full range; narrow
+it again if you need to. See
+[Plot similarity-weighted entropy](/how-to/desktop-app/#explore-the-results).
+
+**Desktop app: "Exported figures are now at least 720 × 320 px so the title, legend and axes
+fit; yours was raised to W × H px"** (or "Exported figures are between 720 × 320 and 20000 ×
+20000 px; yours was changed to W × H px") — the figure size saved in the settings, by an earlier
+version or by hand, was outside the sizes exported figures can have. The app moved it into that
+range once and saved it; nothing else changed. Nothing needs doing; to choose another size, set it
+in **Preferences**. See [Open an alignment](/how-to/desktop-app/#open-an-alignment).
+
+For anything this page does not answer, see the [FAQ](/getting-started/faq/) or ask in
+[GitHub Discussions](https://github.com/ShanWeera/dima-perf/discussions).

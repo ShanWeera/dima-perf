@@ -1,7 +1,8 @@
 //! The results header: the query name and the run's facts as chips — sequences, positions, k,
-//! T with "support > T eligible" (G42), the eligible mean, lowest and highest entropy with
-//! their positions and tie counts (D43, D88), the NS/LS/ELS counts and the low-support total,
-//! and the total-variants incidence at the selected position (G60).
+//! T with "support > T eligible" (G42), the eligible mean, the similarity-weighted mean with the
+//! observed mean of the same positions (when the run computed it), lowest and highest entropy
+//! with their positions and tie counts (D43, D88), the NS/LS/ELS counts and the low-support
+//! total, and the total-variants incidence at the selected position (G60).
 
 use egui::{RichText, Ui};
 
@@ -20,7 +21,11 @@ fn extremum(e: Option<Extremum>) -> String {
             } else {
                 String::new()
             };
-            format!("{:.4} at position {}{ties}", e.entropy, e.position)
+            format!(
+                "{} at position {}{ties}",
+                dima_core::human::fixed(e.entropy, 4),
+                e.position
+            )
         },
     )
 }
@@ -51,14 +56,21 @@ pub fn chips(r: &Results, session: &Session) -> Vec<(String, String)> {
         (
             format!(
                 "mean {}",
-                r.average_entropy
-                    .map_or_else(|| "\u{2014}".to_owned(), |m| format!("{m:.4} bits"))
+                r.average_entropy.map_or_else(
+                    || "\u{2014}".to_owned(),
+                    |m| format!("{} bits", dima_core::human::fixed(m, 4))
+                )
             ),
             format!(
                 "Mean entropy over the {} eligible positions",
                 r.eligible_position_count
             ),
         ),
+    ];
+    if r.run.parameters.similarity_weighted_entropy.value {
+        out.push(similarity_weighted_chip(r));
+    }
+    out.extend([
         (
             format!("lowest {}", extremum(r.lowest_entropy)),
             "Lowest entropy among eligible positions: the first position with it and how many \
@@ -82,7 +94,7 @@ pub fn chips(r: &Results, session: &Session) -> Vec<(String, String)> {
                 c.eligible
             ),
         ),
-    ];
+    ]);
     if let Some(p) = session.selected() {
         out.push((
             format!(
@@ -96,6 +108,29 @@ pub fn chips(r: &Results, session: &Session) -> Vec<(String, String)> {
         ));
     }
     out
+}
+
+/// "similarity-weighted mean X bits (observed Y)": the mean similarity-weighted entropy and the
+/// mean observed entropy of the same eligible positions, or "—" when none is eligible.
+fn similarity_weighted_chip(r: &Results) -> (String, String) {
+    let means = r
+        .similarity_weighted_entropy_summary
+        .as_ref()
+        .and_then(|s| s.average_entropy.zip(s.average_observed_entropy));
+    let text = means.map_or_else(
+        || "similarity-weighted mean \u{2014}".to_owned(),
+        |(mean, observed)| {
+            format!(
+                "similarity-weighted mean {} bits (observed {})",
+                dima_core::human::fixed(mean, 4),
+                dima_core::human::fixed(observed, 4)
+            )
+        },
+    );
+    (
+        text,
+        super::help_text::similarity_weighted_mean(r.eligible_position_count),
+    )
 }
 
 /// Draws the header.
@@ -117,20 +152,117 @@ pub fn show(ui: &mut Ui, session: &Session, t: &DesignTokens) {
     });
     ui.horizontal_wrapped(|ui| {
         for (text, tip) in chips(r, session) {
-            egui::Frame::new()
-                .fill(t.surface_secondary)
-                .stroke(egui::Stroke::new(1.0, t.border))
-                .corner_radius(10.0)
-                .inner_margin(egui::Margin::symmetric(8, 2))
-                .show(ui, |ui| {
-                    ui.label(
-                        RichText::new(text)
-                            .size(t.font_size_caption)
-                            .color(t.text_secondary),
-                    );
-                })
-                .response
-                .on_hover_text(tip);
+            // The explanation is the tooltip and, for screen readers, the description.
+            super::common::with_help(chip(ui, t, &text), &tip);
         }
     });
+}
+
+/// One chip: its text on a rounded frame, allocated as a single item, so a row that is full
+/// moves the whole chip to the next row instead of wrapping its text into a narrow column.
+fn chip(ui: &mut Ui, t: &DesignTokens, text: &str) -> egui::Response {
+    const MARGIN: egui::Vec2 = egui::vec2(8.0, 2.0);
+    const STROKE: f32 = 1.0;
+    let galley = ui.painter().layout_no_wrap(
+        text.to_owned(),
+        egui::FontId::proportional(t.font_size_caption),
+        t.text_secondary,
+    );
+    let inset = MARGIN + egui::Vec2::splat(STROKE);
+    let (rect, response) =
+        ui.allocate_exact_size(galley.size() + 2.0 * inset, egui::Sense::hover());
+    if ui.is_rect_visible(rect) {
+        let p = ui.painter();
+        p.rect(
+            rect,
+            10.0,
+            t.surface_secondary,
+            egui::Stroke::new(STROKE, t.border),
+            egui::StrokeKind::Inside,
+        );
+        p.galley(rect.min + inset, galley, t.text_secondary);
+    }
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, text));
+    response
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::charts::series::tests::{position, results_of};
+    use crate::state::session::Origin;
+
+    fn texts(r: Results) -> Vec<String> {
+        let s = Session::new(1, Arc::new(r), Origin::Opened("x.json".into()));
+        chips(&s.results, &s)
+            .into_iter()
+            .map(|(text, _)| text)
+            .collect()
+    }
+
+    /// A value that is not zero never reads 0.0000, an exact zero does, and an incidence below
+    /// 100% never reads 100.00%.
+    #[test]
+    fn chips_never_round_a_value_to_zero_or_to_its_bound() {
+        let mut p = position(1, Some(3.288e-5), 200, 100);
+        p.total_variants_incidence = Some(99.996);
+        let mut r = results_of(vec![p]);
+        r.average_entropy = Some(4.9e-5);
+        r.lowest_entropy = Some(Extremum {
+            position: 7,
+            entropy: 0.0,
+            tied_position_count: 455,
+        });
+        r.highest_entropy = Some(Extremum {
+            position: 26,
+            entropy: 3.288e-5,
+            tied_position_count: 1,
+        });
+        let chips = texts(r);
+        for expected in [
+            "mean < 0.0001 bits",
+            "lowest 0.0000 at position 7, 455 positions tied",
+            "highest < 0.0001 at position 26",
+            "total variants at 1: > 99.99%",
+        ] {
+            assert!(
+                chips.iter().any(|c| c == expected),
+                "{expected:?} in {chips:?}"
+            );
+        }
+        // Ordinary values read as before.
+        let mut r = results_of(vec![position(1, Some(0.5), 200, 100)]);
+        r.average_entropy = Some(0.126_084_5);
+        let chips = texts(r);
+        assert!(chips.iter().any(|c| c == "mean 0.1261 bits"), "{chips:?}");
+        assert!(
+            chips.iter().any(|c| c == "total variants at 1: 0.00%"),
+            "{chips:?}"
+        );
+    }
+
+    /// The similarity-weighted chip follows the mean chip, only when computed: the guide's
+    /// worked example on the MERS spike sample, and "—" without eligible positions.
+    #[test]
+    fn the_similarity_weighted_chip() {
+        let chips = texts((*crate::tests::fixtures::mers_swe()).clone());
+        let mean = chips.iter().position(|c| c == "mean 0.1261 bits").unwrap();
+        assert_eq!(
+            chips[mean + 1],
+            "similarity-weighted mean 0.0363 bits (observed 0.1207)"
+        );
+        let off = texts((*crate::tests::fixtures::mers()).clone());
+        assert!(off.iter().all(|c| !c.contains("similarity")), "{off:?}");
+        assert_eq!(off.len() + 1, chips.len());
+        let mut none = (*crate::tests::fixtures::mers_swe()).clone();
+        let summary = none.similarity_weighted_entropy_summary.as_mut().unwrap();
+        (summary.average_entropy, summary.average_observed_entropy) = (None, None);
+        assert!(
+            texts(none)
+                .iter()
+                .any(|c| c == "similarity-weighted mean \u{2014}")
+        );
+    }
 }

@@ -19,11 +19,31 @@ use crate::normalise::SequenceStats;
 /// Key of the reference to this software in `run.references`.
 pub const SOFTWARE_REFERENCE_KEY: &str = "dima_software";
 
+/// The methods a run used, which decide its references.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MethodsUsed {
+    /// The entropy estimator.
+    pub estimator: Estimator,
+    /// The alphabet.
+    pub alphabet: Alphabet,
+    /// The alphabet was detected from the data, not given.
+    pub alphabet_detected: bool,
+    /// Similarity-weighted entropy was computed.
+    pub similarity_weighted_entropy: bool,
+}
+
 /// The references of a run: the DiMA paper, this software, Shannon entropy, the estimator, the
-/// coverage estimate, the motif definitions and, where used, alphabet detection and nucleotide
-/// ambiguity codes (D89).
+/// coverage estimate, the motif definitions and, where used, similarity-weighted entropy (with
+/// the amino-acid identity measure for proteins), alphabet detection and nucleotide ambiguity
+/// codes (D89).
 #[must_use]
-pub fn references(estimator: Estimator, alphabet: Alphabet, detected: bool) -> Vec<Reference> {
+pub fn references(m: MethodsUsed) -> Vec<Reference> {
+    let MethodsUsed {
+        estimator,
+        alphabet,
+        alphabet_detected: detected,
+        similarity_weighted_entropy,
+    } = m;
     let mut keys: Vec<&str> = vec!["tharanga2025"];
     let software = Reference {
         key: SOFTWARE_REFERENCE_KEY.to_owned(),
@@ -35,6 +55,12 @@ pub fn references(estimator: Estimator, alphabet: Alphabet, detected: bool) -> V
     keys.extend_from_slice(estimator_references(estimator));
     keys.push("chao2012");
     keys.push("hu2013");
+    if similarity_weighted_entropy {
+        keys.push("wu2025");
+        if !alphabet.is_nucleotide() {
+            keys.push("grishin1995");
+        }
+    }
     if detected {
         keys.push("eddy2011");
     }
@@ -378,11 +404,16 @@ mod tests {
 
     #[test]
     fn references_follow_the_methods() {
-        let keys = |e, a, d| {
-            references(e, a, d)
-                .into_iter()
-                .map(|r| r.key)
-                .collect::<Vec<_>>()
+        let keys = |estimator, alphabet, alphabet_detected| {
+            references(MethodsUsed {
+                estimator,
+                alphabet,
+                alphabet_detected,
+                similarity_weighted_entropy: false,
+            })
+            .into_iter()
+            .map(|r| r.key)
+            .collect::<Vec<_>>()
         };
         assert_eq!(
             keys(Estimator::Dima, Alphabet::Protein, true),
@@ -412,9 +443,34 @@ mod tests {
         assert!(
             keys(Estimator::MillerMadow, Alphabet::Rna, false).contains(&"miller1955".to_owned())
         );
-        let r = references(Estimator::Raw, Alphabet::Protein, false);
+        let r = references(MethodsUsed {
+            estimator: Estimator::Raw,
+            alphabet: Alphabet::Protein,
+            alphabet_detected: false,
+            similarity_weighted_entropy: false,
+        });
         assert_eq!(r[0].doi.as_deref(), Some("10.1093/bib/bbae607"));
         assert!(r[1].citation.contains("dima"));
+        // Similarity-weighted entropy adds Wu 2025, and for proteins the identity measure.
+        let with = |alphabet| {
+            references(MethodsUsed {
+                estimator: Estimator::Raw,
+                alphabet,
+                alphabet_detected: false,
+                similarity_weighted_entropy: true,
+            })
+            .into_iter()
+            .map(|r| r.key)
+            .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            with(Alphabet::Protein)[4..],
+            ["hu2013", "wu2025", "grishin1995"]
+        );
+        assert_eq!(
+            with(Alphabet::Dna)[4..],
+            ["hu2013", "wu2025", "cornishbowden1985"]
+        );
     }
 
     #[test]

@@ -1,4 +1,4 @@
-//! The solid (eligible) part of the entropy line, drawn by wgpu through an egui paint callback.
+//! The solid (eligible) part of the chart's line, drawn by wgpu through an egui paint callback.
 //!
 //! Each segment is expanded in the vertex shader into a quad of the requested pixel width, so
 //! the GPU line matches the CPU fallback (used when no wgpu device is available, e.g. in tests).
@@ -9,6 +9,8 @@
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
+
+use super::series::ChartKey;
 
 /// One corner of a segment quad.
 #[repr(C)]
@@ -30,7 +32,7 @@ pub struct LineUniforms {
     pub x_min: f32,
     /// Data span of the view.
     pub x_range: f32,
-    /// Entropy at the top edge.
+    /// The plotted value at the top edge, in bits.
     pub y_max: f32,
     /// Half the line width, in physical pixels.
     pub half_width: f32,
@@ -81,7 +83,7 @@ pub struct LineResources {
     bind_group: wgpu::BindGroup,
     vertex_count: u32,
     /// Key of the vertex data in the buffer.
-    uploaded_key: Option<u64>,
+    uploaded_key: Option<ChartKey>,
 }
 
 /// One frame's request: the uniforms, and the vertex data with its key.
@@ -89,7 +91,7 @@ pub struct LineCallback {
     /// Mapping, width and colour.
     pub uniforms: LineUniforms,
     /// Identifies `vertices`; a different key triggers an upload.
-    pub key: u64,
+    pub key: ChartKey,
     /// The quads (shared, so a frame that does not upload copies nothing).
     pub vertices: Arc<Vec<SegmentVertex>>,
 }

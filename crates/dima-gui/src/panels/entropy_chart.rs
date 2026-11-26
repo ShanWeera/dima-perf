@@ -1,23 +1,34 @@
 //! The entropy chart (D87): one line per run of shown positions — solid Okabe–Ito blue where
-//! support > T (corrected entropy), dashed vermillion where support ≤ T (uncorrected) — with
-//! hatched full-height bands labelled "no usable support" over positions without support
-//! (never drawn as 0), the eligible-mean line, coverage marks, a legend and per-point
+//! support > T (corrected entropy with the paper's estimator), dashed vermillion where support
+//! ≤ T — with hatched full-height bands labelled "no usable support" over positions without
+//! support (never drawn as 0), the eligible-mean line, coverage marks, a legend and per-point
 //! tooltips. Long ranges are M4-downsampled per pixel column, keeping class boundaries.
+//!
+//! When the run computed similarity-weighted entropy, a "Metric:" switch on its own row above
+//! the heading plots it instead, with its own value axis, mean line and legend; the heading and
+//! the legend entries that change with the metric keep the width of the longer text, so no
+//! control moves on a switch.
 //!
 //! Gestures: scroll zooms about the cursor, drag pans, Shift-drag zooms to a region,
 //! double-click resets, click selects; the hovered position is mirrored in the table.
 
 use std::sync::Arc;
 
+use dima_core::human;
 use egui::{Color32, Pos2, Rect, Stroke, Ui};
 
-use super::common::{Swatch, hatch_rect, heading, legend_entry};
+use super::common::{
+    Swatch, fixed_width_slot, hatch_rect, heading, legend_entry, legend_entry_at_least,
+    legend_entry_width, row_with_trailing, text_width, with_help,
+};
 use super::help_text;
 use crate::app::msg::Msg;
-use crate::charts::axis::{integer_ticks, nice_ticks};
+use crate::charts::axis::{integer_ticks, nice_ticks, y_tick_labels};
 use crate::charts::gpu_line::{LineCallback, LineUniforms, SegmentVertex, segment_vertices};
+use crate::charts::metric::ChartMetric;
 use crate::charts::series::{
-    Class, NsSpan, Series, Style, legend, nearest_point, ns_span_at, strokes,
+    ChartKey, Class, NsSpan, Point, Series, Stroke as DataStroke, Style, chart_cache_key, legend,
+    nearest_point, ns_span_at, strokes,
 };
 use crate::charts::transform::{XMap, YMap, y_axis_max};
 use crate::charts::viewport;
@@ -38,8 +49,67 @@ const NS_LABEL: &str = "no usable support";
 pub struct ChartUi {
     /// Screen x where a Shift-drag began.
     pub drag_origin: Option<f32>,
-    /// Vertices on the GPU: their key and data.
-    gpu: Option<(u64, Arc<Vec<SegmentVertex>>)>,
+    /// The lines last drawn, with their key.
+    lines: Option<Lines>,
+}
+
+/// The lines of one [`ChartKey`], computed when the key changes, not per frame (P5): the
+/// strokes and markers in data units and, when the GPU draws the solid line, its vertices.
+struct Lines {
+    key: ChartKey,
+    strokes: Vec<DataStroke>,
+    markers: Vec<Point>,
+    /// The solid strokes as GPU quads, x relative to the view's left edge.
+    vertices: Option<Arc<Vec<SegmentVertex>>>,
+}
+
+impl ChartUi {
+    /// The lines of `series` in `view`, reduced to `columns`: from the cache when `key` (which
+    /// identifies all of them, see [`chart_cache_key`]) has not changed. The GPU vertices are
+    /// built only when `gpu`.
+    fn lines(
+        &mut self,
+        key: ChartKey,
+        series: &Series,
+        view: (f64, f64),
+        columns: usize,
+        gpu: bool,
+    ) -> &Lines {
+        let lines = match self.lines.take() {
+            Some(l) if l.key == key => l,
+            _ => {
+                let (strokes, markers) = strokes(series, view.0, view.1, Some(columns));
+                Lines {
+                    key,
+                    strokes,
+                    markers,
+                    vertices: None,
+                }
+            }
+        };
+        let lines = self.lines.insert(lines);
+        if gpu && lines.vertices.is_none() {
+            lines.vertices = Some(Arc::new(solid_vertices(&lines.strokes, view.0)));
+        }
+        lines
+    }
+}
+
+/// The GPU quads of the solid strokes, with x relative to the view's left edge `lo` (so `f32`
+/// keeps sub-pixel precision at any position, G58).
+fn solid_vertices(strokes: &[DataStroke], lo: f64) -> Vec<SegmentVertex> {
+    #[allow(clippy::cast_possible_truncation)]
+    let lines: Vec<Vec<[f32; 2]>> = strokes
+        .iter()
+        .filter(|st| st.style == Style::Eligible)
+        .map(|st| {
+            st.points
+                .iter()
+                .map(|&(px, py)| [(px - lo) as f32, py as f32])
+                .collect()
+        })
+        .collect();
+    segment_vertices(&lines)
 }
 
 /// What the chart reports to the strip below it.
@@ -60,12 +130,19 @@ pub fn show(
 ) -> Option<Shared> {
     let threshold = s.results.support_threshold;
     let series = Arc::clone(&s.series);
-    header(ui, s, &series, t, threshold);
+    let metric = s.metric;
+    let switchable = ChartMetric::SimilarityWeighted.available(&s.results);
+    if switchable {
+        metric_switch(ui, metric, out);
+    }
+    header(ui, s, &series, t, threshold, switchable);
     let height = (ui.ctx().content_rect().height() * 0.28).clamp(150.0, 380.0);
     let (full_rect, response) = ui.allocate_exact_size(
         egui::vec2(ui.available_width(), height + BOTTOM_MARGIN + TOP_MARGIN),
         egui::Sense::click_and_drag(),
     );
+    // A Tab stop, for its description; outlined while it has the focus.
+    super::common::focus_outline(ui, &response);
     let plot = Rect::from_min_max(
         egui::pos2(full_rect.left() + LEFT_MARGIN, full_rect.top() + TOP_MARGIN),
         egui::pos2(
@@ -83,13 +160,8 @@ pub fn show(
             egui::FontId::proportional(t.font_size_body),
             t.text_muted,
         );
-        response.widget_info(|| {
-            egui::WidgetInfo::labeled(
-                egui::WidgetType::Other,
-                true,
-                "Entropy chart: no positions shown",
-            )
-        });
+        let label = format!("{} chart: no positions shown", metric.name());
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, &label));
         return None;
     };
     let view = s.viewport.unwrap_or(full);
@@ -107,7 +179,7 @@ pub fn show(
     let plot_painter = ui.painter_at(plot);
 
     draw_ns_bands(&plot_painter, &series, x, plot, t);
-    draw_mean(&plot_painter, s.results.average_entropy, y, plot, t);
+    draw_mean(&plot_painter, metric.mean(&s.results), y, plot, t);
     draw_lines(
         ui,
         &plot_painter,
@@ -117,11 +189,12 @@ pub fn show(
         plot,
         chart,
         gpu,
+        s.id,
         s.version,
         t,
     );
     draw_coverage(&plot_painter, &series, x, plot, t);
-    draw_axes(&painter, x, y, plot, full_rect, t);
+    draw_axes(&painter, x, y, plot, full_rect, metric, t);
     if let Some(sel) = s.selection.position {
         #[allow(clippy::cast_precision_loss)]
         let sx = x.to_screen(sel as f64);
@@ -135,9 +208,10 @@ pub fn show(
 
     // Accessibility: the chart is painted, so it describes itself (AccessKit).
     let description = format!(
-        "Entropy chart: {} positions shown, {} with support \u{2264} {threshold}, {} spans with {NS_LABEL}",
+        "{} chart: {} positions shown, {} with support \u{2264} {threshold}, {} spans with {NS_LABEL}",
+        metric.name(),
         s.shown.len(),
-        series.uncorrected_count(),
+        series.count(Style::LowSupport),
         series.ns_spans.len()
     );
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, &description));
@@ -146,81 +220,167 @@ pub fn show(
     Some(Shared { x })
 }
 
-fn header(ui: &mut Ui, s: &mut Session, series: &Series, t: &DesignTokens, threshold: u64) {
-    ui.horizontal_wrapped(|ui| {
-        heading(ui, t, "Entropy");
-        ui.add_space(t.space_8);
-        let has = |st: Style| {
-            series
-                .paths
-                .iter()
-                .flat_map(|p| &p.points)
-                .any(|p| p.style == st)
-        };
-        let estimator = s.results.run.parameters.estimator.value;
-        let tip = help_text::chart_encoding(threshold, estimator);
-        let [solid, dashed] = legend(threshold, estimator);
-        if has(Style::Eligible) {
-            legend_entry(ui, t, &solid, Swatch::Line(t.series_eligible)).on_hover_text(&tip);
-        }
-        if has(Style::Uncorrected) {
-            legend_entry(ui, t, &dashed, Swatch::Dashed(t.series_uncorrected)).on_hover_text(&tip);
-        }
-        if !series.ns_spans.is_empty() {
-            legend_entry(
-                ui,
-                t,
-                &format!("NS: {NS_LABEL}"),
-                Swatch::Hatched(t.ns_band_fill, t.ns_hatch),
-            )
-            .on_hover_text(&tip);
-        }
-        if s.results.average_entropy.is_some() {
-            legend_entry(ui, t, "eligible mean", Swatch::Dashed(t.mean_line)).on_hover_text(
-                "Mean entropy over the eligible positions (support > T), as in the summaries",
-            );
-        }
-        if let (Some(c), false) = (
-            s.results.coverage_summary.min_coverage,
-            series.low_coverage.is_empty(),
-        ) {
-            legend_entry(
-                ui,
-                t,
-                &format!("sample coverage < {c}"),
-                Swatch::Tick(t.coverage_mark),
-            )
-            .on_hover_text(help_text::min_coverage());
-        }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let zoomed = s.viewport.is_some();
-            let full = s.extent();
-            if ui
-                .add_enabled(zoomed, egui::Button::new("Fit").small())
-                .on_hover_text("Show every shown position (or double-click the chart)")
-                .clicked()
-            {
-                s.viewport = None;
-            }
-            if let Some(full) = full {
-                if ui
-                    .small_button("+")
-                    .on_hover_text("Zoom in (or scroll over the chart)")
-                    .clicked()
-                {
-                    s.viewport = viewport::zoom(s.viewport, full, 0.8, 0.5);
-                }
-                if ui
-                    .add_enabled(zoomed, egui::Button::new("\u{2212}").small())
-                    .on_hover_text("Zoom out")
-                    .clicked()
-                {
-                    s.viewport = viewport::zoom(s.viewport, full, 1.25, 0.5);
-                }
-            }
-            ui.weak("drag: pan \u{2022} Shift-drag: zoom to region");
+/// "Metric:" and its options, on a left-aligned row of their own above the heading row. The
+/// row is one AccessKit radio group named by its visible label; a click asks `update`, which
+/// refuses a metric the results lack.
+fn metric_switch(ui: &mut Ui, current: ChartMetric, out: &mut Vec<Msg>) {
+    ui.horizontal(|ui| {
+        let label = ui.label("Metric:");
+        ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+            node.set_role(egui::accesskit::Role::RadioGroup);
+            node.push_labelled_by(label.id.accesskit_id());
         });
+        for metric in ChartMetric::ALL {
+            let radio = ui.radio(current == metric, metric.name());
+            if with_help(radio, &help_text::chart_metric(metric)).clicked() {
+                out.push(Msg::ChartMetric(metric));
+            }
+        }
     });
+}
+
+/// The heading row: the heading, the legend and the gesture hint, wrapping as the width needs,
+/// with Fit, + and − at its top right. The zoom buttons are laid out first and the rest wraps
+/// in the width left of them, so a long legend can neither run under them nor push them down;
+/// screen readers still meet the heading and the legend before the buttons, as in the row.
+/// When the metric can be switched, the heading and the legend entries whose text depends on it
+/// keep the width of the longer of their two texts, so the row wraps alike for both metrics.
+fn header(
+    ui: &mut Ui,
+    s: &mut Session,
+    series: &Series,
+    t: &DesignTokens,
+    threshold: u64,
+    switchable: bool,
+) {
+    // The gap the buttons leave: the item spacing after the last one, and 8 px more.
+    let gap = ui.spacing().item_spacing.x + t.space_8;
+    let session: &Session = s;
+    let ((), zoomed) = row_with_trailing(
+        ui,
+        gap,
+        |ui| {
+            if switchable {
+                let font = egui::FontId::new(
+                    t.font_size_heading,
+                    egui::FontFamily::Name(crate::theme::fonts::SEMIBOLD.into()),
+                );
+                let width =
+                    widest(ChartMetric::ALL.map(|m| text_width(ui, m.name(), font.clone())));
+                fixed_width_slot(ui, width, |ui| heading(ui, t, session.metric.name()));
+            } else {
+                heading(ui, t, session.metric.name());
+            }
+            ui.add_space(t.space_8);
+            legend_entries(ui, session, series, t, threshold, switchable);
+            // One item, so it moves to the next row whole rather than wrapping inside.
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new("drag: pan \u{2022} Shift-drag: zoom to region").weak(),
+                )
+                .extend(),
+            );
+        },
+        |ui| zoom_buttons(ui, session),
+    );
+    if let Some(viewport) = zoomed {
+        s.viewport = viewport;
+    }
+}
+
+/// The larger of two widths.
+fn widest(widths: [f32; 2]) -> f32 {
+    widths[0].max(widths[1])
+}
+
+/// The chart's legend: the line styles shown, the no-support bands, the mean and coverage marks.
+/// The line styles' captions depend on the metric; when it can be switched, each is given the
+/// width of its longer caption.
+fn legend_entries(
+    ui: &mut Ui,
+    s: &Session,
+    series: &Series,
+    t: &DesignTokens,
+    threshold: u64,
+    switchable: bool,
+) {
+    let estimator = s.results.run.parameters.estimator.value;
+    let tip = help_text::chart_encoding(threshold, estimator, s.metric);
+    let [solid, dashed] = legend(threshold, estimator, s.metric);
+    let slots = if switchable {
+        let [a, b] = ChartMetric::ALL.map(|m| legend(threshold, estimator, m));
+        [
+            widest([&a[0], &b[0]].map(|c| legend_entry_width(ui, t, c))),
+            widest([&a[1], &b[1]].map(|c| legend_entry_width(ui, t, c))),
+        ]
+    } else {
+        [0.0; 2]
+    };
+    if series.has(Style::Eligible) {
+        let swatch = Swatch::Line(t.series_eligible);
+        legend_entry_at_least(ui, t, &solid, swatch, slots[0]).on_hover_text(&tip);
+    }
+    if series.has(Style::LowSupport) {
+        let swatch = Swatch::Dashed(t.series_uncorrected);
+        legend_entry_at_least(ui, t, &dashed, swatch, slots[1]).on_hover_text(&tip);
+    }
+    if !series.ns_spans.is_empty() {
+        legend_entry(
+            ui,
+            t,
+            &format!("NS: {NS_LABEL}"),
+            Swatch::Hatched(t.ns_band_fill, t.ns_hatch),
+        )
+        .on_hover_text(&tip);
+    }
+    if s.metric.mean(&s.results).is_some() {
+        legend_entry(ui, t, "eligible mean", Swatch::Dashed(t.mean_line)).on_hover_text(format!(
+            "Mean {} over the eligible positions (support > T), as in the summaries",
+            s.metric.in_sentence()
+        ));
+    }
+    if let (Some(c), false) = (
+        s.results.coverage_summary.min_coverage,
+        series.low_coverage.is_empty(),
+    ) {
+        legend_entry(
+            ui,
+            t,
+            &format!("sample coverage < {c}"),
+            Swatch::Tick(t.coverage_mark),
+        )
+        .on_hover_text(help_text::min_coverage());
+    }
+}
+
+/// Fit, + and −, right to left; returns the zoom a clicked button asks for.
+fn zoom_buttons(ui: &mut Ui, s: &Session) -> Option<Option<(f64, f64)>> {
+    let zoomed = s.viewport.is_some();
+    let mut asked = None;
+    if ui
+        .add_enabled(zoomed, egui::Button::new("Fit").small())
+        .on_hover_text("Show every shown position (or double-click the chart)")
+        .clicked()
+    {
+        asked = Some(None);
+    }
+    if let Some(full) = s.extent() {
+        if ui
+            .small_button("+")
+            .on_hover_text("Zoom in (or scroll over the chart)")
+            .clicked()
+        {
+            asked = Some(viewport::zoom(s.viewport, full, 0.8, 0.5));
+        }
+        if ui
+            .add_enabled(zoomed, egui::Button::new("\u{2212}").small())
+            .on_hover_text("Zoom out")
+            .clicked()
+        {
+            asked = Some(viewport::zoom(s.viewport, full, 1.25, 0.5));
+        }
+    }
+    asked
 }
 
 fn band_rect(span: NsSpan, x: XMap, plot: Rect) -> Rect {
@@ -292,7 +452,7 @@ fn draw_mean(p: &egui::Painter, mean: Option<f64>, y: YMap, plot: Rect, t: &Desi
     p.text(
         egui::pos2(plot.right() - 4.0, sy - 2.0),
         egui::Align2::RIGHT_BOTTOM,
-        format!("eligible mean {mean:.4}"),
+        format!("eligible mean {}", human::fixed(mean, 4)),
         egui::FontId::proportional(t.font_size_caption),
         t.mean_line,
     );
@@ -308,6 +468,7 @@ fn draw_lines(
     plot: Rect,
     chart: &mut ChartUi,
     gpu: bool,
+    session: u64,
     version: u64,
     t: &DesignTokens,
 ) {
@@ -315,17 +476,18 @@ fn draw_lines(
     // M4 per physical pixel column (G4: fills and lines are drawn once per stroke).
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let columns = (plot.width() * ppp).ceil().max(1.0) as usize;
-    let (strokes, markers) = strokes(series, x.lo, x.hi, Some(columns));
+    let key = chart_cache_key(session, version, (x.lo, x.hi), columns);
+    let lines = chart.lines(key, series, (x.lo, x.hi), columns, gpu);
     let screen = |pts: &[(f64, f64)]| -> Vec<Pos2> {
         pts.iter()
             .map(|&(px, py)| egui::pos2(x.to_screen(px), y.to_screen(py)))
             .collect()
     };
     // Fills under the line, one mesh per stroke.
-    for st in &strokes {
+    for st in &lines.strokes {
         let color = match st.style {
             Style::Eligible => t.series_fill,
-            Style::Uncorrected => {
+            Style::LowSupport => {
                 let [r, g, b, _] = t.series_uncorrected.to_srgba_unmultiplied();
                 Color32::from_rgba_unmultiplied(r, g, b, 22)
             }
@@ -344,25 +506,17 @@ fn draw_lines(
         }
         p.add(egui::Shape::mesh(mesh));
     }
-    let mut gpu_lines: Vec<Vec<[f32; 2]>> = Vec::new();
-    for st in &strokes {
+    for st in &lines.strokes {
         match st.style {
-            Style::Eligible if gpu => {
-                #[allow(clippy::cast_possible_truncation)]
-                gpu_lines.push(
-                    st.points
-                        .iter()
-                        .map(|&(px, py)| [(px - x.lo) as f32, py as f32])
-                        .collect(),
-                );
-            }
+            // Drawn below from the cached vertices.
+            Style::Eligible if gpu => {}
             Style::Eligible => {
                 p.add(egui::Shape::line(
                     screen(&st.points),
                     Stroke::new(LINE_WIDTH, t.series_eligible),
                 ));
             }
-            Style::Uncorrected => {
+            Style::LowSupport => {
                 p.extend(egui::Shape::dashed_line(
                     &screen(&st.points),
                     Stroke::new(LINE_WIDTH, t.series_uncorrected),
@@ -372,28 +526,7 @@ fn draw_lines(
             }
         }
     }
-    if gpu && !gpu_lines.is_empty() {
-        let key = {
-            use std::hash::{Hash, Hasher};
-            let mut h = std::collections::hash_map::DefaultHasher::new();
-            (
-                version,
-                x.lo.to_bits(),
-                x.hi.to_bits(),
-                y.max.to_bits(),
-                columns,
-            )
-                .hash(&mut h);
-            h.finish()
-        };
-        let vertices = match &chart.gpu {
-            Some((k, v)) if *k == key => Arc::clone(v),
-            _ => {
-                let v = Arc::new(segment_vertices(&gpu_lines));
-                chart.gpu = Some((key, Arc::clone(&v)));
-                v
-            }
-        };
+    if gpu && let Some(vertices) = lines.vertices.as_ref().filter(|v| !v.is_empty()) {
         #[allow(clippy::cast_possible_truncation)]
         let uniforms = LineUniforms {
             x_min: 0.0,
@@ -409,14 +542,14 @@ fn draw_lines(
             LineCallback {
                 uniforms,
                 key,
-                vertices,
+                vertices: Arc::clone(vertices),
             },
         ));
     }
-    for m in markers {
+    for m in &lines.markers {
         let color = match m.style {
             Style::Eligible => t.series_eligible,
-            Style::Uncorrected => t.series_uncorrected,
+            Style::LowSupport => t.series_uncorrected,
         };
         p.circle_filled(egui::pos2(x.to_screen(m.x), y.to_screen(m.y)), 3.0, color);
     }
@@ -435,12 +568,21 @@ fn draw_coverage(p: &egui::Painter, series: &Series, x: XMap, plot: Rect, t: &De
     }
 }
 
-fn draw_axes(p: &egui::Painter, x: XMap, y: YMap, plot: Rect, full: Rect, t: &DesignTokens) {
+fn draw_axes(
+    p: &egui::Painter,
+    x: XMap,
+    y: YMap,
+    plot: Rect,
+    full: Rect,
+    metric: ChartMetric,
+    t: &DesignTokens,
+) {
     let stroke = Stroke::new(1.0, t.chart_axis);
     let font = egui::FontId::proportional(t.font_size_caption);
     p.line_segment([plot.left_top(), plot.left_bottom()], stroke);
     p.line_segment([plot.left_bottom(), plot.right_bottom()], stroke);
-    for v in nice_ticks(0.0, y.max, 6) {
+    let (ticks, step) = nice_ticks(0.0, y.max, 6);
+    for (&v, label) in ticks.iter().zip(y_tick_labels(&ticks, step)) {
         let sy = y.to_screen(v);
         if !(plot.top() - 0.5..=plot.bottom() + 0.5).contains(&sy) {
             continue;
@@ -455,7 +597,7 @@ fn draw_axes(p: &egui::Painter, x: XMap, y: YMap, plot: Rect, full: Rect, t: &De
         p.text(
             egui::pos2(plot.left() - 6.0, sy),
             egui::Align2::RIGHT_CENTER,
-            format!("{v:.2}"),
+            label,
             font.clone(),
             t.chart_axis,
         );
@@ -487,12 +629,25 @@ fn draw_axes(p: &egui::Painter, x: XMap, y: YMap, plot: Rect, full: Rect, t: &De
         font.clone(),
         t.chart_axis,
     );
-    let galley = p.layout_no_wrap("Entropy (bits)".to_owned(), font, t.chart_axis);
-    let pos = egui::pos2(full.left() + 2.0, plot.center().y + galley.size().x / 2.0);
+    let galley = p.layout_no_wrap(metric.axis_title().to_owned(), font, t.chart_axis);
+    // Rotated, the title runs upwards from its anchor, `galley.size().x` long.
+    let center = y_title_center(plot, full, galley.size().x);
+    let pos = egui::pos2(full.left() + 2.0, center + galley.size().x / 2.0);
     p.add(
         egui::epaint::TextShape::new(pos, galley, t.chart_axis)
             .with_angle(-std::f32::consts::FRAC_PI_2),
     );
+}
+
+/// The centre of the rotated value-axis title, `length` long: the plot's middle, moved just
+/// enough to keep the whole title inside the chart (a long title on a short plot would reach
+/// into the heading row); when the chart is shorter than the title, its bottom stays inside.
+/// `max` then `min`, never `clamp`, which panics when the bounds cross.
+fn y_title_center(plot: Rect, full: Rect, length: f32) -> f32 {
+    plot.center()
+        .y
+        .max(full.top() + length / 2.0)
+        .min(full.bottom() - length / 2.0)
 }
 
 /// The tooltip text of a hovered position (pure, for tests).
@@ -505,11 +660,12 @@ pub fn point_tooltip(s: &Session, position: u64) -> Option<String> {
     match p.entropy {
         Some(e) => {
             text.push_str(&format!(
-                "entropy {e:.4} bits ({})",
+                "entropy {} bits ({})",
+                human::fixed(e, 4),
                 p.entropy_method.as_str()
             ));
             if let Some(o) = p.observed_entropy {
-                text.push_str(&format!(", observed {o:.4}"));
+                text.push_str(&format!(", observed {}", human::fixed(o, 4)));
             }
             text.push('\n');
         }
@@ -527,7 +683,14 @@ pub fn point_tooltip(s: &Session, position: u64) -> Option<String> {
     if p.below_min_coverage == Some(true) {
         text.push_str(&format!(
             "\nsample coverage {} below the minimum",
-            crate::util::opt_f64(p.sample_coverage, 3)
+            crate::util::opt_coverage(p.sample_coverage, 3)
+        ));
+    }
+    if ChartMetric::SimilarityWeighted.available(&s.results) {
+        let [similarity, observed, normalised] = super::position_summary::similarity_values(p);
+        text.push_str(&format!(
+            "\nsimilarity-weighted entropy {similarity}\nnormalised observed entropy \
+             {observed}\nnormalised similarity-weighted entropy {normalised}"
         ));
     }
     Some(text)
@@ -613,6 +776,8 @@ fn interact(
         let anchor = f64::from(((pp.x - plot.left()) / plot.width().max(1.0)).clamp(0.0, 1.0));
         let factor = if scroll > 0.0 { 0.85 } else { 1.18 };
         s.viewport = viewport::zoom(s.viewport, full, factor, anchor);
+        // The wheel zoomed the chart; the scrolling column around it must not move as well.
+        ui.ctx().input_mut(|i| i.smooth_scroll_delta.y = 0.0);
     }
     // Shift-drag zooms to a region; a plain drag pans.
     let shift = ui.ctx().input(|i| i.modifiers.shift);
@@ -662,9 +827,173 @@ mod tests {
         assert!(c.contains("LS") && c.contains("uncorrected"), "{c}");
         let b = point_tooltip(&s, 2).unwrap();
         assert!(b.contains("no entropy") && !b.contains("0.0000"), "{b}");
+        assert!(
+            a.contains("entropy 0.5000 bits (dima), observed 0.5000"),
+            "{a}"
+        );
         assert_eq!(
             band_tooltip(NsSpan { first: 4, last: 9 }),
             "Positions 4\u{2013}9: no usable support (support 0, no entropy)"
         );
+    }
+
+    /// A value that is not zero never reads 0.0000, and a coverage below 1 never reads 1.000.
+    #[test]
+    fn tooltips_never_round_a_value_to_zero_or_to_its_bound() {
+        let mut tiny = position(1, Some(3.288e-5), 200, 100);
+        tiny.observed_entropy = Some(4.9e-5);
+        tiny.below_min_coverage = Some(true);
+        tiny.sample_coverage = Some(0.99996);
+        let mut zero = position(2, Some(0.0), 200, 100);
+        zero.observed_entropy = Some(-0.0);
+        let r = results_of(vec![tiny, zero]);
+        let s = Session::new(1, Arc::new(r), Origin::Opened("x.json".into()));
+        let a = point_tooltip(&s, 1).unwrap();
+        assert!(
+            a.contains("entropy < 0.0001 bits (dima), observed < 0.0001"),
+            "{a}"
+        );
+        assert!(
+            a.contains("sample coverage > 0.999 below the minimum"),
+            "{a}"
+        );
+        let b = point_tooltip(&s, 2).unwrap();
+        assert!(
+            b.contains("entropy 0.0000 bits (dima), observed 0.0000"),
+            "an exact zero is zero: {b}"
+        );
+    }
+
+    /// Both value-axis titles fit whole inside the chart at its smallest plot height (150 px)
+    /// with the bundled fonts, and the entropy title stays centred on the plot, as before.
+    #[test]
+    fn both_axis_titles_fit_the_smallest_chart() {
+        let ctx = egui::Context::default();
+        crate::theme::fonts::install(&ctx);
+        let t = DesignTokens::light();
+        let mut lengths = Vec::new();
+        // Fonts set in one pass are used from the next.
+        for _ in 0..2 {
+            lengths.clear();
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                let font = egui::FontId::proportional(t.font_size_caption);
+                for m in ChartMetric::ALL {
+                    lengths.push(text_width(ui, m.axis_title(), font.clone()));
+                }
+            });
+            out.textures_delta.clear();
+        }
+        let full = Rect::from_min_size(
+            egui::pos2(16.0, 200.0),
+            egui::vec2(588.0, 150.0 + TOP_MARGIN + BOTTOM_MARGIN),
+        );
+        let plot = Rect::from_min_max(
+            egui::pos2(full.left() + LEFT_MARGIN, full.top() + TOP_MARGIN),
+            egui::pos2(full.right() - RIGHT_MARGIN, full.bottom() - BOTTOM_MARGIN),
+        );
+        assert_eq!(plot.height(), 150.0);
+        for (m, &length) in ChartMetric::ALL.iter().zip(&lengths) {
+            assert!(length > 60.0, "{m:?}: measured with the bundled font");
+            let c = y_title_center(plot, full, length);
+            assert!(
+                c - length / 2.0 >= full.top() && c + length / 2.0 <= full.bottom(),
+                "{m:?}: {length} px centred at {c} in {full:?}"
+            );
+        }
+        assert!(lengths[1] > plot.height(), "longer than the plot: it moves");
+        assert_eq!(y_title_center(plot, full, lengths[0]), plot.center().y);
+        // A title longer than the chart keeps its bottom inside, and nothing panics.
+        assert_eq!(y_title_center(plot, full, 1000.0), full.bottom() - 500.0);
+    }
+
+    /// With similarity-weighted entropy the tooltip adds its three values, marked like the
+    /// position's facts; without it, nothing.
+    #[test]
+    fn tooltips_add_the_similarity_weighted_values_when_computed() {
+        let s = Session::new(
+            1,
+            crate::tests::fixtures::mers_swe(),
+            Origin::Opened("x".into()),
+        );
+        let text = point_tooltip(&s, 25).unwrap();
+        assert!(
+            text.ends_with(
+                "\nsimilarity-weighted entropy 0.4275 bits\nnormalised observed entropy \
+                 0.4282\nnormalised similarity-weighted entropy 0.1287"
+            ),
+            "{text}"
+        );
+        let off = Session::new(
+            2,
+            crate::tests::fixtures::mers(),
+            Origin::Opened("x".into()),
+        );
+        assert!(!point_tooltip(&off, 25).unwrap().contains("similarity"));
+        let hiv = Session::new(
+            3,
+            crate::tests::fixtures::hiv_pro_swe(),
+            Origin::Opened("x".into()),
+        );
+        let low = hiv
+            .results
+            .results
+            .iter()
+            .find(|p| p.low_support.is_some() && p.diversity_motifs.len() > 1)
+            .unwrap();
+        let text = point_tooltip(&hiv, low.position).unwrap();
+        assert_eq!(text.matches(" (low support)").count(), 2, "{text}");
+    }
+
+    /// A new load restarts the version, so two sessions showing the same positions at the same
+    /// zoom differ only in their id: the line of one must never be drawn for the other.
+    #[test]
+    fn lines_of_two_sessions_never_share_a_key() {
+        let r = Arc::new(results_of(vec![
+            position(1, Some(0.5), 200, 100),
+            position(2, Some(0.25), 40, 100),
+        ]));
+        let a = Session::new(1, Arc::clone(&r), Origin::Opened("a.json".into()));
+        let b = Session::new(2, r, Origin::Opened("b.json".into()));
+        assert_eq!(a.version, b.version);
+        let (view, columns) = (a.extent().unwrap(), 900);
+        let key = |s: &Session| chart_cache_key(s.id, s.version, view, columns);
+        assert_ne!(key(&a), key(&b));
+        assert_eq!(key(&a), chart_cache_key(1, a.version, view, columns));
+        // Every input is part of the key.
+        assert_ne!(key(&a), chart_cache_key(1, a.version + 1, view, columns));
+        assert_ne!(key(&a), chart_cache_key(1, a.version, (0.5, 2.0), columns));
+        assert_ne!(key(&a), chart_cache_key(1, a.version, view, columns + 1));
+    }
+
+    /// Strokes, markers and GPU vertices are one cache entry: a frame with the same key
+    /// recomputes nothing (here: the cache answers even for other data), a new key recomputes.
+    #[test]
+    fn lines_are_computed_once_per_key() {
+        let series = |e: f64| {
+            let r = results_of((1..=50).map(|p| position(p, Some(e), 200, 100)).collect());
+            Series::build(&r, &(0..50).collect::<Vec<_>>(), ChartMetric::Entropy)
+        };
+        let (a, b) = (series(0.5), series(0.25));
+        let view = (0.5, 50.5);
+        let key = chart_cache_key(1, 1, view, 20);
+        let mut chart = ChartUi::default();
+        let first = chart.lines(key, &a, view, 20, true);
+        let (strokes, vertices) = (
+            first.strokes.clone(),
+            Arc::clone(first.vertices.as_ref().unwrap()),
+        );
+        assert!(!strokes.is_empty() && !vertices.is_empty());
+        let hit = chart.lines(key, &b, view, 20, true);
+        assert_eq!(hit.strokes, strokes, "served from the cache");
+        assert!(Arc::ptr_eq(hit.vertices.as_ref().unwrap(), &vertices));
+        let miss = chart.lines(chart_cache_key(2, 1, view, 20), &b, view, 20, true);
+        assert_ne!(miss.strokes, strokes, "a new key recomputes");
+        assert!(!Arc::ptr_eq(miss.vertices.as_ref().unwrap(), &vertices));
+        // Without the GPU no vertices are built.
+        let cpu = ChartUi::default()
+            .lines(key, &a, view, 20, false)
+            .vertices
+            .is_none();
+        assert!(cpu);
     }
 }

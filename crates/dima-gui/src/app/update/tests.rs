@@ -38,6 +38,11 @@ fn opened_alignment(state: &mut AppState) -> Vec<Effect> {
 }
 
 fn with_session(state: &mut AppState) {
+    with_results(state, &fixtures::mers());
+}
+
+/// Opens `results` as if read from a results file.
+fn with_results(state: &mut AppState, results: &dima_core::model::Results) {
     let effects = update(state, Msg::OpenPath(PathBuf::from("results.json")));
     let Some(Effect::Open { generation, .. }) = effects.first() else {
         panic!("an open effect");
@@ -47,7 +52,7 @@ fn with_session(state: &mut AppState) {
         Msg::Opened {
             generation: *generation,
             path: PathBuf::from("results.json"),
-            outcome: Ok(Opened::Results(Box::new((*fixtures::mers()).clone()))),
+            outcome: Ok(Opened::Results(Box::new(results.clone()))),
         },
     );
 }
@@ -562,6 +567,37 @@ fn hidden_positions_ask_to_clear_the_filters() {
     );
 }
 
+/// A figure whose positions were all filtered out while its save dialog was open is not saved,
+/// and a warning says why.
+#[test]
+fn a_figure_with_no_positions_left_is_not_saved_silently() {
+    let mut s = state();
+    with_session(&mut s);
+    let effects = update(&mut s, Msg::Export(ExportKind::Png));
+    let [Effect::Dialog { purpose, .. }] = effects.as_slice() else {
+        panic!("{effects:?}");
+    };
+    let purpose = *purpose;
+    s.session.as_mut().unwrap().filter.value_range = (2.0, 3.0);
+    update(&mut s, Msg::FiltersEdited);
+    tick(&mut s, Duration::from_millis(16), false);
+    assert!(s.session.as_ref().unwrap().shown.is_empty());
+    let effects = update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose,
+            path: Some(PathBuf::from("/x/figure.png")),
+            failed_fast: false,
+        },
+    );
+    assert!(effects.is_empty(), "{effects:?}");
+    assert_eq!(s.export_busy, None);
+    assert!(s.toasts.items().iter().any(|t| t.severity == Severity::Warning
+        && t.text
+            == "Nothing was saved: no positions are shown, so there is no chart to export (check \
+                the filters)"));
+}
+
 #[test]
 fn filters_apply_when_the_pointer_is_released() {
     let mut s = state();
@@ -673,6 +709,7 @@ fn exports_are_guarded_and_go_through_a_dialog() {
             purpose: Purpose::Export {
                 kind: ExportKind::Svg,
                 session,
+                ..
             },
             kind: DialogKind::Save { .. },
             built_in: false,
@@ -697,6 +734,7 @@ fn exports_are_guarded_and_go_through_a_dialog() {
             purpose: Purpose::Export {
                 kind: ExportKind::Svg,
                 session: id,
+                metric: ChartMetric::Entropy,
             },
             path: None,
             failed_fast: true,
@@ -712,6 +750,7 @@ fn exports_are_guarded_and_go_through_a_dialog() {
             purpose: Purpose::Export {
                 kind: ExportKind::Svg,
                 session: id,
+                metric: ChartMetric::Entropy,
             },
             path: Some(PathBuf::from("/x/figure")),
             failed_fast: false,
@@ -739,6 +778,7 @@ fn exports_are_guarded_and_go_through_a_dialog() {
         &mut s,
         Msg::ExportDone {
             kind: ExportKind::ResultsJson,
+            metric: ChartMetric::Entropy,
             session: Some(id),
             outcome: Ok(files.clone()),
         },
@@ -750,6 +790,7 @@ fn exports_are_guarded_and_go_through_a_dialog() {
         &mut s,
         Msg::ExportDone {
             kind: ExportKind::ResultsJson,
+            metric: ChartMetric::Entropy,
             session: Some(id + 1),
             outcome: Ok(files),
         },
@@ -844,9 +885,14 @@ fn drops_options_views_and_threads() {
     update(&mut s, Msg::ShowView(View::Workspace));
     assert_eq!(s.view, View::Setup, "no results to show");
     s.setup.options.support_threshold = 7;
+    s.setup.options.similarity_weighted_entropy = true;
+    update(&mut s, Msg::OptionsChanged);
+    assert!(s.settings.similarity_weighted_entropy, "remembered (D73)");
     let effects = update(&mut s, Msg::ResetOptions);
     assert!(matches!(effects.as_slice(), [Effect::SaveSettings(_)]));
     assert_eq!(s.setup.options.support_threshold, 100);
+    assert!(!s.setup.options.similarity_weighted_entropy);
+    assert!(!s.settings.similarity_weighted_entropy);
     update(&mut s, Msg::ThreadsChanged(Some(2)));
     assert_eq!(s.settings.threads, Some(2));
 }
@@ -866,6 +912,7 @@ fn an_export_never_writes_results_loaded_while_its_dialog_was_open() {
             purpose: Purpose::Export {
                 kind: ExportKind::ResultsJson,
                 session: first,
+                metric: ChartMetric::Entropy,
             },
             path: Some(PathBuf::from("/x/first.json")),
             failed_fast: false,
@@ -907,6 +954,7 @@ fn closing_during_an_export_asks_first() {
         &mut s,
         Msg::ExportDone {
             kind: ExportKind::ResultsJson,
+            metric: ChartMetric::Entropy,
             session: None,
             outcome: Ok(Vec::new()),
         },
@@ -924,6 +972,7 @@ fn an_appended_extension_never_replaces_a_file_unasked() {
     let purpose = Purpose::Export {
         kind: ExportKind::ResultsJson,
         session,
+        metric: ChartMetric::Entropy,
     };
     update(&mut s, Msg::Export(ExportKind::ResultsJson));
     // "results" was typed: the dialog checked that name, the app adds ".json", which exists.
@@ -962,4 +1011,370 @@ fn an_appended_extension_never_replaces_a_file_unasked() {
         },
     );
     assert!(matches!(effects.as_slice(), [Effect::Export { .. }]));
+}
+
+/// The chart's metric: entropy on every load; a metric the results lack is refused, the metric
+/// shown is a no-op; a switch keeps the zoom and the selection, resets the value range to the
+/// new metric's full range, and says so only when the user had narrowed it, in which case the
+/// table also brings the selected row back into view.
+#[test]
+fn the_chart_metric_switch() {
+    use crate::charts::metric::ChartMetric::{Entropy, SimilarityWeighted};
+    let mut s = state();
+    with_session(&mut s);
+    assert!(update(&mut s, Msg::ChartMetric(SimilarityWeighted)).is_empty());
+    assert_eq!(
+        s.session.as_ref().unwrap().metric,
+        Entropy,
+        "not computed: refused"
+    );
+    with_results(&mut s, &fixtures::mers_swe());
+    s.toasts = crate::state::toasts::Toasts::default();
+    let session = s.session.as_mut().unwrap();
+    assert_eq!(
+        session.metric, Entropy,
+        "every load starts with entropy (G26)"
+    );
+    session.filter.value_range = (0.0, 1.0);
+    session.apply_filters();
+    session.viewport = Some((100.5, 200.5));
+    session.select(150, SelectSource::Chart);
+    // The table has drawn since, and scrolled to the row.
+    session.selection.scroll_to_row = false;
+    let (shown, version) = (session.shown.len(), session.version);
+    assert!(shown < 1345, "a narrowed range");
+    // The metric shown: nothing changes.
+    assert!(update(&mut s, Msg::ChartMetric(Entropy)).is_empty());
+    let session = s.session.as_ref().unwrap();
+    assert_eq!(
+        (session.version, session.filter.value_range),
+        (version, (0.0, 1.0))
+    );
+    assert!(s.toasts.is_empty());
+    // A switch after narrowing: the new metric's full range, with a note.
+    update(&mut s, Msg::ChartMetric(SimilarityWeighted));
+    let session = s.session.as_ref().unwrap();
+    assert_eq!(session.metric, SimilarityWeighted);
+    let max = session.bounds.max_similarity_weighted;
+    assert!((max - 0.4548).abs() < 5e-5, "{max}");
+    assert_eq!(session.filter.value_range, (0.0, max));
+    assert_eq!(session.shown.len(), 1345);
+    assert_eq!(session.viewport, Some((100.5, 200.5)), "the zoom is kept");
+    assert_eq!(
+        session.selection.position,
+        Some(150),
+        "the selection is kept"
+    );
+    assert!(
+        session.selection.scroll_to_row,
+        "the positions that came back can push its row out of view"
+    );
+    assert_ne!(session.version, version, "the chart's lines are recomputed");
+    assert_eq!(session.series.y_max, Some(max), "its own axis");
+    let notes: Vec<_> = s.toasts.items().iter().collect();
+    assert_eq!(notes.len(), 1);
+    assert_eq!(notes[0].severity, Severity::Info);
+    assert_eq!(
+        notes[0].text,
+        "Value range reset to the full range of similarity-weighted entropy"
+    );
+    // Back without narrowing: no note, and the same rows, so the table does not move.
+    s.toasts = crate::state::toasts::Toasts::default();
+    s.session.as_mut().unwrap().selection.scroll_to_row = false;
+    update(&mut s, Msg::ChartMetric(Entropy));
+    let session = s.session.as_ref().unwrap();
+    assert_eq!(session.metric, Entropy);
+    assert_eq!(
+        session.filter.value_range,
+        (0.0, session.bounds.max_entropy)
+    );
+    assert_eq!(session.viewport, Some((100.5, 200.5)));
+    assert!(!session.selection.scroll_to_row);
+    assert!(s.toasts.is_empty());
+    // Entropy narrowed, then switched to similarity-weighted entropy and back: only the
+    // narrowed range is told.
+    let session = s.session.as_mut().unwrap();
+    session.filter.value_range = (0.5, session.bounds.max_entropy);
+    session.apply_filters();
+    update(&mut s, Msg::ChartMetric(SimilarityWeighted));
+    update(&mut s, Msg::ChartMetric(Entropy));
+    assert_eq!(s.toasts.items().len(), 1, "only the narrowed range is told");
+    // A new load starts with entropy again.
+    update(&mut s, Msg::ChartMetric(SimilarityWeighted));
+    with_results(&mut s, &fixtures::mers_swe());
+    assert_eq!(s.session.as_ref().unwrap().metric, Entropy);
+}
+
+/// The figure of similarity-weighted entropy: its own title, value axis, legend (never
+/// "corrected") and mean, and no estimator in the subtitle; entropy's is unchanged.
+#[test]
+fn the_figure_follows_the_metric() {
+    use crate::charts::metric::ChartMetric::SimilarityWeighted;
+    let mut s = state();
+    with_results(&mut s, &fixtures::mers_swe());
+    let entropy = chart_scene(&s, ChartMetric::Entropy).unwrap();
+    assert_eq!(
+        entropy.title,
+        "mers_spike_aa \u{2014} Shannon entropy per k-mer position"
+    );
+    assert_eq!(entropy.y_title, "Shannon entropy (bits)");
+    assert_eq!(
+        entropy.mean,
+        s.session.as_ref().unwrap().results.average_entropy
+    );
+    assert!(entropy.subtitle.contains("estimator dima"));
+    assert_eq!(entropy.legend[0], "support > 100: corrected where possible");
+    update(&mut s, Msg::ChartMetric(SimilarityWeighted));
+    let scene = chart_scene(&s, SimilarityWeighted).unwrap();
+    assert_eq!(
+        scene.title,
+        "mers_spike_aa \u{2014} Similarity-weighted entropy per k-mer position"
+    );
+    assert_eq!(scene.y_title, "Similarity-weighted entropy (bits)");
+    assert!(
+        scene.legend.iter().all(|l| !l.contains("corrected")),
+        "{:?}",
+        scene.legend
+    );
+    assert_eq!(scene.legend[0], "support > 100");
+    let mean = scene.mean.unwrap();
+    assert!((mean - 0.0363).abs() < 5e-5, "{mean}");
+    assert!(!scene.subtitle.contains("estimator"), "{}", scene.subtitle);
+    assert!(
+        scene
+            .subtitle
+            .starts_with("191 sequences, k = 9, T = 100; 1345 of 1345")
+    );
+    let max = scene.series.y_max.unwrap();
+    assert!(
+        (max - 0.4548).abs() < 5e-5,
+        "the similarity-weighted values: {max}"
+    );
+    let svg = scene.to_svg().unwrap();
+    assert!(svg.contains(">Similarity-weighted entropy (bits)</text>"));
+    assert!(svg.contains(&format!(
+        "eligible mean {}",
+        dima_core::human::fixed(mean, 4)
+    )));
+}
+
+/// A figure is named and saved for the metric shown when it was chosen: the dialog proposes
+/// `<stem>.similarity-weighted-entropy.png`, and if the chart was switched while the dialog was
+/// open nothing is saved (a data export is unaffected). Otherwise the export job carries that
+/// metric and its figure, and a failed export's message names the figure by it.
+#[test]
+fn figures_are_saved_only_for_the_metric_they_were_chosen_for() {
+    use crate::charts::metric::ChartMetric::{Entropy, SimilarityWeighted};
+    let mut s = state();
+    with_results(&mut s, &fixtures::mers_swe());
+    let session = s.session.as_ref().unwrap().id;
+    update(&mut s, Msg::ChartMetric(SimilarityWeighted));
+    let effects = update(&mut s, Msg::Export(ExportKind::Png));
+    let [
+        Effect::Dialog {
+            purpose,
+            kind: DialogKind::Save { default_name, .. },
+            title,
+            ..
+        },
+    ] = effects.as_slice()
+    else {
+        panic!("{effects:?}");
+    };
+    assert_eq!(
+        *purpose,
+        Purpose::Export {
+            kind: ExportKind::Png,
+            session,
+            metric: SimilarityWeighted
+        }
+    );
+    assert_eq!(
+        default_name,
+        "mers_spike_aa.similarity-weighted-entropy.png"
+    );
+    assert_eq!(title, "Save Similarity-weighted entropy chart (PNG)");
+    let purpose = *purpose;
+    // Switched back (the palette, while the dialog is open): nothing is saved.
+    update(&mut s, Msg::ChartMetric(Entropy));
+    let effects = update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose,
+            path: Some(PathBuf::from("/x/figure.png")),
+            failed_fast: false,
+        },
+    );
+    assert!(effects.is_empty(), "{effects:?}");
+    assert_eq!(s.export_busy, None);
+    assert_eq!(s.dialog.pending, None);
+    let warning = s
+        .toasts
+        .items()
+        .iter()
+        .find(|t| t.severity == Severity::Warning)
+        .expect("a warning");
+    assert_eq!(
+        warning.text,
+        "Nothing was saved: the chart was switched to entropy while the dialog was open. \
+         Export again to save the chart now shown."
+    );
+    // The other way round, with the SVG.
+    s.toasts = crate::state::toasts::Toasts::default();
+    update(&mut s, Msg::Export(ExportKind::Svg));
+    update(&mut s, Msg::ChartMetric(SimilarityWeighted));
+    update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose: Purpose::Export {
+                kind: ExportKind::Svg,
+                session,
+                metric: Entropy,
+            },
+            path: Some(PathBuf::from("/x/figure.svg")),
+            failed_fast: false,
+        },
+    );
+    assert!(s.toasts.items().iter().any(|t| t.text
+        == "Nothing was saved: the chart was switched to similarity-weighted entropy while the \
+            dialog was open. Export again to save the chart now shown."));
+    // A data export does not depend on the chart.
+    update(&mut s, Msg::Export(ExportKind::ResultsJson));
+    update(&mut s, Msg::ChartMetric(Entropy));
+    let effects = update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose: Purpose::Export {
+                kind: ExportKind::ResultsJson,
+                session,
+                metric: SimilarityWeighted,
+            },
+            path: Some(PathBuf::from("/x/r.json")),
+            failed_fast: false,
+        },
+    );
+    assert!(
+        matches!(effects.as_slice(), [Effect::Export { .. }]),
+        "{effects:?}"
+    );
+    s.export_busy = None;
+    // The metric unchanged: the figure of that metric is written.
+    update(&mut s, Msg::ChartMetric(SimilarityWeighted));
+    update(&mut s, Msg::Export(ExportKind::Svg));
+    let effects = update(
+        &mut s,
+        Msg::DialogClosed {
+            purpose: Purpose::Export {
+                kind: ExportKind::Svg,
+                session,
+                metric: SimilarityWeighted,
+            },
+            path: Some(PathBuf::from("/x/figure")),
+            failed_fast: false,
+        },
+    );
+    let [Effect::Export { job, .. }] = effects.as_slice() else {
+        panic!("{effects:?}");
+    };
+    assert_eq!(job.metric, SimilarityWeighted);
+    assert_eq!(job.path, PathBuf::from("/x/figure.svg"));
+    let crate::workers::export::Payload::Figure(scene) = &job.payload else {
+        panic!("a figure");
+    };
+    assert_eq!(scene.y_title, "Similarity-weighted entropy (bits)");
+    // A failed export names the figure by its metric.
+    update(
+        &mut s,
+        Msg::ExportDone {
+            kind: ExportKind::Svg,
+            metric: SimilarityWeighted,
+            session: Some(session),
+            outcome: Err(dima_core::DimaError::usage("disk full")),
+        },
+    );
+    let error = s
+        .toasts
+        .items()
+        .iter()
+        .find(|t| t.severity == Severity::Error)
+        .expect("an error");
+    assert!(
+        error
+            .text
+            .starts_with("Similarity-weighted entropy chart (SVG) failed: "),
+        "{}",
+        error.text
+    );
+}
+
+/// A metric switch in the frame of a filter edit not yet applied applies that edit with the
+/// switch and keeps the zoom, as the switch promises; the edit was applied again on the next
+/// tick, which resets the zoom. The rows the edit changes can push the selected one out of
+/// view, so the table scrolls back to it, as after any filter edit.
+#[test]
+fn a_metric_switch_applies_a_pending_filter_edit_and_keeps_the_zoom() {
+    use crate::charts::metric::ChartMetric::SimilarityWeighted;
+    let mut s = state();
+    with_results(&mut s, &fixtures::mers_swe());
+    let session = s.session.as_mut().unwrap();
+    session.viewport = Some((100.5, 600.5));
+    session.select(150, SelectSource::Chart);
+    session.selection.scroll_to_row = false;
+    session.filter.position_range = (50, 900);
+    update(&mut s, Msg::FiltersEdited);
+    update(&mut s, Msg::ChartMetric(SimilarityWeighted));
+    tick(&mut s, Duration::from_millis(16), false);
+    let session = s.session.as_ref().unwrap();
+    assert_eq!(session.metric, SimilarityWeighted);
+    assert!(!session.filter_dirty, "applied with the switch");
+    assert!(
+        session
+            .shown
+            .iter()
+            .all(|&i| (50..=900).contains(&session.results.results[i].position)),
+        "the edit is applied"
+    );
+    assert_eq!(session.viewport, Some((100.5, 600.5)), "the zoom is kept");
+    assert_eq!(session.selection.position, Some(150));
+    assert!(session.selection.scroll_to_row);
+}
+
+/// Results written with a newer schema, or one this version does not recognise, open with the
+/// warning `dima view` gives, as an export keeps only the fields this version knows; this
+/// version's schema and older ones open without it.
+#[test]
+fn results_of_a_newer_schema_open_with_a_warning() {
+    let current = dima_core::model::SCHEMA_VERSION;
+    for (version, shown) in [
+        ("1.2.0", Some("1.2.0")),
+        ("1.10.0", Some("1.10.0")),
+        ("1.1.0-dev", Some("\"1.1.0-dev\"")),
+        (current, None),
+        ("1.0.0", None),
+    ] {
+        let mut s = state();
+        let mut r = (*fixtures::mers()).clone();
+        r.schema_version = version.to_owned();
+        with_results(&mut s, &r);
+        let warnings: Vec<&str> = s
+            .toasts
+            .items()
+            .iter()
+            .filter(|t| t.severity == Severity::Warning)
+            .map(|t| t.text.as_str())
+            .collect();
+        let expected = shown.map(|v| {
+            format!(
+                "The results were written with schema {v}; this version writes {current} and \
+                 keeps only the fields it knows. Use the DiMA version that wrote the file to \
+                 keep every field."
+            )
+        });
+        assert_eq!(
+            warnings,
+            expected.as_deref().into_iter().collect::<Vec<_>>(),
+            "{version}"
+        );
+        assert!(s.session.is_some(), "{version}: opened all the same");
+    }
 }

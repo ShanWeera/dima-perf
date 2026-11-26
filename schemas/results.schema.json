@@ -2,12 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://shanweera.github.io/dima-perf/schemas/1.0/results.schema.json",
   "title": "DiMA results",
-  "description": "Results of `dima analyze` (DiMA: Tharanga et al. 2025, Brief Bioinform 26(1):bbae607, doi:10.1093/bib/bbae607). Keys follow DiMA; undefined values are null.",
+  "description": "Results of `dima analyze` (DiMA: Tharanga et al. 2025, Brief Bioinform 26(1):bbae607, doi:10.1093/bib/bbae607). Keys follow DiMA; undefined or not computed values are null.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "query_name": {
       "type": "string"
@@ -190,6 +190,65 @@
         "below_min_count"
       ]
     },
+    "similarity_weighted_entropy_summary": {
+      "description": "Similarity-weighted entropy over eligible positions (support > T), with the mean observed entropy of the same positions (Wu 2025); null when not requested.",
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "position_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "average_entropy": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "lowest_entropy": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/extremum"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "highest_entropy": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/extremum"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "average_observed_entropy": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            }
+          },
+          "required": [
+            "position_count",
+            "average_entropy",
+            "lowest_entropy",
+            "highest_entropy",
+            "average_observed_entropy"
+          ]
+        }
+      ]
+    },
     "run": {
       "$ref": "#/$defs/run"
     },
@@ -215,8 +274,69 @@
     "support_label_counts",
     "all_positions_summary",
     "coverage_summary",
+    "similarity_weighted_entropy_summary",
     "run",
     "results"
+  ],
+  "allOf": [
+    {
+      "description": "Presence rules of every 1.x results file: the similarity-weighted values and their summary are given exactly where the run computed them.",
+      "if": {
+        "properties": {
+          "run": {
+            "properties": {
+              "parameters": {
+                "properties": {
+                  "similarity_weighted_entropy": {
+                    "properties": {
+                      "value": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  }
+                },
+                "required": [
+                  "similarity_weighted_entropy"
+                ]
+              }
+            },
+            "required": [
+              "parameters"
+            ]
+          }
+        },
+        "required": [
+          "run"
+        ]
+      },
+      "then": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/$defs/swe_on"
+            }
+          },
+          "similarity_weighted_entropy_summary": {
+            "type": "object"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/$defs/swe_off"
+            }
+          },
+          "similarity_weighted_entropy_summary": {
+            "type": "null"
+          }
+        }
+      }
+    }
   ],
   "$defs": {
     "origin": {
@@ -550,6 +670,32 @@
             "null"
           ]
         },
+        "similarity_weighted_entropy": {
+          "description": "Similarity-weighted entropy H_sim in bits (Wu 2025); null when not requested or without support.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "normalised_observed_entropy": {
+          "description": "Observed entropy divided by log2 of the number of distinct k-mers, Index included (H_n, Wu 2025); null when not requested or with fewer than two distinct k-mers.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "normalised_similarity_weighted_entropy": {
+          "description": "Similarity-weighted entropy divided by log2 of the number of distinct k-mers (H_nsim, Wu 2025); null when not requested or with fewer than two distinct k-mers.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
         "diversity_motifs": {
           "type": "array",
           "items": {
@@ -570,6 +716,9 @@
         "total_variants_incidence",
         "sample_coverage",
         "below_min_coverage",
+        "similarity_weighted_entropy",
+        "normalised_observed_entropy",
+        "normalised_similarity_weighted_entropy",
         "diversity_motifs"
       ],
       "description": "Results for one k-mer position."
@@ -654,6 +803,23 @@
                 "origin"
               ],
               "description": "Entropy estimator."
+            },
+            "similarity_weighted_entropy": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "boolean"
+                },
+                "origin": {
+                  "$ref": "#/$defs/origin"
+                }
+              },
+              "required": [
+                "value",
+                "origin"
+              ],
+              "description": "Whether similarity-weighted entropy was computed (--similarity-weighted-entropy)."
             },
             "validation": {
               "type": "object",
@@ -781,6 +947,7 @@
             "kmer_length",
             "support_threshold",
             "estimator",
+            "similarity_weighted_entropy",
             "validation",
             "min_coverage",
             "query_name",
@@ -1175,6 +1342,77 @@
         "references"
       ],
       "description": "Deterministic provenance of the run."
+    },
+    "swe_off": {
+      "description": "A position of a run without similarity-weighted entropy: its three values are null.",
+      "properties": {
+        "similarity_weighted_entropy": {
+          "type": "null"
+        },
+        "normalised_observed_entropy": {
+          "type": "null"
+        },
+        "normalised_similarity_weighted_entropy": {
+          "type": "null"
+        }
+      }
+    },
+    "swe_on": {
+      "description": "A position of a run with similarity-weighted entropy: the value is given wherever there is support, the normalised values wherever there are at least two distinct k-mers.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "support": {
+                "minimum": 1
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "similarity_weighted_entropy": {
+                "type": "number"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "similarity_weighted_entropy": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "diversity_motifs": {
+                "minItems": 2
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "normalised_observed_entropy": {
+                "type": "number"
+              },
+              "normalised_similarity_weighted_entropy": {
+                "type": "number"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "normalised_observed_entropy": {
+                "type": "null"
+              },
+              "normalised_similarity_weighted_entropy": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

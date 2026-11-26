@@ -396,7 +396,7 @@ impl ValueDictionary {
             return Ok(id);
         }
         let id = u32::try_from(self.entries.len()).map_err(|_| DimaError::Overflow {
-            what: "distinct header values",
+            what: "the number of distinct header values",
         })?;
         self.ids[field].insert(value.clone(), id);
         self.entries.push((field, value, 1));

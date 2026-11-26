@@ -3,10 +3,10 @@ cff-version: 1.2.0
 message: "If you use DiMA, please cite the DiMA paper (preferred-citation) and the software version you used."
 type: software
 title: "dima: sequence diversity dynamics analyser for viruses (Rust implementation)"
-version: "1.0.0"
+version: "1.1.0"
 license: MIT
 repository-code: "https://github.com/ShanWeera/dima-perf"
-url: "https://shanweera.github.io/dima-perf/v1.0/"
+url: "https://shanweera.github.io/dima-perf/v1.1/"
 authors:
   - family-names: "Tharanga"
     given-names: "Shan"
@@ -113,6 +113,29 @@ references:
     issue: "4"
     start: "e59994"
     doi: "10.1371/journal.pone.0059994"
+  - type: article
+    authors:
+      - family-names: "Wu"
+        given-names: "Jian"
+    title: "Similarity-weighted entropy for quantifying genetic diversity in viral quasispecies"
+    journal: "Virus Evolution"
+    year: 2025
+    volume: "11"
+    issue: "1"
+    start: "veaf029"
+    doi: "10.1093/ve/veaf029"
+  - type: article
+    authors:
+      - family-names: "Grishin"
+        given-names: "Nick V."
+    title: "Estimation of the number of amino acid substitutions per site when the substitution rate varies among sites"
+    journal: "Journal of Molecular Evolution"
+    year: 1995
+    volume: "41"
+    issue: "5"
+    start: "675"
+    end: "679"
+    doi: "10.1007/BF00175826"
   - type: article
     authors:
       - family-names: "Eddy"

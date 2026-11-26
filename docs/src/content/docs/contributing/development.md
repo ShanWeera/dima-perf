@@ -48,6 +48,8 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps -p dima-core -p dima --locked  # 
 cargo bench --no-run -p dima-core --locked                         # benchmarks compile
 python3 scripts/reference/dima_reference.py --self-test
 python3 scripts/release/check-windows-crt.py --self-test
+python3 scripts/reference/paper_values.py --check                 # after changes to the reference or the datasets
+python3 -I -B scripts/reference/docs_numbers.py --check            # the documentation's computed numbers
 pnpm -C docs install --frozen-lockfile && pnpm -C docs build       # after documentation changes
 ```
 
@@ -62,6 +64,8 @@ Some files are generated from the code and must never be edited by hand:
 | `CITATION.cff`, `.zenodo.json` | the citation registry and the workspace version |
 | `README.md` (its citation section only) | the citation registry |
 | `THIRD-PARTY-NOTICES.md` | the dependency tree (`python3 scripts/notices/generate.py`, with cargo-about) |
+| `crates/dima-core/tests/paper_expected/mod.rs` | the reference implementation on the bundled datasets (`python3 scripts/reference/paper_values.py`) |
+| The marked regions `<!-- docs-numbers:NAME:start -->` … `:end -->` of `entropy.md`, `paper-comparison.md` and `scripts/validate_paper.sh` | expectations and simulations (`python3 -I -B scripts/reference/docs_numbers.py`) |
 
 ```sh
 cargo xtask gen --mode write    # regenerate after changing options, help texts or references
@@ -136,7 +140,12 @@ named by `CHROME_PATH`.
 
 | Script | Purpose |
 |---|---|
-| `scripts/validate_paper.sh` | Prints the comparison with the paper's published values ([Comparison with the paper](/explanation/paper-comparison/)) |
+| `scripts/validate_paper.sh` | Prints the comparison with the paper's published values ([Comparison with the papers](/explanation/paper-comparison/)) |
 | `scripts/bench/run.sh` | Regenerates `BENCHMARK.md` ([Benchmarks](/explanation/benchmarks/)) |
 | `scripts/reference/dima_reference.py` | The independent reference implementation ([Testing](/contributing/testing/)) |
+| `scripts/reference/paper_values.py` | Writes the paper test's expected values from the reference implementation; `--check` compares |
+| `scripts/reference/docs_numbers.py` | Computes the documentation's numbers that come from expectations and simulations and writes them between their markers; `--check` compares |
+| `scripts/reference/tobrfv_from_supplement.py` | Writes the ToBRFV test alignments from Wu 2025's Supplementary File 2 (see `tests/data/README.md`) |
+| `scripts/reference/pstvd_from_supplement.py` | Writes the PSTVd loop-27 test alignments from the S2 Table of Wu et al. 2024 (see `tests/data/README.md`) |
+| `scripts/reference/xlsx_rows.py` | Reads the cells of spreadsheet (.xlsx) sheets for the two converters above (standard library only) |
 | `scripts/release/check-windows-crt.py` | Checks that Windows programs need no Visual C++ runtime DLL, by reading their import tables; CI and the release workflow run it on every Windows program |

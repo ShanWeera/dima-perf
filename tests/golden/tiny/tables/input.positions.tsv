@@ -1,19 +1,19 @@
-position	low_support	support	distinct_variants_count	entropy	observed_entropy	entropy_method	entropy_fallback	distinct_variants_incidence	total_variants_incidence	sample_coverage	below_min_coverage
-1	NA	7	0	0.0	0.0	dima	NA	NA	0.0	1.0	NA
-2	NA	7	0	0.0	0.0	dima	NA	NA	0.0	1.0	NA
-3	NA	6	0	0.0	0.0	dima	NA	NA	0.0	1.0	NA
-4	NA	7	1	1.126251128385085	0.9852281360342515	dima	NA	33.333333333333336	42.857142857142854	1.0	NA
-5	NA	7	1	1.126251128385085	0.9852281360342515	dima	NA	33.333333333333336	42.857142857142854	1.0	NA
-6	NA	8	0	1.0741918029924027	1.0	dima	NA	NA	0.0	1.0	NA
-7	NA	8	0	0.0	0.0	dima	NA	NA	0.0	1.0	NA
-8	NA	8	0	0.0	0.0	dima	NA	NA	0.0	1.0	NA
-9	NA	5	0	0.0	0.0	dima	NA	NA	0.0	1.0	NA
-10	NA	5	0	0.0	0.0	dima	NA	NA	0.0	1.0	NA
-11	NA	5	0	0.0	0.0	dima	NA	NA	0.0	1.0	NA
-12	ELS	4	0	0.0	0.0	plug_in	support_at_or_below_threshold	NA	0.0	1.0	NA
-13	LS	3	0	0.0	0.0	plug_in	support_at_or_below_threshold	NA	0.0	1.0	NA
-14	LS	3	0	0.0	0.0	plug_in	support_at_or_below_threshold	NA	0.0	1.0	NA
-15	LS	3	0	0.0	0.0	plug_in	support_at_or_below_threshold	NA	0.0	1.0	NA
-16	NS	0	0	NA	NA	not_estimable	NA	NA	NA	NA	NA
-17	NS	0	0	NA	NA	not_estimable	NA	NA	NA	NA	NA
-18	NS	0	0	NA	NA	not_estimable	NA	NA	NA	NA	NA
+position	low_support	support	distinct_variants_count	entropy	observed_entropy	entropy_method	entropy_fallback	distinct_variants_incidence	total_variants_incidence	sample_coverage	below_min_coverage	similarity_weighted_entropy	normalised_observed_entropy	normalised_similarity_weighted_entropy
+1	NA	7	0	0.0	0.0	dima	NA	NA	0.0	1.0	NA	NA	NA	NA
+2	NA	7	0	0.0	0.0	dima	NA	NA	0.0	1.0	NA	NA	NA	NA
+3	NA	6	0	0.0	0.0	dima	NA	NA	0.0	1.0	NA	NA	NA	NA
+4	NA	7	1	1.126251128385085	0.9852281360342515	dima	NA	33.333333333333336	42.857142857142854	1.0	NA	NA	NA	NA
+5	NA	7	1	1.126251128385085	0.9852281360342515	dima	NA	33.333333333333336	42.857142857142854	1.0	NA	NA	NA	NA
+6	NA	8	0	1.0741918029924027	1.0	dima	NA	NA	0.0	1.0	NA	NA	NA	NA
+7	NA	8	0	0.0	0.0	dima	NA	NA	0.0	1.0	NA	NA	NA	NA
+8	NA	8	0	0.0	0.0	dima	NA	NA	0.0	1.0	NA	NA	NA	NA
+9	NA	5	0	0.0	0.0	dima	NA	NA	0.0	1.0	NA	NA	NA	NA
+10	NA	5	0	0.0	0.0	dima	NA	NA	0.0	1.0	NA	NA	NA	NA
+11	NA	5	0	0.0	0.0	dima	NA	NA	0.0	1.0	NA	NA	NA	NA
+12	ELS	4	0	0.0	0.0	plug_in	support_at_or_below_threshold	NA	0.0	1.0	NA	NA	NA	NA
+13	LS	3	0	0.0	0.0	plug_in	support_at_or_below_threshold	NA	0.0	1.0	NA	NA	NA	NA
+14	LS	3	0	0.0	0.0	plug_in	support_at_or_below_threshold	NA	0.0	1.0	NA	NA	NA	NA
+15	LS	3	0	0.0	0.0	plug_in	support_at_or_below_threshold	NA	0.0	1.0	NA	NA	NA	NA
+16	NS	0	0	NA	NA	not_estimable	NA	NA	NA	NA	NA	NA	NA	NA
+17	NS	0	0	NA	NA	not_estimable	NA	NA	NA	NA	NA	NA	NA	NA
+18	NS	0	0	NA	NA	not_estimable	NA	NA	NA	NA	NA	NA	NA	NA

@@ -6,9 +6,9 @@
 //!
 //! References are ranked by the repository's citation policy (see `AGENTS.md`): domain venues
 //! first ([`Tier::Domain`]), then general statistics, mathematics (including numerical analysis),
-//! HCI or computer science only where they are the primary source of a number, algorithm or
-//! result ([`Tier::General`]), then standards and specifications, cited for what they define
-//! ([`Tier::Standard`]).
+//! HCI or computer science only where they are the primary source of a number, algorithm,
+//! theorem, finding or experiment ([`Tier::General`]), then standards and specifications, cited
+//! for what they define ([`Tier::Standard`]).
 //!
 //! # In-text labels
 //!
@@ -46,13 +46,13 @@ mod data;
 /// Citation-policy tier of a reference (`AGENTS.md`, "Citation policy").
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tier {
-    /// Peer-reviewed work in a bioinformatics, computational-biology, virology, ecology or
-    /// biostatistics venue.
+    /// Peer-reviewed domain work: Tier 1 of `AGENTS.md`, "Citation policy", which lists the
+    /// fields and venues.
     Domain,
     /// Peer-reviewed statistics, mathematics (including numerical analysis), HCI, visualisation or
-    /// computer-science work, cited only as the primary source of something no domain source
-    /// provides, or as a peer-reviewed statement of a classical mathematical result in the form
-    /// used.
+    /// computer-science work, cited only as the primary source of a number, algorithm, theorem,
+    /// finding or experiment that no domain source provides, or as a peer-reviewed statement of a
+    /// classical mathematical result in the form used.
     General,
     /// A standard or specification, cited for what it defines: a W3C, IETF, Unicode, ISO/IEC or
     /// BIPM document, or a file or data format's specification by its maintainer (including a

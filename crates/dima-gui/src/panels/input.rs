@@ -37,10 +37,13 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
         });
         ui.add_space(t.space_4);
         ui.horizontal(|ui| {
-            let field = ui.add(
-                egui::TextEdit::singleline(&mut state.setup.path_text)
-                    .hint_text("or paste a path here and press Enter")
-                    .desired_width(ui.available_width() - 70.0),
+            let field = super::common::named(
+                ui.add(
+                    egui::TextEdit::singleline(&mut state.setup.path_text)
+                        .hint_text("or paste a path here and press Enter")
+                        .desired_width(ui.available_width() - 70.0),
+                ),
+                "Path of a file to open",
             );
             let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             let any = crate::util::pasted_path(&state.setup.path_text, None).is_some();

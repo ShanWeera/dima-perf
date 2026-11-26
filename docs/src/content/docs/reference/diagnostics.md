@@ -152,6 +152,14 @@ depend on them:
 
 | Code | Raised when |
 |---|---|
-| `flag_has_no_effect` | `--hcs-min-incidence` or `--hcs-eligible-only` without an output of conserved sequences (`--hcs-output`, `--tsv-dir` or `--table hcs`); `--pretty` without JSON output |
+| `flag_has_no_effect` | `--hcs-min-incidence` or `--hcs-eligible-only` without an output of conserved sequences (*fix:* add `--hcs-output PATH` or `--tsv-dir DIR`, or write the table with `-o PATH.tsv --table hcs`); `--pretty` without JSON output; `--similarity-weighted-entropy` without an output that holds its values, the results (JSON, JSONL) or the positions table: the values are then not computed (*fix:* write the results with `-o PATH.json`, or the positions table with `-o PATH.tsv --table positions` or `--tsv-dir DIR`) |
+| `newer_schema` | `dima view` read results written with a newer (or an unrecognised 1.x) results schema version than its own, such as `1.2.0` or `1.1`; it writes them with its own version and keeps only the keys it knows. A version whose major number (before the first dot) is not 1 is refused instead (exit 4). *Fix:* to keep every key, convert the file with the DiMA version that wrote it (its `run.tool.version`) or a newer one |
 | `threads_exceed_cpus` | more threads were requested (`--threads` or `RAYON_NUM_THREADS`) than CPUs are available; they are used anyway |
 | `threads_refused` | the system refused to start some of the worker threads (a limit on processes and threads, such as `ulimit -u` or a container's pids limit, or a lack of memory), so the analysis continued with those it started; the run report records both numbers (`threads.count`, `threads.started`). Results are the same with any number of threads |
+
+`dima view` also prints a `note:` (never counted as a warning) when it writes results of an
+older 1.x schema, and only when its outputs hold per-position values (results JSON or JSONL, or
+the positions table): for example, results written by dima 1.0.0 have no similarity-weighted
+entropy, so those keys are written as `null` (`NA` in the positions table) and the option as
+off. Nothing needs doing; re-run the analysis with `--similarity-weighted-entropy` if you want
+the values.

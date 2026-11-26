@@ -231,4 +231,36 @@ fn provenance_records_origins_and_defaults() {
         r.run.references.iter().any(|x| x.key == "eddy2011"),
         "alphabet detection is cited"
     );
+    assert_eq!(
+        (
+            p.similarity_weighted_entropy.value,
+            p.similarity_weighted_entropy.origin
+        ),
+        (false, Origin::Default)
+    );
+    assert!(!r.run.references.iter().any(|x| x.key == "wu2025"));
+    let on = run(
+        &long,
+        AnalysisParams {
+            similarity_weighted_entropy: true,
+            ..dna()
+        },
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    let q = &on.run.parameters;
+    assert_eq!(
+        (
+            q.similarity_weighted_entropy.value,
+            q.similarity_weighted_entropy.origin
+        ),
+        (true, Origin::User)
+    );
+    let keys: Vec<&str> = on.run.references.iter().map(|x| x.key.as_str()).collect();
+    assert!(
+        keys.contains(&"wu2025") && !keys.contains(&"grishin1995"),
+        "{keys:?}"
+    );
+    // The methods sentence cites what the references list: Grishin only for protein runs.
+    let s = dima_core::methods::sentence(&on);
+    assert!(s.contains("Wu (2025)") && !s.contains("Grishin"), "{s}");
 }

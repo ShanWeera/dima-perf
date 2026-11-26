@@ -3,9 +3,15 @@
 //! choice and the export settings.
 //!
 //! Stored as `{"version": N, "settings": {…}}`. A file written by another version, or one that
-//! cannot be read, is replaced by the defaults and the user is told once (safe reset); nothing
-//! half-read is ever used. The alphabet, k and query name are not remembered: they belong to
-//! one file and reset with every new file (G12, G13).
+//! cannot be read, is replaced by the defaults and the user is told at each start until a
+//! setting is saved, so a newer version's file is never overwritten (safe reset); nothing
+//! half-read is ever used. The one exception is a figure size outside its range (such as one
+//! saved before the minimum was raised): it is moved into the range, the user is told, and the
+//! corrected settings are saved at once, so the notice appears once. The alphabet, k and query
+//! name are not remembered: they belong to one file and reset with every new file (G12, G13).
+//!
+//! A key added after 1.0.0 is written only when it differs from its default, so the settings
+//! of someone who never uses it stay readable by 1.0.0, which refuses unknown keys.
 
 use serde::{Deserialize, Serialize};
 
@@ -14,10 +20,11 @@ use dima_core::config::{DEFAULT_FILL, DEFAULT_SUPPORT_THRESHOLD, Estimator, Vali
 /// Version of the stored settings; bump on any incompatible change.
 pub const SETTINGS_VERSION: u32 = 1;
 
-/// Widths of exported figures, in pixels.
-pub const FIGURE_WIDTH: std::ops::RangeInclusive<u32> = 200..=20_000;
-/// Heights of exported figures, in pixels.
-pub const FIGURE_HEIGHT: std::ops::RangeInclusive<u32> = 150..=20_000;
+/// Widths of exported figures, in pixels: at least 720, so the title, a legend of up to three
+/// rows and the axes fit around a plot at least 100 px tall.
+pub const FIGURE_WIDTH: std::ops::RangeInclusive<u32> = 720..=20_000;
+/// Heights of exported figures, in pixels: at least 320 (see [`FIGURE_WIDTH`]).
+pub const FIGURE_HEIGHT: std::ops::RangeInclusive<u32> = 320..=20_000;
 
 /// Which file dialog to use (D100).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,6 +45,10 @@ pub struct Settings {
     pub support_threshold: u64,
     /// Entropy estimator.
     pub estimator: Estimator,
+    /// Also compute similarity-weighted entropy (Wu 2025). Added after 1.0.0: written only
+    /// when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub similarity_weighted_entropy: bool,
     /// Validation mode.
     pub validation: ValidationMode,
     /// Minimum sample coverage to flag, if any.
@@ -61,6 +72,7 @@ impl Default for Settings {
         Self {
             support_threshold: DEFAULT_SUPPORT_THRESHOLD,
             estimator: Estimator::default(),
+            similarity_weighted_entropy: false,
             validation: ValidationMode::default(),
             min_coverage: None,
             fill: DEFAULT_FILL.to_owned(),
@@ -79,6 +91,18 @@ struct Stored {
     settings: serde_json::Value,
 }
 
+/// What reading stored settings found.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Loaded {
+    /// The settings as stored.
+    Ok,
+    /// The stored figure size was outside its range and was moved into it; the notice says so.
+    /// The corrected settings should be saved, so the user is told once.
+    Adjusted(String),
+    /// The stored settings were replaced by the defaults; the notice says why.
+    Reset(String),
+}
+
 impl Settings {
     /// The settings in their stored form.
     #[must_use]
@@ -91,13 +115,14 @@ impl Settings {
     }
 
     /// Reads stored settings. Returns the defaults with a notice when the text was written by
-    /// another version or cannot be read.
+    /// another version, cannot be read or holds an invalid value; a figure size outside its
+    /// range is moved into it instead, with a notice.
     #[must_use]
-    pub fn from_json(text: &str) -> (Self, Option<String>) {
+    pub fn from_json(text: &str) -> (Self, Loaded) {
         let reset = |why: &str| {
             (
                 Self::default(),
-                Some(format!("Settings were reset to the defaults ({why}).")),
+                Loaded::Reset(format!("Settings were reset to the defaults ({why}).")),
             )
         };
         let Ok(stored) = serde_json::from_str::<Stored>(text) else {
@@ -106,20 +131,49 @@ impl Settings {
         if stored.version != SETTINGS_VERSION {
             return reset("they were saved by a different version of DiMA");
         }
-        match serde_json::from_value::<Self>(stored.settings) {
-            Ok(s) if s.is_valid() => (s, None),
-            _ => reset("the saved values were not valid"),
+        let mut s = match serde_json::from_value::<Self>(stored.settings) {
+            Ok(s) if s.is_valid() => s,
+            _ => return reset("the saved values were not valid"),
+        };
+        let saved = s.figure_size;
+        s.figure_size = (
+            saved.0.clamp(*FIGURE_WIDTH.start(), *FIGURE_WIDTH.end()),
+            saved.1.clamp(*FIGURE_HEIGHT.start(), *FIGURE_HEIGHT.end()),
+        );
+        if s.figure_size == saved {
+            return (s, Loaded::Ok);
         }
+        let notice = figure_size_notice(saved, s.figure_size);
+        (s, Loaded::Adjusted(notice))
     }
 
-    /// Range checks (a hand-edited file could hold anything).
+    /// Range checks of every value but the figure size, which is moved into its range instead
+    /// (a hand-edited file could hold anything).
     fn is_valid(&self) -> bool {
         self.support_threshold >= 1
             && self.min_coverage.is_none_or(|c| (0.0..=1.0).contains(&c))
             && !self.fill.trim().is_empty()
             && self.threads.is_none_or(|t| t >= 1)
-            && FIGURE_WIDTH.contains(&self.figure_size.0)
-            && FIGURE_HEIGHT.contains(&self.figure_size.1)
+    }
+}
+
+/// The notice of a stored figure size moved from `saved` into its range, `now`.
+fn figure_size_notice(saved: (u32, u32), now: (u32, u32)) -> String {
+    let (min_w, min_h) = (*FIGURE_WIDTH.start(), *FIGURE_HEIGHT.start());
+    let (w, h) = now;
+    if now.0 >= saved.0 && now.1 >= saved.1 {
+        format!(
+            "Exported figures are now at least {min_w} \u{d7} {min_h} px so the title, legend \
+             and axes fit; yours was raised to {w} \u{d7} {h} px"
+        )
+    } else {
+        // Only a hand-edited file holds a size above the maximum.
+        format!(
+            "Exported figures are between {min_w} \u{d7} {min_h} and {} \u{d7} {} px; yours \
+             was changed to {w} \u{d7} {h} px",
+            FIGURE_WIDTH.end(),
+            FIGURE_HEIGHT.end()
+        )
     }
 }
 
@@ -132,15 +186,57 @@ mod tests {
         let s = Settings {
             support_threshold: 30,
             estimator: Estimator::ChaoWangJost,
+            similarity_weighted_entropy: true,
             min_coverage: Some(0.9),
             hcs_threshold: "95.5".into(),
             threads: Some(3),
             dialogs: DialogMode::BuiltIn,
             ..Settings::default()
         };
-        let (back, notice) = Settings::from_json(&s.to_json());
+        let (back, loaded) = Settings::from_json(&s.to_json());
         assert_eq!(back, s);
-        assert_eq!(notice, None);
+        assert_eq!(loaded, Loaded::Ok);
+        assert!(
+            s.to_json()
+                .contains(r#""similarity_weighted_entropy": true"#)
+        );
+    }
+
+    /// The keys of the stored settings.
+    fn stored_keys(s: &Settings) -> std::collections::BTreeSet<String> {
+        let v: serde_json::Value = serde_json::from_str(&s.to_json()).unwrap();
+        v["settings"].as_object().unwrap().keys().cloned().collect()
+    }
+
+    /// The keys added after 1.0.0 are left out at their defaults, so default settings are
+    /// exactly 1.0.0's (which refuses unknown keys) and a file without them reads as off.
+    #[test]
+    fn default_settings_are_those_of_1_0_0() {
+        const V1_0_0: [&str; 10] = [
+            "support_threshold",
+            "estimator",
+            "validation",
+            "min_coverage",
+            "fill",
+            "hcs_threshold",
+            "hcs_eligible_only",
+            "threads",
+            "dialogs",
+            "figure_size",
+        ];
+        let keys = |names: &[&str]| names.iter().map(|&k| k.to_owned()).collect();
+        assert_eq!(stored_keys(&Settings::default()), keys(&V1_0_0));
+        let on = Settings {
+            similarity_weighted_entropy: true,
+            ..Settings::default()
+        };
+        let mut with = V1_0_0.to_vec();
+        with.push("similarity_weighted_entropy");
+        assert_eq!(stored_keys(&on), keys(&with));
+        let (s, loaded) =
+            Settings::from_json(r#"{"version": 1, "settings": {"support_threshold": 30}}"#);
+        assert!(!s.similarity_weighted_entropy);
+        assert_eq!(loaded, Loaded::Ok);
     }
 
     #[test]
@@ -163,16 +259,55 @@ mod tests {
             r#"{"version": 1, "settings": {"min_coverage": 2.0}}"#,
             r#"{"version": 1, "settings": {"unknown_key": 1}}"#,
             r#"{"version": 1, "settings": {"fill": "  "}}"#,
+            r#"{"version": 1, "settings": {"figure_size": [-1, 500]}}"#,
+            // An invalid value resets everything, even next to a size that would be clamped.
+            r#"{"version": 1, "settings": {"support_threshold": 0, "figure_size": [100, 100]}}"#,
         ] {
-            let (s, notice) = Settings::from_json(text);
+            let (s, loaded) = Settings::from_json(text);
             assert_eq!(s, Settings::default(), "{text}");
-            assert!(notice.is_some(), "{text}");
+            assert!(matches!(loaded, Loaded::Reset(_)), "{text}");
         }
         // Missing keys take their defaults (forward-compatible within a version).
-        let (s, notice) =
+        let (s, loaded) =
             Settings::from_json(r#"{"version": 1, "settings": {"support_threshold": 30}}"#);
         assert_eq!(s.support_threshold, 30);
         assert_eq!(s.fill, "Unknown");
-        assert_eq!(notice, None);
+        assert_eq!(loaded, Loaded::Ok);
+    }
+
+    #[test]
+    fn figure_sizes_are_moved_into_their_range() {
+        let read = |size: &str| {
+            Settings::from_json(&format!(
+                r#"{{"version": 1, "settings": {{"support_threshold": 30, "figure_size": {size}}}}}"#
+            ))
+        };
+        let (s, loaded) = read("[1800, 150]");
+        assert_eq!(s.figure_size, (1800, 320));
+        assert_eq!(s.support_threshold, 30, "the other settings are kept");
+        assert_eq!(
+            loaded,
+            Loaded::Adjusted(
+                "Exported figures are now at least 720 \u{d7} 320 px so the title, legend and \
+                 axes fit; yours was raised to 1800 \u{d7} 320 px"
+                    .to_owned()
+            )
+        );
+        let (s, loaded) = read("[100, 100]");
+        assert_eq!(s.figure_size, (720, 320));
+        assert!(
+            matches!(loaded, Loaded::Adjusted(n) if n.ends_with("raised to 720 \u{d7} 320 px"))
+        );
+        let (s, loaded) = read("[30000, 30000]");
+        assert_eq!(s.figure_size, (20_000, 20_000));
+        assert!(
+            matches!(&loaded, Loaded::Adjusted(n) if n.ends_with("changed to 20000 \u{d7} 20000 px")),
+            "{loaded:?}"
+        );
+        let (s, loaded) = read("[720, 320]");
+        assert_eq!((s.figure_size, loaded), ((720, 320), Loaded::Ok));
+        // The defaults are inside the range.
+        let d = Settings::default().figure_size;
+        assert!(FIGURE_WIDTH.contains(&d.0) && FIGURE_HEIGHT.contains(&d.1));
     }
 }

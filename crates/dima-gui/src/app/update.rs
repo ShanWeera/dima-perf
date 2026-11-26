@@ -11,6 +11,7 @@ use dima_core::error::IoAction;
 use dima_core::run_report::{FileRecord, Status};
 
 use super::msg::{Effect, Msg};
+use crate::charts::metric::ChartMetric;
 use crate::charts::scene::{ChartScene, SceneStyle};
 use crate::charts::transform::y_axis_max;
 use crate::state::header_editor::HeaderEditor;
@@ -24,10 +25,7 @@ use crate::workers::analysis::{FileStamp, Outcome, Request, cpus, worker_threads
 use crate::workers::dialogs::DialogKind;
 use crate::workers::export::{ExportKind, Job, Payload};
 use crate::workers::inspect::Opened;
-use dima_core::human::{
-    self, plural,
-    separators::{GROUP, ITEM},
-};
+use dima_core::human::{self, plural, separators::ITEM};
 use dima_core::output::file_stem;
 
 /// Applies one event.
@@ -128,6 +126,7 @@ pub fn update(state: &mut AppState, msg: Msg) -> Vec<Effect> {
             }
             Vec::new()
         }
+        Msg::ChartMetric(metric) => chart_metric(state, metric),
         Msg::ResetFilters => {
             if let Some(s) = state.session.as_mut() {
                 s.reset_filters();
@@ -190,9 +189,10 @@ pub fn update(state: &mut AppState, msg: Msg) -> Vec<Effect> {
         Msg::Export(kind) => request_export(state, kind),
         Msg::ExportDone {
             kind,
+            metric,
             session,
             outcome,
-        } => export_done(state, kind, session, outcome),
+        } => export_done(state, kind, metric, session, outcome),
         Msg::DialogClosed {
             purpose,
             path,
@@ -279,9 +279,9 @@ fn dialog_effect(state: &AppState, purpose: Purpose, built_in: bool) -> Effect {
             DialogKind::Folder,
             "Choose a folder for the tables".to_owned(),
         ),
-        Purpose::Export { kind, .. } => (
+        Purpose::Export { kind, metric, .. } => (
             DialogKind::Save {
-                default_name: kind.default_name(&query),
+                default_name: kind.default_name(&query, metric),
                 filter: kind.extension().map(|_| {
                     // Native filters match the last extension; compound names (.json.gz) pass.
                     let mut exts: Vec<String> = kind
@@ -291,10 +291,13 @@ fn dialog_effect(state: &AppState, purpose: Purpose, built_in: bool) -> Effect {
                         .collect();
                     exts.sort();
                     exts.dedup();
-                    (kind.label().trim_end_matches('\u{2026}').to_owned(), exts)
+                    (
+                        kind.label(metric).trim_end_matches('\u{2026}').to_owned(),
+                        exts,
+                    )
                 }),
             },
-            format!("Save {}", kind.label().trim_end_matches('\u{2026}')),
+            format!("Save {}", kind.label(metric).trim_end_matches('\u{2026}')),
         ),
         Purpose::FailedRunReport => (
             DialogKind::Save {
@@ -476,6 +479,11 @@ fn opened(
                 None,
                 state.now,
             );
+            if let Some(warning) = newer_schema_warning(&results.schema_version) {
+                state
+                    .toasts
+                    .push(Severity::Warning, warning, None, state.now);
+            }
             let mut effects = start_session(state, Arc::new(*results), Origin::Opened(path));
             if state.recent.add(entry) {
                 effects.push(Effect::SaveRecent(state.recent.to_json()));
@@ -502,6 +510,26 @@ fn opened(
             effects
         }
     }
+}
+
+/// The warning `dima view` gives (`newer_schema`) for results written with a newer schema than
+/// this version writes, or with one it does not recognise: this version keeps only the fields
+/// it knows, so an export leaves out the others. `None` for this version's schema or an older
+/// one.
+fn newer_schema_warning(version: &str) -> Option<String> {
+    use dima_core::output::parse_schema_version;
+    let current = dima_core::model::SCHEMA_VERSION;
+    if matches!(
+        (parse_schema_version(version), parse_schema_version(current)),
+        (Some(file), Some(this)) if file <= this
+    ) {
+        return None;
+    }
+    Some(format!(
+        "The results were written with schema {}; this version writes {current} and keeps only \
+         the fields it knows. Use the DiMA version that wrote the file to keep every field.",
+        dima_core::output::shown_schema_version(version)
+    ))
 }
 
 fn start_session(
@@ -708,11 +736,36 @@ fn select(state: &mut AppState, position: u64, source: SelectSource) -> Vec<Effe
     Vec::new()
 }
 
-/// The figure for the current view of a session.
+/// Switches the chart to `metric`: refused when the results do not hold it, nothing to do
+/// when it is shown already. A value range the user had narrowed is reset to the new metric's
+/// full range, and they are told.
+fn chart_metric(state: &mut AppState, metric: ChartMetric) -> Vec<Effect> {
+    let Some(s) = state.session.as_mut() else {
+        return Vec::new();
+    };
+    if s.metric == metric || !metric.available(&s.results) {
+        return Vec::new();
+    }
+    if s.set_metric(metric) {
+        state.toasts.push(
+            Severity::Info,
+            format!(
+                "Value range reset to the full range of {}",
+                metric.in_sentence()
+            ),
+            None,
+            state.now,
+        );
+    }
+    Vec::new()
+}
+
+/// The figure of `metric` for the current view of a session: `None` when nothing is shown, or
+/// when the chart shows another metric (its series is the only one there is).
 #[must_use]
-pub fn chart_scene(state: &AppState) -> Option<ChartScene> {
+pub fn chart_scene(state: &AppState, metric: ChartMetric) -> Option<ChartScene> {
     let s = state.session.as_ref()?;
-    if s.series.is_empty() {
+    if s.series.is_empty() || s.metric != metric {
         return None;
     }
     let full = s.extent()?;
@@ -720,29 +773,19 @@ pub fn chart_scene(state: &AppState) -> Option<ChartScene> {
     let r = &s.results;
     let (width, height) = state.settings.figure_size;
     Some(ChartScene {
-        title: format!(
-            "{} \u{2014} Shannon entropy per k-mer position",
-            r.query_name
-        ),
-        subtitle: format!(
-            "{}{ITEM}k = {}{ITEM}T = {}{ITEM}estimator {}{GROUP}{} of {} positions shown{GROUP}DiMA {}",
-            plural(r.sequence_count, "sequence", "sequences"),
-            r.kmer_length,
-            r.support_threshold,
-            r.run.parameters.estimator.value.as_str(),
-            s.shown.len(),
-            r.position_count,
-            r.run.tool.version
-        ),
+        title: metric.figure_title(&r.query_name),
+        subtitle: metric.figure_subtitle(r, s.shown.len()),
+        y_title: metric.figure_axis_title().to_owned(),
         width,
         height,
         series: s.series.as_ref().clone(),
         view,
         y_max: y_axis_max(s.series.y_max),
-        mean: r.average_entropy,
+        mean: metric.mean(r),
         legend: crate::charts::series::legend(
             r.support_threshold,
             r.run.parameters.estimator.value,
+            metric,
         ),
         min_coverage: r.coverage_summary.min_coverage,
         style: SceneStyle::publication(),
@@ -780,14 +823,26 @@ fn request_export(state: &mut AppState, kind: ExportKind) -> Vec<Effect> {
         );
         return Vec::new();
     }
-    let session = s.id;
-    open_dialog(state, Purpose::Export { kind, session })
+    let (session, metric) = (s.id, s.metric);
+    open_dialog(
+        state,
+        Purpose::Export {
+            kind,
+            session,
+            metric,
+        },
+    )
 }
 
-fn export_job(state: &AppState, kind: ExportKind, path: PathBuf) -> Option<Job> {
+fn export_job(
+    state: &AppState,
+    kind: ExportKind,
+    path: PathBuf,
+    metric: ChartMetric,
+) -> Option<Job> {
     let s = state.session.as_ref()?;
     let payload = match kind {
-        ExportKind::Png | ExportKind::Svg => Payload::Figure(Box::new(chart_scene(state)?)),
+        ExportKind::Png | ExportKind::Svg => Payload::Figure(Box::new(chart_scene(state, metric)?)),
         ExportKind::RunReport => {
             let Origin::Analysed(run) = &s.origin else {
                 return None;
@@ -809,6 +864,7 @@ fn export_job(state: &AppState, kind: ExportKind, path: PathBuf) -> Option<Job> 
     };
     Some(Job {
         kind,
+        metric,
         path,
         payload,
     })
@@ -861,10 +917,19 @@ fn dialog_closed(
 fn write_chosen(state: &mut AppState, purpose: Purpose, path: PathBuf) -> Vec<Effect> {
     match purpose {
         Purpose::OpenInput => open_path(state, path),
-        Purpose::Export { kind, session } => {
+        Purpose::Export {
+            kind,
+            session,
+            metric,
+        } => {
             // Other results may have been loaded while the dialog was open; never write them
             // under the name chosen for the earlier ones.
-            if state.session.as_ref().map(|s| s.id) != Some(session) {
+            let Some(shown) = state
+                .session
+                .as_ref()
+                .filter(|s| s.id == session)
+                .map(|s| s.metric)
+            else {
                 state.toasts.push(
                     Severity::Warning,
                     "Nothing was saved: other results were loaded while the dialog was open. \
@@ -873,8 +938,23 @@ fn write_chosen(state: &mut AppState, purpose: Purpose, path: PathBuf) -> Vec<Ef
                     state.now,
                 );
                 return Vec::new();
+            };
+            // Nor a figure of another metric under the name chosen for this one (the switch
+            // stays usable through a shortcut while a dialog is open).
+            if kind.is_figure() && shown != metric {
+                state.toasts.push(
+                    Severity::Warning,
+                    format!(
+                        "Nothing was saved: the chart was switched to {} while the dialog was \
+                         open. Export again to save the chart now shown.",
+                        shown.in_sentence()
+                    ),
+                    None,
+                    state.now,
+                );
+                return Vec::new();
             }
-            match export_job(state, kind, path) {
+            match export_job(state, kind, path, metric) {
                 Some(job) => {
                     state.export_busy = Some(kind);
                     vec![Effect::Export {
@@ -882,7 +962,19 @@ fn write_chosen(state: &mut AppState, purpose: Purpose, path: PathBuf) -> Vec<Ef
                         job: Box::new(job),
                     }]
                 }
-                None => Vec::new(),
+                None => {
+                    // The filters may have hidden every position while the dialog was open.
+                    if kind.is_figure() {
+                        state.toasts.push(
+                            Severity::Warning,
+                            "Nothing was saved: no positions are shown, so there is no chart to \
+                             export (check the filters)",
+                            None,
+                            state.now,
+                        );
+                    }
+                    Vec::new()
+                }
             }
         }
         Purpose::FailedRunReport => {
@@ -909,6 +1001,7 @@ fn write_chosen(state: &mut AppState, purpose: Purpose, path: PathBuf) -> Vec<Ef
                 session: None,
                 job: Box::new(Job {
                     kind: ExportKind::RunReport,
+                    metric: ChartMetric::Entropy,
                     path,
                     payload: Payload::Report(Box::new(report)),
                 }),
@@ -920,6 +1013,7 @@ fn write_chosen(state: &mut AppState, purpose: Purpose, path: PathBuf) -> Vec<Ef
 fn export_done(
     state: &mut AppState,
     kind: ExportKind,
+    metric: ChartMetric,
     session: Option<u64>,
     outcome: crate::workers::export::Outcome,
 ) -> Vec<Effect> {
@@ -960,7 +1054,7 @@ fn export_done(
             Severity::Error,
             format!(
                 "{} failed: {}",
-                kind.label().trim_end_matches('\u{2026}'),
+                kind.label(metric).trim_end_matches('\u{2026}'),
                 e
             ),
             Some(e.report()),

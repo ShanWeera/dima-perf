@@ -3,6 +3,7 @@
 
 use egui::Ui;
 
+use dima_core::human::percent_bounded;
 use dima_core::model::{Motif, Variant};
 
 use super::common::{Swatch, legend_entry, sub_heading};
@@ -59,9 +60,9 @@ pub fn show(ui: &mut Ui, variants: &[Variant], t: &DesignTokens) {
         && let Some(&(_, i)) = segments.iter().find(|(r, _)| r.contains(p))
     {
         response.on_hover_text(format!(
-            "{}: {:.1}% of the supporting sequences",
+            "{}: {} of the supporting sequences",
             MOTIFS[i].long(),
-            shares[i]
+            percent_bounded(shares[i], 1)
         ));
     }
     ui.horizontal_wrapped(|ui| {
@@ -69,7 +70,7 @@ pub fn show(ui: &mut Ui, variants: &[Variant], t: &DesignTokens) {
             legend_entry(
                 ui,
                 t,
-                &format!("{} {:.1}%", m.long(), shares[i]),
+                &format!("{} {}", m.long(), percent_bounded(shares[i], 1)),
                 Swatch::Block(colors[i]),
             );
         }

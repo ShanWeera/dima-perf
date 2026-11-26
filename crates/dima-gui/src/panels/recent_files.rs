@@ -55,10 +55,12 @@ pub fn show(ui: &mut Ui, recent: &RecentFiles, t: &DesignTokens, out: &mut Vec<M
             }
             ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui
-                        .small_button("\u{2715}")
-                        .on_hover_text("Remove from recent files")
-                        .clicked()
+                    // Named with the file: screen readers meet it before the file's name.
+                    if super::common::with_name(
+                        ui.small_button(super::common::CLOSE),
+                        &format!("Remove {name} from recent files"),
+                    )
+                    .clicked()
                     {
                         out.push(Msg::RecentRemoved(f.path.clone()));
                     }

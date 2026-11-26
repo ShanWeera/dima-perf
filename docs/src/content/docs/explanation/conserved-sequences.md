@@ -103,7 +103,7 @@ With the defaults ($T = 100$; HIV-1 *pol* DNA at 70%):
 | HIV-1 *pol* DNA | 70% | 2 | 0 | columns 3046–3077 (32 nt, min incidence 80.1%, bound 78.5%) and 3156–3185 (30 nt, 71.5%, bound 69.8%) | the same 2 |
 
 The HIV-1 *pol* DNA regions are compared with the paper in
-[Comparison with the paper](/explanation/paper-comparison/).
+[Comparison with the papers](/explanation/paper-comparison/).
 
 ## Computing regions
 

@@ -261,7 +261,7 @@ fn schema_versions(root: &Path) -> Vec<String> {
     let mut problems = Vec::new();
     for (file, version) in [
         ("results.schema.json", dima_core::model::SCHEMA_VERSION),
-        ("hcs.schema.json", dima_core::model::SCHEMA_VERSION),
+        ("hcs.schema.json", dima_core::model::HCS_SCHEMA_VERSION),
         (
             "run-report.schema.json",
             dima_core::run_report::REPORT_SCHEMA_VERSION,

@@ -110,7 +110,7 @@ the first one listed here is used. Generated with cargo-about.
 | ash | 0.38.0+1.3.281 | MIT OR Apache-2.0 |
 | async-broadcast | 0.7.2 | MIT OR Apache-2.0 |
 | async-channel | 2.5.0 | Apache-2.0 OR MIT |
-| async-executor | 1.14.0 | Apache-2.0 OR MIT |
+| async-executor | 1.14.1 | Apache-2.0 OR MIT |
 | async-io | 2.6.0 | Apache-2.0 OR MIT |
 | async-lock | 3.4.2 | Apache-2.0 OR MIT |
 | async-process | 2.5.0 | Apache-2.0 OR MIT |
@@ -148,7 +148,7 @@ the first one listed here is used. Generated with cargo-about.
 | clap_complete | 4.6.5 | MIT OR Apache-2.0 |
 | clap_derive | 4.5.41 | MIT OR Apache-2.0 |
 | clap_lex | 0.7.5 | MIT OR Apache-2.0 |
-| clipboard-win | 5.4.1 | BSL-1.0 |
+| clipboard-win | 5.4.3 | BSL-1.0 |
 | codespan-reporting | 0.13.1 | Apache-2.0 |
 | color | 0.3.3 | Apache-2.0 OR MIT |
 | colorchoice | 1.0.4 | MIT OR Apache-2.0 |
@@ -213,7 +213,7 @@ the first one listed here is used. Generated with cargo-about.
 | foreign-types | 0.5.0 | MIT OR Apache-2.0 |
 | foreign-types-macros | 0.2.3 | MIT OR Apache-2.0 |
 | foreign-types-shared | 0.3.1 | MIT OR Apache-2.0 |
-| form_urlencoded | 1.2.2 | MIT OR Apache-2.0 |
+| form_urlencoded | 1.2.3 | MIT OR Apache-2.0 |
 | futures-core | 0.3.31 | MIT OR Apache-2.0 |
 | futures-io | 0.3.31 | MIT OR Apache-2.0 |
 | futures-lite | 2.6.1 | Apache-2.0 OR MIT |
@@ -405,7 +405,7 @@ the first one listed here is used. Generated with cargo-about.
 | unicode-properties | 0.1.4 | MIT OR Apache-2.0 |
 | unicode-segmentation | 1.13.3 | MIT OR Apache-2.0 |
 | unicode-width | 0.2.1 | MIT OR Apache-2.0 |
-| url | 2.5.8 | MIT OR Apache-2.0 |
+| url | 2.5.9 | MIT OR Apache-2.0 |
 | utf8_iter | 1.0.4 | Apache-2.0 OR MIT |
 | utf8parse | 0.2.2 | Apache-2.0 OR MIT |
 | uuid | 1.20.0 | Apache-2.0 OR MIT |
@@ -480,9 +480,9 @@ the first one listed here is used. Generated with cargo-about.
 | zerovec-derive | 0.11.2 | Unicode-3.0 |
 | zlib-rs | 0.6.8 | Zlib |
 | zmij | 1.0.23 | MIT |
-| zstd | 0.13.3 | MIT |
-| zstd-safe | 7.2.4 | MIT OR Apache-2.0 |
-| zstd-sys | 2.0.15+zstd.1.5.7 | (MIT OR Apache-2.0) AND BSD-3-Clause |
+| zstd | 0.13.4 | BSD-3-Clause |
+| zstd-safe | 7.4.0 | BSD-3-Clause |
+| zstd-sys | 2.1.3+zstd.1.5.7 | BSD-3-Clause AND BSD-2-Clause |
 | zune-core | 0.5.1 | MIT OR Apache-2.0 OR Zlib |
 | zune-jpeg | 0.5.15 | MIT OR Apache-2.0 OR Zlib |
 | zvariant | 5.13.0 | MIT |
@@ -1644,6 +1644,42 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
+#### BSD 2-Clause "Simplified" License (BSD-2-Clause)
+
+Used by: zstd-sys 2.1.3+zstd.1.5.7
+
+```text
+The decoders for legacy formats, in zstd/lib/legacy/, include code under the
+2-clause BSD license:
+
+BSD 2-Clause License
+
+Copyright (C) 2013-2016, Yann Collet.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+    * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
 #### BSD 3-Clause "New" or "Revised" License (BSD-3-Clause)
 
 Used by: tiny-skia 0.11.4, tiny-skia-path 0.11.4
@@ -1683,7 +1719,42 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #### BSD 3-Clause "New" or "Revised" License (BSD-3-Clause)
 
-Used by: zstd-sys 2.0.15+zstd.1.5.7
+Used by: zstd 0.13.4, zstd-safe 7.4.0, zstd-sys 2.1.3+zstd.1.5.7
+
+```text
+BSD 3-Clause License
+
+Copyright (c) 2026, Alexandre Bury
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+#### BSD 3-Clause "New" or "Revised" License (BSD-3-Clause)
+
+Used by: zstd-sys 2.1.3+zstd.1.5.7
 
 ```text
 BSD License
@@ -1720,7 +1791,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #### BSD 3-Clause "New" or "Revised" License (BSD-3-Clause)
 
-Used by: zstd-sys 2.0.15+zstd.1.5.7
+Used by: zstd-sys 2.1.3+zstd.1.5.7
 
 ```text
 The auto-generated bindings are under the 3-clause BSD license:
@@ -1729,7 +1800,7 @@ BSD License
 
 For Zstandard software
 
-Copyright (c) 2016-present, Facebook, Inc. All rights reserved.
+Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -1741,9 +1812,9 @@ are permitted provided that the following conditions are met:
    this list of conditions and the following disclaimer in the documentation
    and/or other materials provided with the distribution.
 
- * Neither the name Facebook nor the names of its contributors may be used to
-   endorse or promote products derived from this software without specific
-   prior written permission.
+ * Neither the name Facebook, nor Meta, nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
 ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -1759,7 +1830,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #### Boost Software License 1.0 (BSL-1.0)
 
-Used by: clipboard-win 5.4.1
+Used by: clipboard-win 5.4.3
 
 ```text
 Boost Software License - Version 1.0 - August 17th, 2003
@@ -1847,7 +1918,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #### MIT License (MIT)
 
-Used by: adler2 2.0.1, allocator-api2 0.2.21, async-channel 2.5.0, async-executor 1.14.0, async-io 2.6.0, async-lock 3.4.2, async-process 2.5.0, async-recursion 1.1.1, async-signal 0.2.14, async-task 4.7.1, async-trait 0.1.89, atomic-waker 1.1.2, blocking 1.6.2, concurrent-queue 2.5.0, displaydoc 0.2.5, endi 1.1.1, enumn 0.1.14, event-listener 5.4.1, event-listener-strategy 0.5.4, fastrand 2.3.0, futures-lite 2.6.1, glow 0.17.0, itoa 1.0.15, khronos-egl 6.0.0, linux-raw-sys 0.12.1, linux-raw-sys 0.4.15, once_cell 1.21.4, ordered-stream 0.2.0, parking 2.2.1, pin-project-lite 0.2.16, piper 0.2.5, polling 3.11.0, proc-macro-crate 3.4.0, proc-macro2 1.0.97, quote 1.0.40, rustc-hash 1.1.0, rustc-hash 2.1.3, rustix 0.38.44, rustix 1.1.5, rustversion 1.0.22, serde 1.0.228, serde_core 1.0.228, serde_derive 1.0.228, serde_json 1.0.149, serde_repr 0.1.20, smol_str 0.2.2, syn 2.0.104, thiserror 1.0.69, thiserror 2.0.18, thiserror-impl 1.0.69, thiserror-impl 2.0.18, typeid 1.0.3, unicode-ident 1.0.18, x11-dl 2.21.0, zbus-lockstep 0.5.2, zbus-lockstep-macros 0.5.2, zmij 1.0.23, zvariant_utils 3.5.0
+Used by: adler2 2.0.1, allocator-api2 0.2.21, async-channel 2.5.0, async-executor 1.14.1, async-io 2.6.0, async-lock 3.4.2, async-process 2.5.0, async-recursion 1.1.1, async-signal 0.2.14, async-task 4.7.1, async-trait 0.1.89, atomic-waker 1.1.2, blocking 1.6.2, concurrent-queue 2.5.0, displaydoc 0.2.5, endi 1.1.1, enumn 0.1.14, event-listener 5.4.1, event-listener-strategy 0.5.4, fastrand 2.3.0, futures-lite 2.6.1, glow 0.17.0, itoa 1.0.15, khronos-egl 6.0.0, linux-raw-sys 0.12.1, linux-raw-sys 0.4.15, once_cell 1.21.4, ordered-stream 0.2.0, parking 2.2.1, pin-project-lite 0.2.16, piper 0.2.5, polling 3.11.0, proc-macro-crate 3.4.0, proc-macro2 1.0.97, quote 1.0.40, rustc-hash 1.1.0, rustc-hash 2.1.3, rustix 0.38.44, rustix 1.1.5, rustversion 1.0.22, serde 1.0.228, serde_core 1.0.228, serde_derive 1.0.228, serde_json 1.0.149, serde_repr 0.1.20, smol_str 0.2.2, syn 2.0.104, thiserror 1.0.69, thiserror 2.0.18, thiserror-impl 1.0.69, thiserror-impl 2.0.18, typeid 1.0.3, unicode-ident 1.0.18, x11-dl 2.21.0, zbus-lockstep 0.5.2, zbus-lockstep-macros 0.5.2, zmij 1.0.23, zvariant_utils 3.5.0
 
 ```text
 Permission is hereby granted, free of charge, to any
@@ -3302,7 +3373,7 @@ SOFTWARE.
 
 #### MIT License (MIT)
 
-Used by: form_urlencoded 1.2.2
+Used by: form_urlencoded 1.2.3
 
 ```text
 Copyright (c) 2013-2016 The rust-url developers
@@ -3593,7 +3664,7 @@ DEALINGS IN THE SOFTWARE.
 
 #### MIT License (MIT)
 
-Used by: idna 1.1.0, percent-encoding 2.3.2, url 2.5.8
+Used by: idna 1.1.0, percent-encoding 2.3.2, url 2.5.9
 
 ```text
 Copyright (c) 2013-2025 The rust-url developers
@@ -5899,21 +5970,6 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
-```
-
-#### MIT License (MIT)
-
-Used by: zstd 0.13.3, zstd-safe 7.2.4, zstd-sys 2.0.15+zstd.1.5.7
-
-```text
-The MIT License (MIT)
-Copyright (c) 2016 Alexandre Bury
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
 #### MIT License (MIT)

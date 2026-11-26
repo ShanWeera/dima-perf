@@ -101,7 +101,7 @@ pub fn sentence(r: &Results) -> String {
     let p = &r.run.parameters;
     let mut s = format!(
         "Sequence diversity was analysed with DiMA {} using dima {}. In the {} \
-         alignment of {} ({} columns), the overlapping {}-mers at each of the {} were counted; \
+         alignment of {} ({} columns), the overlapping {}-mers at {} were counted; \
          positions supported by more than {} were eligible for {}. Shannon entropy {} was \
          estimated with {}, and sample coverage after {}. Variants were classified as Index, \
          Major, Minor and Unique motifs {}.",
@@ -111,7 +111,11 @@ pub fn sentence(r: &Results) -> String {
         plural(r.sequence_count, "sequence", "sequences"),
         r.run.alignment_length,
         r.kmer_length,
-        plural(r.position_count, "position", "positions"),
+        if r.position_count == 1 {
+            "its one position".to_owned()
+        } else {
+            format!("each of the {} positions", r.position_count)
+        },
         plural(r.support_threshold, "sequence", "sequences"),
         eligible_for(p.estimator.value),
         cited(&["shannon1948"]),
@@ -119,6 +123,20 @@ pub fn sentence(r: &Results) -> String {
         Cite::new("chao2012").narrative(),
         cited(&["hu2013"]),
     );
+    if p.similarity_weighted_entropy.value {
+        s.push_str(&format!(
+            " Similarity-weighted entropy and the observed and similarity-weighted entropies \
+             normalised by log2 of the number of distinct k-mers were computed as described by \
+             {}, with the similarity of two k-mers taken as their proportion of identical \
+             residues{}.",
+            Cite::new("wu2025").narrative(),
+            if p.alphabet.value.is_nucleotide() {
+                String::new()
+            } else {
+                format!(" {}", cited(&["grishin1995"]))
+            },
+        ));
+    }
     let unknown = r.run.validation.unknown_total;
     if unknown > 0 {
         s.push_str(&format!(
@@ -451,6 +469,13 @@ mod tests {
             "the Miller–Madow correction (Miller 1955)"
         );
         assert!(s.contains("were eligible for the corrected entropy and the summary statistics"));
+        assert!(s.contains(&format!(
+            "-mers at each of the {} positions were",
+            r.position_count
+        )));
+        let mut one = r.clone();
+        one.position_count = 1;
+        assert!(sentence(&one).contains("-mers at its one position were counted"));
         // Other estimators estimate every position alike: eligibility is only for summaries.
         let mut raw = r.clone();
         raw.run.parameters.estimator.value = Estimator::Raw;

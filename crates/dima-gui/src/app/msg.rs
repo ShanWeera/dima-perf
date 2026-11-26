@@ -8,6 +8,7 @@ use dima_core::DimaError;
 use dima_core::hcs::HcsParams;
 use dima_core::model::{HcsResults, Results};
 
+use crate::charts::metric::ChartMetric;
 use crate::state::session::{Nav, SelectSource};
 use crate::state::toasts::Severity;
 use crate::state::{Purpose, View};
@@ -80,6 +81,8 @@ pub enum Msg {
     // Workspace.
     /// A filter control changed (applied when the pointer is released).
     FiltersEdited,
+    /// Plot another metric (the switch above the chart).
+    ChartMetric(ChartMetric),
     /// "Reset" filters.
     ResetFilters,
     /// Select a position.
@@ -111,6 +114,8 @@ pub enum Msg {
     ExportDone {
         /// What.
         kind: ExportKind,
+        /// The metric the chart showed when it was chosen (names a figure).
+        metric: ChartMetric,
         /// The session exported from (`None`: the failed run's report).
         session: Option<u64>,
         /// The files written, or why not.

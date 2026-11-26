@@ -517,6 +517,10 @@ fn special_files_are_written_directly() {
 fn messages_are_ascii() {
     let d = tmp();
     let t = s(&tiny()).to_owned();
+    let frozen = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/data/results-schema-1.0.0.json.gz")
+        .to_string_lossy()
+        .into_owned();
     let cases: Vec<Vec<&str>> = vec![
         vec![
             "analyze",
@@ -555,6 +559,34 @@ fn messages_are_ascii() {
             "analyze",
             "-i",
             &t,
+            "-o",
+            "s.json",
+            "-a",
+            "protein",
+            "-k",
+            "3",
+            "--validation",
+            "permissive",
+            "--similarity-weighted-entropy",
+        ],
+        vec![
+            "analyze",
+            "-i",
+            &t,
+            "-o",
+            "v.tsv",
+            "--table",
+            "variants",
+            "-a",
+            "protein",
+            "--validation",
+            "permissive",
+            "--similarity-weighted-entropy",
+        ],
+        vec![
+            "analyze",
+            "-i",
+            &t,
             "--hcs-min-incidence",
             "40",
             "-a",
@@ -573,6 +605,7 @@ fn messages_are_ascii() {
             "-v",
         ],
         vec!["view", "-i", &t],
+        vec!["view", "-i", &frozen, "-o", "old.json"],
         vec!["analyze", "--help"],
         vec!["--help"],
         vec!["cite", "--from", "r.json"],
@@ -587,6 +620,12 @@ fn messages_are_ascii() {
             let out = stdout(&o);
             let symbol = out.chars().find(|c| !c.is_ascii() && !c.is_alphabetic());
             assert_eq!(symbol, None, "{args:?}: {out}");
+            // The similarity-weighted entropy help, references aside, is plain ASCII.
+            if let Some(start) = out.find("--similarity-weighted-entropy\n") {
+                let text = &out[start..];
+                let text = &text[..text.find("Ref:").unwrap()];
+                assert!(text.is_ascii(), "{text}");
+            }
         }
     }
 }
@@ -1446,4 +1485,190 @@ fn ctrl_break_cancels() {
     assert_eq!(status.code(), Some(130), "{status:?}");
     drop(stdin);
     assert!(!d.path().join("r.json").exists());
+}
+
+/// `dima view` tells how a file of another schema version is written: an older 1.x file gets a
+/// note, only when the outputs carry the values its schema did not record; a newer or
+/// unrecognised version a `newer_schema` warning.
+#[test]
+fn view_reports_older_and_newer_schemas() {
+    let tmp = tmp();
+    let dir = tmp.path();
+    let frozen =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/results-schema-1.0.0.json.gz");
+    let o = run(&["view", "-i", s(&frozen), "-o", "new.json"], dir);
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    let e = stderr(&o);
+    assert!(e.is_ascii(), "{e}");
+    assert!(
+        e.contains(
+            "note: results file written with schema 1.0.0; values that schema did not record \
+             are written as null (NA in the positions table), and options it did not have as off"
+        ),
+        "{e}"
+    );
+    assert!(!e.contains("newer_schema"), "{e}");
+    let written = json(&dir.join("new.json"));
+    assert_eq!(written["schema_version"], dima_core::model::SCHEMA_VERSION);
+    assert_eq!(
+        written["run"]["parameters"]["similarity_weighted_entropy"]["value"],
+        false
+    );
+    assert!(written["results"][0]["similarity_weighted_entropy"].is_null());
+    // The variants table carries none of those values: no note.
+    let o = run(
+        &[
+            "view",
+            "-i",
+            s(&frozen),
+            "-O",
+            "tsv",
+            "--table",
+            "variants",
+            "-o",
+            "-",
+        ],
+        dir,
+    );
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    assert!(!stderr(&o).contains("note:"), "{}", stderr(&o));
+    // The current version: nothing to say. Newer or unrecognised versions: a warning.
+    for (version, expected) in [
+        (dima_core::model::SCHEMA_VERSION, None),
+        ("1.9.0", Some("schema 1.9.0;")),
+        ("1.1.0-dev", Some("schema \"1.1.0-dev\";")),
+        // An unrecognised version is quoted, so a stray space shows.
+        ("1.1.0 ", Some("schema \"1.1.0 \";")),
+    ] {
+        let mut v = json(&dir.join("new.json"));
+        v["schema_version"] = version.into();
+        std::fs::write(dir.join("v.json"), serde_json::to_vec(&v).unwrap()).unwrap();
+        let o = run(&["view", "-i", "v.json", "-o", "-"], dir);
+        assert_eq!(code(&o), 0, "{version}: {}", stderr(&o));
+        let e = stderr(&o);
+        match expected {
+            Some(shown) => assert!(
+                e.contains("warning[newer_schema]") && e.contains(shown),
+                "{version}: {e}"
+            ),
+            None => assert!(
+                !e.contains("note:") && !e.contains("warning"),
+                "{version}: {e}"
+            ),
+        }
+    }
+    // An older file that already holds the values: no note.
+    let o = dima()
+        .args(["analyze", "-i", s(&tiny()), "-o", "on.json", "-s", "4"])
+        .args(TINY)
+        .arg("--similarity-weighted-entropy")
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    let mut v = json(&dir.join("on.json"));
+    v["schema_version"] = "1.0.0".into();
+    std::fs::write(dir.join("v.json"), serde_json::to_vec(&v).unwrap()).unwrap();
+    let o = run(&["view", "-i", "v.json", "-o", "-"], dir);
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    assert!(!stderr(&o).contains("note:"), "{}", stderr(&o));
+}
+
+/// `--similarity-weighted-entropy`: the values in the results and the end-of-run line; a
+/// warning, and nothing computed, when no output carries them (the run report still records
+/// the command as typed); the methods text cites Wu 2025.
+#[test]
+fn similarity_weighted_entropy_on_the_command_line() {
+    let d = tmp();
+    let dir = d.path();
+    let t = tiny();
+    let o = dima()
+        .args(["analyze", "-i", s(&t), "-o", "r.json", "-s", "4"])
+        .args(TINY)
+        .arg("--similarity-weighted-entropy")
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    let line = stderr(&o);
+    // The means of tests/golden/tiny_similarity/results.json: 0.1794… and observed 0.2700….
+    assert!(
+        line.contains("; similarity-weighted mean 0.1795 bits (observed 0.2700)"),
+        "{line}"
+    );
+    let r = json(&dir.join("r.json"));
+    assert_eq!(
+        r["run"]["parameters"]["similarity_weighted_entropy"],
+        serde_json::json!({"value": true, "origin": "user"})
+    );
+    // Position 6 has two equally common k-mers one residue apart: (k + d)/(2k) = 2/3.
+    let p6 = &r["results"][5];
+    assert_eq!(p6["diversity_motifs"].as_array().unwrap().len(), 2);
+    assert!((p6["similarity_weighted_entropy"].as_f64().unwrap() - 2.0 / 3.0).abs() < 1e-15);
+    assert_eq!(p6["normalised_observed_entropy"], 1.0);
+    assert!(r["similarity_weighted_entropy_summary"].is_object());
+    // Without the option: the line is as before, and the values are null.
+    let o = dima()
+        .args(["analyze", "-i", s(&t), "-o", "plain.json"])
+        .args(TINY)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(
+        !stderr(&o).contains("similarity-weighted"),
+        "{}",
+        stderr(&o)
+    );
+    let plain = json(&dir.join("plain.json"));
+    assert!(plain["results"][5]["similarity_weighted_entropy"].is_null());
+    // No output carries the values: a warning with its hint, and they are not computed.
+    let o = dima()
+        .args(["analyze", "-i", s(&t), "-o", "v.tsv", "--table", "variants"])
+        .args(TINY)
+        .args(["--similarity-weighted-entropy", "--run-report", "run.json"])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    let e = stderr(&o);
+    assert!(
+        e.contains("warning[flag_has_no_effect]: --similarity-weighted-entropy has no effect"),
+        "{e}"
+    );
+    assert!(
+        e.contains("hint: write the results (-o PATH.json) or the positions table"),
+        "{e}"
+    );
+    assert!(!e.contains("similarity-weighted mean"), "{e}");
+    let report = json(&dir.join("run.json"));
+    assert!(
+        report["command"]
+            .as_array()
+            .unwrap()
+            .contains(&Value::from("--similarity-weighted-entropy"))
+    );
+    // The methods text cites the method.
+    let o = run(&["cite", "--from", "r.json"], dir);
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    assert!(stdout(&o).contains("Wu (2025)"), "{}", stdout(&o));
+    // A protein run also cites the amino-acid identity measure.
+    assert!(stdout(&o).contains("(Grishin 1995)"), "{}", stdout(&o));
+    // No eligible position: no summary, so no similarity-weighted group on the line.
+    let o = dima()
+        .args(["analyze", "-i", s(&t), "-o", "none.json", "-s", "100"])
+        .args(TINY)
+        .arg("--similarity-weighted-entropy")
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    let e = stderr(&o);
+    assert!(e.contains("no eligible positions"), "{e}");
+    assert!(!e.contains("similarity-weighted mean"), "{e}");
+    let none = json(&dir.join("none.json"));
+    assert_eq!(
+        none["similarity_weighted_entropy_summary"]["position_count"],
+        0
+    );
+    assert!(none["similarity_weighted_entropy_summary"]["average_entropy"].is_null());
 }

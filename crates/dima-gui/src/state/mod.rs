@@ -26,6 +26,7 @@ use self::recent::RecentFiles;
 use self::session::Session;
 use self::settings::Settings;
 use self::toasts::Toasts;
+use crate::charts::metric::ChartMetric;
 use crate::workers::analysis::RunFacts;
 use crate::workers::error_context::RecordExcerpt;
 use crate::workers::export::ExportKind;
@@ -185,6 +186,8 @@ pub enum Purpose {
         kind: ExportKind,
         /// The session whose results were shown when the export was chosen.
         session: u64,
+        /// The metric the chart showed then (a figure is refused if it changed).
+        metric: ChartMetric,
     },
     /// The run report of the failed run on the setup screen.
     FailedRunReport,

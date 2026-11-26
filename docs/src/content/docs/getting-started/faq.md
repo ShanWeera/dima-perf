@@ -12,7 +12,7 @@ in the [Glossary](/reference/glossary/).
 ### Is this the DiMA of the paper?
 
 Yes. `dima` implements the method of the DiMA paper [@tharanga2025] and reproduces its published
-results ([Comparison with the paper](/explanation/paper-comparison/)). It replaces `dima-cli` 5.x,
+results ([Comparison with the papers](/explanation/paper-comparison/)). It replaces `dima-cli` 5.x,
 which stays installable from PyPI but is no longer developed, and the web server.
 
 ### I used dima-cli 5.x. What changed?
@@ -81,6 +81,40 @@ window length and the alphabet, and entropy estimates grow with the number of se
 the support and the sample coverage of both analyses, and check that the conclusion holds with
 `--estimator chao-wang-jost`. See [Entropy and its correction](/explanation/entropy/).
 
+The optional similarity-weighted and normalised entropies need the same care, and they are not
+corrected for sample size at all: the observed entropy is lower on average with fewer sequences
+[@zhao2019, Section 3.1], the similarity-weighted entropy also changes with the number of
+sequences, and the normalised entropy also depends on sample size
+[@gregori2014, Sections 2.4 and 3.2]. Compare them only between runs with the same k and
+alphabet, and between positions of similar support.
+
+### What is similarity-weighted entropy and should I use it?
+
+It is an optional measure from Wu [@wu2025, Section 2.1], not part of the DiMA paper's method.
+Shannon entropy counts a variant that differs from the others at one residue as just as different
+as an unrelated one. Similarity-weighted entropy gives each variant less weight the more similar
+it is to the rest of the position, so near-identical variants count for less, and it is never
+more than the observed entropy. DiMA computes it, with both entropies divided by $\log_2$ of the
+number of distinct k-mers (which puts them between 0 and 1), only when you ask:
+`--similarity-weighted-entropy`, or **Compute similarity-weighted entropy (Wu 2025)** under
+**Advanced** in the desktop app.
+
+It can help when it matters how different the variants are, not only how many there are and how
+common. Use it next to the entropy, not instead of it, and with care:
+
+- It was published in 2025, and its source study applied it only to nucleotide sequences:
+  simulated populations, a viroid mutant pool and the populations it gave within single plants,
+  and one plant-virus dataset. Using it on protein k-mers, or on sequences from many hosts as in
+  the MERS-CoV and HIV-1 examples of this documentation, is DiMA's extension.
+- None of its values is corrected for sample size: they change with the number of sequences, so
+  compare them only between positions and datasets of similar support (see the previous
+  question).
+
+[Add similarity-weighted entropy](/how-to/analyse/#add-similarity-weighted-entropy-optional)
+shows an example, and
+[Similarity-weighted entropy](/explanation/entropy/#similarity-weighted-entropy-opt-in) gives
+the formulas.
+
 ### How do I plot entropy along the alignment?
 
 In the desktop app, export the entropy chart as PNG or SVG. From the command line, plot `entropy`
@@ -111,7 +145,7 @@ command-line tool and the desktop app are built on.
 
 ### Why do my results differ from the paper or from dima-cli 5.x?
 
-[Comparison with the paper](/explanation/paper-comparison/) reproduces the paper's results, and
+[Comparison with the papers](/explanation/paper-comparison/) reproduces the paper's results, and
 [Differences from DiMA v5.0.9](/explanation/differences/) lists every deliberate difference from
 5.x with its reason. For example, the default support threshold is 100, as in the paper, where
 5.x used 30.
@@ -128,8 +162,9 @@ threads, and every result file records the version that produced it
 Exact to far more digits than any analysis needs, but not to the last digit. Like any
 floating-point program, DiMA rounds. Its values are accurate to about 14 significant digits on
 alignments of thousands of sequences, and to at least 10 at 17.5 million sequences per
-position (the opt-in Chao–Wang–Jost estimator to about 15 digits at any size). The error is
-at least $10^{10}$ times smaller than the sampling error of the estimate. [Numerical accuracy](/explanation/numerical-accuracy/)
+position (the opt-in Chao–Wang–Jost estimator to about 15 digits at any size, the opt-in
+similarity-weighted entropy to at least 9). The error is at least $10^{10}$ times smaller than
+the sampling error of the estimate ($10^9$ times for similarity-weighted entropy). [Numerical accuracy](/explanation/numerical-accuracy/)
 has the measurements.
 
 ### How long will an analysis take, and how much memory does it need?

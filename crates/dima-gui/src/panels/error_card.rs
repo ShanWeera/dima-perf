@@ -90,6 +90,7 @@ pub fn show(ui: &mut Ui, card: &ErrorCard, t: &DesignTokens, out: &mut Vec<Msg>,
                         .button("Save run report\u{2026}")
                         .on_hover_text(super::help_text::export(
                             crate::workers::export::ExportKind::RunReport,
+                            crate::charts::metric::ChartMetric::Entropy,
                         ))
                         .clicked()
                 {

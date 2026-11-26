@@ -1,10 +1,28 @@
-//! The filter bar: position range, entropy range, motif classes and the low-support switch,
-//! with the shown/total count and "Reset". Changes are applied when the pointer is released
-//! (a drag does not refilter on every tick).
+//! The filter bar: position range, the value range of the metric the chart plots (entropy, or
+//! similarity-weighted entropy), motif classes and the low-support switch, with the shown/total
+//! count and "Reset". Changes are applied when the pointer is released (a drag does not
+//! refilter on every tick), and a value typed into a field when it is entered (Enter, Tab or a
+//! click elsewhere), not at every keystroke; Esc leaves the field without applying it.
+//!
+//! The two value fields show four decimals (a drag value otherwise picks its decimals from its
+//! speed and the screen's pixel size) and keep a typed value to those four decimals, a minimum
+//! that reads as 0 is 0 and a maximum that reads as the metric's largest value is that value
+//! exactly: a drag value stores the text it showed when it loses the focus, so tabbing through
+//! a field would otherwise change the bound by the rounding.
+//!
+//! The bar does not rearrange when its texts change: the position fields are as wide as their
+//! text at the last position, also while typed in, the value fields sit in slots as wide as the
+//! widest value of the metrics the results hold, the count and Reset start a row of their own
+//! whenever the longest count would not fit at the end of the last one, and when the metric can
+//! be switched the value label keeps the width of the longer name. Each field's text is only its
+//! value, so each is named (for screen readers, and as its tooltip) by what it bounds.
 
 use egui::{RichText, Ui};
 
+use super::common::{fixed_width_slot, text_width, with_name};
+use super::help_text;
 use crate::app::msg::Msg;
+use crate::charts::metric::ChartMetric;
 use crate::state::filter::MOTIFS;
 use crate::state::session::Session;
 use crate::theme::DesignTokens;
@@ -17,25 +35,75 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
         ui.label("Positions")
             .on_hover_text("Show a range of positions");
         let r = &mut s.filter.position_range;
-        changed |= ui
-            .add(egui::DragValue::new(&mut r.0).prefix("from ").range(b.positions.0..=b.positions.1))
-            .changed();
-        changed |= ui
-            .add(egui::DragValue::new(&mut r.1).prefix("to ").range(b.positions.0..=b.positions.1))
-            .changed();
+        let before = *r;
+        for (bound, prefix, name) in [
+            (&mut r.0, "from ", "First position shown"),
+            (&mut r.1, "to ", "Last position shown"),
+        ] {
+            let width = field_width(ui, &format!("{prefix}{}", b.positions.1));
+            let previous = *bound;
+            let field = egui::DragValue::new(&mut *bound)
+                .prefix(prefix)
+                .range(b.positions.0..=b.positions.1)
+                .update_while_editing(false);
+            let size = egui::vec2(width, ui.spacing().interact_size.y);
+            let response = with_name(ui.add_sized(size, field), name);
+            undo_escape(ui, &response, bound, previous);
+        }
+        changed |= *r != before;
         ui.add_space(t.space_12);
-        ui.label("Entropy").on_hover_text(
-            "Show positions whose entropy is in this range (bits). Positions without usable \
-             support have no entropy and are not affected.",
-        );
-        let e = &mut s.filter.entropy_range;
-        let max = b.max_entropy.max(0.0);
-        changed |= ui
-            .add(egui::DragValue::new(&mut e.0).prefix("min ").speed(0.01).range(0.0..=max).max_decimals(4))
-            .changed();
-        changed |= ui
-            .add(egui::DragValue::new(&mut e.1).prefix("max ").speed(0.01).range(0.0..=max).max_decimals(4))
-            .changed();
+        let metric = s.metric;
+        let label = |ui: &mut Ui| {
+            ui.label(metric.name())
+                .on_hover_text(help_text::value_range(metric));
+        };
+        if ChartMetric::SimilarityWeighted.available(&s.results) {
+            let font = egui::TextStyle::Body.resolve(ui.style());
+            let width = ChartMetric::ALL
+                .map(|m| text_width(ui, m.name(), font.clone()))
+                .into_iter()
+                .fold(0.0, f32::max);
+            fixed_width_slot(ui, width, label);
+        } else {
+            label(ui);
+        }
+        let v = &mut s.filter.value_range;
+        let max = b.max_for(metric).max(0.0);
+        let speed = drag_speed(max);
+        let before = *v;
+        for (bound, prefix, end, which) in [
+            (&mut v.0, "min ", 0.0, "Lowest"),
+            (&mut v.1, "max ", max, "Highest"),
+        ] {
+            let width = ChartMetric::ALL
+                .into_iter()
+                .filter(|m| m.available(&s.results))
+                .map(|m| {
+                    let widest = b.max_for(m).max(0.0);
+                    field_width(ui, &format!("{prefix}{widest:.VALUE_DECIMALS$}"))
+                })
+                .fold(0.0, f32::max);
+            let previous = *bound;
+            let field = egui::DragValue::new(&mut *bound)
+                .prefix(prefix)
+                .speed(speed)
+                .range(0.0..=max)
+                .fixed_decimals(VALUE_DECIMALS)
+                .custom_parser(parse_value)
+                .update_while_editing(false);
+            let response = with_name(
+                fixed_width_slot(ui, width, |ui| ui.add(field)),
+                &format!("{which} {} shown, in bits", metric.in_sentence()),
+            );
+            undo_escape(ui, &response, bound, previous);
+            // Not while the field has the focus, where a new value would replace the text
+            // being typed.
+            if !response.has_focus() {
+                *bound = snapped(*bound, end);
+            }
+        }
+        // Only a change of the bounds themselves: leaving a field changes nothing by itself.
+        changed |= *v != before;
         ui.add_space(t.space_12);
         ui.label("Motifs")
             .on_hover_text("Show positions with at least one variant of a checked motif");
@@ -47,24 +115,179 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
             .checkbox(&mut s.filter.include_low_support, "Low support (NS, LS, ELS)")
             .on_hover_text("Show positions with support \u{2264} T: none (NS), below T (LS) and equal to T (ELS)")
             .changed();
+        let (shown, total) = (s.shown.len(), s.results.results.len());
+        let count = format!("{shown} of {total} positions");
+        // The count and Reset end the last row; a row without room for them would put them
+        // over its controls, so they start a row of their own instead. The room is that of the
+        // longest count (the interface's digits are all as wide), so a count that changes with
+        // a filter or a metric switch never moves them to another row.
+        let longest = format!("{total} of {total} positions");
+        if ui.available_size_before_wrap().x < right_group_width(ui, &longest) {
+            ui.end_row();
+        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui
-                .add_enabled(!s.filter.is_everything(b), egui::Button::new("Reset"))
+                .add_enabled(!s.filter.is_everything(b, metric), egui::Button::new("Reset"))
                 .on_hover_text("Show every position")
                 .clicked()
             {
                 out.push(Msg::ResetFilters);
             }
-            let (shown, total) = (s.shown.len(), s.results.results.len());
-            let text = format!("{shown} of {total} positions");
             if shown == total {
-                ui.weak(text);
+                ui.weak(count);
             } else {
-                ui.label(RichText::new(text).strong().color(t.accent));
+                ui.label(RichText::new(count).strong().color(t.accent));
             }
         });
     });
     if changed {
         out.push(Msg::FiltersEdited);
+    }
+}
+
+/// Decimals of the value fields.
+const VALUE_DECIMALS: usize = 4;
+
+/// `bound`, or `end` (0 for the minimum, the largest value for the maximum) when the field
+/// shows them alike, with [`VALUE_DECIMALS`] decimals as the field formats its value.
+fn snapped(bound: f64, end: f64) -> f64 {
+    if format!("{bound:.VALUE_DECIMALS$}") == format!("{end:.VALUE_DECIMALS$}") {
+        end
+    } else {
+        bound
+    }
+}
+
+/// Puts `bound` back to `previous`, its value before the frame, when Esc took the focus of
+/// `field`, so that Esc drops what was typed. egui applies the text of a field that lost the
+/// focus once more on the next frame, Esc or not (and that frame comes only with the next
+/// input); the bound is put back on that frame, which is asked for at once.
+fn undo_escape<T: Copy + Default + Send + Sync + 'static>(
+    ui: &Ui,
+    field: &egui::Response,
+    bound: &mut T,
+    previous: T,
+) {
+    let key = field.id.with("escaped");
+    if field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        ui.data_mut(|d| d.insert_temp(key, previous));
+        ui.ctx().request_repaint();
+    } else if let Some(kept) = ui.data_mut(|d| d.remove_temp::<T>(key)) {
+        *bound = kept;
+    }
+}
+
+/// A value typed into a value field, kept to the [`VALUE_DECIMALS`] decimals the field shows
+/// (`None` for text that is not a number, which leaves the bound as it was). Stored as shown,
+/// a typed bound is what the field reads again when it next loses the focus, so tabbing
+/// through it changes nothing.
+fn parse_value(text: &str) -> Option<f64> {
+    text.trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|v| v.is_finite())
+        .map(|v| egui::emath::round_to_decimals(v, VALUE_DECIMALS))
+}
+
+/// The width of a field showing `text` (its prefix and widest value): the text in the
+/// drag-value style, the button's padding on both sides, and one digit to spare for measuring
+/// the text whole rather than in its two parts.
+fn field_width(ui: &Ui, text: &str) -> f32 {
+    let font = ui.style().drag_value_text_style.resolve(ui.style());
+    let spacing = ui.spacing();
+    let width = text_width(ui, text, font.clone())
+        + 2.0 * spacing.button_padding.x
+        + text_width(ui, "0", font);
+    width.max(spacing.interact_size.x)
+}
+
+/// Value change per pixel dragged on a range of `0..=max` bits: the full range in 200 pixels,
+/// whatever the metric's scale (similarity-weighted entropy is often a small fraction of a bit).
+fn drag_speed(max: f64) -> f64 {
+    (max / 200.0).max(1e-4)
+}
+
+/// The width the count `text` and the Reset button take at the end of the bar.
+fn right_group_width(ui: &Ui, text: &str) -> f32 {
+    let width = |s: &str, style: egui::TextStyle| {
+        ui.painter()
+            .layout_no_wrap(
+                s.to_owned(),
+                style.resolve(ui.style()),
+                egui::Color32::PLACEHOLDER,
+            )
+            .size()
+            .x
+    };
+    let spacing = ui.spacing();
+    width(text, egui::TextStyle::Body)
+        + width("Reset", egui::TextStyle::Button)
+        + 2.0 * spacing.button_padding.x
+        + 2.0 * spacing.item_spacing.x
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{VALUE_DECIMALS, parse_value, snapped};
+
+    /// A typed value is kept to the four decimals the field shows, so the text the field reads
+    /// back when it loses the focus is that value again; text that is not a finite number
+    /// leaves the bound as it was.
+    #[test]
+    fn a_typed_value_is_kept_as_the_field_shows_it() {
+        assert_eq!(parse_value("0.111293"), Some(0.1113));
+        assert_eq!(parse_value(" 0.11126 "), Some(0.1113));
+        assert_eq!(parse_value("1.5878"), Some(1.5878));
+        assert_eq!(parse_value("2"), Some(2.0));
+        assert_eq!(parse_value("0.00004"), Some(0.0));
+        for text in ["", "abc", "1.2.3", "nan", "inf", "-inf"] {
+            assert_eq!(parse_value(text), None, "{text:?}");
+        }
+        for v in [0.1113, 1.5878, 0.0001, 0.4548] {
+            let shown = format!("{v:.VALUE_DECIMALS$}");
+            assert_eq!(parse_value(&shown), Some(v), "read back unchanged");
+        }
+    }
+
+    /// A bound that reads as its end of the range is that end, so a field that is left without
+    /// a change keeps the full range exactly; one that reads otherwise is kept.
+    #[test]
+    fn a_bound_that_reads_as_an_end_is_that_end() {
+        // The largest entropy of the MERS spike sample, and maxima that round up and down.
+        for max in [1.587_825_175_645_670_3, 0.454_776, 0.454_74, 2.0, 0.000_03] {
+            let shown: f64 = format!("{max:.VALUE_DECIMALS$}").parse().unwrap();
+            assert_eq!(snapped(shown, max), max, "{max}");
+            assert_eq!(snapped(max, max), max);
+        }
+        assert_eq!(snapped(1.5877, 1.587_825_175_645_670_3), 1.5877);
+        // Typed with more decimals: what the field shows decides, whichever way the end rounds.
+        let mers = 1.587_825_175_645_670_3;
+        assert_eq!(snapped(1.587_77, mers), mers, "reads 1.5878");
+        assert_eq!(snapped(1.587_76, mers), mers, "reads 1.5878");
+        assert_eq!(snapped(1.587_74, mers), 1.587_74, "reads 1.5877");
+        assert_eq!(
+            snapped(0.454_73, 0.454_776),
+            0.454_73,
+            "reads 0.4547, not 0.4548"
+        );
+        assert_eq!(snapped(0.454_79, 0.454_776), 0.454_776, "reads 0.4548");
+        assert_eq!(snapped(0.0, 0.0), 0.0);
+        assert_eq!(snapped(0.000_04, 0.0), 0.0, "reads 0.0000");
+        assert_eq!(
+            snapped(0.0001, 0.0),
+            0.0001,
+            "the smallest step shown is kept"
+        );
+    }
+
+    #[test]
+    fn dragging_crosses_the_range_in_200_pixels() {
+        assert!((super::drag_speed(1.6) - 0.008).abs() < 1e-12);
+        assert!((super::drag_speed(0.02) - 0.0001).abs() < 1e-12);
+        assert_eq!(
+            super::drag_speed(0.0),
+            1e-4,
+            "an all-zero range still moves"
+        );
     }
 }

@@ -2,11 +2,14 @@
 """Writes the expected values of the paper test (crates/dima-core/tests/paper.rs).
 
 Runs the reference implementation (dima_reference.py, in this directory) on the four bundled
-datasets with the parameters the test uses, and writes the numbers the test compares with
-`common::assert_agrees` to crates/dima-core/tests/paper_expected/mod.rs, a generated file that is
-never edited by hand. `--check` fails if that file is out of date (CI), and prints the
-difference. Standard library only; the five runs take about 45 s on four cores (75 s of CPU),
-almost all of it in the HIV-1 datasets; about 250 MB of memory.
+datasets, Wu 2025's two ToBRFV samples and the ten PSTVd loop-27 libraries of Wu et al. 2024
+with the parameters the test uses, and writes the
+numbers the test compares with `common::assert_agrees` to
+crates/dima-core/tests/paper_expected/mod.rs, a generated file that is never edited by hand.
+Every run but the T = 30 one computes similarity-weighted entropy (pairwise, as Wu defines it),
+so the unchanged values also show that the option changes nothing else. `--check` fails if that
+file is out of date (CI), and prints the difference. Standard library only; the 17 runs take
+about a minute on four cores, almost all of it in the HIV-1 datasets; about 250 MB of memory.
 
 The dima entropy (and so every mean and extreme) uses the platform's `math.log`, whose last bit
 may differ between operating systems (README.md, "Determinism"); the committed file is the
@@ -29,13 +32,44 @@ ORACLE = Path(__file__).resolve().parent / "dima_reference.py"
 OUT = ROOT / "crates/dima-core/tests/paper_expected/mod.rs"
 
 # (module, input, oracle options, description); paths from the repository root.
+SWE = "--similarity-weighted-entropy"
 RUNS = [
     ("mers_aa_t30", "samples/mers_spike_aa.fasta", ["-s", "30"], "MERS-CoV spike protein, T = 30"),
-    ("mers_aa_t100", "samples/mers_spike_aa.fasta", [], "MERS-CoV spike protein, defaults (T = 100)"),
-    ("mers_nt", "tests/data/MERS_Spike_nt.fasta.bz2", [], "MERS-CoV spike gene, defaults"),
-    ("hiv_pro", "tests/data/HIV1_ALL_2020_pol_PRO.fasta.bz2", [], "HIV-1 pol protein, defaults"),
-    ("hiv_dna", "tests/data/HIV1_FLT_2022_pol_DNA.fasta.bz2", [], "HIV-1 pol gene, defaults"),
+    ("mers_aa_t100", "samples/mers_spike_aa.fasta", [SWE], "MERS-CoV spike protein, defaults (T = 100)"),
+    ("mers_nt", "tests/data/MERS_Spike_nt.fasta.bz2", [SWE], "MERS-CoV spike gene, defaults"),
+    ("hiv_pro", "tests/data/HIV1_ALL_2020_pol_PRO.fasta.bz2", [SWE], "HIV-1 pol protein, defaults"),
+    ("hiv_dna", "tests/data/HIV1_FLT_2022_pol_DNA.fasta.bz2", [SWE], "HIV-1 pol gene, defaults"),
+    (
+        "tobrfv_tm2",
+        "tests/data/tobrfv_tm2.fasta.bz2",
+        ["-a", "dna", "-k", "120", SWE],
+        "ToBRFV in tm-2 plants (Wu 2025, Supplementary File 2), one 120-mer position",
+    ),
+    (
+        "tobrfv_tm22",
+        "tests/data/tobrfv_tm22.fasta.bz2",
+        ["-a", "dna", "-k", "120", SWE],
+        "ToBRFV in Tm-2^2 plants (Wu 2025, Supplementary File 2), one 120-mer position",
+    ),
 ]
+# The PSTVd loop-27 libraries (Wu et al. 2024, S2 Table; Wu 2025, Fig. 5c): the mutant pool and
+# three plants each of the inoculated region, the leaf margins and systemic leaves.
+PSTVD = [("pool", "the mutant pool")] + [
+    (f"{part.lower()}{plant}", f"{where}, plant {plant}")
+    for part, where in (("IR", "inoculated region"), ("LM", "inoculated-leaf margin"), ("Sys", "systemic leaves"))
+    for plant in (1, 2, 3)
+]
+RUNS += [
+    (
+        f"pstvd_{stem}",
+        f"tests/data/pstvd_loop27_{stem}.fasta.bz2",
+        ["-a", "dna", "-k", "6", SWE],
+        f"PSTVd loop 27, {what} (Wu et al. 2024, S2 Table), one 6-mer position",
+    )
+    for stem, what in PSTVD
+]
+# Runs of one k-mer position (the whole sequence), whose position 1 is also written.
+ONE_POSITION = ("tobrfv", "pstvd")
 
 
 def without_motifs(obj: dict) -> dict:
@@ -78,6 +112,28 @@ pub struct Position {
     /// Sample coverage.
     pub coverage: f64,
 }
+
+/// Similarity-weighted entropy summary of one run (eligible positions).
+pub struct SimilaritySummary {
+    /// Mean similarity-weighted entropy.
+    pub mean: f64,
+    /// Mean observed entropy of the same positions.
+    pub observed_mean: f64,
+    /// Lowest similarity-weighted entropy.
+    pub lowest: f64,
+    /// Highest similarity-weighted entropy.
+    pub highest: f64,
+}
+
+/// The similarity-weighted values of one position.
+pub struct SimilarityPosition {
+    /// Similarity-weighted entropy.
+    pub similarity_weighted: f64,
+    /// Observed entropy / log2 D.
+    pub normalised_observed: f64,
+    /// Similarity-weighted entropy / log2 D.
+    pub normalised_similarity_weighted: f64,
+}
 """
 
 
@@ -113,6 +169,33 @@ def position(name: str, r: dict, number: int) -> str:
     )
 
 
+def similarity_summary(name: str, r: dict) -> str:
+    s = r["similarity_weighted_entropy_summary"]
+    lo, hi = s["lowest_entropy"], s["highest_entropy"]
+    return (
+        "/// Similarity-weighted entropy of the run above.\n"
+        f"pub const {name.upper()}_SIMILARITY: SimilaritySummary = SimilaritySummary {{\n"
+        f"    mean: {s['average_entropy']!r},\n"
+        f"    observed_mean: {s['average_observed_entropy']!r},\n"
+        f"    // {where(lo)}\n    lowest: {lo['entropy']!r},\n"
+        f"    // {where(hi)}\n    highest: {hi['entropy']!r},\n"
+        "};\n"
+    )
+
+
+def similarity_position(name: str, r: dict, number: int) -> str:
+    p = r["positions"][number - 1]
+    assert p["position"] == number
+    return (
+        f"/// The similarity-weighted values of position {number} of the run above.\n"
+        f"pub const {name.upper()}_POS{number}_SIMILARITY: SimilarityPosition = SimilarityPosition {{\n"
+        f"    similarity_weighted: {p['similarity_weighted_entropy']!r},\n"
+        f"    normalised_observed: {p['normalised_observed_entropy']!r},\n"
+        f"    normalised_similarity_weighted: {p['normalised_similarity_weighted_entropy']!r},\n"
+        "};\n"
+    )
+
+
 def render(results: dict) -> str:
     versions = {r["reference_version"] for r in results.values()}
     assert len(versions) == 1, versions
@@ -124,10 +207,19 @@ def render(results: dict) -> str:
         TYPES,
     ]
     for name, data, options, description in RUNS:
-        text = summary(name, data, options, description, results[name])
+        r = results[name]
+        text = summary(name, data, options, description, r)
         if name.startswith("mers_aa"):
             # The paper's Fig. 1C.
-            text += position(name, results[name], 25)
+            text += position(name, r, 25)
+        if name.startswith(ONE_POSITION):
+            text += position(name, r, 1)
+        if SWE in options:
+            text += similarity_summary(name, r)
+            if name == "mers_aa_t100":
+                text += similarity_position(name, r, 25)
+            if name.startswith(ONE_POSITION):
+                text += similarity_position(name, r, 1)
         parts.append(text)
     return "\n".join(parts)
 

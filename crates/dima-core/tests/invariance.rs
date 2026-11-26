@@ -25,6 +25,7 @@ fn mers_params() -> AnalysisParams {
             "Year".into(),
         ]),
         metadata_fields: Some(vec!["Host".into(), "Year".into()]),
+        similarity_weighted_entropy: true,
         ..AnalysisParams::default()
     }
 }
@@ -72,7 +73,13 @@ fn threads_and_batches_do_not_change_a_single_byte() {
             mers_params(),
         ),
         // NS/LS positions and several batches after the probe.
-        (large_input(dir.path()), AnalysisParams::default()),
+        (
+            large_input(dir.path()),
+            AnalysisParams {
+                similarity_weighted_entropy: true,
+                ..AnalysisParams::default()
+            },
+        ),
     ];
     for (source, params) in &cases {
         let reference =
@@ -102,6 +109,56 @@ fn threads_and_batches_do_not_change_a_single_byte() {
                 );
             }
         }
+    }
+}
+
+/// Similarity-weighted entropy only adds its own values: with them set back to `null`, the
+/// parameter to off and Wu's references removed, the results are identical bit for bit.
+#[test]
+fn similarity_weighted_entropy_changes_nothing_else() {
+    for (source, params) in [
+        (
+            Source::Path(root().join("samples/mers_spike_aa.fasta")),
+            AnalysisParams::default(),
+        ),
+        (
+            Source::Path(root().join("tests/data/MERS_Spike_nt.fasta.bz2")),
+            mers_params(),
+        ),
+    ] {
+        let off = AnalysisParams {
+            similarity_weighted_entropy: false,
+            ..params.clone()
+        };
+        let on = AnalysisParams {
+            similarity_weighted_entropy: true,
+            ..params
+        };
+        let without = run_with(&source, &off, &RunControl::new());
+        let mut with = run_with(&source, &on, &RunControl::new());
+        assert!(with.similarity_weighted_entropy_summary.is_some());
+        assert!(
+            with.results
+                .iter()
+                .any(|p| p.similarity_weighted_entropy > Some(0.0))
+        );
+        with.similarity_weighted_entropy_summary = None;
+        with.run.parameters.similarity_weighted_entropy =
+            without.run.parameters.similarity_weighted_entropy.clone();
+        with.run
+            .references
+            .retain(|r| r.key != "wu2025" && r.key != "grishin1995");
+        for p in &mut with.results {
+            p.similarity_weighted_entropy = None;
+            p.normalised_observed_entropy = None;
+            p.normalised_similarity_weighted_entropy = None;
+        }
+        assert_eq!(
+            serde_json::to_string(&with).unwrap(),
+            serde_json::to_string(&without).unwrap(),
+            "{}",
+            source.display_name()
+        );
     }
 }
 

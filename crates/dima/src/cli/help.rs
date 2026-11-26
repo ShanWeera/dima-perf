@@ -32,8 +32,10 @@ pub fn about_long() -> String {
          k-mer position it counts the distinct k-mers, estimates their Shannon entropy with a \
          correction for sample size, classifies variants into Index, Major, Minor and Unique \
          motifs, and reports their incidence, optionally stratified by FASTA header metadata. \
+         On request it also computes their similarity-weighted entropy (Wu 2025), which is not \
+         corrected for sample size. \
          Conserved stretches (historically conserved sequences) are reported separately.{}",
-        refs(&[c("tharanga2025")])
+        refs(&[c("tharanga2025"), dima_core::similarity::WU2025])
     )
 }
 
@@ -117,6 +119,17 @@ pub fn estimator() -> String {
     )
 }
 
+pub fn similarity_weighted_entropy() -> String {
+    format!(
+        "{}\n\n{}\n\n{} The values are written only to the results (JSON, JSONL) and the \
+         positions table, and are null (NA) without this option.{}",
+        dima_core::similarity::DESCRIPTION,
+        dima_core::similarity::EVIDENCE,
+        dima_core::similarity::sample_size(),
+        refs(&dima_core::similarity::REFERENCES)
+    )
+}
+
 pub fn min_coverage() -> String {
     format!(
         "Flag positions whose estimated sample coverage (the probability that one more sequence \
@@ -173,8 +186,8 @@ pub fn output_format() -> String {
 pub fn table() -> String {
     format!(
         "The table written by -O tsv: positions, variants, metadata or hcs. Tables are tidy (one \
-         row per observation), tab-separated with RFC 4180 quoting, and use NA for undefined \
-         values.{}",
+         row per observation), tab-separated with RFC 4180 quoting, and use NA for undefined or \
+         not computed values.{}",
         refs(&[c("wickham2014"), c("broman2018"), c("rfc4180")])
     )
 }
@@ -279,6 +292,8 @@ pub mod short {
     pub const VALIDATION: &str =
         "How characters outside the alphabet are handled [default: strict]";
     pub const ESTIMATOR: &str = "Entropy estimator [default: dima]";
+    pub const SIMILARITY_WEIGHTED_ENTROPY: &str =
+        "Also compute similarity-weighted entropy (Wu 2025) and normalised entropies";
     pub const MIN_COVERAGE: &str = "Flag positions whose sample coverage is below X (0 to 1)";
     pub const QUERY_NAME: &str = "Name of the protein or gene [default: from the file name]";
     pub const HEADER_FORMAT: &str =
@@ -321,6 +336,7 @@ mod tests {
             super::support_threshold(),
             super::alphabet(),
             super::estimator(),
+            super::similarity_weighted_entropy(),
             super::min_coverage(),
             super::header_format(),
             super::table(),

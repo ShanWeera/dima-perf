@@ -12,8 +12,8 @@ use unicode_normalization::char::is_combining_mark;
 use crate::markdown::linkify;
 
 /// The references behind the methods any run can use (every estimator, both alphabets,
-/// alphabet detection, conserved sequences), without the DiMA paper itself (it is the
-/// preferred citation) and in a stable order.
+/// alphabet detection, similarity-weighted entropy, conserved sequences), without the DiMA
+/// paper itself (it is the preferred citation) and in a stable order.
 pub fn method_references() -> Vec<&'static Citation> {
     let mut keys: Vec<String> = Vec::new();
     for estimator in [
@@ -23,7 +23,13 @@ pub fn method_references() -> Vec<&'static Citation> {
         Estimator::Raw,
     ] {
         for alphabet in [Alphabet::Protein, Alphabet::Dna] {
-            for r in dima_core::provenance::references(estimator, alphabet, true) {
+            let used = dima_core::provenance::MethodsUsed {
+                estimator,
+                alphabet,
+                alphabet_detected: true,
+                similarity_weighted_entropy: true,
+            };
+            for r in dima_core::provenance::references(used) {
                 keys.push(r.key);
             }
         }
@@ -103,7 +109,9 @@ fn natural(a: &str, b: &str) -> Ordering {
 
 fn heading(tier: Tier) -> &'static str {
     match tier {
-        Tier::Domain => "Bioinformatics, computational biology and statistics",
+        Tier::Domain => {
+            "Bioinformatics, computational biology, virology, microbiology, ecology and evolution, and biostatistics"
+        }
         Tier::General => "General sources [general]",
         Tier::Standard => "Standards and specifications [standard]",
     }

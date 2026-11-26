@@ -102,6 +102,21 @@
   "volume": null,
   "year": 2019
  },
+ "10.1007/BF00175826": {
+  "authors": [
+   [
+    "Grishin",
+    "Nick V."
+   ]
+  ],
+  "issue": "5",
+  "key": "grishin1995",
+  "pages": "675-679",
+  "title": "Estimation of the number of amino acid substitutions per site when the substitution rate varies among sites",
+  "venue": "Journal of Molecular Evolution",
+  "volume": "41",
+  "year": 1995
+ },
  "10.1007/BF02166031": {
   "authors": [
    [
@@ -119,6 +134,71 @@
   "title": "Truncation error estimates for Stieltjes fractions",
   "venue": "Numerische Mathematik",
   "volume": "9",
+  "year": 1966
+ },
+ "10.1007/s11075-025-02299-z": {
+  "authors": [
+   [
+    "Filipuk",
+    "Galina"
+   ],
+   [
+    "Mañas-Mañas",
+    "Juan F."
+   ],
+   [
+    "Moreno-Balcázar",
+    "Juan J."
+   ],
+   [
+    "Rodríguez-Perales",
+    "Cristina"
+   ]
+  ],
+  "issue": "3",
+  "key": "filipuk2026",
+  "pages": "1891-1922",
+  "title": "Differential system related to generalised Krawtchouk polynomials: iterated regularisation and Painlevé equation",
+  "venue": "Numerical Algorithms",
+  "volume": "102",
+  "year": 2026
+ },
+ "10.1007/s11749-022-00844-9": {
+  "authors": [
+   [
+    "Ion",
+    "Roxana A."
+   ],
+   [
+    "Klaassen",
+    "Chris A. J."
+   ],
+   [
+    "van den Heuvel",
+    "Edwin R."
+   ]
+  ],
+  "issue": "2",
+  "key": "ion2023",
+  "pages": "566-601",
+  "title": "Sharp inequalities of Bienaymé–Chebyshev and Gauß type for possibly asymmetric intervals around the mean",
+  "venue": "TEST",
+  "volume": "32",
+  "year": 2023
+ },
+ "10.1016/0022-5193(66)90013-0": {
+  "authors": [
+   [
+    "Pielou",
+    "E. C."
+   ]
+  ],
+  "issue": null,
+  "key": "pielou1966",
+  "pages": "131-144",
+  "title": "The measurement of diversity in different types of biological collections",
+  "venue": "Journal of Theoretical Biology",
+  "volume": "13",
   "year": 1966
  },
  "10.1016/S0021-9258(18)89400-5": {
@@ -279,6 +359,25 @@
   "venue": "Interacting with Computers",
   "volume": "19",
   "year": 2007
+ },
+ "10.1016/j.jat.2019.01.007": {
+  "authors": [
+   [
+    "Diaconis",
+    "Persi"
+   ],
+   [
+    "Griffiths",
+    "Robert C."
+   ]
+  ],
+  "issue": null,
+  "key": "diaconis2019",
+  "pages": "1-30",
+  "title": "Reproducing kernel orthogonal polynomials on the multinomial distribution",
+  "venue": "Journal of Approximation Theory",
+  "volume": "242",
+  "year": 2019
  },
  "10.1021/acs.jproteome.5b00981": {
   "authors": [
@@ -1262,6 +1361,25 @@
   "volume": "3",
   "year": 2016
  },
+ "10.1057/jors.1993.141": {
+  "authors": [
+   [
+    "Gallego",
+    "Guillermo"
+   ],
+   [
+    "Moon",
+    "Ilkyeong"
+   ]
+  ],
+  "issue": "8",
+  "key": "gallego1993",
+  "pages": "825-834",
+  "title": "The Distribution Free Newsboy Problem: Review and Extensions",
+  "venue": "Journal of the Operational Research Society",
+  "volume": "44",
+  "year": 1993
+ },
  "10.1073/pnas.85.8.2444": {
   "authors": [
    [
@@ -1418,6 +1536,21 @@
   "venue": "Briefings in Bioinformatics",
   "volume": "19",
   "year": 2018
+ },
+ "10.1093/bioinformatics/10.4.379": {
+  "authors": [
+   [
+    "Gotoh",
+    "Osamu"
+   ]
+  ],
+  "issue": "4",
+  "key": "gotoh1994",
+  "pages": "379-387",
+  "title": "Further improvement in methods of group-to-group sequence alignment with generalized profile operations",
+  "venue": "Computer Applications in the Biosciences",
+  "volume": "10",
+  "year": 1994
  },
  "10.1093/bioinformatics/btm270": {
   "authors": [
@@ -1593,6 +1726,45 @@
   "venue": "Bioinformatics",
   "volume": "27",
   "year": 2011
+ },
+ "10.1093/bioinformatics/btt768": {
+  "authors": [
+   [
+    "Gregori",
+    "Josep"
+   ],
+   [
+    "Salicrú",
+    "Miquel"
+   ],
+   [
+    "Domingo",
+    "Esteban"
+   ],
+   [
+    "Sanchez",
+    "Alex"
+   ],
+   [
+    "Esteban",
+    "Juan I."
+   ],
+   [
+    "Rodríguez-Frías",
+    "Francisco"
+   ],
+   [
+    "Quer",
+    "Josep"
+   ]
+  ],
+  "issue": "8",
+  "key": "gregori2014",
+  "pages": "1104-1111",
+  "title": "Inference with viral quasispecies diversity indices: clonal and NGS approaches",
+  "venue": "Bioinformatics",
+  "volume": "30",
+  "year": 2014
  },
  "10.1093/bioinformatics/btw354": {
   "authors": [
@@ -2003,6 +2175,91 @@
   "venue": "Molecular Biology and Evolution",
   "volume": "17",
   "year": 2000
+ },
+ "10.1093/ve/veaf029": {
+  "authors": [
+   [
+    "Wu",
+    "Jian"
+   ]
+  ],
+  "issue": "1",
+  "key": "wu2025",
+  "pages": "veaf029",
+  "title": "Similarity-weighted entropy for quantifying genetic diversity in viral quasispecies",
+  "venue": "Virus Evolution",
+  "volume": "11",
+  "year": 2025
+ },
+ "10.1093/ve/vey041": {
+  "authors": [
+   [
+    "Zhao",
+    "Lei"
+   ],
+   [
+    "Illingworth",
+    "Christopher J R"
+   ]
+  ],
+  "issue": "1",
+  "key": "zhao2019",
+  "pages": "vey041",
+  "title": "Measurements of intrahost viral diversity require an unbiased diversity metric",
+  "venue": "Virus Evolution",
+  "volume": "5",
+  "year": 2019
+ },
+ "10.1099/jgv.0.002306": {
+  "authors": [
+   [
+    "Mo",
+    "Han"
+   ],
+   [
+    "Li",
+    "Hui"
+   ],
+   [
+    "Yi",
+    "Liu"
+   ],
+   [
+    "Qian",
+    "Ke"
+   ],
+   [
+    "Lin",
+    "Juan"
+   ],
+   [
+    "Lin",
+    "Ziqi"
+   ],
+   [
+    "He",
+    "Fenglan"
+   ],
+   [
+    "Zhang",
+    "Xian"
+   ],
+   [
+    "Ni",
+    "Xiansheng"
+   ],
+   [
+    "Zhou",
+    "Xianfeng"
+   ]
+  ],
+  "issue": "7",
+  "key": "mo2026",
+  "pages": "002306",
+  "title": "Evolutionary and molecular characteristics of high-Shannon entropy codons in VP1 of Coxsackievirus A6",
+  "venue": "Journal of General Virology",
+  "volume": "107",
+  "year": 2026
  },
  "10.1103/PhysRevLett.80.197": {
   "authors": [
@@ -2939,6 +3196,25 @@
   "volume": "15",
   "year": 2003
  },
+ "10.1186/1471-2105-7-415": {
+  "authors": [
+   [
+    "Raghava",
+    "G. P. S."
+   ],
+   [
+    "Barton",
+    "Geoffrey J"
+   ]
+  ],
+  "issue": "1",
+  "key": "raghava2006",
+  "pages": "415",
+  "title": "Quantification of the variation in percentage identity for protein sequence alignments",
+  "venue": "BMC Bioinformatics",
+  "volume": "7",
+  "year": 2006
+ },
  "10.1186/1471-2105-9-S1-S18": {
   "authors": [
    [
@@ -3250,6 +3526,21 @@
   "venue": "Journal of the American Medical Informatics Association",
   "volume": "13",
   "year": 2006
+ },
+ "10.1214/ECP.v18-2659": {
+  "authors": [
+   [
+    "Rio",
+    "Emmanuel"
+   ]
+  ],
+  "issue": null,
+  "key": "rio2013",
+  "pages": "44",
+  "title": "On McDiarmid's concentration inequality",
+  "venue": "Electronic Communications in Probability",
+  "volume": "18",
+  "year": 2013
  },
  "10.1214/aoms/1177730497": {
   "authors": [
@@ -3987,6 +4278,41 @@
   "volume": "3",
   "year": 2007
  },
+ "10.1371/journal.ppat.1012142": {
+  "authors": [
+   [
+    "Wu",
+    "Jian"
+   ],
+   [
+    "Zhang",
+    "Yuhong"
+   ],
+   [
+    "Nie",
+    "Yuxin"
+   ],
+   [
+    "Yan",
+    "Fei"
+   ],
+   [
+    "Zirbel",
+    "Craig L."
+   ],
+   [
+    "Bisaro",
+    "David M."
+   ]
+  ],
+  "issue": "4",
+  "key": "wu2024",
+  "pages": "e1012142",
+  "title": "RNA three-dimensional structure drives the sequence organization of potato spindle tuber viroid quasispecies",
+  "venue": "PLOS Pathogens",
+  "volume": "20",
+  "year": 2024
+ },
  "10.14778/2732951.2732953": {
   "authors": [
    [
@@ -4124,6 +4450,25 @@
   "volume": "59",
   "year": 2014
  },
+ "10.1890/10-2402.1": {
+  "authors": [
+   [
+    "Leinster",
+    "Tom"
+   ],
+   [
+    "Cobbold",
+    "Christina A."
+   ]
+  ],
+  "issue": "3",
+  "key": "leinster2012",
+  "pages": "477-489",
+  "title": "Measuring diversity: the importance of species similarity",
+  "venue": "Ecology",
+  "volume": "93",
+  "year": 2012
+ },
  "10.1890/11-1952.1": {
   "authors": [
    [
@@ -4142,6 +4487,21 @@
   "venue": "Ecology",
   "volume": "93",
   "year": 2012
+ },
+ "10.2307/1933900": {
+  "authors": [
+   [
+    "Sheldon",
+    "Andrew L."
+   ]
+  ],
+  "issue": "3",
+  "key": "sheldon1969",
+  "pages": "466-467",
+  "title": "Equitability Indices: Dependence on the Species Count",
+  "venue": "Ecology",
+  "volume": "50",
+  "year": 1969
  },
  "10.2307/1967627": {
   "authors": [
@@ -4172,6 +4532,25 @@
   "venue": "Biometrika",
   "volume": "40",
   "year": 1953
+ },
+ "10.2307/3545749": {
+  "authors": [
+   [
+    "Smith",
+    "Benjamin"
+   ],
+   [
+    "Wilson",
+    "J. Bastow"
+   ]
+  ],
+  "issue": "1",
+  "key": "smith1996",
+  "pages": "70-82",
+  "title": "A Consumer's Guide to Evenness Indices",
+  "venue": "Oikos",
+  "volume": "76",
+  "year": 1996
  },
  "10.32614/RJ-2015-022": {
   "authors": [

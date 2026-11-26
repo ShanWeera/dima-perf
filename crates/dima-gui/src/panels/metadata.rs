@@ -152,6 +152,15 @@ fn field_header(ui: &mut Ui, t: &DesignTokens, field: &str, values: usize, open:
         .clicked()
 }
 
+/// "84.5% (169)": a value's `share` of the sequences (0 to 1) as a percentage, which never
+/// reads 100.0% below all of them nor 0.0% above none, and its `count`.
+fn share_text(share: f64, count: u64) -> String {
+    format!(
+        "{} ({count})",
+        dima_core::human::percent_bounded(share * 100.0, 1)
+    )
+}
+
 fn value_row(ui: &mut Ui, t: &DesignTokens, value: &str, count: u64, total: u64) {
     #[allow(clippy::cast_precision_loss)]
     let share = (count as f64 / total as f64).clamp(0.0, 1.0);
@@ -161,7 +170,7 @@ fn value_row(ui: &mut Ui, t: &DesignTokens, value: &str, count: u64, total: u64)
     let pct = p.text(
         egui::pos2(rect.right(), rect.top() + 8.0),
         egui::Align2::RIGHT_CENTER,
-        format!("{:.1}% ({count})", share * 100.0),
+        share_text(share, count),
         egui::FontId::proportional(t.font_size_caption),
         t.text_secondary,
     );
@@ -194,4 +203,20 @@ fn value_row(ui: &mut Ui, t: &DesignTokens, value: &str, count: u64, total: u64)
     let label = format!("{value}, {count} of {total}");
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &label));
     response.on_hover_text(RichText::new(format!("{value}: {count} of {total}")));
+}
+
+#[cfg(test)]
+mod tests {
+    /// A share just below all the sequences, or just above none, is never shown as all or none.
+    #[test]
+    fn shares_never_round_to_all_or_none() {
+        let text = |count: u64, total: u64| {
+            #[allow(clippy::cast_precision_loss)]
+            super::share_text(count as f64 / total as f64, count)
+        };
+        assert_eq!(text(9_999, 10_000), "> 99.9% (9999)");
+        assert_eq!(text(10_000, 10_000), "100.0% (10000)");
+        assert_eq!(text(1, 100_000), "< 0.1% (1)");
+        assert_eq!(text(169, 200), "84.5% (169)");
+    }
 }

@@ -165,6 +165,40 @@ fn tiny() {
     );
 }
 
+/// The `tiny` alignment with similarity-weighted entropy: position 6 is an Index tie (no
+/// non-Index variant, but two distinct k-mers, so its normalised values are defined); the
+/// results, their JSON Lines and the positions table.
+#[test]
+fn tiny_similarity() {
+    let input = repo().join("tests/golden/tiny/input.fasta");
+    let input = input.to_str().unwrap();
+    case(
+        "tiny_similarity",
+        &[],
+        &[
+            args(&[
+                "analyze",
+                "-i",
+                input,
+                "-a",
+                "protein",
+                "-k",
+                "3",
+                "-s",
+                "4",
+                "--validation",
+                "permissive",
+                "--similarity-weighted-entropy",
+                "-o",
+                "results.json",
+                "--tsv-dir",
+                "tables",
+            ]),
+            args(&["view", "-i", "results.json", "-o", "results.jsonl"]),
+        ],
+    );
+}
+
 /// The paper's MERS-CoV spike protein dataset (Fig. 1C) with the default parameters.
 #[test]
 fn mers_spike_aa() {

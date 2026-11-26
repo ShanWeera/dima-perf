@@ -8,7 +8,7 @@ use dima_core::config::{Alphabet, AnalysisParams, Estimator, ValidationMode};
 use dima_core::control::RunControl;
 use dima_core::hcs::{self, HcsParams};
 use dima_core::input::Source;
-use dima_core::model::SCHEMA_VERSION;
+use dima_core::model::{HCS_SCHEMA_VERSION, SCHEMA_VERSION};
 use serde_json::Value;
 
 fn root() -> PathBuf {
@@ -71,10 +71,13 @@ fn fixture(text: &str, params: AnalysisParams) -> dima_core::model::Results {
 
 #[test]
 fn schema_versions_match_the_code() {
-    for name in ["results.schema.json", "hcs.schema.json"] {
+    for (name, version) in [
+        ("results.schema.json", SCHEMA_VERSION),
+        ("hcs.schema.json", HCS_SCHEMA_VERSION),
+    ] {
         assert_eq!(
             schema(name)["properties"]["schema_version"]["const"],
-            SCHEMA_VERSION,
+            version,
             "{name}"
         );
     }
@@ -137,6 +140,27 @@ fn every_output_validates() {
             ),
         ),
     ];
+    for (what, text) in [
+        (
+            "similarity-weighted, no support and one k-mer",
+            ">a\nACG--TTTT\n>b\nACG--TTTA\n>c\nACC--TTTT\n",
+        ),
+        (
+            "similarity-weighted, diverse",
+            ">a\nACGTACGT\n>b\nACGAACGT\n>c\nACGTACGA\n",
+        ),
+    ] {
+        cases.push((
+            what,
+            fixture(
+                text,
+                AnalysisParams {
+                    similarity_weighted_entropy: true,
+                    ..dna.clone()
+                },
+            ),
+        ));
+    }
     for estimator in Estimator::ALL {
         cases.push((
             "estimator",
@@ -173,11 +197,125 @@ fn every_output_validates() {
     let mut bad = serde_json::to_value(&cases[0].1).unwrap();
     bad["results"][24]["diversity_motifs"][0]["motif_short"] = Value::from("X");
     assert!(!results.is_valid(&bad));
+    // The presence rules of the similarity-weighted values hold in both directions.
+    let on = serde_json::to_value(&cases[5].1).unwrap();
+    // Every position of the flag-off MERS file is supported, so a value there breaks only the
+    // rule for runs without the option.
+    let off = serde_json::to_value(&cases[0].1).unwrap();
+    let multi = on["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .position(|p| p["diversity_motifs"].as_array().unwrap().len() >= 2)
+        .unwrap();
+    // The flag-on fixture has positions without support and positions with one k-mer.
+    let sparse = serde_json::to_value(&cases[4].1).unwrap();
+    let at = |v: &Value, keep: fn(&Value) -> bool| -> usize {
+        v["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .position(keep)
+            .unwrap()
+    };
+    let unsupported = at(&sparse, |p| p["support"] == 0);
+    let single = at(&sparse, |p| {
+        p["support"].as_u64().unwrap() > 0 && p["diversity_motifs"].as_array().unwrap().len() == 1
+    });
+    for (what, i, key) in [
+        (
+            "on with a value without support",
+            unsupported,
+            "similarity_weighted_entropy",
+        ),
+        (
+            "on with a normalised value at one k-mer",
+            single,
+            "normalised_observed_entropy",
+        ),
+        (
+            "on with a normalised value at one k-mer",
+            single,
+            "normalised_similarity_weighted_entropy",
+        ),
+    ] {
+        let mut bad = sparse.clone();
+        bad["results"][i][key] = Value::from(0.5);
+        assert!(!results.is_valid(&bad), "{what}: {key}");
+    }
+    type Damage<'a> = (&'a str, &'a Value, fn(&mut Value, usize));
+    let damaged: [Damage<'_>; 8] = [
+        ("off with a value", &off, |v, _| {
+            v["results"][0]["similarity_weighted_entropy"] = Value::from(0.5);
+        }),
+        ("off with a normalised value", &off, |v, _| {
+            v["results"][0]["normalised_observed_entropy"] = Value::from(0.5);
+        }),
+        (
+            "off with a normalised similarity-weighted value",
+            &off,
+            |v, _| {
+                v["results"][0]["normalised_similarity_weighted_entropy"] = Value::from(0.5);
+            },
+        ),
+        ("off with a summary", &off, |v, _| {
+            v["similarity_weighted_entropy_summary"] = serde_json::json!({
+                "position_count": 0, "average_entropy": null, "lowest_entropy": null,
+                "highest_entropy": null, "average_observed_entropy": null
+            });
+        }),
+        ("on without a value", &on, |v, i| {
+            v["results"][i]["similarity_weighted_entropy"] = Value::Null;
+        }),
+        ("on without a normalised value", &on, |v, i| {
+            v["results"][i]["normalised_observed_entropy"] = Value::Null;
+        }),
+        (
+            "on without a normalised similarity-weighted value",
+            &on,
+            |v, i| {
+                v["results"][i]["normalised_similarity_weighted_entropy"] = Value::Null;
+            },
+        ),
+        ("on without a summary", &on, |v, _| {
+            v["similarity_weighted_entropy_summary"] = Value::Null;
+        }),
+    ];
+    for (what, original, damage) in damaged {
+        let mut bad = original.clone();
+        damage(&mut bad, multi);
+        assert!(!results.is_valid(&bad), "{what}");
+    }
     // … and so are references into the results schema from the HCS schema.
     let h = hcs::compute(&cases[0].1, &HcsParams::default()).unwrap();
     let mut bad = serde_json::to_value(&h).unwrap();
     bad["references"][0]["doi"] = Value::from("not-a-doi");
     assert!(!hcs_schema.is_valid(&bad));
+}
+
+/// A results file written by dima 1.0.0, read and written again, validates against this
+/// version's schema (its new keys null and its new parameter off).
+#[test]
+fn rewritten_1_0_0_files_validate() {
+    let frozen = root().join("tests/data/results-schema-1.0.0.json.gz");
+    let r = dima_core::output::read_results(&frozen).unwrap();
+    assert_eq!(r.schema_version, "1.0.0");
+    let dir = tempfile::tempdir().unwrap();
+    let again = dir.path().join("again.json");
+    let mut sink = dima_core::output::Sink::create(
+        &dima_core::output::Target::Path(again.clone()),
+        dima_core::output::OutputCompression::None,
+    )
+    .unwrap();
+    dima_core::output::write_json(&r, false, &mut sink).unwrap();
+    sink.commit().unwrap();
+    let value: Value = serde_json::from_str(&std::fs::read_to_string(&again).unwrap()).unwrap();
+    assert_eq!(value["schema_version"], SCHEMA_VERSION);
+    check(
+        &validator("results.schema.json"),
+        "rewritten 1.0.0 file",
+        &value,
+    );
 }
 
 /// The schema's lists of method and fallback names are exactly the code's: a value the code can

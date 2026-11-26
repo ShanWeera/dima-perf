@@ -66,10 +66,13 @@ pub fn show(
         .on_hover_text(help::header_format());
         if paste.open {
             ui.horizontal(|ui| {
-                let field = ui.add(
-                    egui::TextEdit::singleline(&mut paste.text)
-                        .hint_text("Accession|Host|Country|Year")
-                        .desired_width(ui.available_width() - 80.0),
+                let field = super::common::named(
+                    ui.add(
+                        egui::TextEdit::singleline(&mut paste.text)
+                            .hint_text("Accession|Host|Country|Year")
+                            .desired_width(ui.available_width() - 80.0),
+                    ),
+                    "Header format to paste",
                 );
                 let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                 if (ui.button("Apply").clicked() || enter) && !paste.text.trim().is_empty() {
@@ -104,9 +107,10 @@ pub fn show(
                 ui.end_row();
                 for (i, row) in h.rows.iter_mut().enumerate() {
                     ui.label((i + 1).to_string());
+                    let field = format!("Field {}", i + 1);
                     ui.horizontal(|ui| {
                         let selected = row.tag().unwrap_or("Custom\u{2026}");
-                        egui::ComboBox::from_id_salt(("header_tag", i))
+                        let tag = egui::ComboBox::from_id_salt(("header_tag", i))
                             .width(110.0)
                             .selected_text(selected)
                             .show_ui(ui, |ui| {
@@ -122,16 +126,21 @@ pub fn show(
                                 {
                                     row.name = format!("field_{}", i + 1);
                                 }
-                            });
+                            })
+                            .response;
+                        super::common::named(tag, &format!("{field} name"));
                         if row.tag().is_none() {
-                            ui.add(
+                            let name = ui.add(
                                 egui::TextEdit::singleline(&mut row.name)
                                     .desired_width(120.0)
                                     .hint_text("name"),
                             );
+                            super::common::named(name, &format!("{field} custom name"));
                         }
                     });
-                    ui.checkbox(&mut row.stratify, "").on_hover_text(if row.identifier_like {
+                    let stratify = ui.checkbox(&mut row.stratify, "");
+                    super::common::named(stratify, &format!("Stratify field {}", i + 1))
+                        .on_hover_text(if row.identifier_like {
                         "Every checked value is different: stratifying by an identifier multiplies \
                          the size of the results"
                     } else {

@@ -13,6 +13,10 @@ nucleotide alignment it:
 - counts the k-mers and their support, and labels positions without enough data (NS, LS, ELS);
 - estimates Shannon entropy with the paper's sample-size correction (or an alternative
   estimator), and the sample coverage;
+- optionally computes similarity-weighted entropy, in which near-identical variants count for
+  less (Wu 2025, *Virus Evolution* 11(1):veaf029,
+  [doi:10.1093/ve/veaf029](https://doi.org/10.1093/ve/veaf029)), an addition to the paper's
+  method;
 - classifies variants as Index, Major, Minor and Unique motifs with their incidences;
 - optionally counts variants per value of FASTA header fields (host, country, year, …);
 - finds historically conserved sequences, with a confidence bound for each.
@@ -37,7 +41,7 @@ is documented with its sources.
 Or build it from source with Rust 1.85 or newer:
 
 ```sh
-cargo install --locked --git https://github.com/ShanWeera/dima-perf --tag v1.0.0 dima
+cargo install --locked --git https://github.com/ShanWeera/dima-perf --tag v1.1.0 dima
 ```
 
 A Bioconda package (and with it BioContainers Docker and Apptainer images) will follow; the
@@ -85,8 +89,9 @@ Every JSON output has a [JSON Schema](schemas/). Exit codes: 0 success, 1 intern
 
 Numbers are written at full double precision. As in any floating-point program they carry a
 small rounding error: about the 14th significant digit on alignments of thousands of sequences,
-and no earlier than the 11th at 17.5 million sequences per position. That is at least 10¹⁰ times
-smaller than the sampling error.
+and no earlier than the 11th at 17.5 million sequences per position (the 10th for the opt-in
+similarity-weighted entropy). That is at least 10¹⁰ times smaller than the sampling error
+(10⁹ times for similarity-weighted entropy).
 [Numerical accuracy](https://shanweera.github.io/dima-perf/latest/explanation/numerical-accuracy/)
 has the measurements, and explains why a prototyped fix for the last digits is deferred.
 
@@ -115,7 +120,7 @@ If you use DiMA, please cite the paper:
 
 and the version of the software you used:
 
-> Tharanga S. dima: sequence diversity dynamics analyser for viruses (Rust implementation), version 1.0.0 [software]. https://github.com/ShanWeera/dima-perf
+> Tharanga S. dima: sequence diversity dynamics analyser for viruses (Rust implementation), version 1.1.0 [software]. https://github.com/ShanWeera/dima-perf
 
 `dima cite` prints both (`--format bibtex`, `ris` or `cff` for reference managers), and `dima cite --from results.json` adds a methods paragraph with the references of the methods that run used. [`CITATION.cff`](CITATION.cff) holds the same metadata for GitHub's "Cite this repository".
 
@@ -134,10 +139,10 @@ and the version of the software you used:
   doi       = {10.1093/bib/bbae607},
 }
 
-@software{dima_rs_1_0_0,
+@software{dima_rs_1_1_0,
   author    = {{Tharanga}, Shan},
   title     = {{dima: sequence diversity dynamics analyser for viruses (Rust implementation)}},
-  version   = {1.0.0},
+  version   = {1.1.0},
   url       = {https://github.com/ShanWeera/dima-perf},
   note      = {Implements the method of Tharanga et al. 2025, doi:10.1093/bib/bbae607},
 }

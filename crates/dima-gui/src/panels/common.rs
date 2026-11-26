@@ -7,6 +7,10 @@ use egui::{Color32, RichText, Ui};
 use crate::theme::DesignTokens;
 use crate::util::truncate_display;
 
+/// The glyph of the buttons that close or remove something: × (U+00D7), which the bundled IBM
+/// Plex Sans draws (✕, U+2715, is in none of the app's fonts and would show as an empty box).
+pub const CLOSE: &str = "\u{00D7}";
+
 /// A section heading.
 pub fn heading(ui: &mut Ui, t: &DesignTokens, text: impl Into<String>) {
     ui.label(
@@ -22,45 +26,79 @@ pub fn sub_heading(ui: &mut Ui, text: impl Into<String>) {
 }
 
 /// A label for an option, with a dot and a "default: X" tooltip when its value differs from
-/// the default (D73).
+/// the default (D73). The dot's place is kept when there is no dot, so the column of labels
+/// keeps its width and no control moves when an option is changed (a second click at the same
+/// place reaches the same control). Returns the label's id, by which the option's control is
+/// named for screen readers (`labelled_by`).
 pub fn option_label(
     ui: &mut Ui,
     t: &DesignTokens,
     text: &str,
     help: &str,
     default: Option<String>,
-) {
+) -> egui::Id {
+    const DOT: egui::Vec2 = egui::vec2(8.0, 8.0);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        let label = ui.label(text).on_hover_text(help);
-        let _ = label;
-        if let Some(d) = default {
-            let (rect, response) =
-                ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-            ui.painter().circle_filled(rect.center(), 3.5, t.accent);
-            response
-                .on_hover_text(format!("Changed from the default (default: {d})"))
-                .widget_info(|| {
-                    egui::WidgetInfo::labeled(
-                        egui::WidgetType::Label,
-                        true,
-                        format!("{text} changed; default: {d}"),
-                    )
-                });
-        }
-    });
+        let label = ui.label(text).on_hover_text(help).id;
+        let Some(d) = default else {
+            ui.allocate_space(DOT);
+            return label;
+        };
+        let (rect, response) = ui.allocate_exact_size(DOT, egui::Sense::hover());
+        ui.painter().circle_filled(rect.center(), 3.5, t.accent);
+        response
+            .on_hover_text(format!("Changed from the default (default: {d})"))
+            .widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::WidgetType::Label,
+                    true,
+                    format!("{text} changed; default: {d}"),
+                )
+            });
+        label
+    })
+    .inner
 }
+
+/// Width of a legend swatch.
+const SWATCH_WIDTH: f32 = 22.0;
+/// From a swatch to its caption.
+const SWATCH_GAP: f32 = 6.0;
 
 /// A small coloured swatch followed by a caption, as one item (so wrapping never separates
 /// them). `kind` draws the swatch.
 pub fn legend_entry(ui: &mut Ui, t: &DesignTokens, caption: &str, kind: Swatch) -> egui::Response {
-    const W: f32 = 22.0;
+    legend_entry_at_least(ui, t, caption, kind, 0.0)
+}
+
+/// The width [`legend_entry`] takes for `caption`.
+#[must_use]
+pub fn legend_entry_width(ui: &Ui, t: &DesignTokens, caption: &str) -> f32 {
+    SWATCH_WIDTH
+        + SWATCH_GAP
+        + text_width(ui, caption, egui::FontId::proportional(t.font_size_caption))
+}
+
+/// [`legend_entry`] in a slot at least `width` wide (the caption left-aligned in it), so what
+/// follows keeps its place when the caption changes.
+pub fn legend_entry_at_least(
+    ui: &mut Ui,
+    t: &DesignTokens,
+    caption: &str,
+    kind: Swatch,
+    width: f32,
+) -> egui::Response {
+    const W: f32 = SWATCH_WIDTH;
     let galley = ui.painter().layout_no_wrap(
         caption.to_owned(),
         egui::FontId::proportional(t.font_size_caption),
         t.text_secondary,
     );
-    let size = egui::vec2(W + 6.0 + galley.size().x, galley.size().y.max(12.0));
+    let size = egui::vec2(
+        (W + SWATCH_GAP + galley.size().x).max(width),
+        galley.size().y.max(12.0),
+    );
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
     let p = ui.painter();
     let mid = rect.center().y;
@@ -98,7 +136,7 @@ pub fn legend_entry(ui: &mut Ui, t: &DesignTokens, caption: &str, kind: Swatch) 
         }
     }
     p.galley(
-        egui::pos2(sw.right() + 6.0, mid - galley.size().y / 2.0),
+        egui::pos2(sw.right() + SWATCH_GAP, mid - galley.size().y / 2.0),
         galley,
         t.text_secondary,
     );
@@ -181,11 +219,174 @@ pub fn disclosure(painter: &egui::Painter, rect: egui::Rect, open: bool, color: 
     ));
 }
 
-/// A muted "key value" pair in a grid row.
-pub fn fact(ui: &mut Ui, t: &DesignTokens, key: &str, value: impl Into<String>) {
-    ui.label(RichText::new(key).color(t.text_secondary));
+/// The width of `text` laid out on one line in `font`.
+#[must_use]
+pub fn text_width(ui: &Ui, text: &str, font: egui::FontId) -> f32 {
+    ui.painter()
+        .layout_no_wrap(text.to_owned(), font, Color32::PLACEHOLDER)
+        .size()
+        .x
+}
+
+/// Lays out `add_contents` left-aligned in a slot `width` wide and one row high (taller if the
+/// contents are), as one item of the row, so whatever follows keeps its place when the
+/// contents change.
+pub fn fixed_width_slot<R>(ui: &mut Ui, width: f32, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
+    let size = egui::vec2(width, ui.spacing().interact_size.y);
+    ui.allocate_ui_with_layout(
+        size,
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            ui.set_min_width(width);
+            add_contents(ui)
+        },
+    )
+    .inner
+}
+
+/// Gives a control its hover text and, from the same text, its AccessKit description, so a
+/// screen reader says what the tooltip shows.
+pub fn with_help(response: egui::Response, text: &str) -> egui::Response {
+    response
+        .ctx
+        .accesskit_node_builder(response.id, |node| node.set_description(text));
+    response.on_hover_text(text)
+}
+
+/// Names a control whose own text does not say what it is (a field that shows only its value):
+/// `name` is its AccessKit name, which a screen reader says first, and its hover text. Call it
+/// after the control is added, whose own AccessKit node it completes.
+pub fn with_name(response: egui::Response, name: &str) -> egui::Response {
+    named(response, name).on_hover_text(name)
+}
+
+/// Gives a control `name` as its AccessKit name only (it has a tooltip or hint of its own, and
+/// no visible label beside it to be named by).
+pub fn named(response: egui::Response, name: &str) -> egui::Response {
+    response
+        .ctx
+        .accesskit_node_builder(response.id, |node| node.set_label(name));
+    response
+}
+
+/// Draws a keyboard-focus outline around a control that draws none of its own (a frameless
+/// button, a clickable label) while it has the focus, so the focus is always visible.
+pub fn focus_outline(ui: &Ui, response: &egui::Response) {
+    if response.has_focus() {
+        let visuals = ui.visuals();
+        ui.painter().rect_stroke(
+            outline_rect(response.rect, ui.clip_rect()),
+            visuals.widgets.active.corner_radius,
+            visuals.widgets.active.bg_stroke,
+            egui::StrokeKind::Inside,
+        );
+    }
+}
+
+/// Where a focus outline goes: 2 px around the control, but within what is visible of it (a
+/// table cell clips at its edges), the stroke being drawn inside this rectangle, so every side
+/// of the outline shows.
+fn outline_rect(control: egui::Rect, clip: egui::Rect) -> egui::Rect {
+    control.expand(2.0).intersect(clip)
+}
+
+/// One row as wide as the space left: `trailing` (controls such as buttons) at its top right,
+/// laid out right to left, and `leading` (what the row says) left-aligned in the width left of
+/// them less `gap`, wrapping onto further lines as it needs. `leading` is created first, so a
+/// screen reader reads it before the controls at its end, as the row reads; `trailing` is laid
+/// out first, so `leading` knows its width. Returns what both return.
+pub fn row_with_trailing<L, T>(
+    ui: &mut Ui,
+    gap: f32,
+    leading: impl FnOnce(&mut Ui) -> L,
+    trailing: impl FnOnce(&mut Ui) -> T,
+) -> (L, T) {
+    let full = ui.available_rect_before_wrap();
+    let first_line = egui::Rect::from_min_size(
+        full.min,
+        egui::vec2(full.width(), ui.spacing().interact_size.y),
+    );
+    let mut lead = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt("leading")
+            .max_rect(first_line)
+            .layout(egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true)),
+    );
+    let mut trail = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt("trailing")
+            .max_rect(full)
+            .layout(egui::Layout::right_to_left(egui::Align::Min)),
+    );
+    let t = trailing(&mut trail);
+    let trail_rect = trail.min_rect();
+    lead.set_max_width((trail_rect.left() - gap - full.left()).max(0.0));
+    let l = leading(&mut lead);
+    ui.advance_cursor_after_rect(lead.min_rect().union(trail_rect));
+    (l, t)
+}
+
+/// A muted "key value" pair in a grid row; returns the key's response (for its tooltip).
+pub fn fact(ui: &mut Ui, t: &DesignTokens, key: &str, value: impl Into<String>) -> egui::Response {
+    let key = ui.label(RichText::new(key).color(t.text_secondary));
     ui.label(value.into());
     ui.end_row();
+    key
+}
+
+/// [`fact`] with the key in a cell `key_width` wide, so grids drawn one below another line up
+/// their values; a key with a line break takes two lines. The cell is exactly as tall as its
+/// text, so the grid centres it in the row like any other label.
+pub fn fact_at(
+    ui: &mut Ui,
+    t: &DesignTokens,
+    key: &str,
+    value: impl Into<String>,
+    key_width: f32,
+) -> egui::Response {
+    let galley = ui.painter().layout(
+        key.to_owned(),
+        egui::TextStyle::Body.resolve(ui.style()),
+        t.text_secondary,
+        f32::INFINITY,
+    );
+    let size = egui::vec2(key_width.max(galley.size().x), galley.size().y);
+    let (rect, key_response) = ui.allocate_exact_size(size, egui::Sense::hover());
+    ui.painter().galley(rect.min, galley, t.text_secondary);
+    key_response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, key));
+    ui.label(value.into());
+    ui.end_row();
+    key_response
+}
+
+/// The width of the key column that fits every line of `keys` in the body font.
+#[must_use]
+pub fn key_column_width(ui: &Ui, keys: &[&str]) -> f32 {
+    let font = egui::TextStyle::Body.resolve(ui.style());
+    keys.iter()
+        .flat_map(|k| k.lines())
+        .map(|line| text_width(ui, line, font.clone()))
+        .fold(0.0, f32::max)
+}
+
+/// A normalised entropy as the position facts and the chart's tooltip show it: the value, marked
+/// "(low support)" at support ≤ T (LS, ELS), where it is less reliable; "— (one variant)" where
+/// it is undefined because the position has a single distinct k-mer; "—" without support.
+#[must_use]
+pub fn normalised_value(value: Option<f64>, p: &dima_core::model::PositionResult) -> String {
+    use crate::charts::series::Class;
+    match value {
+        Some(v) => {
+            let shown = dima_core::human::fixed(v, 4);
+            if matches!(Class::of(p), Class::Low | Class::EqualToThreshold) {
+                format!("{shown} (low support)")
+            } else {
+                shown
+            }
+        }
+        None if p.diversity_motifs.len() == 1 => "\u{2014} (one variant)".to_owned(),
+        None => "\u{2014}".to_owned(),
+    }
 }
 
 /// A frame for a card (setup sections, error cards).
@@ -199,16 +400,39 @@ pub fn card(t: &DesignTokens) -> egui::Frame {
 
 /// A sortable column header: a frameless button (reachable with Tab and announced as a button
 /// by screen readers) showing the column name and, when the table is sorted by it, the
-/// direction arrow.
-pub fn sort_header(ui: &mut Ui, name: &str, arrow: &str) -> egui::Response {
-    ui.add(egui::Button::new(RichText::new(format!("{name}{arrow}")).strong()).frame(false))
-        .on_hover_text(format!("Sort by {}", name.to_lowercase()))
-        .on_hover_cursor(egui::CursorIcon::PointingHand)
+/// direction arrow. "Sort by `sort_name`" is its tooltip and its AccessKit description; a
+/// header that has the keyboard focus is outlined (its text alone does not change) and scrolls
+/// into view when it gains it.
+pub fn sort_header(ui: &mut Ui, name: &str, sort_name: &str, arrow: &str) -> egui::Response {
+    let response = ui
+        .add(egui::Button::new(RichText::new(format!("{name}{arrow}")).strong()).frame(false))
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
+    let response = with_help(response, &format!("Sort by {sort_name}"));
+    focus_outline(ui, &response);
+    if response.gained_focus() {
+        response.scroll_to_me(None);
+    }
+    response
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A focus outline lies within what is visible of its control, so a header or a variant at
+    /// a clipped edge of a table (its last column clips) shows all four sides; with room around
+    /// the control it is 2 px outside it.
+    #[test]
+    fn focus_outlines_stay_in_the_visible_area() {
+        let cell = egui::Rect::from_min_max(egui::pos2(100.0, 50.0), egui::pos2(300.0, 72.0));
+        let control = egui::Rect::from_min_max(egui::pos2(100.0, 50.5), egui::pos2(180.0, 71.5));
+        let outline = outline_rect(control, cell);
+        assert!(cell.contains_rect(outline), "{outline:?} outside {cell:?}");
+        assert_eq!(outline.left(), cell.left());
+        assert_eq!(outline.right(), control.right() + 2.0);
+        let roomy = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(500.0, 500.0));
+        assert_eq!(outline_rect(control, roomy), control.expand(2.0));
+    }
 
     #[test]
     fn elision_fits_and_never_panics() {

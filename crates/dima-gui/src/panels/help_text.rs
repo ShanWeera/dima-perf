@@ -8,6 +8,8 @@ use dima_core::config::{
     Estimator,
 };
 
+use crate::charts::metric::ChartMetric;
+
 /// `"\n\nRef: A 2020; B 2021"` for the given citations.
 #[must_use]
 pub fn refs(cites: &[Cite]) -> String {
@@ -19,9 +21,10 @@ const fn c(key: &'static str) -> Cite {
     Cite::new(key)
 }
 
-/// An export (its tooltip), with the references of the format as in the command line's help.
+/// An export (its tooltip), with the references of the format as in the command line's help; a
+/// figure is named by the metric the chart shows.
 #[must_use]
-pub fn export(kind: crate::workers::export::ExportKind) -> String {
+pub fn export(kind: crate::workers::export::ExportKind, metric: ChartMetric) -> String {
     use crate::workers::export::ExportKind as K;
     const TABLES: [Cite; 3] = [c("wickham2014"), c("broman2018"), c("rfc4180")];
     const HCS: [Cite; 4] = [
@@ -39,7 +42,7 @@ pub fn export(kind: crate::workers::export::ExportKind) -> String {
         K::TsvFolder => format!(
             "Tidy tables <name>.positions/variants/metadata/hcs.tsv, as `dima analyze \
              --tsv-dir` writes them: one row per observation, tab-separated with RFC 4180 \
-             quoting, NA for undefined values.{}",
+             quoting, NA for undefined or not computed values.{}",
             refs(&TABLES)
         ),
         K::HcsJson => format!(
@@ -51,12 +54,14 @@ pub fn export(kind: crate::workers::export::ExportKind) -> String {
             "The conserved regions at the current threshold, one row per region.{}",
             refs(&[HCS.as_slice(), TABLES.as_slice()].concat())
         ),
-        K::Png => "The entropy chart as shown (filters and zoom), downsampled to the image \
-                   width."
-            .to_owned(),
-        K::Svg => {
-            "The entropy chart as shown (filters and zoom), every point, editable text.".to_owned()
-        }
+        K::Png => format!(
+            "The {} chart as shown (filters and zoom), downsampled to the image width.",
+            metric.in_sentence()
+        ),
+        K::Svg => format!(
+            "The {} chart as shown (filters and zoom), every point, editable text.",
+            metric.in_sentence()
+        ),
         K::RunReport => format!(
             "How the analysis ran: version, equivalent command, threads, phase times, platform, \
              and the size and SHA-256 of the input and of the exported files. No paths, user or \
@@ -196,6 +201,21 @@ pub fn estimator() -> String {
     )
 }
 
+/// Similarity-weighted entropy: the texts the command-line help shows (shared, so the two never
+/// drift apart), then where the app shows the values.
+#[must_use]
+pub fn similarity_weighted_entropy() -> String {
+    use dima_core::similarity::{DESCRIPTION, EVIDENCE, REFERENCES, sample_size};
+    format!(
+        "{DESCRIPTION}\n\n{EVIDENCE}\n\n{} With this option the chart can show \
+         similarity-weighted entropy (Metric, above the chart), and the position table, the \
+         facts of the selected position, the exported results (JSON, JSON Lines) and the \
+         exported positions table hold the values; without it they are not computed.{}",
+        sample_size(),
+        refs(&REFERENCES)
+    )
+}
+
 /// Validation mode.
 #[must_use]
 pub fn validation() -> String {
@@ -234,38 +254,139 @@ pub fn threads() -> String {
         .to_owned()
 }
 
-/// The chart's encoding (legend tooltip) for a run's threshold and estimator.
+/// The chart's encoding (legend tooltip) for a run's threshold and estimator, and the metric
+/// shown.
 #[must_use]
-pub fn chart_encoding(t: u64, estimator: Estimator) -> String {
-    let lines = match estimator {
-        Estimator::Dima => format!(
+pub fn chart_encoding(t: u64, estimator: Estimator, metric: ChartMetric) -> String {
+    let lines = match (metric, estimator) {
+        (ChartMetric::SimilarityWeighted, _) => format!(
+            "Solid blue: similarity-weighted entropy at positions with support > {t}, which \
+             enter its summary. Dashed vermillion: the same at positions with support \
+             \u{2264} {t} (LS, ELS), from fewer sequences and left out of the summary. No \
+             similarity-weighted value is corrected for sample size."
+        ),
+        (ChartMetric::Entropy, Estimator::Dima) => format!(
             "Solid blue: corrected entropy at positions with support > {t}. Dashed vermillion: \
              the observed (uncorrected) entropy at positions with support \u{2264} {t} (LS, ELS)."
         ),
-        Estimator::ChaoWangJost | Estimator::MillerMadow | Estimator::Raw => format!(
+        (
+            ChartMetric::Entropy,
+            Estimator::ChaoWangJost | Estimator::MillerMadow | Estimator::Raw,
+        ) => format!(
             "Solid blue: positions with support > {t}, which enter the summaries. Dashed \
              vermillion: positions with support \u{2264} {t} (LS, ELS), estimated the same way \
              from fewer sequences and left out of the summaries."
         ),
     };
+    const ENCODING: [Cite; 6] = [
+        c("tharanga2025"),
+        c("wong2011"),
+        c("weiskopf2022"),
+        c("kerpedjiev2018"),
+        c("kent2010"),
+        c("jugel2014"),
+    ];
+    let cites = match metric {
+        ChartMetric::Entropy => ENCODING.to_vec(),
+        ChartMetric::SimilarityWeighted => {
+            [&[dima_core::similarity::WU2025], ENCODING.as_slice()].concat()
+        }
+    };
     format!(
-        "{lines} Hatched bands: positions without usable support, which have no entropy (they \
+        "{lines} Hatched bands: positions without usable support, which have no {} (they \
          are never drawn as 0). The line breaks there and where filters hide positions. Long \
          ranges are drawn with M4 downsampling, which keeps every peak and trough.{}",
-        refs(&[
-            c("tharanga2025"),
-            c("wong2011"),
-            c("weiskopf2022"),
-            c("kerpedjiev2018"),
-            c("kent2010"),
-            c("jugel2014"),
-        ])
+        metric.in_sentence(),
+        refs(&cites)
+    )
+}
+
+/// An option of the chart's metric switch: what it plots, and what a switch keeps.
+#[must_use]
+pub fn chart_metric(metric: ChartMetric) -> String {
+    const SWITCH: &str = "Switching keeps the zoom and the selection, and resets the value range \
+                          of the filters to the full range.";
+    match metric {
+        ChartMetric::Entropy => format!(
+            "Plot each position's entropy, from the run's estimator: the values of the summaries \
+             above. {SWITCH}"
+        ),
+        ChartMetric::SimilarityWeighted => format!(
+            "Plot each position's similarity-weighted entropy, in which near-identical variants \
+             count for less than unrelated ones; it is not corrected for sample size. \
+             {SWITCH}{}",
+            refs(&[dima_core::similarity::WU2025])
+        ),
+    }
+}
+
+/// The sources of a statement about the normalised entropies: their definition, and their
+/// dependence on sample size.
+fn normalised_refs() -> String {
+    use dima_core::similarity::{GREGORI2014, WU2025};
+    refs(&[WU2025, GREGORI2014])
+}
+
+/// The position fact "Similarity-weighted entropy".
+#[must_use]
+pub fn similarity_weighted_fact() -> String {
+    format!(
+        "Entropy in which each variant counts for less the more it resembles the other variants \
+         at this position, in bits: 0 with one distinct k-mer, and never more than the observed \
+         entropy. Not corrected for sample size.{}",
+        refs(&[dima_core::similarity::WU2025])
+    )
+}
+
+/// The position fact "Normalised observed entropy".
+#[must_use]
+pub fn normalised_observed_fact() -> String {
+    format!(
+        "Observed entropy divided by log2 of the number of distinct k-mers here (the Index \
+         included): between 0 and 1, undefined with one distinct k-mer. Values marked (low \
+         support) come from support \u{2264} T: they are less reliable and can be higher or \
+         lower than with more sequences. Where every sequence carries a different k-mer the \
+         value is 1.0000 by arithmetic alone.{}",
+        normalised_refs()
+    )
+}
+
+/// The position fact "Normalised similarity-weighted entropy".
+#[must_use]
+pub fn normalised_similarity_weighted_fact() -> String {
+    format!(
+        "Similarity-weighted entropy divided by log2 of the number of distinct k-mers here (the \
+         Index included): between 0 and 1, undefined with one distinct k-mer. Values marked (low \
+         support) come from support \u{2264} T: they are less reliable and can be higher or \
+         lower than with more sequences.{}",
+        normalised_refs()
+    )
+}
+
+/// The summary chip of similarity-weighted entropy.
+#[must_use]
+pub fn similarity_weighted_mean(eligible: u64) -> String {
+    format!(
+        "Mean similarity-weighted entropy over the {eligible} eligible positions, and in \
+         parentheses the mean observed (uncorrected) entropy of the same positions, for a \
+         like-for-like comparison.{}",
+        refs(&[dima_core::similarity::WU2025])
+    )
+}
+
+/// The filter bar's value range, for the metric shown.
+#[must_use]
+pub fn value_range(metric: ChartMetric) -> String {
+    let m = metric.in_sentence();
+    format!(
+        "Show positions whose {m} is in this range (bits). Positions without usable support \
+         have no {m} and are not affected."
     )
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Estimator;
+    use super::{ChartMetric, Estimator};
 
     #[test]
     fn every_citation_exists() {
@@ -278,19 +399,72 @@ mod tests {
             super::hcs_threshold(),
             super::hcs_eligible_only(),
             super::estimator(),
+            super::similarity_weighted_entropy(),
             super::min_coverage(),
-            super::chart_encoding(100, Estimator::Dima),
-            super::chart_encoding(100, Estimator::Raw),
+            super::chart_encoding(100, Estimator::Dima, ChartMetric::Entropy),
+            super::chart_encoding(100, Estimator::Raw, ChartMetric::Entropy),
+            super::chart_encoding(100, Estimator::Dima, ChartMetric::SimilarityWeighted),
+            super::chart_metric(ChartMetric::SimilarityWeighted),
+            super::similarity_weighted_fact(),
+            super::normalised_observed_fact(),
+            super::normalised_similarity_weighted_fact(),
+            super::similarity_weighted_mean(1345),
         ] {
             assert!(text.contains("\n\nRef: "), "{text}");
         }
         assert!(super::support_threshold().contains("Tharanga et al. 2025, Methods"));
+        // The entropy texts are those of 1.0.0; similarity-weighted entropy cites Wu first and
+        // never calls itself corrected.
+        let entropy = super::chart_encoding(100, Estimator::Dima, ChartMetric::Entropy);
+        assert!(
+            entropy.starts_with("Solid blue: corrected entropy at positions with support > 100.")
+        );
+        assert!(entropy.contains("which have no entropy (they are never drawn as 0)"));
+        assert!(
+            entropy.contains("Ref: Tharanga et al. 2025; Wong 2011"),
+            "{entropy}"
+        );
+        let swe = super::chart_encoding(100, Estimator::Dima, ChartMetric::SimilarityWeighted);
+        assert!(!swe.contains("corrected entropy"), "{swe}");
+        assert!(swe.contains("No similarity-weighted value is corrected for sample size"));
+        assert!(swe.contains("Ref: Wu 2025, Section 2.1 and Supplementary File 1; Tharanga"));
+        assert_eq!(
+            super::value_range(ChartMetric::Entropy),
+            "Show positions whose entropy is in this range (bits). Positions without usable \
+             support have no entropy and are not affected."
+        );
+        // The command line's texts, word for word.
+        let swe = super::similarity_weighted_entropy();
+        for shared in [
+            dima_core::similarity::DESCRIPTION.to_owned(),
+            dima_core::similarity::EVIDENCE.to_owned(),
+            dima_core::similarity::sample_size(),
+        ] {
+            assert!(swe.contains(&shared), "{swe}");
+        }
+        assert!(
+            swe.contains("Wu 2025, Section 2.1 and Supplementary File 1"),
+            "{swe}"
+        );
         for kind in crate::workers::export::ExportKind::ALL {
-            assert!(!super::export(kind).is_empty());
+            for m in ChartMetric::ALL {
+                assert!(!super::export(kind, m).is_empty());
+            }
         }
         use crate::workers::export::ExportKind as K;
         for kind in [K::TsvFolder, K::HcsJson, K::HcsTsv, K::RunReport] {
-            assert!(super::export(kind).contains("\n\nRef: "), "{kind:?}");
+            assert!(
+                super::export(kind, ChartMetric::Entropy).contains("\n\nRef: "),
+                "{kind:?}"
+            );
         }
+        assert_eq!(
+            super::export(K::Png, ChartMetric::Entropy),
+            "The entropy chart as shown (filters and zoom), downsampled to the image width."
+        );
+        assert!(
+            super::export(K::Svg, ChartMetric::SimilarityWeighted)
+                .starts_with("The similarity-weighted entropy chart as shown")
+        );
     }
 }

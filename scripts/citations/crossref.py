@@ -61,6 +61,23 @@ CORRECTIONS = {
     # Crossref splits one name as "Thomas August, J." and gives some initials without points.
     "10.1186/s12920-017-0301-2": {"authors[8]": ["August", "J. Thomas"]},
     "10.1186/1471-2105-9-S1-S18": {"authors[1]": ["Heiny", "A. T."], "authors[3]": ["August", "J. Thomas"]},
+    # An article number Crossref does not record (the journal's page shows vey041).
+    "10.1093/ve/vey041": {"pages": "vey041"},
+    # Crossref runs the given name together ("NickV.") and has no pages (Europe PMC: 675-679).
+    "10.1007/BF00175826": {"authors": [["Grishin", "Nick V."]], "pages": "675-679"},
+    # Published in CABIOS, which Crossref lists under its later name (the article's masthead).
+    "10.1093/bioinformatics/10.4.379": {"venue": "Computer Applications in the Biosciences"},
+    # Initials run together or without points, and a first page only or no article number
+    # (checked on the articles: J Theor Biol 13:131-144, Oikos 76:70-82, J Gen Virol 002306).
+    "10.1016/0022-5193(66)90013-0": {"authors": [["Pielou", "E. C."]]},
+    "10.2307/3545749": {"pages": "70-82"},
+    "10.1186/1471-2105-7-415": {"authors[0]": ["Raghava", "G. P. S."]},
+    "10.1099/jgv.0.002306": {"pages": "002306"},
+    # An article number that Crossref gives as an issue "none" and pages 1-11 (the article: no. 44).
+    "10.1214/ECP.v18-2659": {"issue": None, "pages": "44"},
+    # Crossref splits a name particle into the given name and writes hyphens as en dashes.
+    "10.1007/s11749-022-00844-9": {"authors[2]": ["van den Heuvel", "Edwin R."]},
+    "10.1007/s11075-025-02299-z": {"authors[1]": ["Mañas-Mañas", "Juan F."], "authors[2]": ["Moreno-Balcázar", "Juan J."], "authors[3]": ["Rodríguez-Perales", "Cristina"]},
     # A group author and the publisher, which Crossref records as the institution only.
     "10.59161/AUEZ1291": {"authors": [["Bureau International des Poids et Mesures", ""]], "venue": "BIPM", "title": "The International System of Units (SI), 9th edition"},
 }

@@ -1,8 +1,10 @@
 //! Shannon entropy of the k-mer distribution at a position, and its bias-corrected estimators.
 //!
-//! All estimators work on the *counts of counts* of a position ([`CountProfile`]): how many
+//! The estimators work on the *counts of counts* of a position ([`CountProfile`]): how many
 //! distinct k-mers were seen once, twice, …. That is all they need, it is tiny, and it makes the
-//! cost independent of the k-mer length.
+//! cost independent of the k-mer length. Similarity-weighted entropy also needs the k-mers
+//! themselves (`crate::similarity`); [`normalised`] divides an entropy by log₂ of the number
+//! of distinct k-mers.
 //!
 //! * [`plug_in`]: the observed (maximum-likelihood) entropy H = −Σ pᵢ log₂ pᵢ (Shannon 1948),
 //!   biased downwards by about (D − 1)/(2N ln 2) bits (Miller 1955; Paninski 2003).
@@ -65,9 +67,9 @@ impl CountProfile {
         let mut support = 0u64;
         let mut frequencies: Vec<(u64, u64)> = Vec::new();
         for c in &v {
-            support = support
-                .checked_add(*c)
-                .ok_or(DimaError::Overflow { what: "support" })?;
+            support = support.checked_add(*c).ok_or(DimaError::Overflow {
+                what: "the support",
+            })?;
             match frequencies.last_mut() {
                 Some((last, f)) if last == c => *f += 1,
                 _ => frequencies.push((*c, 1)),
@@ -192,15 +194,46 @@ pub fn plug_in(profile: &CountProfile) -> Option<f64> {
     if n == 0 {
         return None;
     }
-    let nf = n as f64;
     let mut h = Neumaier::new();
     for &(c, f) in &profile.frequencies {
         if c != n {
-            let p = c as f64 / nf;
-            h.add(f as f64 * (-p * libm::log2(p)));
+            h.add(f as f64 * term(c, n));
         }
     }
     Some(h.total())
+}
+
+/// One k-mer's term of the plug-in entropy, −p log₂ p with p = `count` / `support`, evaluated
+/// exactly as [`plug_in`] does, so sums built from it match [`plug_in`] bit for bit.
+pub(crate) fn term(count: u64, support: u64) -> f64 {
+    let p = count as f64 / support as f64;
+    -p * libm::log2(p)
+}
+
+/// An entropy divided by log₂ D, the largest observed entropy possible with D distinct k-mers:
+/// x = H / log₂ D (Wu 2025, Section 2.1 and Supplementary File 1, H_n and H_nsim; the form of
+/// Pielou's J′ with the observed D). `None` when D ≤ 1, where the maximum is 0 and the ratio is
+/// undefined.
+///
+/// A ratio that rounding put just above 1 is capped at 1: the entropy and log₂ D each carry
+/// rounding (the logarithm need not be correctly rounded; Goldberg 1991, §2.1.4), so a quotient
+/// that is 1 in exact arithmetic can be a few units in the last place above it.
+///
+/// # Errors
+/// [`DimaError::Internal`] if the ratio is not a number in [0, 1 + 10⁻¹²]: the entropies given
+/// to it never exceed log₂ D, so a violation is a bug.
+pub fn normalised(entropy: f64, distinct: u64) -> Result<Option<f64>> {
+    if distinct <= 1 {
+        return Ok(None);
+    }
+    let x = entropy / libm::log2(distinct as f64);
+    if !(0.0..=1.0 + 1e-12).contains(&x) {
+        return Err(DimaError::internal(format!(
+            "normalised entropy {x:?} (entropy {entropy:?}, {distinct} distinct k-mers) is not a \
+             number between 0 and 1"
+        )));
+    }
+    Ok(Some(if x == 0.0 { 0.0 } else { x.min(1.0) }))
 }
 
 /// The paper's rarefaction grid for support `n` and threshold `t` (Fig. 2), with the step and
@@ -722,5 +755,35 @@ mod tests {
             let threshold = ((n as f64 * t_fraction) as u64).max(1);
             intercept_bounds_hold(&counts, threshold);
         }
+    }
+
+    #[test]
+    fn normalised_is_undefined_for_one_kmer_and_capped_at_one() {
+        assert_eq!(normalised(0.0, 0).unwrap(), None);
+        assert_eq!(normalised(0.0, 1).unwrap(), None);
+        // A uniform distribution over D k-mers has entropy log2 D: the ratio is 1, give or take
+        // the rounding of two logarithms, and never reported above 1.
+        for d in 2..=2000u64 {
+            let counts = vec![1u64; d as usize];
+            let h = plug_in(&profile(&counts)).unwrap();
+            let x = normalised(h, d).unwrap().unwrap();
+            assert!(
+                (1.0 - 4.0 * f64::EPSILON..=1.0).contains(&x),
+                "D = {d}: {x}"
+            );
+        }
+        let x = normalised(1.4224, 10).unwrap().unwrap();
+        assert!((x - 1.4224 / 10f64.log2()).abs() < 1e-15);
+    }
+
+    #[test]
+    fn normalised_rejects_impossible_ratios_and_never_reports_negative_zero() {
+        assert!(normalised(f64::NAN, 2).is_err());
+        assert!(normalised(-1e-300, 2).is_err());
+        assert!(normalised(1.0 + 1e-9, 2).is_err());
+        assert!(normalised(f64::INFINITY, 2).is_err());
+        let z = normalised(-0.0, 4).unwrap().unwrap();
+        assert_eq!(z.to_bits(), 0.0f64.to_bits());
+        assert_eq!(normalised(1.0 + 1e-13, 2).unwrap(), Some(1.0));
     }
 }

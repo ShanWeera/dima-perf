@@ -205,6 +205,9 @@ pub struct AnalyzeArgs {
     #[arg(help_heading = "Method", long, value_enum, value_name = "ESTIMATOR", help = help::short::ESTIMATOR, long_help = help::estimator())]
     pub estimator: Option<EstimatorArg>,
 
+    #[arg(help_heading = "Method", long, help = help::short::SIMILARITY_WEIGHTED_ENTROPY, long_help = help::similarity_weighted_entropy())]
+    pub similarity_weighted_entropy: bool,
+
     #[arg(help_heading = "Method", long, value_name = "X", value_parser = parse_unit_interval, help = help::short::MIN_COVERAGE, long_help = help::min_coverage())]
     pub min_coverage: Option<f64>,
 

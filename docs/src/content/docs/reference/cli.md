@@ -13,14 +13,14 @@ This page is generated from the definitions `dima` itself parses, so it always m
 | `1` | Internal error (a bug; please report it) |
 | `2` | Usage error (invalid options) |
 | `3` | Input/output or system error (missing file, no permission, disk full, a thread the system refused) |
-| `4` | Invalid input data (not an aligned FASTA, unequal lengths, invalid characters in strict mode) |
+| `4` | Invalid input data (not an aligned FASTA, unequal lengths, invalid characters in strict mode; a results file of another major schema version, or edited or damaged) |
 | `130`, `143`, `129` | Interrupted by SIGINT (Ctrl-C), SIGTERM or SIGHUP; unfinished outputs are removed, never left partial |
 
 ## `dima`
 
-DiMA quantifies the diversity of viral protein or nucleotide alignments: for every k-mer position it counts the distinct k-mers, estimates their Shannon entropy with a correction for sample size, classifies variants into Index, Major, Minor and Unique motifs, and reports their incidence, optionally stratified by FASTA header metadata. Conserved stretches (historically conserved sequences) are reported separately.
+DiMA quantifies the diversity of viral protein or nucleotide alignments: for every k-mer position it counts the distinct k-mers, estimates their Shannon entropy with a correction for sample size, classifies variants into Index, Major, Minor and Unique motifs, and reports their incidence, optionally stratified by FASTA header metadata. On request it also computes their similarity-weighted entropy (Wu 2025), which is not corrected for sample size. Conserved stretches (historically conserved sequences) are reported separately.
 
-**References:** Tharanga et al. 2025, [doi:10.1093/bib/bbae607](https://doi.org/10.1093/bib/bbae607)
+**References:** Tharanga et al. 2025, [doi:10.1093/bib/bbae607](https://doi.org/10.1093/bib/bbae607); Wu 2025, Section 2.1 and Supplementary File 1, [doi:10.1093/ve/veaf029](https://doi.org/10.1093/ve/veaf029)
 
 ```text
 dima [OPTIONS] [COMMAND]
@@ -100,6 +100,16 @@ Entropy estimator. 'dima' is the paper's correction: entropies of subsamples of 
 
 - Values: `dima`, `chao-wang-jost`, `miller-madow`, `raw`
 
+#### `--similarity-weighted-entropy`
+
+Similarity-weighted entropy (Wu 2025) weights each variant's entropy term by how dissimilar it is to the other variants at the position, so near-identical variants count for less. The similarity of two k-mers is the share of their k residues that are the same, (k-d)/k when they differ at d of them; every substitution counts alike. Also reported: observed and similarity-weighted entropy divided by log2 of the number of distinct k-mers (Index included), between 0 and 1; these normalised values are undefined with one distinct k-mer. All three depend on k and the alphabet.
+
+Published in 2025 and applied in its source study only to nucleotide sequences: simulated populations, a viroid mutant pool and the populations it gave within single plants, and one plant-virus dataset; its use on amino-acid k-mers and on sequences from many hosts is dima's extension.
+
+None of the three values is corrected for sample size: observed entropy is lower on average with fewer sequences (Zhao & Illingworth 2019, Section 3.1), similarity-weighted entropy also changes with the number of sequences (see the methodology page, Entropy and its correction), and normalised entropy also depends on sample size (Gregori et al. 2014, Sections 2.4 and 3.2). The values are written only to the results (JSON, JSONL) and the positions table, and are null (NA) without this option.
+
+**References:** Wu 2025, Section 2.1 and Supplementary File 1, [doi:10.1093/ve/veaf029](https://doi.org/10.1093/ve/veaf029); Grishin 1995, p. 675, [doi:10.1007/BF00175826](https://doi.org/10.1007/BF00175826); Zhao & Illingworth 2019, Section 3.1, [doi:10.1093/ve/vey041](https://doi.org/10.1093/ve/vey041); Gregori et al. 2014, Sections 2.4 and 3.2, [doi:10.1093/bioinformatics/btt768](https://doi.org/10.1093/bioinformatics/btt768)
+
 #### `--min-coverage <X>`
 
 Flag positions whose estimated sample coverage (the probability that one more sequence carries an already-seen k-mer) is below this value, between 0 and 1. Coverage is always reported; this only adds the flag and a warning.
@@ -140,7 +150,7 @@ Format of -o: 'json' (complete results with provenance), 'jsonl' (one position p
 
 #### `--table <TABLE>`
 
-The table written by -O tsv: positions, variants, metadata or hcs. Tables are tidy (one row per observation), tab-separated with RFC 4180 quoting, and use NA for undefined values.
+The table written by -O tsv: positions, variants, metadata or hcs. Tables are tidy (one row per observation), tab-separated with RFC 4180 quoting, and use NA for undefined or not computed values.
 
 **References:** Wickham 2014, [doi:10.18637/jss.v059.i10](https://doi.org/10.18637/jss.v059.i10); Broman & Woo 2018, [doi:10.1080/00031305.2017.1375989](https://doi.org/10.1080/00031305.2017.1375989); RFC 4180, [doi:10.17487/RFC4180](https://doi.org/10.17487/RFC4180)
 
@@ -222,7 +232,7 @@ Format of -o: 'json' (complete results with provenance), 'jsonl' (one position p
 
 #### `--table <TABLE>`
 
-The table written by -O tsv: positions, variants, metadata or hcs. Tables are tidy (one row per observation), tab-separated with RFC 4180 quoting, and use NA for undefined values.
+The table written by -O tsv: positions, variants, metadata or hcs. Tables are tidy (one row per observation), tab-separated with RFC 4180 quoting, and use NA for undefined or not computed values.
 
 **References:** Wickham 2014, [doi:10.18637/jss.v059.i10](https://doi.org/10.18637/jss.v059.i10); Broman & Woo 2018, [doi:10.1080/00031305.2017.1375989](https://doi.org/10.1080/00031305.2017.1375989); RFC 4180, [doi:10.17487/RFC4180](https://doi.org/10.17487/RFC4180)
 
