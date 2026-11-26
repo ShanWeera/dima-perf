@@ -106,6 +106,21 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
 - Documentation: "Comparison with the paper" is now "Comparison with the papers" (same address),
   since it also compares DiMA with Wu 2025.
 
+- Desktop app: a value typed into a field of the filter bar (a position or a bound of the value
+  range) is applied when you press Enter or Tab or click elsewhere, no longer at every key, and
+  Esc leaves the field as it was. Typing 0.2 as the maximum applied 0 at the first key, which
+  hid the selected position and moved the selection away for good. Dragging and the Up and Down
+  keys still apply at once.
+- Desktop app: the cells of the position and variant tables are no longer keyboard stops. Tab
+  stopped at every cell without showing it (16 cells before the metric switch on the bundled
+  MERS spike sample, 52 on the HIV-1 pol protein data set). Positions move with the arrow keys
+  as before; a variant the table shows whole is one stop, on its sequence, which is outlined, and
+  Space or Enter selects it, as does a click on the sequence (a click on the text did nothing). A
+  column header that has the keyboard focus is outlined too.
+- Desktop app: notifications stack upwards from 16 px above the window's bottom-right corner,
+  the newest nearest the corner. A message wraps beside its buttons, which sit at its top right
+  (× and Copy details), and screen readers read the message before them.
+
 ### Fixed
 
 - The end-of-run line showed a positive mean or minimum below 0.00005 bits as `0.0000`; it now
@@ -168,7 +183,8 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   switch, and the chart's "drag: pan" hint over its legend. Both now move to a row of their own
   when their row is full (for the count and Reset, when it could not hold the longest count, so
   a count that changes with a filter or a metric switch never moves them to another row), and
-  the chart's Fit, + and − buttons stay at the top right of the chart.
+  the chart's Fit, + and − buttons stay at the top right of the chart, where screen readers meet
+  them after the chart's heading and legend, as in 1.0.0.
 - Moving the keyboard focus through a value field of the desktop app's filter bar, with Tab for
   example, stored the value as the field showed it, rounded. When the field rounded the largest
   value down, the range then hid the positions above the rounded value, the one with the largest
@@ -182,9 +198,43 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   now reads "at its one position".
 - Desktop app: a figure export did nothing, and said nothing, when the filters hid every position
   while its save dialog was open; a warning now says that nothing was saved and why.
-- Desktop app: the filter bar's value fields had no accessible name, so a screen reader announced
-  only "max 1.5878"; each now names the bound and the metric (for example "Highest entropy shown,
-  in bits"), also as its tooltip.
+- Desktop app: the filter bar's fields and the variant table's minimum incidence had no
+  accessible name, so a screen reader announced only "max 1.5878", "from 1" or "0.0%"; each now
+  has one that says what it bounds ("First position shown", "Last position shown", "Minimum
+  incidence", and for the value fields the bound and the metric, for example "Highest entropy
+  shown, in bits"), which is also the filter bar fields' tooltip.
+- Desktop app: a value typed into a value field with more decimals than the field shows was kept
+  whole, and the field read its rounded text back the next time the keyboard focus passed
+  through it: a minimum typed as 0.111293 (shown as 0.1113) became 0.1113, hid position 1 of the
+  MERS spike sample (entropy 0.111294) and reset the zoom, with nothing edited. A typed value is
+  now kept to the four decimals the field shows.
+- Desktop app: switching the chart's metric in the same frame as a filter edit (a field left by
+  clicking the switch) applied the edit again on the next frame and lost the zoom, although the
+  switch keeps it. The switch now applies the edit itself.
+- Desktop app: a notification of three lines or more grew past the bottom of the window, its
+  close button half off it (for example the warning "Nothing was saved: the chart was switched
+  to …"), and the text of a wrapped notification was right-aligned with its buttons on its left.
+- Desktop app: the filter bar's position fields moved every control after them when one was
+  focused (it then shows its number without "from"/"to") or showed a shorter number ("to 500");
+  they now keep their width.
+- Desktop app: results written with a newer schema (or one this version does not recognise)
+  opened without a word, and an export from them left out the fields this version does not
+  know. The app now shows the warning `dima view` gives: "The results were written with schema
+  1.2.0; this version writes 1.1.0 and keeps only the fields it knows. Use the DiMA version that
+  wrote the file to keep every field." (an unrecognised version is quoted).
+- Desktop app: the dot that marks an option changed from its default moved every control of
+  its grid by 12 px when it appeared on the widest option name (ticking **Compute
+  similarity-weighted entropy** or changing T), so a second click at the same place missed. Its
+  place is now kept free.
+- Desktop app: the end of a long fact of the selected position (a method with its fallback) ran
+  under the panel's scroll bar; the facts now wrap before it.
+- Desktop app: the explanations of the results header's chips were tooltips only; screen readers
+  now read them too, as the facts' explanations.
+- Desktop app: the close buttons of notifications and of the recent-files list showed an empty
+  box (✕ is in none of the app's fonts); they show × and are named "Dismiss" and "Remove from
+  recent files" for screen readers. The ▸ of "Export ▸ Methods & references" in the Cite window
+  and the ▼ that marks a coverage below the minimum in the position table also showed as empty
+  boxes since 1.0.0; they are now drawn.
 - Documentation: the precision of large runs was given as measured at 2,208,211 and 17,500,000
   sequences per position, but the rounding error changes from one number of sequences to the
   next. "Numerical accuracy" now gives the largest error, which follows from rounding the most
@@ -208,6 +258,9 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   deviations and its bounds on DiMA v5.0.9's HIV-1 *pol* means (Cantelli's, Scarf's and
   McDiarmid's inequalities, and the Krawtchouk expansion and recurrence), and the v5.0.9
   comparison says that it applies v5.0.9's procedure to the same k-mers.
+- Documentation: the desktop-app guide said that the position table can be sorted by any column
+  and that the similarity-weighted column is sortable like the others; the Coverage column
+  cannot be sorted, and the guide now says so.
 - Documentation: "Large alignments" gave the memory of the results as a few hundred bytes per
   position; it now also counts the variants they hold until they are written (each its k-mer and
   about 72 bytes), which can be most of it on diverse alignments. The exit-code reference now

@@ -194,6 +194,15 @@ instead (exit 4), and the fix is the same. The message is `written by a newer Di
 this version … does not know` when the version is a newer one, such as `1.2.0`, and `not a valid
 DiMA results file: unknown variant …` when it is not recognised.
 
+**`Warning: The results were written with schema …; this version writes … and keeps only the
+fields it knows. Use the DiMA version that wrote the file to keep every field.`** (in the desktop
+app, when it opens a results file) — the same case as `newer_schema` above: a newer DiMA wrote
+the file, or its version is one this DiMA does not recognise (then shown in quotes, such as
+`"1.1.0-dev"`). The app shows the results as usual, but an export of them (results JSON, JSON
+Lines, the TSV folder) leaves out what only the newer version records. To keep everything, open
+the file in the DiMA version that wrote it (its `run.tool.version`) or a newer one. Press the
+warning's × to dismiss it.
+
 ## Other questions
 
 **The results differ from the paper or from DiMA v5.0.9.** See

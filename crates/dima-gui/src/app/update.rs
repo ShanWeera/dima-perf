@@ -528,18 +528,8 @@ fn newer_schema_warning(version: &str) -> Option<String> {
     Some(format!(
         "The results were written with schema {}; this version writes {current} and keeps only \
          the fields it knows. Use the DiMA version that wrote the file to keep every field.",
-        shown_schema_version(version)
+        dima_core::output::shown_schema_version(version)
     ))
-}
-
-/// A schema version as messages show it: plain when it is one (`1.2.0`), quoted otherwise, so
-/// spaces or odd characters show (`"1.1.0-dev"`).
-fn shown_schema_version(version: &str) -> String {
-    if dima_core::output::parse_schema_version(version).is_some() {
-        version.to_owned()
-    } else {
-        format!("{version:?}")
-    }
 }
 
 fn start_session(

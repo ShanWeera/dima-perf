@@ -43,14 +43,21 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
             .desired_width(f32::INFINITY),
     );
     ui.horizontal(|ui| {
-        ui.label("Minimum incidence");
-        ui.add(
-            egui::DragValue::new(&mut s.variants.min_incidence)
-                .suffix("%")
-                .speed(0.1)
-                .range(0.0..=100.0),
-        )
-        .on_hover_text("Hide variants below this incidence (0 shows all)");
+        const NAME: &str = "Minimum incidence";
+        ui.label(NAME);
+        let field = ui
+            .add(
+                egui::DragValue::new(&mut s.variants.min_incidence)
+                    .suffix("%")
+                    .speed(0.1)
+                    .range(0.0..=100.0),
+            )
+            .on_hover_text("Hide variants below this incidence (0 shows all)");
+        // The field's text is only its value: screen readers get the label beside it as its
+        // name.
+        field
+            .ctx
+            .accesskit_node_builder(field.id, |node| node.set_label(NAME));
     });
     let visible = s.visible_variants();
     let visible = &*visible;

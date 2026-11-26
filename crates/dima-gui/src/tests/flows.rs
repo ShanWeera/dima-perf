@@ -888,6 +888,15 @@ fn the_metric_switch_moves_no_control() {
                 names.map(|name| (Some(name), None)),
                 "{size:?} at {ppp}"
             );
+            // Every field of the screen has a name, the variant table's minimum incidence too.
+            let unnamed: Vec<Option<String>> = h
+                .root()
+                .children_recursive()
+                .map(|n| n.accesskit_node())
+                .filter(|a| a.role() == Role::SpinButton && a.label().is_none())
+                .map(|a| a.value())
+                .collect();
+            assert!(unnamed.is_empty(), "unnamed fields {unnamed:?}");
             assert_in_place(
                 &before,
                 &places_above(&h, chart.top()),
