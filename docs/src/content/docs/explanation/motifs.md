@@ -149,16 +149,21 @@ $$
 \end{equation}
 $$
 
-where $|E|$ is `eligible_position_count`. Each position counts once, whatever its support: a
-position supported by 3,000 sequences weighs as much as one supported by 101. It is the same
-number everywhere it is shown: `entropy mean` in the line `dima analyze` prints at the end of a
-run, the *mean* chip of the desktop app, and the dashed line labelled *eligible mean* on the
-app's entropy chart.
+where $|E|$ is `eligible_position_count`. Each position counts once, whatever its support: with
+$T = 100$, a position supported by 3,000 sequences weighs as much as one supported by 101. The
+same number is `entropy mean` in the line `dima analyze` prints at the end of a run, the *mean*
+chip of the desktop app, and the dashed line labelled *eligible mean* on the app's entropy chart.
+When that chart shows similarity-weighted entropy, the same line is the eligible mean of
+similarity-weighted entropy instead: $\eqref{eq:eligible-mean}$ with the similarity-weighted
+entropy in place of $H_p$, which is `similarity_weighted_entropy_summary.average_entropy` and the
+first number of the app's similarity-weighted chip (0.0363 bits on the MERS-CoV spike sample).
 
 **Worked example.** The HIV-1 *pol* protein data set
 (`tests/data/HIV1_ALL_2020_pol_PRO.fasta.bz2`, the default options) has 1,189 positions: 476
 eligible, 162 LS and 551 NS. Its eligible mean is the average of the 476 eligible entropies,
-1.9072 bits. The table compares it with three other averages of the same run:
+1.9072 bits; the paper reports about 1.91 bits for HIV-1 *pol* protein (see
+[Comparison with the papers](/explanation/paper-comparison/)). The table compares it with three
+other averages of the same run:
 
 | Average over | Positions | Mean entropy (bits) |
 |---|---|---|
@@ -169,15 +174,18 @@ eligible, 162 LS and 551 NS. Its eligible mean is the average of the 476 eligibl
 
 The eligible mean leaves out the 162 LS positions, which rest on fewer than $T = 100$
 sequences and keep their uncorrected observed entropy, and the 551 NS positions, which have no
-entropy at all: it covers the positions of the paper's summaries, those with support above $T$.
+entropy at all: it covers the positions of the paper's summaries, those with support above $T$
+[@tharanga2025, Results and Fig. 2].
 
-On the MERS-CoV spike sample every position is eligible and the eligible mean is 0.1261 bits;
-455 of its 1,345 positions have entropy 0 and the highest has 1.5878 bits, so the mean says
-nothing about where the diversity lies: read it with the lowest and highest entropy and the
-per-position values. The eligible mean also depends on the run's settings. On the same sample it
-is 0.1207 bits with `--estimator raw` (the observed entropy), and 0.1235 bits with `-s 30`,
-although every position is eligible at both thresholds, because the subsample sizes of the
-paper's correction depend on $T$ (see
+A mean does not say where the diversity lies. On the MERS-CoV spike sample every position is
+eligible and the eligible mean is 0.1261 bits, while 455 of its 1,345 positions have entropy 0
+and the highest has 1.5878 bits; the lowest and highest entropy of the summary, and the values
+of the positions, show that.
+
+The eligible mean also depends on the run's settings. On the same sample it is 0.1207 bits with
+`--estimator raw` (the observed entropy), and 0.1235 bits with `-s 30`, although every position
+is eligible at both thresholds, because the subsample sizes of the paper's correction depend on
+$T$ (see
 [the paper's correction](/explanation/entropy/#the-papers-correction-fig-2)).
 Before you compare the eligible means of two alignments, see
 [Can I compare diversity between proteins or datasets?](/getting-started/faq/#can-i-compare-diversity-between-proteins-or-datasets).

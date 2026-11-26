@@ -302,7 +302,8 @@ The dashed grey line across the chart is the
 [eligible mean](/reference/glossary/#eligible-mean): the average entropy of the run's eligible
 positions, the positions with support above T. Each eligible position counts once, whatever its
 support. The line's value is written at its right end, and the legend lists it as *eligible
-mean*; hover over that legend entry for a short explanation. For the bundled MERS spike sample
+mean*; hover over that legend entry for a short explanation, which screen readers read too, as
+for every legend entry. For the bundled MERS spike sample
 (`samples/mers_spike_aa.fasta`, default options) the line reads *eligible mean 0.1261*, the same
 number as the *mean 0.1261 bits* chip above the chart and `average_entropy` in the exported
 results.
@@ -310,18 +311,20 @@ results.
 Use it as a reference level: a point above the line is a position with more entropy than the
 average eligible position, a point below it one with less. Keep in mind:
 
-- **It is the run's value, not that of the positions shown.** Zooming, panning and the filters
-  do not move it. If the filters hide the larger values, the line can lie above the top of the
-  value axis; it is then not drawn, but the legend still lists it.
+- **It is the run's value, not that of the positions shown.** Zooming and panning do not move
+  it, and the filters do not change its value. The value axis follows the largest value shown,
+  though, so a filter can rescale the axis and move the line with it. If the filters hide the
+  larger values, the line can lie above the top of the axis; it is then not drawn, but the
+  legend still lists it.
 - **Only eligible positions are in it.** The dashed vermillion stretches (support at or below T)
   are drawn but left out, and positions without support (hatched) have no entropy to add. In the
-  HIV-1 pol protein data set (`tests/data/HIV1_ALL_2020_pol_PRO.fasta.bz2`, default options),
+  HIV-1 *pol* protein data set (`tests/data/HIV1_ALL_2020_pol_PRO.fasta.bz2`, default options),
   476 of the 1,189 positions are eligible and the line reads *eligible mean 1.9072*; the 162
   positions drawn dashed, whose mean entropy is 0.5823 bits, are not in it. The mean of every
   point the chart draws there would be 1.5708 bits.
 - **It does not show where the diversity is.** On the MERS spike sample 455 of the 1,345
-  positions have entropy 0 and the highest, at position 26, has 1.5878 bits; read the line with
-  the *lowest* and *highest* chips and the chart itself.
+  positions have entropy 0 and the highest, at position 26, has 1.5878 bits; the *lowest* and
+  *highest* chips and the chart itself show that.
 - **It depends on the run's settings.** It uses the run's estimator and T: on the MERS spike
   sample it is 0.1207 bits with the **Entropy estimator** *Raw (plug-in)* and 0.1235 bits with
   **Support threshold T** set to 30. Before you compare it between alignments, see

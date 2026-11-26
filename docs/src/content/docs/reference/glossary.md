@@ -68,7 +68,10 @@ It appears as `average_entropy` in the results, `entropy mean` in the line `dima
 at the end, the *mean* chip of the desktop app and, on the app's entropy chart, the dashed grey
 line labelled *eligible mean*: 0.1261 bits for the bundled MERS-CoV spike sample. Positions with
 support at or below the threshold are not in it, and it is `null` (— in the app) when no position
-is eligible. See [the eligible mean](/explanation/motifs/#the-eligible-mean).
+is eligible. When the app's chart shows similarity-weighted entropy, the same line is the
+eligible mean of similarity-weighted entropy (`similarity_weighted_entropy_summary.average_entropy`,
+the first number of the app's similarity-weighted chip). See
+[the eligible mean](/explanation/motifs/#the-eligible-mean).
 
 ### NS, LS and ELS
 

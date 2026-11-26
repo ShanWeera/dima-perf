@@ -1866,3 +1866,39 @@ fn the_chips_tooltips_are_their_descriptions() {
         assert_eq!(node.accesskit_node().description(), Some(tip), "{text:?}");
     }
 }
+
+/// The entropy chart's legend entries give screen readers what their tooltips show: the
+/// eligible-mean entry its definition, for the metric shown.
+#[test]
+fn the_legend_tooltips_are_their_descriptions() {
+    use crate::charts::metric::ChartMetric;
+    use egui_kittest::kittest::NodeT;
+    let mut h = harness();
+    load(&mut h, &fixtures::mers_swe());
+    let description = |h: &H| {
+        h.get_by_label("eligible mean")
+            .accesskit_node()
+            .description()
+    };
+    assert_eq!(
+        description(&h),
+        Some(crate::panels::help_text::eligible_mean(
+            ChartMetric::Entropy,
+            100,
+            1345
+        ))
+    );
+    h.get_by_role_and_label(Role::RadioButton, ChartMetric::SimilarityWeighted.name())
+        .click();
+    h.run_steps(1);
+    h.event(egui::Event::PointerGone);
+    h.run_steps(3);
+    assert_eq!(
+        description(&h),
+        Some(crate::panels::help_text::eligible_mean(
+            ChartMetric::SimilarityWeighted,
+            100,
+            1345
+        ))
+    );
+}

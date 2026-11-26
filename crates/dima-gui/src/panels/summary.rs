@@ -61,11 +61,7 @@ pub fn chips(r: &Results, session: &Session) -> Vec<(String, String)> {
                     |m| format!("{} bits", dima_core::human::fixed(m, 4))
                 )
             ),
-            format!(
-                "Mean entropy over the {} eligible positions (support > T), each position \
-                 counted once: the line labelled eligible mean on the entropy chart",
-                r.eligible_position_count
-            ),
+            super::help_text::mean_chip(r.eligible_position_count, r.average_entropy.is_some()),
         ),
     ];
     if r.run.parameters.similarity_weighted_entropy.value {
@@ -130,7 +126,7 @@ fn similarity_weighted_chip(r: &Results) -> (String, String) {
     );
     (
         text,
-        super::help_text::similarity_weighted_mean(r.eligible_position_count),
+        super::help_text::similarity_weighted_mean(r.eligible_position_count, means.is_some()),
     )
 }
 
