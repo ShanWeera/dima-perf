@@ -159,7 +159,7 @@ pub fn render() -> String {
          terminal; `-h` shows one-line summaries.\n\n",
     );
     out.push_str(
-        "| Exit status | Meaning |\n|---|---|\n| `0` | Success (also when a reader of standard output, such as `head`, stops early) |\n| `1` | Internal error (a bug; please report it) |\n| `2` | Usage error (invalid options) |\n| `3` | Input/output or system error (missing file, no permission, disk full, a thread the system refused) |\n| `4` | Invalid input data (not an aligned FASTA, unequal lengths, invalid characters in strict mode; a results file of another schema version, or edited or damaged) |\n| `130`, `143`, `129` | Interrupted by SIGINT (Ctrl-C), SIGTERM or SIGHUP; unfinished outputs are removed, never left partial |\n\n",
+        "| Exit status | Meaning |\n|---|---|\n| `0` | Success (also when a reader of standard output, such as `head`, stops early) |\n| `1` | Internal error (a bug; please report it) |\n| `2` | Usage error (invalid options) |\n| `3` | Input/output or system error (missing file, no permission, disk full, a thread the system refused) |\n| `4` | Invalid input data (not an aligned FASTA, unequal lengths, invalid characters in strict mode; a results file of another major schema version, or edited or damaged) |\n| `130`, `143`, `129` | Interrupted by SIGINT (Ctrl-C), SIGTERM or SIGHUP; unfinished outputs are removed, never left partial |\n\n",
     );
     command_section(&mut out, &cmd, "dima");
     for sub in cmd.get_subcommands().filter(|s| s.get_name() != "help") {

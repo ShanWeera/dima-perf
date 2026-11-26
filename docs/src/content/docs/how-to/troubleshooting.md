@@ -133,7 +133,8 @@ or accept the mismatches with `--validation permissive` (they get the fill value
 version, or its version is not a plain number, such as `01.1.0`. Re-run the analysis, or use the version that wrote the file.
 
 **`position N: … is given, but …`**, **`… is missing`** or another message with the hint `the
-file was edited or damaged` (exit 4, from `dima view`, `dima hcs` or `dima cite --from`) — the
+file was edited or damaged` (exit 4, from `dima view`, `dima hcs` or `dima cite --from`; the
+desktop app shows the same message when it cannot open the file) — the
 results contradict themselves, for example a similarity-weighted value at a position without
 support, no such value where the run computed them (`run.parameters.similarity_weighted_entropy`
 says whether it did), or `position N: similarity_weighted_entropy is …, above the observed

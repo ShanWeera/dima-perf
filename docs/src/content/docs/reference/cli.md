@@ -13,14 +13,14 @@ This page is generated from the definitions `dima` itself parses, so it always m
 | `1` | Internal error (a bug; please report it) |
 | `2` | Usage error (invalid options) |
 | `3` | Input/output or system error (missing file, no permission, disk full, a thread the system refused) |
-| `4` | Invalid input data (not an aligned FASTA, unequal lengths, invalid characters in strict mode; a results file of another schema version, or edited or damaged) |
+| `4` | Invalid input data (not an aligned FASTA, unequal lengths, invalid characters in strict mode; a results file of another major schema version, or edited or damaged) |
 | `130`, `143`, `129` | Interrupted by SIGINT (Ctrl-C), SIGTERM or SIGHUP; unfinished outputs are removed, never left partial |
 
 ## `dima`
 
-DiMA quantifies the diversity of viral protein or nucleotide alignments: for every k-mer position it counts the distinct k-mers, estimates their Shannon entropy with a correction for sample size (and, on request, their similarity-weighted entropy), classifies variants into Index, Major, Minor and Unique motifs, and reports their incidence, optionally stratified by FASTA header metadata. Conserved stretches (historically conserved sequences) are reported separately.
+DiMA quantifies the diversity of viral protein or nucleotide alignments: for every k-mer position it counts the distinct k-mers, estimates their Shannon entropy with a correction for sample size, classifies variants into Index, Major, Minor and Unique motifs, and reports their incidence, optionally stratified by FASTA header metadata. On request it also computes their similarity-weighted entropy (Wu 2025), which is not corrected for sample size. Conserved stretches (historically conserved sequences) are reported separately.
 
-**References:** Tharanga et al. 2025, [doi:10.1093/bib/bbae607](https://doi.org/10.1093/bib/bbae607); Wu 2025, [doi:10.1093/ve/veaf029](https://doi.org/10.1093/ve/veaf029)
+**References:** Tharanga et al. 2025, [doi:10.1093/bib/bbae607](https://doi.org/10.1093/bib/bbae607); Wu 2025, Section 2.1 and Supplementary File 1, [doi:10.1093/ve/veaf029](https://doi.org/10.1093/ve/veaf029)
 
 ```text
 dima [OPTIONS] [COMMAND]

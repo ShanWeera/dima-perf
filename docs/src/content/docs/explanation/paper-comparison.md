@@ -183,7 +183,7 @@ et al. give the IR, LM and Sys values of their own figures as means of the three
 LM and Sys points with the means of their three plants, to within 0.06 bits for $H$ and
 $H_\text{sim}$ and 0.005 for $H_n$ and $H_\text{nsim}$: about what the figure can be read to,
 since its theoretical-pool points, whose values are exact, read up to 0.02 bits and 0.004 off.
-No single LM plant would match: the LM point is at about 1.25 bits. The pool's values use every
+No single LM plant would match: the LM point is at about 1.3 bits. The pool's values use every
 listed sequence, <!-- docs-numbers:pstvd-pool:start -->
 255 of them of the form UNNNNA and 88 others; the 255 alone would give $H_n = 0.9598$<!-- docs-numbers:pstvd-pool:end -->, against about 0.91 in the figure. As Section 3.2 reports
 [@wu2025, Section 3.2], all four values fall from the pool through IR and LM to Sys. From the
