@@ -419,6 +419,35 @@ Wu computes each variant's weight from the similarity of every pair of distinct 
 each site of the k-mer, without forming pairs (see
 [Numerical accuracy](/explanation/numerical-accuracy/#similarity-weighted-entropy)).
 
+### Amino-acid k-mers (DiMA's extension)
+
+Wu defined the metric for nucleotide sequences and applied it only to them [@wu2025, Sections 2.1
+and 3.1–3.3]. DiMA also computes it for amino-acid k-mers, in the same way:
+
+- **The same computation.** Nothing in Wu's definition depends on the alphabet: the similarity of
+  two k-mers counts the sites that carry the same residue, whatever the residues are. DiMA uses
+  this definition unchanged for amino acids, where it is the fraction of identical residues of
+  two aligned protein sequences [@grishin1995, p. 675]. Nothing is added: no substitution matrix,
+  no grouping of similar amino acids, no other weighting.
+- **What is compared.** Every site of a k-mer that is counted holds a definite residue: for
+  proteins one of the 20 standard amino acids, selenocysteine (U) or pyrrolysine (O). A k-mer
+  with an ambiguity code (X, B, Z or J), a gap, or a stop or frameshift symbol is not counted at
+  that position, for similarity-weighted entropy as for observed entropy (see
+  [Valid k-mers and support](/explanation/method/#valid-k-mers-and-support) and the
+  [symbol tables](/reference/symbols/)). So two k-mers are never compared at an ambiguous site.
+- **Why identity, and not a substitution matrix.** Identity treats every exchange of amino acids
+  alike, and percentage identity is a poor substitute for scores that take the physico-chemical
+  properties of the amino acids into account [@raghava2006, Conclusion]. A matrix of such scores
+  would change Wu's method, however, and DiMA keeps the published methods
+  ([working agreement 1](/contributing/working-agreements/)): no variant of similarity-weighted
+  entropy with such scores has been published or validated. A conservative exchange therefore
+  lowers the similarity of two amino-acid k-mers as much as a radical one.
+- **Reading the values.** An amino-acid k-mer changes only when the encoded amino acids change,
+  and a k-mer of $k$ amino acids spans $3k$ nucleotides, so the values of a protein and of its
+  gene differ; compare them only between runs with the same alphabet and $k$ (see
+  [k and the alphabet](#k-and-the-alphabet)). Like every use outside Wu's nucleotide populations,
+  this use is untested (see [What the evidence covers](#what-the-evidence-covers)).
+
 ### Weights and bounds
 
 Written with the distances, a variant's weight is its own frequency plus the average share of
@@ -507,7 +536,8 @@ host" [@wu2025, Section 1], and applied the metric only to nucleotide sequences 
 that differ by substitutions only: simulated populations, a potato spindle tuber viroid (PSTVd)
 mutant pool and the populations it gave within single plants, and two tomato brown rugose fruit
 virus (ToBRFV) samples [@wu2025, Sections 2.1 and 3.1–3.3]. DiMA's alignments usually hold sequences
-from many hosts, and DiMA applies the metric at every k-mer position, to amino-acid k-mers too.
+from many hosts, and DiMA applies the metric at every k-mer position, to amino-acid k-mers too
+(see [Amino-acid k-mers](#amino-acid-k-mers-dimas-extension)).
 Wu's reading, that a variant similar to the others adds less to a quasispecies' diversity, then
 becomes a statement about the k-mers sampled across hosts. These uses are DiMA's extension and are
 untested.

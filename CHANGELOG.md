@@ -103,6 +103,10 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
   `dima view` notes this when it writes values their schema did not record, and keeps its
   `newer_schema` warning for newer or unrecognised versions, now quoting a version that is not a
   plain `MAJOR.MINOR.PATCH` (so that, for example, a stray space shows).
+- Documentation: the methodology page explains how DiMA applies Wu's similarity, defined and
+  tested on nucleotide sequences, to amino-acid k-mers: the same identity-based computation,
+  which residues are compared, why identity is used rather than a substitution matrix, and how to
+  read and compare the values ("Amino-acid k-mers (DiMA's extension)").
 - Documentation: "Comparison with the paper" is now "Comparison with the papers" (same address),
   since it also compares DiMA with Wu 2025.
 - Desktop app: a value typed into a field of the filter bar (a position or a bound of the value
