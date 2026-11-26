@@ -199,6 +199,15 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
 - Documentation: some rows of "Design rationale" cited sources for more than those sources say;
   each now cites the rule, section or table that supports it and states the rest in plain words.
 
+### Security
+
+- Dependencies updated for RustSec advisories, none of which affects how DiMA uses them: zstd
+  0.13.4, zstd-safe 7.4.0 and zstd-sys 2.1.3 (RUSTSEC-2026-0391, -0398, -0403 and -0410:
+  context reuse, seekable archives, legacy frames and WebAssembly, none of which DiMA uses; the
+  bundled zstd library stays 1.5.7, so compressed outputs are unchanged), and, in the desktop
+  app, url 2.5.9 (RUSTSEC-2026-0592) and the yanked async-executor 1.14.0 and clipboard-win
+  5.4.1. The zstd crates are now BSD-3-Clause licensed (THIRD-PARTY-NOTICES.md).
+
 ## [1.0.0] - 2026-10-07
 
 First release of the Rust implementation of DiMA (Tharanga et al. 2025, *Briefings in

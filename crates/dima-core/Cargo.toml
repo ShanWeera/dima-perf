@@ -22,7 +22,7 @@ libm.workspace = true
 seq_io = "0.3.4"
 flate2 = { version = "1.1.10", default-features = false, features = ["zlib-rs", "runtime_detection"] }
 bzip2 = "0.6.1"
-zstd = { version = "0.13.3", default-features = false }
+zstd = { version = "0.13.4", default-features = false }
 sha2 = "0.11"
 memchr = "2.7"
 hashbrown = { version = "0.16", default-features = false, features = ["inline-more"] }

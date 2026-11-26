@@ -26,6 +26,10 @@ ignore = [
     { id = "RUSTSEC-2026-0194", reason = "quick-xml is used only by the wayland-scanner proc-macro, which parses the Wayland protocol XML shipped in the wayland crates at compile time (trusted, fixed input); no runtime use; upstream pins quick-xml 0.39 (until 2027-04-05)" },
     { id = "RUSTSEC-2026-0195", reason = "same as RUSTSEC-2026-0194: compile-time parsing of trusted Wayland protocol files only (until 2027-04-05)" },
     { id = "RUSTSEC-2026-0192", reason = "ttf-parser is unmaintained but has no known vulnerability; the desktop app parses only its bundled fonts (ab_glyph, sctk-adwaita); no maintained replacement is used by egui yet (until 2027-04-05)" },
+    { id = "RUSTSEC-2026-0441", reason = "pin-utils is unmaintained (archived) but has no known vulnerability; it reaches only the desktop app, through futures-util in its Linux accessibility stack (accesskit_unix), which has no release without it yet (until 2027-05-26)" },
+    { id = "RUSTSEC-2026-0370", reason = "zvariant is unmaintained as a standalone crate (merged into zbus 6) but has no known vulnerability; it reaches only the desktop app's Linux accessibility stack (accesskit_unix 0.21, atspi 0.29), which still uses zbus 5 (until 2027-05-26)" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names: same as RUSTSEC-2026-0370 (until 2027-05-26)" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: same as RUSTSEC-2026-0370 (until 2027-05-26)" },
 ]
 
 [licenses]
