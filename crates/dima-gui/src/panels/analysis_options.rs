@@ -215,16 +215,17 @@ pub fn hcs_controls(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &m
             (h.params.threshold != default).then(|| format!("{default}%")),
         );
         let mut value = h.params.threshold.to_f64();
+        // The slider and the exact field set the same threshold: each has a name of its own,
+        // so a screen reader tells them apart. The exact field shows the value, so the slider
+        // shows none of its own (which would be a third control, named like the slider).
         let slider = ui
             .add(
                 egui::Slider::new(&mut value, 50.5..=100.0)
                     .step_by(0.5)
-                    .suffix("%")
+                    .show_value(false)
                     .text("Index incidence"),
             )
             .labelled_by(label);
-        // The slider and the exact field set the same threshold: each has a name of its own,
-        // so a screen reader tells them apart.
         let slider = with_help(named(slider, HCS_SLIDER), &help::hcs_threshold());
         if slider.changed()
             && let Ok(p) = Percent::hcs_threshold(&format!("{value}"))
@@ -437,13 +438,15 @@ fn advanced(
             ui.horizontal(|ui| {
                 let mut n =
                     crate::workers::analysis::worker_threads(state.settings.threads, cpus).get();
+                // One control named by its row (a slider's own value box and text would name
+                // themselves "of 8 CPUs"); the count is written after it.
                 let slider = ui
-                    .add(egui::Slider::new(&mut n, 1..=cpus.max(1)).text(format!("of {cpus} CPUs")))
+                    .add(egui::Slider::new(&mut n, 1..=cpus.max(1)).show_value(false))
                     .labelled_by(label);
-                // Named by its row, not by its text ("of 8 CPUs"), which egui would make its name.
                 if with_help(named(slider, "Worker threads"), &help::threads()).changed() {
                     out.push(Msg::ThreadsChanged((n != default).then_some(n)));
                 }
+                ui.label(format!("{n} of {cpus} CPUs"));
             });
             ui.end_row();
         });

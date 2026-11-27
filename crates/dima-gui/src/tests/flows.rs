@@ -1847,9 +1847,27 @@ fn every_option_reads_its_tooltip() {
         described(&h, Role::CheckBox, "Stratify field 1").is_some(),
         "the header editor's boxes too"
     );
+    // Each slider is one control: no value box of its own named after its text.
     assert!(
         h.query_by_role_and_label(Role::Slider, "Index incidence")
             .is_none()
+    );
+    assert!(
+        h.query_by_role_and_label(Role::SpinButton, "Index incidence")
+            .is_none()
+    );
+    assert!(
+        !h.query_all_by_role(Role::SpinButton).any(|n| n
+            .accesskit_node()
+            .label()
+            .is_some_and(|l| l.contains("CPUs"))),
+        "the threads slider is named by its row"
+    );
+    let cpus = crate::workers::analysis::cpus();
+    let threads = crate::workers::analysis::default_threads().get();
+    assert!(
+        has_label(&h, &format!("{threads} of {cpus} CPUs")),
+        "the count after the threads slider"
     );
     // The theme switch is named in words, never by its glyph.
     assert!(
