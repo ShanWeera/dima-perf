@@ -110,11 +110,13 @@ results' `x.json`.
 is always JSON. Name it `.json`, optionally followed by `.gz` or `.zst`; the hint suggests
 `run.run-report.json` for `run.tsv`. No run report is written.
 
-**`cannot create '…'`** with **`caused by: file name too long (more than 255 bytes)`** (exit 3)
-— the file name, often a long `--query-name` in the table names, is longer than file systems
-allow. Shorten it. With **`caused by: too many levels of symbolic links`**, the name is a
-symbolic link that leads, through others, back to itself: remove the loop. Both are found before
-the analysis starts.
+**`cannot create '…'`** with **`caused by: File name too long (os error 36)`** (exit 3; the
+system's own words, with its own number on macOS and Windows) — the file name, often a long
+`--query-name` in the table names, is longer than the file system holding it accepts (255 bytes
+on ext4, 255 characters on FAT, exFAT, NTFS and HFS+). Shorten it. With **`caused by: too many
+levels of symbolic links`**, the name is a symbolic link that leads, through others, back to
+itself: remove the loop; with another cause, such as a permission error, the link cannot be
+read. All are found before the analysis starts.
 
 ### Outputs that would overwrite each other
 
@@ -159,10 +161,15 @@ standard output and `/dev/fd/3`, lead to one file (`3>same.json >same.json`). Gi
 its own file.
 
 **`… and … are the same pipe: … and … would both be written to it`**, **`… is the pipe '…',
-which is also written as …`**, **`'…' and '…' lead to one pipe: …`** — two outputs go into one
-pipe, FIFO or socket (`-o /dev/fd/3 -O json --hcs-output - 3>&1 | wc -c`, or a symbolic link to
-`/dev/stdout` next to `-`), where their bytes would be mixed into one stream that neither
-format can read. Give each output its own file or pipe.
+which is also written as …`**, **`'…' and '…' lead to one pipe: …`**, **`/dev/fd/3 would be
+written twice: …`** — two outputs go into one pipe, FIFO or socket (`-o /dev/fd/3 -O json
+--hcs-output - 3>&1 | wc -c`, or a symbolic link to `/dev/stdout` next to `-`), where their bytes
+would be mixed into one stream that neither format can read. Give each output its own file or
+pipe.
+
+**`output '…' (…) is the input pipe (read from standard input)`** — standard input comes from a
+FIFO that an output also writes (`dima analyze -o p -O json < p`): DiMA itself would hold the
+FIFO open for writing, so its input would never end. Write the output elsewhere.
 
 The message `--run-report '…' is also given as '…'` of earlier versions is now one of the
 messages above.
@@ -205,7 +212,8 @@ see [why](/explanation/conserved-sequences/#which-positions-qualify).
 **`--from takes at most one results file and one conserved-sequences file`** — give the results
 of one run and, optionally, the conserved sequences computed from them.
 
-**`--from - is given twice`** (since 1.2.0) — standard input can be read once. Give the other
+**`standard input is given twice to --from`** (since 1.2.0) — `-`, `/dev/stdin` and `/dev/fd/0`
+all read standard input, which can be read once. Give the other
 file by its name.
 
 **`the conserved sequences in '…' were not computed from the results in '…': …`** (since 1.2.0)
@@ -236,8 +244,8 @@ was before the run.
 **`… is a directory`** (exit 2) — `-i` or the redirected standard input names a folder; give
 the alignment file.
 
-**`cannot start …`** (the reader thread, the checksum thread, the interrupt handler or a worker
-thread) — the system refused a new thread (`Resource temporarily unavailable`): a limit on
+**`cannot start …`** (the thread that opens the input, the reader thread, the checksum thread,
+the interrupt handler or a worker thread) — the system refused a new thread (`Resource temporarily unavailable`): a limit on
 processes and threads (`ulimit -u`, a container's pids limit; on macOS, the limit of
 threads per process) or a lack of memory. Use fewer threads (`-t`), stop other programs, or raise
 the limit.

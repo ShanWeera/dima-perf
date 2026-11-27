@@ -298,35 +298,36 @@ pub fn written_in_place(path: &Path) -> bool {
     }
 }
 
-/// Why no file can be written at `dest`, known before writing: a symbolic-link loop (the
-/// resolution gave up on a link), or a file name longer than any file system allows (more
-/// than 255 bytes on Linux, 255 UTF-16 units elsewhere), which would otherwise fail only when
-/// the finished output is renamed into place.
+/// Why no file can be written at `dest`, known before writing, which would otherwise fail only
+/// when the finished output is renamed into place: a symbolic link left unresolved (a loop,
+/// or a link that cannot be read), or a file name longer than the file system holding it
+/// accepts, which the file system itself reports (255 bytes on ext4, 255 UTF-16 units on
+/// vfat, exFAT, NTFS and HFS+).
 fn unusable_name(dest: &Path) -> Option<io::Error> {
-    if fs::symlink_metadata(dest).is_ok_and(|m| m.file_type().is_symlink()) {
-        return Some(io::Error::other("too many levels of symbolic links"));
+    match fs::symlink_metadata(dest) {
+        Ok(m) if m.file_type().is_symlink() => Some(match fs::read_link(dest) {
+            Ok(_) => io::Error::other("too many levels of symbolic links"),
+            Err(e) => e,
+        }),
+        Err(e) if name_too_long(&e) => Some(e),
+        _ => None,
     }
-    let name = dest.file_name()?;
-    let too_long = if cfg!(target_os = "linux") {
-        name.len() > NAME_MAX
-    } else {
-        name.to_string_lossy().encode_utf16().count() > NAME_MAX
-    };
-    too_long.then(|| {
-        io::Error::other(format!(
-            "file name too long (more than {NAME_MAX} {})",
-            if cfg!(target_os = "linux") {
-                "bytes"
-            } else {
-                "characters"
-            }
-        ))
-    })
 }
 
-/// The longest file name file systems accept: 255 bytes on Linux (its `NAME_MAX`), 255 UTF-16
-/// units on NTFS and HFS+.
-const NAME_MAX: usize = 255;
+/// The error a file system gives for a name longer than it accepts (`ENAMETOOLONG`;
+/// `ERROR_FILENAME_EXCED_RANGE` on Windows). `io::ErrorKind::InvalidFilename` is newer than the
+/// minimum supported Rust, so the code is compared.
+fn name_too_long(e: &io::Error) -> bool {
+    let code = if cfg!(any(target_os = "linux", target_os = "android")) {
+        36
+    } else if cfg!(windows) {
+        206
+    } else {
+        // macOS and the BSDs.
+        63
+    };
+    e.raw_os_error() == Some(code)
+}
 
 impl Sink {
     /// Opens `target` for writing with the given compression.
@@ -699,7 +700,12 @@ mod tests {
         let Err(e) = Sink::create(&Target::Path(long), OutputCompression::None) else {
             panic!("a name too long is refused");
         };
-        assert!(format!("{e:?}").contains("file name too long"), "{e:?}");
+        assert!(
+            std::error::Error::source(&e)
+                .and_then(|c| c.downcast_ref::<io::Error>())
+                .is_some_and(name_too_long),
+            "{e:?}"
+        );
         assert_eq!(entries(dir.path()).len(), 2, "only the two links");
         // The longest name that fits is written.
         let fits = dir.path().join(format!("{}.json", "a".repeat(250)));

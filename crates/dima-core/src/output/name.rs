@@ -122,9 +122,6 @@ const UNSUPPORTED: &[(&str, &str, Option<&str>)] = &[
         "gzip compression under the name .gzip",
         Some(".gz"),
     ),
-    (".tar.gz", "a compressed tar archive", None),
-    (".tar.zst", "a compressed tar archive", None),
-    (".tar", "a tar archive", None),
     (".tgz", "a compressed tar archive", None),
     (".tbz2", "a compressed tar archive", None),
     (".txz", "a compressed tar archive", None),
@@ -177,6 +174,17 @@ pub fn read_name(path: &Path) -> Result<Named, NameError> {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
     let lower = name.to_ascii_lowercase();
+    if let Some(at) = tar_at(&lower) {
+        return Err(NameError::UnsupportedCompression {
+            suffix: name[at..].to_owned(),
+            what: if at + TAR.len() == lower.len() {
+                "a tar archive"
+            } else {
+                "a compressed tar archive"
+            },
+            instead: None,
+        });
+    }
     if let Some(&(suffix, what, instead)) = UNSUPPORTED.iter().find(|(s, ..)| lower.ends_with(s)) {
         return Err(NameError::UnsupportedCompression {
             suffix: name[name.len() - suffix.len()..].to_owned(),
@@ -215,37 +223,67 @@ pub fn read_name(path: &Path) -> Result<Named, NameError> {
 }
 
 /// `path` as file systems that ignore letter case and Unicode form compare names (macOS's by
-/// default for both, Windows' for case): in lower case and normalization form C. Two names
-/// equal once folded may be one file; [`one_file`] tells when the file system can.
+/// default for both, Windows' for case): upper-cased then lower-cased, so that letters with one
+/// capital fold alike (`ſ` and `s`, `µ` and `μ`, `ı` and `i`), with every sigma `σ` (a final
+/// `ς` and `Σ` included), in normalization form C. Two names equal once folded may be one file;
+/// [`one_file`] tells when the file system can. Folding may join a few names that a file system
+/// keeps apart (`ß` and `ss`), which only makes the check more careful.
 #[must_use]
 pub fn folded(path: &Path) -> String {
     use unicode_normalization::UnicodeNormalization;
-    path.to_string_lossy().to_lowercase().nfc().collect()
+    let nfc: String = path.to_string_lossy().nfc().collect();
+    nfc.to_uppercase()
+        .to_lowercase()
+        .replace('\u{3c2}', "\u{3c3}")
+        .nfc()
+        .collect()
 }
 
 /// Whether two names that are equal once [`folded`] but differ as written are one file:
 /// `Some(false)` when only one of them exists (a file system that ignores the difference would
 /// find both), the comparison of their device and inode when both exist (Unix), `None` when
-/// the file system cannot tell (neither exists yet, or both exist where inodes are not
-/// available). Neither name's symbolic links are followed: resolve them first.
+/// the file system cannot tell (both exist where inodes are not available). When neither
+/// exists yet, the same question is asked of their folders, as long as those are spelled
+/// differently (`Out/r.json` and `out/r.json`: two files where `Out` and `out` are two
+/// folders), and `None` once the folders are spelled alike. Neither name's symbolic links are
+/// followed: resolve them first.
 #[must_use]
 pub fn one_file(a: &Path, b: &Path) -> Option<bool> {
-    match (std::fs::symlink_metadata(a), std::fs::symlink_metadata(b)) {
-        (Ok(x), Ok(y)) => same_inode(&x, &y),
-        (Err(_), Err(_)) => None,
-        _ => Some(false),
+    let (mut a, mut b) = (Some(a), Some(b));
+    while let (Some(x), Some(y)) = (a, b) {
+        if x == y {
+            return None;
+        }
+        match (std::fs::symlink_metadata(x), std::fs::symlink_metadata(y)) {
+            (Ok(m), Ok(n)) => return same_inode(&m, &n),
+            (Err(_), Err(_)) => (a, b) = (x.parent(), y.parent()),
+            _ => return Some(false),
+        }
     }
+    None
 }
 
 /// Why two names equal once [`folded`] may be one file, for messages: they differ only in
-/// letter case, or only in how their accented letters are encoded.
+/// letter case, only in how their accented letters are encoded, or in both.
 #[must_use]
 pub fn why_one_file(a: &Path, b: &Path) -> &'static str {
-    if a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase() {
-        "names that differ only in letter case are one file on macOS and Windows"
-    } else {
+    use unicode_normalization::UnicodeNormalization;
+    let nfc = |p: &Path| -> String { p.to_string_lossy().nfc().collect() };
+    // Case folded as `folded` does, without normalizing.
+    let case = |p: &Path| {
+        p.to_string_lossy()
+            .to_uppercase()
+            .to_lowercase()
+            .replace('\u{3c2}', "\u{3c3}")
+    };
+    if nfc(a) == nfc(b) {
         "names that differ only in how their accented letters are encoded (Unicode form) are one \
          file on macOS"
+    } else if case(a) == case(b) {
+        "names that differ only in letter case are one file on macOS and Windows"
+    } else {
+        "names that differ only in letter case and in how their accented letters are encoded \
+         (Unicode form) are one file on macOS"
     }
 }
 
@@ -259,6 +297,29 @@ fn same_inode(x: &std::fs::Metadata, y: &std::fs::Metadata) -> Option<bool> {
 #[cfg(not(unix))]
 const fn same_inode(_: &std::fs::Metadata, _: &std::fs::Metadata) -> Option<bool> {
     None
+}
+
+const TAR: &str = ".tar";
+
+/// Where `.tar` starts in `lower` when the name, without the compression extensions that end it
+/// (any number, written or not by DiMA: `.gz`, `.bz2`, `.zstd`, …), ends in `.tar`: a tar
+/// archive, which no hint may suggest (`x.tar.bz2` must not become `x.tar.gz`).
+fn tar_at(lower: &str) -> Option<usize> {
+    let compressions = COMPRESSIONS.iter().map(|(s, _)| *s).chain(
+        UNSUPPORTED
+            .iter()
+            .filter(|(_, what, _)| !what.contains("archive"))
+            .map(|(s, ..)| *s),
+    );
+    let compressions: Vec<&str> = compressions.collect();
+    let mut end = lower.len();
+    loop {
+        let stem = &lower[..end];
+        if stem.ends_with(TAR) {
+            return Some(end - TAR.len());
+        }
+        end -= compressions.iter().find(|s| stem.ends_with(**s))?.len();
+    }
 }
 
 /// `true` when `raw` can only name a folder: it ends in a path separator (other than a lone
@@ -343,6 +404,14 @@ mod tests {
             ("x.TAR.gz", ".TAR.gz"),
             ("x.json.tar.zst", ".tar.zst"),
             ("x.tar", ".tar"),
+            // Behind any compression, DiMA's or not, a tar name is an archive: no hint may
+            // suggest x.tar.gz.
+            ("x.tar.bz2", ".tar.bz2"),
+            ("x.tar.xz", ".tar.xz"),
+            ("x.tar.gzip", ".tar.gzip"),
+            ("x.tar.zstd", ".tar.zstd"),
+            ("x.tar.gz.zst", ".tar.gz.zst"),
+            ("x.tar.Z", ".tar.Z"),
         ] {
             match err(name) {
                 NameError::UnsupportedCompression { suffix: s, .. } => {
@@ -410,11 +479,29 @@ mod tests {
     /// only where the file system says so.
     #[test]
     fn names_that_differ_only_in_case_or_form() {
-        use super::{folded, one_file};
+        use super::{folded, one_file, why_one_file};
         assert_eq!(
             folded(Path::new("Caf\u{e9}.JSON")),
             folded(Path::new("cafe\u{301}.json"))
         );
+        // Letters with one capital fold alike, final sigma included, as NTFS and APFS compare.
+        let one = |a: &str, b: &str| folded(Path::new(a)) == folded(Path::new(b));
+        assert!(one(
+            "\u{3a3}\u{391}\u{3a3}.json",
+            "\u{3c3}\u{3b1}\u{3c2}.json"
+        ));
+        assert!(one(
+            "\u{3c3}\u{3b1}\u{3c3}.json",
+            "\u{3c3}\u{3b1}\u{3c2}.json"
+        ));
+        assert!(one("\u{17f}.json", "s.json"));
+        assert!(one("\u{b5}.json", "\u{3bc}.json"));
+        assert!(!one("a.json", "b.json"));
+        // The reason names what differs.
+        let why = |a: &str, b: &str| why_one_file(Path::new(a), Path::new(b));
+        assert!(why("R.json", "r.json").contains("only in letter case are"));
+        assert!(why("caf\u{e9}.json", "cafe\u{301}.json").contains("only in how"));
+        assert!(why("Caf\u{e9}.json", "cafe\u{301}.json").contains("letter case and in how"));
         let dir = tempfile::tempdir().unwrap();
         let (upper, lower) = (dir.path().join("R.json"), dir.path().join("r.json"));
         assert_eq!(one_file(&upper, &lower), None, "neither exists yet");
@@ -427,6 +514,16 @@ mod tests {
             std::fs::write(&lower, "{}").unwrap();
             #[cfg(unix)]
             assert_eq!(one_file(&upper, &lower), Some(false), "two inodes");
+            // Neither file exists, in folders that differ only in letter case: the folders tell.
+            std::fs::create_dir(dir.path().join("Out")).unwrap();
+            let (a, b) = (dir.path().join("Out/x.json"), dir.path().join("out/x.json"));
+            assert_eq!(one_file(&a, &b), Some(false), "only Out exists");
+            std::fs::create_dir(dir.path().join("out")).unwrap();
+            #[cfg(unix)]
+            assert_eq!(one_file(&a, &b), Some(false), "two folders");
+            // Spelled alike above the difference, and nothing below exists: unknown.
+            let (a, b) = (dir.path().join("New/x.json"), dir.path().join("new/x.json"));
+            assert_eq!(one_file(&a, &b), None);
         }
     }
 

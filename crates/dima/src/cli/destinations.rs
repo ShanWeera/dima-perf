@@ -250,6 +250,8 @@ struct Identity {
     /// What is behind them is a pipe, a FIFO or a socket, not a regular file: two outputs
     /// written to it would be mixed.
     pipe: bool,
+    /// What is behind them is a socket, which the input may share with an output.
+    socket: bool,
 }
 
 impl Identity {
@@ -274,7 +276,8 @@ impl Identity {
         Self {
             place,
             inode: id.map(|(inode, _)| inode),
-            pipe: id.is_some_and(|(_, pipe)| pipe),
+            pipe: id.is_some_and(|(_, b)| b != Behind::File),
+            socket: id.is_some_and(|(_, b)| b == Behind::Socket),
         }
     }
 
@@ -285,15 +288,19 @@ impl Identity {
                 place: Place::Device,
                 inode: None,
                 pipe: false,
+                socket: false,
             };
         }
         let id = meta.as_ref().and_then(file_id);
-        let (inode, pipe) = (id.map(|(inode, _)| inode), id.is_some_and(|(_, p)| p));
+        let inode = id.map(|(inode, _)| inode);
+        let pipe = id.is_some_and(|(_, b)| b != Behind::File);
+        let socket = id.is_some_and(|(_, b)| b == Behind::Socket);
         if dima_core::input::is_descriptor_alias(path) {
             return Self {
                 place: Place::Descriptor,
                 inode,
                 pipe,
+                socket,
             };
         }
         let exact = resolved(&output::destination_of(path))
@@ -304,6 +311,7 @@ impl Identity {
             place: Place::Named { exact, key },
             inode,
             pipe,
+            socket,
         }
     }
 
@@ -336,13 +344,31 @@ fn is_device(m: &std::fs::Metadata) -> bool {
     }
 }
 
-/// The device and inode of what a write to `m` reaches (Unix), and whether it is a pipe, a
-/// FIFO or a socket (`true`) rather than a regular file; `None` for devices and folders.
-fn file_id(m: &std::fs::Metadata) -> Option<((u64, u64), bool)> {
+/// What is behind a name or a descriptor, besides its device and inode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Behind {
+    /// A regular file.
+    File,
+    /// A pipe or a FIFO: one way, so it cannot be both the input and an output.
+    Pipe,
+    /// A socket, which can be read and written (a service started by inetd).
+    Socket,
+}
+
+/// The device and inode of what a write to `m` reaches (Unix), and what it is; `None` for
+/// devices and folders.
+fn file_id(m: &std::fs::Metadata) -> Option<((u64, u64), Behind)> {
     #[cfg(unix)]
     {
-        use std::os::unix::fs::MetadataExt;
-        (!is_device(m) && !m.is_dir()).then(|| ((m.dev(), m.ino()), !m.is_file()))
+        use std::os::unix::fs::{FileTypeExt, MetadataExt};
+        let behind = if m.is_file() {
+            Behind::File
+        } else if m.file_type().is_socket() {
+            Behind::Socket
+        } else {
+            Behind::Pipe
+        };
+        (!is_device(m) && !m.is_dir()).then(|| ((m.dev(), m.ino()), behind))
     }
     #[cfg(not(unix))]
     {
@@ -360,7 +386,7 @@ enum Stream {
 /// The file behind standard input or output (Unix), as [`file_id`]: a regular file (`< x.fa`,
 /// `> r.json`, `>> log`), or a pipe, FIFO or socket (`| wc`). Read from a duplicate of the
 /// descriptor, so nothing is consumed.
-fn stream_id(stream: Stream) -> Option<((u64, u64), bool)> {
+fn stream_id(stream: Stream) -> Option<((u64, u64), Behind)> {
     #[cfg(unix)]
     {
         use std::os::fd::AsFd;
@@ -509,6 +535,14 @@ fn usage(message: impl Into<String>, hint: impl Into<String>) -> DimaError {
 
 /// How to resolve a clash between `a` and `b`.
 fn fix(a: &Entry<'_>, b: &Entry<'_>) -> String {
+    // `dima cite` has no output option: its only output is standard output.
+    if [a, b]
+        .iter()
+        .any(|e| matches!(e.role, Role::Output(d) if d.kind == Kind::Citation))
+    {
+        return "redirect standard output to another file; a --from file is never overwritten"
+            .to_owned();
+    }
     if [a, b].iter().any(|e| matches!(e.role, Role::Input)) {
         return "choose another output path; the input is never overwritten".to_owned();
     }
@@ -583,9 +617,10 @@ fn clash(a: &Entry<'_>, b: &Entry<'_>) -> Option<DimaError> {
     let same_file = a.id.inode.is_some() && a.id.inode == b.id.inode;
     if same_file {
         let input = matches!(a.role, Role::Input) || matches!(b.role, Role::Input);
-        // Two outputs into one pipe would be mixed in it. The input may share a socket with
-        // standard output (a service started by inetd), and reading a pipe replaces nothing.
-        if a.id.pipe && !input {
+        // Two outputs into one pipe would be mixed in it, and an output on the pipe or FIFO
+        // the input comes from would keep the input from ever ending. Only a socket may be
+        // both (a service started by inetd reads and writes one).
+        if a.id.pipe && !(input && a.id.socket) {
             return Some(stream_clash(a, b));
         }
         if !a.id.pipe && (a.id.is_stream() || b.id.is_stream()) {
@@ -680,20 +715,32 @@ fn stream_clash(a: &Entry<'_>, b: &Entry<'_>) -> DimaError {
             fix(a, b),
         );
     }
+    if a.shown == b.shown {
+        // One descriptor named twice (`-o /dev/fd/3 --hcs-output /dev/fd/3`).
+        return usage(
+            format!(
+                "{} would be written twice: as {} and as {}",
+                a.shown,
+                a.what(),
+                b.what()
+            ),
+            fix(a, b),
+        );
+    }
     let (stream, other) = if a.id.is_stream() { (a, b) } else { (b, a) };
     let it = if a.id.pipe { "pipe" } else { "file" };
     let message = match (stream.role, other.role) {
         (Role::Input, _) => {
             if other.id.is_stream() {
                 format!(
-                    "{}, where {} would go, is the input file (read from {})",
+                    "{}, where {} would go, is the input {it} (read from {})",
                     other.shown,
                     other.what(),
                     stream.shown
                 )
             } else {
                 format!(
-                    "output '{}' ({}) is the input file (read from {})",
+                    "output '{}' ({}) is the input {it} (read from {})",
                     other.shown,
                     other.what(),
                     stream.shown
@@ -701,7 +748,7 @@ fn stream_clash(a: &Entry<'_>, b: &Entry<'_>) -> DimaError {
             }
         }
         (_, Role::Input) => format!(
-            "{}, where {} would go, is the input file '{}'",
+            "{}, where {} would go, is the input {it} '{}'",
             stream.shown,
             stream.what(),
             other.shown
@@ -1003,6 +1050,7 @@ mod tests {
                 place: Place::Descriptor,
                 inode: Identity::of_path(&file).inode,
                 pipe: false,
+                socket: false,
             },
         };
         let output = Destination {
@@ -1037,6 +1085,7 @@ mod tests {
                 place: Place::Stdout,
                 inode: Identity::of_path(&file).inode,
                 pipe: false,
+                socket: false,
             },
         };
         let e = clash(&out, &s).unwrap();
@@ -1076,6 +1125,7 @@ mod tests {
             place,
             inode: named.inode,
             pipe: true,
+            socket: false,
         };
         let results = Destination {
             kind: Kind::Results,
@@ -1119,9 +1169,28 @@ mod tests {
         };
         let m = clash(&c, &d).unwrap().to_string();
         assert!(m.contains("lead to one pipe"), "{m}");
-        // The input on the same pipe as an output: not refused (a socket can be both).
+        // The input on the FIFO an output writes: refused, since the input would never end.
         let input = entry("standard input", Role::Input, on(Place::Descriptor));
-        assert!(clash(&input, &b).is_none());
+        let m = clash(&input, &a).unwrap().to_string();
+        assert!(
+            m.contains("is the input pipe (read from standard input)"),
+            "{m}"
+        );
+        // A socket may be both (a service started by inetd).
+        let socket = Identity {
+            socket: true,
+            ..on(Place::Descriptor)
+        };
+        let input = entry("standard input", Role::Input, socket.clone());
+        let out = entry(
+            "standard output",
+            Role::Output(&hcs),
+            Identity {
+                place: Place::Stdout,
+                ..socket
+            },
+        );
+        assert!(clash(&input, &out).is_none());
     }
 
     /// The Unicode form of an accented letter is part of the key, like letter case (the rule

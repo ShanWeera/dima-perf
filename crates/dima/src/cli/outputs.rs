@@ -356,8 +356,18 @@ fn file_in_folder(kind: Kind, path: &Path) -> String {
         Kind::RunReport => "run-report.json",
         Kind::Results | Kind::Table(_) | Kind::Citation => "results.json",
     };
-    // Components drop the `.` of `x/.`, so the example reads `x/hcs.json`.
-    let folder: std::path::PathBuf = path.components().collect();
+    // Components drop the `.` of `x/.`, and `..` takes back the part before it, so the
+    // example reads `x/hcs.json` for `x/.` and `hcs.json` for `x/..`.
+    let mut folder = std::path::PathBuf::new();
+    for c in path.components() {
+        match c {
+            std::path::Component::ParentDir if folder.file_name().is_some() => {
+                folder.pop();
+            }
+            std::path::Component::CurDir => {}
+            c => folder.push(c),
+        }
+    }
     format!(
         "give a file name, such as '{}'",
         folder.join(example).display()
@@ -675,8 +685,8 @@ fn writing_rank(planned: &Planned) -> u8 {
 
 /// The outputs of a plan with their files opened (temporary files created), before the
 /// analysis runs: a destination that cannot be written — a missing or read-only folder, a name
-/// longer than file systems allow (255 bytes), a symbolic-link loop — stops the run before a
-/// long computation. Dropped without
+/// longer than its file system accepts, a symbolic-link loop — stops the run before a long
+/// computation. Dropped without
 /// [`Opened::write`] (an error or an interruption), it removes its temporary files.
 pub struct Opened<'a> {
     plan: &'a Plan,

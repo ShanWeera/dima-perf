@@ -66,13 +66,15 @@ first two describe the whole job, not this task; DiMA does not use OpenMP). With
 prints the thread count and where it came from, and notes when `OMP_NUM_THREADS` is lower.
 
 An explicit count above the available CPUs is obeyed, with a warning. The count never changes
-the results. Besides the worker threads, DiMA runs a reader thread and a checksum thread, which
-mostly wait for input, and the command line runs an interrupt handler. Those start first. If the
+the results. Besides the worker threads, DiMA runs a thread that opens the input (and ends once
+its first bytes are read, so that an interruption is noticed even while the input is still
+empty), a reader thread and a checksum thread, which mostly wait for input, and the command line
+runs an interrupt handler. Those start first. If the
 system then refuses some of the worker threads (a limit on processes and threads, such as
 `ulimit -u` or a container's pids limit), DiMA continues with as many workers as the system
 allows and warns (`threads_refused`); it stops, with [exit status 3](/reference/exit-codes/),
-only when it cannot start the reader, the checksum thread, the interrupt handler or a single
-worker.
+only when it cannot start the thread that opens the input, the reader, the checksum thread,
+the interrupt handler or a single worker.
 
 ## Colour
 

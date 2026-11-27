@@ -2631,13 +2631,15 @@ fn cite_describes_one_run() {
         stderr(&o)
     );
     // Standard input is read once.
-    let o = run(&["cite", "--from", "-", "--from", "-"], dir);
-    assert_eq!(code(&o), 2, "{}", stderr(&o));
-    assert!(
-        stderr(&o).contains("--from - is given twice"),
-        "{}",
-        stderr(&o)
-    );
+    for twice in [["-", "-"], ["-", "/dev/stdin"]] {
+        let o = run(&["cite", "--from", twice[0], "--from", twice[1]], dir);
+        assert_eq!(code(&o), 2, "{}", stderr(&o));
+        assert!(
+            stderr(&o).contains("standard input is given twice to --from"),
+            "{}",
+            stderr(&o)
+        );
+    }
     // Standard output appended to a file the citation reads would corrupt it: refused, and the
     // file is unchanged.
     #[cfg(unix)]
@@ -2657,7 +2659,7 @@ fn cite_describes_one_run() {
         assert!(
             stderr(&o).contains(
                 "standard output, where the citation would go, is the input file 'a.json'"
-            ),
+            ) && stderr(&o).contains("redirect standard output to another file"),
             "{}",
             stderr(&o)
         );
@@ -2721,5 +2723,72 @@ fn the_null_device_takes_outputs() {
     ] {
         let o = analyze_tiny(d.path(), &extra);
         assert_eq!(code(&o), 0, "{extra:?}: {}", stderr(&o));
+    }
+}
+
+/// Names and destinations refused since the review of 1.2.0: tar names behind any compression,
+/// a descriptor given to two outputs, the folder hint after `..`, and (Unix) an output on the
+/// FIFO standard input comes from, which would keep the input from ever ending.
+#[test]
+fn more_names_and_destinations_are_refused() {
+    let d = tmp();
+    let dir = d.path();
+    for (name, suffix) in [("x.tar.bz2", ".tar.bz2"), ("x.tar.gz.zst", ".tar.gz.zst")] {
+        let o = analyze_tiny(dir, &["-o", name]);
+        assert_eq!(code(&o), 2, "{name}: {}", stderr(&o));
+        assert!(
+            stderr(&o).contains(&format!(
+                "'{name}' asks for a compressed tar archive, which DiMA does not write"
+            )) && !stderr(&o).contains(".tar.gz or"),
+            "{name} ({suffix}): {}",
+            stderr(&o)
+        );
+    }
+    let o = analyze_tiny(dir, &["-o", "out.json/.."]);
+    assert_eq!(code(&o), 2, "{}", stderr(&o));
+    assert!(
+        stderr(&o).contains("hint: give a file name, such as 'results.json'"),
+        "{}",
+        stderr(&o)
+    );
+    #[cfg(unix)]
+    {
+        let o = analyze_tiny(
+            dir,
+            &["-o", "/dev/fd/2", "-O", "json", "--hcs-output", "/dev/fd/2"],
+        );
+        assert_eq!(code(&o), 2, "{}", stderr(&o));
+        assert!(
+            stderr(&o).contains("would be written twice"),
+            "{}",
+            stderr(&o)
+        );
+        // Standard input from a FIFO that an output also names: refused, not a hang.
+        let fifo = dir.join("p");
+        assert!(
+            Command::new("mkfifo")
+                .arg(&fifo)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let o = Command::new("sh")
+            .args([
+                "-c",
+                "cat \"$1\" > p & exec \"$0\" analyze -o p -O json -a protein -k 3 \
+                 --validation permissive < p",
+                env!("CARGO_BIN_EXE_dima"),
+            ])
+            .arg(tiny())
+            .current_dir(dir)
+            .env("NO_COLOR", "1")
+            .output()
+            .unwrap();
+        assert_eq!(code(&o), 2, "{}", stderr(&o));
+        assert!(
+            stderr(&o).contains("is the input pipe (read from standard input)"),
+            "{}",
+            stderr(&o)
+        );
     }
 }

@@ -97,7 +97,9 @@ anything runs. Two names are one file when they lead to it: spelled differently 
 `d/../x.json`) or through a symbolic link. Names that differ only in letter case are one file on
 macOS and Windows (and names that differ only in how their accented letters are encoded, on
 macOS), so they are refused on every system unless the file system shows they are two files:
-when only one of them exists, or, on Linux and macOS, when both exist and are different files.
+when only one of them exists, or, on Linux and macOS, when both exist and are different files;
+when neither exists yet, their folders are asked the same (`Out/r.json` and `out/r.json` are two
+files where `Out` and `out` are two folders).
 For example:
 
 ```text
@@ -138,7 +140,8 @@ That was `dima analyze -i mers_spike_aa.fasta -o mers.json --hcs-output - > mers
 would make the results invalid JSON.
 
 Two outputs into one pipe, FIFO or socket are refused too, because their bytes would be mixed in
-it: `-o /dev/fd/3 -O json --hcs-output /dev/fd/3`, or `-o /dev/fd/3 -O json --hcs-output - 3>&1 |
+it, and so is an output on the FIFO or pipe that standard input comes from (`-o p < p`), which
+would keep the input from ever ending: `-o /dev/fd/3 -O json --hcs-output /dev/fd/3`, or `-o /dev/fd/3 -O json --hcs-output - 3>&1 |
 wc -c`, or a symbolic link to `/dev/stdout` next to `-`:
 
 ```text

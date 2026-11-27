@@ -992,15 +992,13 @@ fn replaced_input(state: &AppState, kind: ExportKind, dest: &Path) -> Option<Str
     written.iter().find_map(|file| {
         inputs.iter().find_map(|&(input, what)| {
             let name = name_of(file);
-            crate::workers::export::replaces(file, input).map(|certain| {
-                if certain {
+            crate::workers::export::replaces(file, input).map(|r| match r {
+                crate::workers::export::Replaces::Certainly => {
                     format!("Nothing was saved: '{name}' is {what}; choose another name")
-                } else {
-                    format!(
-                        "Nothing was saved: '{name}' may be {what} ({}); choose another name",
-                        dima_core::output::why_one_file(file, input)
-                    )
                 }
+                crate::workers::export::Replaces::Possibly(why) => format!(
+                    "Nothing was saved: '{name}' may be {what} ({why}); choose another name"
+                ),
             })
         })
     })

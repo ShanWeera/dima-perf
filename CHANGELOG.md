@@ -79,7 +79,8 @@ some output names that 1.1.1 accepted are now refused because they misstated wha
   `.zstd` or `.gzip` for `.zst` or `.gz`) or an archive (`.zip`, `.7z`, `.tar`, `.tar.gz`,
   `.tar.zst`, `.tgz`, `.tbz2`, `.txz`), two compressions, a run report named as a table (`.tsv`,
   `.jsonl`), or a folder (a name that ends in a path separator, or whose last part is `.` or
-  `..`) is refused with exit status 2 before anything runs, with the name to use. A name DiMA
+  `..`) is refused (a tar name behind any compression, `x.tar.bz2` or `x.tar.gz.zst`, as an
+  archive) with exit status 2 before anything runs, with the name to use. A name DiMA
   suggests keeps the name given: it adds the format's extension to a name that names none
   (`regions.txt` → `regions.txt.json`) and puts the output's own name in place of another
   format's extension (`run.tsv` → `run.run-report.json`, `x.jsonl` → `x.hcs.json`), so it is
@@ -90,13 +91,16 @@ some output names that 1.1.1 accepted are now refused because they misstated wha
   on every platform.
 - Every file and folder a command writes is checked against every other and against the input
   before anything runs, the run report first, however the names are spelled (`./`, `..`,
-  symbolic links). Names that differ only in letter case, or in the Unicode form of an accented
-  letter, are refused unless the file system shows two files (only one exists, or their inodes
-  differ). On Unix, standard input and standard output are compared with the files a run replaces
+  symbolic links). Names that differ only in letter case (with letters such as `ς` and `σ`, `ſ`
+  and `s` folded as NTFS and APFS fold them), or in the Unicode form of an accented letter, are
+  refused unless the file system shows two files (only one exists, or their inodes differ, or,
+  when neither exists yet, the same holds for their folders). On Unix, standard input and standard output are compared with the files a run replaces
   by device and inode, so `dima analyze -o x.fa < x.fa` and `-o r.json --hcs-output - > r.json`
   are refused, and so is `dima cite --from r.json >> r.json`. Two outputs that lead to one pipe,
   FIFO or socket (`-o /dev/fd/3 -O json --hcs-output - 3>&1 | …`, a link to `/dev/stdout` next to
-  `-`) are refused. Devices such as `/dev/null` take any number of outputs, and appending standard
+  `-`) are refused, and so is an output on the pipe or FIFO standard input comes from, which
+  would keep the input from ever ending (a socket, which inetd-style services read and write, is
+  allowed). Devices such as `/dev/null` take any number of outputs, and appending standard
   output to a log (`>> log`) is never a clash. `dima view --tsv-dir` checks the names it will
   write. Messages name the outputs in words ("the positions table (--tsv-dir)").
 - The run report is opened right after its check, so a report that cannot be written fails
@@ -109,7 +113,8 @@ some output names that 1.1.1 accepted are now refused because they misstated wha
   `DIMA_NO_PROGRESS` (before, the variable won), and of `--progress` and `--no-progress` the last
   one given wins.
 - `dima cite --from` refuses results and conserved sequences of different runs, saying which
-  value is whose ("T is 100 in 'a.json' and 4 in 'b.hcs.json'"), and `--from -` given twice.
+  value is whose ("T is 100 in 'a.json' and 4 in 'b.hcs.json'"), and standard input given twice
+  (`-`, `/dev/stdin`, `/dev/fd/0`).
   `--licenses` with a subcommand is a usage error.
 - The `Cite:` line names the results file only when it is a regular file, quoted for the shell
   where needed; otherwise it suggests `dima cite`.
@@ -126,9 +131,9 @@ some output names that 1.1.1 accepted are now refused because they misstated wha
   explains that the results already go to standard output; the hint for unreadable compressed
   results mentions `dima analyze` only for bzip2, the one of those formats it reads alignments
   in; a run report clashing at a device or descriptor suggests `run-report.json`; the folder hint
-  gives a file name for that output (`out/hcs.json`) and mentions `--tsv-dir` only where the
-  command has it; `dima hcs` names its default output "(standard output by default)", as
-  `dima analyze` does.
+  gives a file name for that output (`out/hcs.json`) instead of naming `--tsv-dir`, which
+  `dima hcs` does not have; `dima hcs` names its default output "(standard output by default)",
+  as `dima analyze` does; `dima cite`'s hint says to redirect standard output.
 - The methods paragraph of `dima cite --from` and the desktop app's *Methods & references*
   define supported positions, state that the paper's correction applies where support is at
   least 1.25 T (credited to DiMA v5.0.9), give a conserved region's bound as the lowest
@@ -181,9 +186,9 @@ some output names that 1.1.1 accepted are now refused because they misstated wha
   until the 3-second grace period ended the process, without the closing message or the run
   report; the input is now opened on a thread of its own, and the interruption is handled at
   once.
-- A name longer than file systems allow (255) and a symbolic-link loop failed only after the
+- A name longer than the file system accepts and a symbolic-link loop failed only after the
   analysis, when the finished output was renamed into place (a looped link was even replaced);
-  both now fail before the analysis. A `--tsv-dir` that is a file, with the run report inside it,
+  both now fail before the analysis, as the file system reports them. A `--tsv-dir` that is a file, with the run report inside it,
   is a usage error instead of a failed folder creation (exit status 3).
 - The time the counting threads waited for the input (`waited_for_input_seconds`, and the `-v`
   note "reading the input limited the run") included the first batch, which is read while

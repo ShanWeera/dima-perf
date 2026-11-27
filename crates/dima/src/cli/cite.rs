@@ -27,8 +27,8 @@ const fn format_of(f: CiteFormat) -> CitationFormat {
 /// Errors reading `--from`, conserved sequences of another run than the results, or errors
 /// writing to standard output.
 pub fn run(a: &CiteArgs) -> Result<()> {
-    if a.from.iter().filter(|p| p.as_os_str() == "-").count() > 1 {
-        return Err(DimaError::usage("--from - is given twice")
+    if a.from.iter().filter(|p| reads_stdin(p)).count() > 1 {
+        return Err(DimaError::usage("standard input is given twice to --from")
             .with_hint("standard input can be read once: give the other file by its name"));
     }
     // Standard output must not be a file the citation is computed from (`>> r.json`).
@@ -79,6 +79,15 @@ pub fn run(a: &CiteArgs) -> Result<()> {
                 e,
             )
         })
+}
+
+/// `-`, or a name of descriptor 0 (`/dev/stdin`, `/dev/fd/0`, `/proc/self/fd/0` on Unix).
+fn reads_stdin(p: &Path) -> bool {
+    p.as_os_str() == "-"
+        || (cfg!(unix)
+            && ["/dev/stdin", "/dev/fd/0", "/proc/self/fd/0"]
+                .iter()
+                .any(|alias| p == Path::new(alias)))
 }
 
 /// Where a `--from` document was read, as messages say it: `in 'r.json'`, `from standard

@@ -970,8 +970,9 @@ from `results.json` under that same name says *Nothing was saved: 'results.json'
 file these results were opened from; choose another name*. Names that differ only in letter case
 (or, on macOS, only in how their accented letters are encoded) are judged by the file system:
 when the other name does not exist, it is another file and the export goes ahead; when it
-exists, Linux and macOS tell by the file itself whether it is the loaded one; on Windows the
-message says the file *may be* that file, with the reason. A
+exists, Linux and macOS tell by the file itself whether it is the loaded one; on Windows it is
+refused as that file, or, where the system cannot tell, as one that *may be* that file, with the
+reason. A
 folder export is refused alike when one of its four tables would replace such a file.
 
 Every file is written completely or not at all: an export goes to a temporary file in the

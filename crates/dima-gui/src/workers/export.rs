@@ -221,27 +221,36 @@ pub fn table_paths(folder: &Path, query_name: &str) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Whether writing to `dest` would replace `input`, a file the app has read: `Some(true)`
-/// when both name the same file (the library's writer follows symbolic links, so a link to the
-/// input is the input; names that differ only in letter case or Unicode form are when the
-/// file system says so), `Some(false)` when only such a difference tells them apart and the
-/// file system cannot say whether it ignores it ([`output::one_file`]: on Windows, where no
-/// inode is available), `None` otherwise. A hard link to the input is another name of it,
-/// which replacing leaves the input's own name intact. A file looked at, never changed.
+/// What writing to a destination would do to a file the app has read.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Replaces {
+    /// It is that file (the library's writer follows symbolic links, so a link to the input is
+    /// the input; a name that differs only in letter case or Unicode form is when the file
+    /// system says so).
+    Certainly,
+    /// It may be: the names differ only in letter case or Unicode form, and the file system
+    /// cannot say whether it ignores that ([`output::one_file`]); why, for the message.
+    Possibly(&'static str),
+}
+
+/// Whether writing to `dest` would replace `input`, a file the app has read, or `None`. A hard
+/// link to the input is another name of it, which replacing leaves the input's own name
+/// intact. A file looked at, never changed.
 #[must_use]
-pub fn replaces(dest: &Path, input: &Path) -> Option<bool> {
+pub fn replaces(dest: &Path, input: &Path) -> Option<Replaces> {
     let input = std::fs::canonicalize(input).ok()?;
     let dest = resolved(&output::destination_of(dest));
     if dest == input {
-        return Some(true);
+        return Some(Replaces::Certainly);
     }
     if output::folded(&dest) != output::folded(&input) {
         return None;
     }
     match output::one_file(&dest, &input) {
-        Some(true) => Some(true),
+        Some(true) => Some(Replaces::Certainly),
         Some(false) => None,
-        None => Some(false),
+        // The resolved names, so the reason names what differs, not how they were spelled.
+        None => Some(Replaces::Possibly(output::why_one_file(&dest, &input))),
     }
 }
 
@@ -833,22 +842,24 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let input = dir.path().join("in.fasta");
         std::fs::write(&input, ">a\nACGT\n").unwrap();
-        assert_eq!(replaces(&input, &input), Some(true));
+        assert_eq!(replaces(&input, &input), Some(Replaces::Certainly));
         let spelt = dir.path().join("sub").join("..").join(".").join("in.fasta");
         std::fs::create_dir(dir.path().join("sub")).unwrap();
-        assert_eq!(replaces(&spelt, &input), Some(true));
+        assert_eq!(replaces(&spelt, &input), Some(Replaces::Certainly));
         assert_eq!(replaces(&dir.path().join("other.json"), &input), None);
         // Letter case: the file system tells. Where `IN.fasta` is not found, it is another file
-        // (Linux); where it is, it is the input (macOS by inode, Windows possibly).
+        // (Linux); where it is, it is the input (macOS by inode; on Windows, where the
+        // canonical path has the letter case on disk or no inode is known, certainly or
+        // possibly).
         let upper = dir.path().join("IN.fasta");
-        let expected = if std::fs::metadata(&upper).is_err() {
-            None
+        let found = replaces(&upper, &input);
+        if std::fs::metadata(&upper).is_err() {
+            assert_eq!(found, None);
         } else if cfg!(unix) {
-            Some(true)
+            assert_eq!(found, Some(Replaces::Certainly));
         } else {
-            Some(false)
-        };
-        assert_eq!(replaces(&upper, &input), expected);
+            assert!(found.is_some(), "{found:?}");
+        }
         // A file that is gone protects nothing.
         assert_eq!(replaces(&input, &dir.path().join("gone.fasta")), None);
         #[cfg(unix)]
@@ -857,7 +868,7 @@ mod tests {
             std::os::unix::fs::symlink(&input, &link).unwrap();
             assert_eq!(
                 replaces(&link, &input),
-                Some(true),
+                Some(Replaces::Certainly),
                 "the writer follows links"
             );
             let hard = dir.path().join("hard.fasta");

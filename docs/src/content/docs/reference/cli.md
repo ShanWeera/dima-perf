@@ -374,7 +374,7 @@ Output format
 
 #### `--from <FILE>`
 
-Results of a run, and/or the conserved sequences computed from them (give the option twice; '-' reads standard input): print a methods text and the references of the methods used, or with --format bibtex, ris or cff the references only. Both files must come from one run: conserved sequences of another input, k or T are refused
+Results of a run, and/or the conserved sequences computed from them (give the option twice; '-' reads standard input, which can be given once): print a methods text and the references of the methods used, or with --format bibtex, ris or cff the references only. Both files must come from one run: conserved sequences of another input, k or T are refused. Standard output must not be one of these files ('\>\> results.json' is refused)
 
 Global options (`--color`, `-q`, `-v`) and `-h`/`--help`, `-V`/`--version` apply to every subcommand; see [`dima`](#dima).
 

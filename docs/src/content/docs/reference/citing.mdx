@@ -65,8 +65,12 @@ dima cite --from results.json --from conserved.json   # with the conserved seque
   prints the run's reference list in that format, without the methods paragraph: those formats
   hold references, not prose.
 - **Standard input.** `--from -` reads the file from standard input, for example
-  `cat results.json | dima cite --from -`. Results compressed with gzip or Zstandard are read
-  as they are, from a file or from standard input.
+  `cat results.json | dima cite --from -`; standard input can be given once (as `-`,
+  `/dev/stdin` or `/dev/fd/0`). Results compressed with gzip or Zstandard are read as they are,
+  from a file or from standard input.
+- **Standard output.** The text goes to standard output, which must not be one of the `--from`
+  files: `dima cite --from results.json >> results.json` is refused, since the appended text
+  would make the results invalid JSON. Write it to a file of its own (`> methods.txt`).
 - **One run.** `--from` takes at most one results file and one conserved-sequences file, and both
   must describe the same run: give the conserved sequences computed from those results
   (`--hcs-output` of the same `dima analyze`, or `dima hcs -i results.json`). Files of different
