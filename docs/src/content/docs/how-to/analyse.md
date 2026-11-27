@@ -178,12 +178,13 @@ Give the alphabet:
 dima analyze -i short_peptides.fasta -a protein -o peptides.json
 ```
 
-`-a` accepts `auto`, `protein`, `dna` and `rna`. If you set it and the data look different,
-DiMA uses your choice; in `--validation permissive` it also warns (`alphabet_contradiction`). If
-the choice is wrong in the default strict mode, the first residue of the other alphabet stops
-the run, for example
-`character 'F' (0x46) is not valid in a dna alignment` — check `-a` first; see
-[Choose the validation mode](/how-to/validation/#a-wrong---alphabet).
+`-a` accepts `auto`, `protein`, `dna` and `rna`. If you set it and the data look like another
+alphabet, DiMA uses your choice and warns (`alphabet_contradiction`) — for example with
+`-a protein` on a DNA alignment, whose letters are all valid protein residues. When a character
+of the data is not valid in your choice, the default strict mode stops at the first one instead,
+for example `character 'F' (0x46) is not valid in a dna alignment` for a protein alignment
+analysed with `-a dna`: check `-a` first; see
+[Validate input characters](/how-to/validation/#a-wrong---alphabet).
 
 ## Choose the entropy estimator
 

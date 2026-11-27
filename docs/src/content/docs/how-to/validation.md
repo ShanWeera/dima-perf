@@ -55,9 +55,10 @@ error: mers_spike_aa.fasta: record 1 (line 2, column 6, byte 43): character 'F' 
 
 Check `-a` first: here the residues are amino acids, so the fix is `-a protein`, or no `-a` at
 all, which detects the alphabet. `--validation permissive` would not fix it: it would exclude
-every k-mer with an amino acid that is not a nucleotide letter and analyse what is left as DNA.
-In permissive mode DiMA also warns when the residues look like another alphabet than the one you
-gave (`alphabet_contradiction`).
+every k-mer with an amino acid that is not a nucleotide letter and analyse what is left as DNA,
+with a warning that the residues look like another alphabet (`alphabet_contradiction`). The
+same warning comes in any mode when every character is valid in the alphabet you gave but the
+composition looks like another, as with `-a protein` on a DNA alignment.
 
 ## Report: see what the file contains
 
