@@ -355,8 +355,9 @@ shows as "lowest 0.0000 at position 7, 455 positions tied".
 The last line that `dima analyze` prints on standard error, for example `analysed 191 sequences,
 1345 positions (1345 eligible) in 0.03 s; entropy mean 0.1261, min 0.0000, max 1.5878 bits`;
 `dima hcs` prints its own (`44 conserved regions with an Index incidence of at least 100%`).
-These pages call it the summary line everywhere ("one-line summary", "end-of-run line"); `-q`
-hides it. See [analyse an alignment](/how-to/analyse/).
+These pages call it the summary line (also known as the one-line summary or the end-of-run
+line). When warnings were printed above it, it ends with their number ("1 warning (see above)");
+`-q` hides it. See [analyse an alignment](/how-to/analyse/).
 
 ## Conserved sequences
 
@@ -412,8 +413,8 @@ and [NFC](#nfc)-normalised. See [describe the headers](/how-to/metadata/#describ
 
 A header field per whose values each variant's sequences are counted: `--metadata-fields`
 (default: every field of `--header-format`), the *Stratify* boxes of the desktop app's header
-editor, and `run.metadata.stratified` in the results. These pages also call it a counted field or
-a metadata field. See [stratify by header metadata](/how-to/metadata/).
+editor, and `run.metadata.stratified` in the results. It is also called a counted field or a
+metadata field. See [stratify by header metadata](/how-to/metadata/).
 
 ### Metadata fields
 
