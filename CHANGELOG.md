@@ -162,6 +162,9 @@ some output names that 1.1.1 accepted are now refused because they misstated wha
   file whose name differs only in letter case only when the file system cannot tell the two
   apart.
 - The Bioconda build sets `DIMA_RELEASE=1`.
+- The Linux `.deb` package is named `dima-gui`, like the program, so `sudo apt remove dima-gui`
+  removes it as the installation guide said. Up to 1.1.1 it was named `di-ma` (the packager's
+  default, from the app's name); remove that one first with `sudo apt remove di-ma`.
 
 ### Fixed
 
@@ -214,8 +217,7 @@ some output names that 1.1.1 accepted are now refused because they misstated wha
 - Documentation: wrong statements corrected, among them what Eddy 2011 describes, which
   datasets the repository holds ("the paper's four datasets in the repository", not "bundled"),
   the internal-error claim of Troubleshooting, `threads_exceed_cpus`, "`dima view` converts the
-  same way" for table names, the name of the Linux `.deb` package (`di-ma`, so `sudo apt remove
-  di-ma`), the section of Khan et al. 2008 that holds the upper-bound quotation (Methods), what
+  same way" for table names, the section of Khan et al. 2008 that holds the upper-bound quotation (Methods), what
   the quotation of Brito et al. 2022 refers to, which files `SHA256SUMS` lists, when
   `--run-report -` is possible, quoting in the Windows Command Prompt, and that `--color` values
   are case-sensitive like every other.

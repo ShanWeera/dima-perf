@@ -228,9 +228,9 @@ The AppImage needs FUSE 2 (`libfuse2`, called `libfuse2t64` on Ubuntu 24.04); wi
 it with `--appimage-extract-and-run`, or use the `.tar.gz`. To remove it, delete the file.
 
 **.deb.** Install it with `sudo apt install ./dima-gui_1.2.0_x86_64.deb`, then start **DiMA**
-from the applications menu, or run `dima-gui` in a terminal. The package is named `di-ma` (from
-the app's name, DiMA; `dpkg -S "$(command -v dima-gui)"` shows it), so remove it with
-`sudo apt remove di-ma`.
+from the applications menu, or run `dima-gui` in a terminal. Remove it with
+`sudo apt remove dima-gui`. (Up to 1.1.1 the package was named `di-ma`: if you installed one of
+those, remove it with `sudo apt remove di-ma` before installing this one.)
 
 **.tar.gz.** It holds the program `dima-gui`, the README, the licence, the third-party notices
 and the licence of the bundled font (`OFL.txt`), and adds no menu entry or icon. Unpack it and
