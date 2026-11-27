@@ -14,7 +14,7 @@ scientific software [@darriba2018; @eddy2011].
 - **Always present, always negligible.** Every result carries some rounding error, as in any
   floating-point program. It grows with the number of sequences $N$ at a position, most at
   highly conserved positions (one dominant k-mer), which are most positions of a viral alignment.
-- **Bundled datasets** (the paper's four datasets, up to 3,756 sequences): every entropy is
+- **The test datasets** (the paper's four datasets, in the repository's `tests/data/`, up to 3,756 sequences): every entropy is
   within about $5 \times 10^{-15}$ of the exact result, relative to its size. That is the last one
   or two of the 17 significant digits written to the JSON. The optional similarity-weighted
   entropy is within $2 \times 10^{-14}$ (see
@@ -156,7 +156,7 @@ coverage $\hat C$ is close to 0. That requires nearly every k-mer at a position 
 singleton. An error of $10^{-9}$, for example, needs a coverage below $10^{-7}$, which at
 10 million sequences means more than 99.99999% singletons. Real alignments are nowhere near this:
 
-- In the four bundled datasets, positions where more than half of the sequences carry a k-mer
+- In the four test datasets, positions where more than half of the sequences carry a k-mer
   seen only once occur only with 100 sequences or fewer. Coverage there is at least 0.07.
 - Among positions with more than 100 sequences, the largest singleton share is 0.39, so coverage
   is at least 0.61.
@@ -164,9 +164,9 @@ singleton. An error of $10^{-9}$, for example, needs a coverage below $10^{-7}$,
   share of $4.9 \times 10^{-5}$.
 - The expected singleton share $\sum_i p_i(1 - p_i)^{N-1}$ falls as $N$ grows.
 
-### The bundled datasets
+### The test datasets
 
-At the sizes of the bundled datasets the current code is within about $5 \times 10^{-15}$ of
+At the sizes of the test datasets the current code is within about $5 \times 10^{-15}$ of
 the exact values of every entropy (similarity-weighted entropy within $1.9 \times 10^{-14}$, see
 [Similarity-weighted entropy](#similarity-weighted-entropy)), and Chao–Wang–Jost within $4.2 \times 10^{-16}$ (at most 3 units in the last
 place).
@@ -238,7 +238,7 @@ or a hang.
 
 Measured against the exact values, every position of a synthetic spike alignment of 2.2 million
 sequences is within $3.7 \times 10^{-16}$ (at most 3 units in the last place), and every position
-of the bundled datasets within $4.2 \times 10^{-16}$. The term no longer costs anything noticeable:
+of the test datasets within $4.2 \times 10^{-16}$. The term no longer costs anything noticeable:
 on that alignment the statistics phase went from 7.97 s to 0.01 s of an 84 s single-threaded
 run. Below 64 sequences a position can take up to about 11 µs, at most 0.26 s on an extreme
 alignment of 63 sequences with 30,000 positions. Only the last digits of Chao–Wang–Jost results
@@ -306,7 +306,7 @@ similarity-weighted entropy from sampling, computed as for the entropies above, 
 $6.5 \times 10^{-7}$ bits on these profiles at 2,208,211 sequences and $8.2 \times 10^{-8}$ bits
 at 17.5 million (one differing sequence, the longest k-mers), so the rounding error stays at least
 $10^9$ times smaller. On the
-four bundled datasets the largest relative error of similarity-weighted entropy is
+four test datasets the largest relative error of similarity-weighted entropy is
 $1.9 \times 10^{-14}$ (MERS-CoV spike gene, position 433, where 451 of 452 sequences carry one
 27-mer). Mathematically both normalised values lie between 0 and 1 and similarity-weighted
 entropy is at most the observed entropy; a normalised value that rounding puts above 1 by at most
@@ -322,7 +322,7 @@ different counts), for each position being computed.
 
 The differential test against the reference implementation
 (`crates/dima-core/tests/reference.rs`) and the paper test (`crates/dima-core/tests/paper.rs`,
-which compares the four bundled datasets, Wu 2025's two ToBRFV samples and the ten PSTVd
+which compares the four test datasets, Wu 2025's two ToBRFV samples and the ten PSTVd
 libraries with values the reference implementation computed) share one rule: every number must
 agree within a relative $10^{-13}$, so a zero must be exactly zero. Their alignments have at most
 73,627 sequences per position; the largest
@@ -364,7 +364,7 @@ $10^{-14}$ for `dima` at 10 million sequences, as today.
 **Speed.** The default estimator ran as fast or slightly faster (0.90 to 1.02 times the time).
 
 **Outputs.** The last one or two digits of many values change. Nothing printed to four decimals,
-no conserved sequence and no summary line changes. Per bundled dataset, with the default
+no conserved sequence and no summary line changes. Per test dataset, with the default
 estimator:
 
 | Dataset | Numbers changed | Largest relative change |

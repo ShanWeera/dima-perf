@@ -30,6 +30,14 @@ const unreleased = /^## \[[^\]]+\]\s*-\s*Unreleased\s*$/im.test(
   (readFileSync(fileURLToPath(new URL('../CHANGELOG.md', import.meta.url)), 'utf8').match(/^## .*$/m) ?? [''])[0],
 );
 
+// The software version these pages describe: the workspace version in ../Cargo.toml, shown next to
+// the version menu (and in its place where the version list cannot be loaded, as offline).
+const softwareVersion =
+  /^\[workspace\.package\][^[]*?^version\s*=\s*"([^"]+)"/ms.exec(
+    readFileSync(fileURLToPath(new URL('../Cargo.toml', import.meta.url)), 'utf8'),
+  )?.[1] ?? '';
+if (!softwareVersion) throw new Error('docs: no [workspace.package] version in ../Cargo.toml');
+
 /** MathJax TeX input: AMS equation numbering, `\eqref`, and the same settings for both math plugins. */
 const tex = { tags: 'ams' };
 
@@ -156,6 +164,9 @@ export default defineConfig({
   vite: {
     // Pages include ../CHANGELOG.md and ../AGENTS.md; the logo is ../assets/icon/dima.svg.
     server: { fs: { allow: ['..'] } },
-    define: { __DIMA_UNRELEASED__: JSON.stringify(kind === 'latest' && unreleased) },
+    define: {
+      __DIMA_UNRELEASED__: JSON.stringify(kind === 'latest' && unreleased),
+      __DIMA_VERSION__: JSON.stringify(softwareVersion),
+    },
   },
 });

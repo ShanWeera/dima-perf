@@ -108,7 +108,7 @@ defines them, so the library's per-offset counting is tested against a different
 references from the registry), `analyze`, `view`, `hcs`, `cite` (the subcommands), `outputs`
 (planning and checking every output before the analysis starts), `threads` (the default thread
 count from the scheduler's grant), `signals` (interruptions, cleanup and exit by signal),
-`progress` (bars and milestones), `resources` (peak memory and CPU time) and `ui` (messages on
+`progress` (the progress line redrawn on a terminal, or plain progress lines), `resources` (peak memory and CPU time) and `ui` (messages on
 standard error). Platform-specific `unsafe` code — signal handling, host name, resource usage — is
 confined to this crate.
 
@@ -133,4 +133,11 @@ re-implements a computation.
 | `scripts/reference/` | The independent reference implementation (Python, standard library only) |
 | `tests/data/`, `tests/golden/` | Test datasets with provenance; expected outputs compared byte for byte |
 | `packaging/` | The Bioconda recipe template |
+| `crates/dima-gui/packaging/` | The desktop entry (`dima-gui.desktop`) of the Linux packages |
+| `assets/icon/` | The app icon: the SVG source, the PNG, ICO and ICNS sizes made from it, and `generate.py`, which makes them |
+| `scripts/release/` | The release workflow's helpers: packaging the command-line archives, the release notes, the documentation site's versions, the Windows runtime check |
+| `scripts/ci/` | CI helpers: the desktop app's Linux build packages, the signal test as process 1 |
+| `scripts/citations/`, `scripts/notices/` | The Crossref check of the citation registry; the third-party notices generator |
+| `scripts/bench/` | The benchmark driver that writes `BENCHMARK.md` |
+| `xtask/` | `cargo xtask gen` (the generated files) and `cargo xtask man --out-dir DIR` (the manual pages of the release archives) |
 | `docs/` | This documentation site |

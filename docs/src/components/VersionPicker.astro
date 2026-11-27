@@ -1,14 +1,20 @@
 ---
 // Version picker (plan D102): lists the published documentation versions from versions.json.
-// It stays hidden when the list is unavailable (local builds, previews, offline archives).
+// It stays hidden when the list is unavailable (local builds, previews, offline archives); a plain
+// label then still names the version the pages describe.
 // A disclosure of plain links (not a <select> that navigates on change; WCAG 2.2 SC 3.2.2).
 import { Icon } from '@astrojs/starlight/components';
 
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
 const match = /\/(latest|v\d+(?:\.\d+){1,2})\/$/.exec(base);
-const current = match ? match[1] : 'versions';
+// The version these pages describe: the development version on /latest/, the exact release
+// elsewhere (a /vX.Y/ site holds the newest patch of X.Y, so its label names that patch).
+const current = match?.[1] === 'latest' ? 'latest' : `v${__DIMA_VERSION__}`;
 ---
 
+<span class="dima-version" data-dima-version>
+  <span class="sr-only">Documentation of DiMA{' '}</span>{current}
+</span>
 <dima-version-picker data-base={base} hidden>
   <details class="dima-versions">
     <summary>
@@ -50,6 +56,8 @@ const current = match ? match[1] : 'versions';
           }),
         );
         this.hidden = false;
+        // The menu names the version itself; the plain label stands in only without it.
+        this.parentElement?.querySelector<HTMLElement>('[data-dima-version]')?.setAttribute('hidden', '');
       });
       // Close like a menu: Escape returns focus to the button, a click elsewhere closes it.
       details.addEventListener('keydown', (event) => {
@@ -71,8 +79,17 @@ const current = match ? match[1] : 'versions';
     display: flex;
     align-items: center;
   }
-  dima-version-picker[hidden] {
+  dima-version-picker[hidden],
+  .dima-version[hidden] {
     display: none;
+  }
+  .dima-version {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0.25rem;
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-sm);
+    white-space: nowrap;
   }
   .dima-versions {
     position: relative;
