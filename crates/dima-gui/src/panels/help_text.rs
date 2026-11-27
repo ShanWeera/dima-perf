@@ -113,15 +113,6 @@ pub fn kmer_length() -> String {
     )
 }
 
-/// The smallest support at which the paper's estimator corrects an eligible position's
-/// entropy with support threshold `t`: ⌈1.25 T⌉ (125 for T = 100). Below it the regression has
-/// fewer than five points, DiMA v5.0.9's minimum, and the observed entropy is kept
-/// (`too_few_points`).
-#[must_use]
-pub const fn smallest_corrected_support(t: u64) -> u64 {
-    t.saturating_add(t.div_ceil(4))
-}
-
 /// The rule of the paper's correction, in the words the documentation and the command line
 /// use: an eligible position is corrected where possible. `t` is the run's threshold, which
 /// the example then uses; without one (an option being edited) the example is T = 100.
@@ -135,7 +126,7 @@ pub fn corrected_where_possible(t: Option<u64>) -> String {
          position is corrected only when its support is at least 1.25 T ({} sequences for T = \
          {t}). Between T and that, and in the one tiny case T = 2, N = 3, it keeps its observed \
          entropy. Such positions are still eligible and in the summaries.",
-        smallest_corrected_support(t)
+        dima_core::entropy::min_corrected_support(t)
     )
 }
 
@@ -598,10 +589,10 @@ mod tests {
     /// ⌈1.25 T⌉ (the five-point minimum of DiMA v5.0.9), with the run's threshold in the example.
     #[test]
     fn the_correction_is_described_where_possible() {
-        for (t, smallest) in [(100, 125), (25, 32), (30, 38), (2, 3), (1, 2), (4, 5)] {
-            assert_eq!(super::smallest_corrected_support(t), smallest, "T = {t}");
-        }
-        assert_eq!(super::smallest_corrected_support(u64::MAX), u64::MAX);
+        // The rule itself is the library's (checked there against the estimator); the text
+        // gives its value for the run's threshold.
+        assert!(super::corrected_where_possible(Some(2)).contains("(4 sequences for T = 2)"));
+        assert!(super::corrected_where_possible(Some(25)).contains("(32 sequences for T = 25)"));
         assert_eq!(
             super::corrected_where_possible(None),
             "With the paper's estimator, an eligible position's entropy is corrected where \

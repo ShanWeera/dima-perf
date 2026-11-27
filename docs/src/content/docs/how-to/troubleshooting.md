@@ -476,14 +476,34 @@ shows at every start until you change a setting, which saves a new file. The set
 `settings.json` in `~/.config/dima-gui` (Linux), `~/Library/Application Support/dima-gui`
 (macOS) or `%APPDATA%\dima-gui` (Windows).
 
-**"Could not start …: the system refused a new thread (…). Nothing was written."** and
-**"Used N of M worker threads: the system refused to start more."** — as `cannot start …` and
-`threads_refused` above: close other programs, or lower **Worker threads** under **Advanced**,
-then try again. The results are the same with any number of threads.
+**"Could not start …: the system refused a new thread (…). Nothing was written. Close other
+programs or lower Worker threads under Advanced (Setup screen), then try again."** and **"Used N
+of M worker threads: the system refused to start more. …"** — as `cannot start …` and
+`threads_refused` above: close other programs, or lower **Worker threads** under **Advanced** on
+the Setup screen, then try again. The results are the same with any number of threads.
 
-**"Not started: …"** — **Analyze** was pressed (or its shortcut used) while a setting is not
-valid; the rest of the message, also shown under the **Analyze** button, says which, such as
-`k = 27 exceeds the alignment length (6 columns)`. Fix that setting.
+**"Alphabet not detected: … Choose it under Alphabet below."** — on the Setup screen, the first
+records do not tell protein from nucleotide sequences, for the reason the message gives: too few
+residue letters ("only 3 residue letters in the first record; that is too few to tell protein
+from nucleotide sequences"), both T and U ("the sequences contain both T (2) and U (2), so DNA
+and RNA cannot be told apart"), or a composition that decides nothing ("the residue composition
+of the first 10000 records (60000 letters) does not identify the alphabet"). Choose **Protein**,
+**DNA** or **RNA** under **Alphabet**; the message then goes. See
+[the alphabet](/explanation/input/#the-alphabet).
+
+**"Not started: …"** — **Analyze** was pressed (or its shortcut used) while the analysis cannot
+start; the rest of the message, also shown under the **Analyze** button, says why, and the fix is
+the same there:
+
+- "Open an alignment first";
+- "Choose the alphabet: …" (as above);
+- "k = 27 exceeds the alignment length (6 columns): choose a k-mer length of at most 6", or "the
+  default k for proteins (9) exceeds the alignment length (6 columns): …" when k was not set;
+- "tick at least one Stratify box" (stratifying by header fields needs at least one);
+- "the Fill value under Advanced must not be empty";
+- "header format field 2 has no name", "header format field "Host" appears more than once"
+  (name every field once in the header editor);
+- "minimum coverage 2 is outside [0, 1]".
 
 **"A file dialog is already open; choose a file there or cancel it first"**, **"An export is
 already running; try again when it finishes"** — a shortcut or the command palette asked for a
@@ -495,6 +515,24 @@ first. Drop or open the others one by one.
 **"The system file dialog is not available here; using the built-in browser"** — the system's
 file dialog could not be shown (on Linux, no desktop portal or `zenity`); the app's own file
 browser opens instead. Nothing needs doing.
+
+**"Nothing was saved: '…' asks for bzip2 compression, which DiMA does not write (DiMA compresses
+with gzip or Zstandard: name it ….gz or ….zst)"** (or "…asks for two compressions…") — the file
+name chosen for an export ends in a compression DiMA does not write, or in two. Name it as the
+message suggests. A name without a known extension gets the export's own extension added instead
+(see [Export](/how-to/desktop-app/#export)).
+
+**"Nothing was saved: '…' is the alignment these results were computed from; choose another
+name"** (or "…the results file these results were opened from", "…the alignment of the failed
+run", "…the alignment on the Setup screen"; "…may be …" when the names differ only in letter
+case, which macOS and Windows treat as one file) — the export would have replaced a file the app
+is using. Choose another name.
+
+**"'…' is compressed with bzip2, which DiMA does not read results from"** (hint: decompress it,
+or recompress it with gzip or Zstandard, and open it again; alignments compressed with bzip2 open
+as they are), **"'…' is compressed with xz (.xz), which DiMA does not read"**, **"'…' is a zip
+archive, which DiMA does not read"** — the file opened is a results file in a compression the app
+cannot read, or an archive. Decompress it (or extract the file from the archive) and open that.
 
 **"Nothing was saved: other results were loaded while the dialog was open. Export again to save
 the results now shown"** — the results shown changed between choosing an export and confirming
@@ -526,7 +564,7 @@ Press **Copy details** and include the text in a report on
 entropy") — you switched the chart's metric after narrowing the value range in the filter bar.
 Each metric has its own scale, so the range starts over at the new metric's full range; narrow
 it again if you need to. See
-[Plot similarity-weighted entropy](/how-to/desktop-app/#explore-the-results).
+[Plot similarity-weighted entropy](/how-to/desktop-app/#plot-similarity-weighted-entropy).
 
 **"Exported figures are now at least 720 × 320 px so the title, legend and axes
 fit; yours was raised to W × H px"** (or "Exported figures are between 720 × 320 and 20000 ×

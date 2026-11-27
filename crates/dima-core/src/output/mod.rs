@@ -21,7 +21,9 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub use name::{NameError, Named, read_name};
-pub use sink::{OutputCompression, Sink, Target, Written, destination_of, remove_temporaries};
+pub use sink::{
+    OutputCompression, Sink, Target, Written, destination_of, remove_temporaries, written_in_place,
+};
 pub use tsv::{NA, Table, write_table};
 
 use crate::error::{DimaError, IoAction, IoTarget, Location, Result};

@@ -339,8 +339,7 @@ pub fn settle(kind: Kind, target: &Target, explicit: Option<OutputFormat>) -> Re
 /// `true` when `path` is written in place rather than replaced (D77): a descriptor such as
 /// `/dev/stdout` or `/dev/fd/3`, a device such as `/dev/null`, or a FIFO.
 fn is_stream(path: &Path) -> bool {
-    dima_core::input::is_descriptor_alias(path)
-        || std::fs::metadata(path).is_ok_and(|m| !m.is_file() && !m.is_dir())
+    dima_core::output::written_in_place(path)
 }
 
 /// `path` as written, with each of `extensions` in place of the extension that names another

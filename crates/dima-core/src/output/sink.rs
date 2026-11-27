@@ -285,6 +285,19 @@ pub fn destination_of(path: &Path) -> PathBuf {
     }
 }
 
+/// `true` when an output to `path` is written in place, as a stream, rather than through a
+/// temporary file renamed over it: a device such as `/dev/null`, a FIFO, a descriptor alias
+/// such as `/dev/fd/63` (from `>(…)`), or a symbolic link to one. Planners ask this to treat
+/// such names as streams exactly as [`Sink`] will write them. A folder is neither (planners
+/// refuse it).
+#[must_use]
+pub fn written_in_place(path: &Path) -> bool {
+    match resolve_destination(path) {
+        Destination::Direct { path, .. } => !path.is_dir(),
+        Destination::Atomic(_) => false,
+    }
+}
+
 impl Sink {
     /// Opens `target` for writing with the given compression.
     ///
@@ -616,6 +629,17 @@ mod tests {
                 append: false
             }
         );
+        // What planners treat as a stream is exactly what is written in place.
+        assert!(written_in_place(Path::new("/dev/null")));
+        assert!(written_in_place(Path::new("/dev/stdout")));
+        assert!(written_in_place(&to_stdout));
+        assert!(!written_in_place(&file));
+        assert!(!written_in_place(&link));
+        assert!(!written_in_place(&missing));
+        assert!(!written_in_place(dir.path()), "a folder is not a stream");
+        let to_dir = dir.path().join("to_dir");
+        std::os::unix::fs::symlink(dir.path(), &to_dir).unwrap();
+        assert!(!written_in_place(&to_dir), "nor is a link to one");
     }
 
     #[test]

@@ -214,3 +214,15 @@ references:
     start: "404"
     end: "413"
     doi: "10.1093/biomet/26.4.404"
+  - type: article
+    authors:
+      - family-names: "Castresana"
+        given-names: "J."
+    title: "Selection of Conserved Blocks from Multiple Alignments for Their Use in Phylogenetic Analysis"
+    journal: "Molecular Biology and Evolution"
+    year: 2000
+    volume: "17"
+    issue: "4"
+    start: "540"
+    end: "552"
+    doi: "10.1093/oxfordjournals.molbev.a026334"

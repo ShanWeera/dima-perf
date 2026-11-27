@@ -53,14 +53,13 @@ dima analyze -i hivx10.fasta.bz2 -o x10.json -v
 ```text
 threads: 4 (available CPUs; OS 4)
 [0.00 s] opening
-[0.68 s] counting k-mers
-[1.77 s] computing statistics
-[2.83 s] writing
+[0.64 s] counting k-mers
+[1.65 s] computing statistics
+[2.68 s] writing
 wrote x10.json (278 MB)
-phases: opening 0.68 s, counting k-mers 1.08 s, computing statistics 1.07 s, writing 1.28 s
-reading the input limited the run (waited 0.86 s of 1.08 s); zstd decompresses fastest
-CPU 9.09 s user + 0.29 s system, peak memory 246 MB
-analysed 26370 sequences, 3364 positions (2159 eligible) in 4.11 s; entropy mean 5.6032, min 1.3112, max 9.5310 bits
+phases: opening 0.64 s, counting k-mers 1.01 s, computing statistics 1.03 s, writing 1.33 s
+CPU 8.70 s user + 0.24 s system, peak memory 254 MB
+analysed 26370 sequences, 3364 positions (2159 eligible) in 4.01 s; entropy mean 5.6032, min 1.3112, max 9.5310 bits
 ```
 
 Line by line:
@@ -68,11 +67,11 @@ Line by line:
 | Line | Meaning |
 |---|---|
 | `threads: 4 (available CPUs; OS 4)` | The number of worker threads, and where it came from: `--threads`, `RAYON_NUM_THREADS`, a batch scheduler's variable (such as `SLURM_CPUS_ON_NODE=8`, or `PE_HOSTFILE[node12]=8`, which names this host), or `available CPUs`, the CPUs this process may use. `OS 4` is that number of CPUs. A note follows when `OMP_NUM_THREADS` is lower: DiMA does not use it ([Run on clusters](/how-to/hpc/#threads)) |
-| `[0.68 s] counting k-mers` | A phase began, at that time since the start. These lines appear with `-v` when standard error is not a terminal (a log file, a pipe); on a terminal, one line redrawn in place shows the progress instead, as below |
+| `[0.64 s] counting k-mers` | A phase began, at that time since the start. These lines appear with `-v` when standard error is not a terminal (a log file, a pipe); on a terminal, one line redrawn in place shows the progress instead, as below |
 | `wrote x10.json (278 MB)` | A file written, with its size (MB is 10⁶ bytes) |
 | `phases: …` | How long each phase took. **opening**: opening the input, reading its first batch (up to 10,000 records or 64 MiB, and at least 1,000 records) and detecting the alphabet; **counting k-mers**: reading the rest and counting the k-mers; **computing statistics**: the entropy, motifs and incidences of every position; **writing**: computing the conserved sequences, when an output holds them, and writing every output |
-| `reading the input limited the run (waited … of …)` | Only when counting took more than half a second and the threads that count spent more than half of it waiting for the input: here 0.86 of 1.08 seconds. Reading, not computing, set the pace: recompress the input with Zstandard, or read it from a faster disk |
-| `CPU 9.09 s user + 0.29 s system, peak memory 246 MB` | The CPU time of all threads together (it can exceed the run time) and the peak resident memory, the most the process held at once (`unknown` where the system does not tell) |
+| `reading the input limited the run (waited X of Y); zstd decompresses fastest` | Not in this example. Printed only when counting took more than half a second (Y) and the threads that count spent more than half of it waiting for the input (X). Reading, not computing, then set the pace: recompress the input with Zstandard, or read it from a faster disk. The wait counts from the start of counting: the first batch, read while opening, is part of the opening phase |
+| `CPU 8.70 s user + 0.24 s system, peak memory 254 MB` | The CPU time of all threads together (it can exceed the run time) and the peak resident memory, the most the process held at once (`unknown` where the system does not tell) |
 | `analysed …` | The [summary line](/reference/glossary/#summary-line), always last |
 
 The [run report](/how-to/reproducibility/#keep-a-run-report) (`--run-report`) records the same

@@ -50,7 +50,7 @@ With `-a dna`, a protein alignment stops at its first amino acid that is not a n
 ```console
 $ dima analyze -i mers_spike_aa.fasta -a dna -o w.json
 error: mers_spike_aa.fasta: record 1 (line 2, column 6, byte 43): character 'F' (0x46) is not valid in a dna alignment
-  hint: check --alphabet, or use --validation permissive to exclude the k-mers that contain such characters (they are counted and reported)
+  hint: check --alphabet first: the residues of the first records look like protein, not dna; or use --validation permissive to exclude the k-mers that contain such characters (they are counted and reported)
 ```
 
 Check `-a` first: here the residues are amino acids, so the fix is `-a protein`, or no `-a` at

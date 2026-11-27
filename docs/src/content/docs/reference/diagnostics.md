@@ -310,6 +310,9 @@ this control:
 | `--min-coverage` | **Advanced** ▸ **Minimum coverage** ▸ **flag below** |
 | `--estimator` | **Advanced** ▸ **Entropy estimator** |
 | `--threads` | **Advanced** ▸ **Worker threads** |
+| `--similarity-weighted-entropy` | **Advanced** ▸ **Similarity-weighted** |
+| `--query-name` | **Query name** |
+| `--tsv-dir` | **Export** ▸ **Tables (TSV folder)…** |
 | `--hcs-min-incidence` | **Conserved regions (HCS) at** … **Index incidence** |
 | `--hcs-eligible-only` | **Eligible positions only** |
 | `run.validation.characters` | the *Characters in sequence lines* table under *Input validation* in the Diagnostics window |
