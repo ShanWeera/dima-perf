@@ -106,6 +106,17 @@ fn help_version_and_bare_command() {
     let text = String::from_utf8(o.stdout).unwrap();
     assert!(text.starts_with("MIT License"), "{}", &text[..80]);
     assert!(text.contains("Third-party"), "no notices");
+    // Not with a subcommand, which it would silently skip; global options still precede one.
+    let o = run(&["--licenses", "analyze", "-i", s(&tiny())], d.path());
+    assert_eq!(code(&o), 2, "{}", stderr(&o));
+    assert!(
+        stderr(&o).contains("error: the argument '--licenses' cannot be used with 'analyze'"),
+        "{}",
+        stderr(&o)
+    );
+    assert!(o.stdout.is_empty());
+    let o = run(&["-q", "cite"], d.path());
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
 }
 
 #[test]
@@ -915,12 +926,19 @@ fn destinations_are_checked_before_the_analysis() {
     );
     let report = json(&dir.join("run.json"));
     assert_eq!(report["phases"], serde_json::json!([]), "{report}");
-    // A directory given as the output file.
+    // A directory given as the output file: a usage error, with or without -O.
     std::fs::create_dir(dir.join("adir")).unwrap();
-    let mut folder = args.clone();
-    folder.extend(["-o", "adir"]);
-    let o = run(&folder, dir);
-    assert_ne!(code(&o), 0, "{}", stderr(&o));
+    for extra in [&["-o", "adir"][..], &["-o", "adir", "-O", "json"][..]] {
+        let mut folder = args.clone();
+        folder.extend(extra);
+        let o = run(&folder, dir);
+        assert_eq!(code(&o), 2, "{}", stderr(&o));
+        assert!(
+            stderr(&o).contains("'adir' is a folder, not a file"),
+            "{}",
+            stderr(&o)
+        );
+    }
     // A long file name (its temporary file must still fit the file system's limit).
     let long = format!("{}.json", "r".repeat(240));
     let mut long_args = args.clone();
@@ -1348,6 +1366,13 @@ fn signals_cancel_cleanly() {
                 .any(|l| l.contains("cancelled; no results were written")),
             "{signal}: {lines:?}"
         );
+        // The notice names the signal. Without a terminal (as here), SIGINT came from another
+        // program, not from the Ctrl-C key, so it is named like the others.
+        let notice = format!("cancelling on SIG{signal}... (a second signal stops immediately)");
+        assert!(
+            lines.iter().any(|l| l == &notice),
+            "{signal}: {notice:?} in {lines:?}"
+        );
         drop(stdin);
         // No results and no temporary files; the run report says what happened.
         let names: Vec<String> = std::fs::read_dir(d.path())
@@ -1368,6 +1393,49 @@ fn signals_cancel_cleanly() {
             .collect();
         assert_eq!(phases.first(), Some(&"opening"), "{signal}: {phases:?}");
     }
+}
+
+/// An input with no bytes yet (an idle pipe or FIFO) is opened on a thread of its own, so an
+/// interruption is noticed at once: the closing message is printed and the run report written,
+/// instead of the process ending by the 3 s grace period without either.
+#[cfg(unix)]
+#[test]
+fn an_idle_input_is_cancelled_promptly() {
+    use std::os::unix::process::ExitStatusExt;
+    let d = tmp();
+    let mut child = dima()
+        .args(["analyze", "-v", "-o", "r.json", "--run-report", "run.json"])
+        .args(TINY)
+        .current_dir(d.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // Nothing is written: opening waits for the first bytes.
+    let stdin = child.stdin.take().unwrap();
+    let rx = stderr_lines(&mut child);
+    wait_for(&rx, "threads: ");
+    std::thread::sleep(Duration::from_millis(200));
+    let sent = Instant::now();
+    kill(&child, "TERM");
+    let status = wait_exit(&mut child, Duration::from_secs(10));
+    assert!(
+        sent.elapsed() < Duration::from_secs(2),
+        "{:?}",
+        sent.elapsed()
+    );
+    assert_eq!(status.signal(), Some(libc::SIGTERM), "{status:?}");
+    let lines: Vec<String> = rx.try_iter().collect();
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("cancelled; no results were written")),
+        "{lines:?}"
+    );
+    let r = json(&d.path().join("run.json"));
+    assert_eq!(r["status"], "cancelled");
+    drop(stdin);
 }
 
 #[cfg(unix)]
@@ -1394,10 +1462,11 @@ fn ignored_hangup_stays_ignored() {
 #[test]
 fn a_second_signal_forces_exit() {
     use std::os::unix::process::ExitStatusExt;
-    // Opening a FIFO without a writer blocks the main thread: the first signal can only cancel
-    // at the next check, so a second one must end the process at once.
+    // Opening an output FIFO without a reader blocks the main thread (an input is opened on a
+    // thread of its own, see `an_idle_input_is_cancelled_promptly`): the first signal can only
+    // cancel at the next check, so a second one must end the process at once.
     let d = tmp();
-    let fifo = d.path().join("in.fifo");
+    let fifo = d.path().join("out.fifo");
     assert!(
         Command::new("mkfifo")
             .arg(&fifo)
@@ -1407,7 +1476,9 @@ fn a_second_signal_forces_exit() {
     );
     let spawn = || {
         let mut child = dima()
-            .args(["analyze", "-v", "-i", "in.fifo", "-o", "r.json"])
+            .args(["analyze", "-v", "-o", "out.fifo", "-O", "json", "-i"])
+            .arg(tiny())
+            .args(TINY)
             .current_dir(d.path())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
@@ -1445,7 +1516,11 @@ fn a_second_signal_forces_exit() {
         sent.elapsed()
     );
     assert_eq!(status.signal(), Some(15));
-    assert!(!d.path().join("r.json").exists());
+    let names: Vec<String> = std::fs::read_dir(d.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names, ["out.fifo"], "nothing else is left");
 }
 
 /// D96 on Windows: Ctrl-Break (delivered to the process group) cancels the run, removes its
@@ -1671,4 +1746,1056 @@ fn similarity_weighted_entropy_on_the_command_line() {
         0
     );
     assert!(none["similarity_weighted_entropy_summary"]["average_entropy"].is_null());
+}
+
+/// The names of the files in `dir`, sorted.
+fn names(dir: &Path) -> Vec<String> {
+    let mut v: Vec<String> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    v.sort();
+    v
+}
+
+/// `dima analyze` of the tiny fixture (copied to `in.fasta`) with `extra`, in `dir`.
+fn analyze_tiny(dir: &Path, extra: &[&str]) -> Output {
+    if !dir.join("in.fasta").exists() {
+        std::fs::copy(tiny(), dir.join("in.fasta")).unwrap();
+    }
+    dima()
+        .args(["analyze", "-i", "in.fasta"])
+        .args(TINY)
+        .args(extra)
+        .current_dir(dir)
+        .output()
+        .unwrap()
+}
+
+/// B2: every output name is read once, before anything runs. Names DiMA cannot honour are
+/// refused (the run report still tells what happened, unless its own name is refused); a file
+/// of conserved sequences named neither .json nor .tsv gets JSON with a warning.
+#[test]
+fn output_names_are_read_before_anything_runs() {
+    let d = tmp();
+    let dir = d.path();
+    for (extra, message) in [
+        (
+            vec!["-o", "r.json.bz2"],
+            "'r.json.bz2' asks for bzip2 compression, which DiMA does not write",
+        ),
+        (
+            vec!["-o", "r.json.xz", "-O", "json"],
+            "asks for xz compression",
+        ),
+        (
+            vec!["-o", "r.json.gz.zst"],
+            "asks for two compressions (.gz, then .zst)",
+        ),
+        (vec!["-o", "out/"], "'out/' names a folder, not a file"),
+        (
+            vec!["-o", "r.json", "--hcs-output", "h.jsonl"],
+            "'h.jsonl' names JSON Lines, but conserved sequences are written as JSON or TSV",
+        ),
+        (
+            vec!["-o", "r.json", "--hcs-output", "h.tsv.zip"],
+            "asks for a ZIP archive",
+        ),
+        (vec!["--tsv-dir", "t", "-o", "x.tsv.7z"], "a 7-Zip archive"),
+    ] {
+        let mut args = extra.clone();
+        args.extend(["--run-report", "run.json"]);
+        let o = analyze_tiny(dir, &args);
+        assert_eq!(code(&o), 2, "{args:?}: {}", stderr(&o));
+        assert!(stderr(&o).contains(message), "{args:?}: {}", stderr(&o));
+        assert!(stderr(&o).contains("hint: "), "{args:?}: {}", stderr(&o));
+        let r = json(&dir.join("run.json"));
+        assert_eq!(
+            (&r["status"], &r["exit_code"]),
+            (&Value::from("failed"), &Value::from(2))
+        );
+        assert_eq!(
+            r["phases"],
+            serde_json::json!([]),
+            "{args:?}: before the analysis"
+        );
+        std::fs::remove_file(dir.join("run.json")).unwrap();
+        assert_eq!(names(dir), ["in.fasta"], "{args:?}");
+    }
+    // A run report whose own name is refused writes no report.
+    for (name, message) in [
+        (
+            "run.tsv",
+            "the run report is JSON, but 'run.tsv' names a TSV table",
+        ),
+        ("run.jsonl.gz", "names JSON Lines"),
+        ("run.json.bz2", "bzip2"),
+        ("run/", "names a folder"),
+    ] {
+        let o = analyze_tiny(dir, &["-o", "r.json", "--run-report", name]);
+        assert_eq!(code(&o), 2, "{name}: {}", stderr(&o));
+        assert!(stderr(&o).contains(message), "{name}: {}", stderr(&o));
+        assert_eq!(names(dir), ["in.fasta"], "{name}");
+    }
+    // `dima view` and `dima hcs` read their names alike.
+    assert_eq!(code(&analyze_tiny(dir, &["-o", "r.json", "-q"])), 0);
+    for args in [
+        vec!["view", "-i", "r.json", "-o", "v.json.lz4"],
+        vec!["hcs", "-i", "r.json", "-o", "h.json.br"],
+        vec!["hcs", "-i", "r.json", "-o", "h.json", "-O", "tsv"],
+    ] {
+        let o = run(&args, dir);
+        assert_eq!(code(&o), 2, "{args:?}: {}", stderr(&o));
+    }
+    assert_eq!(names(dir), ["in.fasta", "r.json"]);
+    // A compressed run report, by name.
+    let o = analyze_tiny(dir, &["-o", "r.json", "--run-report", "run.json.gz", "-q"]);
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    assert_eq!(
+        std::fs::read(dir.join("run.json.gz")).unwrap()[..2],
+        [0x1F, 0x8B]
+    );
+    // The documented JSON for a name that gives no format: warned about and counted.
+    let o = analyze_tiny(dir, &["-o", "r.json", "--hcs-output", "regions.txt"]);
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    let e = stderr(&o);
+    assert!(
+        e.contains(
+            "warning[output_format_assumed]: 'regions.txt' does not name JSON or TSV, so the \
+             conserved sequences are written to it as JSON\n  hint: name it regions.txt.json or \
+             regions.txt.tsv (optionally followed by .gz or .zst)\n"
+        ),
+        "{e}"
+    );
+    // Counted in the summary line, like every warning.
+    let warnings = |e: &str| -> u64 {
+        let end = e.rfind(" warning").unwrap();
+        let start = e[..end].rfind("; ").unwrap() + 2;
+        e[start..end].parse().unwrap()
+    };
+    let named = stderr(&analyze_tiny(
+        dir,
+        &["-o", "r.json", "--hcs-output", "regions.json"],
+    ));
+    assert_eq!(warnings(&e), warnings(&named) + 1, "{e}\n{named}");
+    assert!(json(&dir.join("regions.txt"))["region_count"].is_u64());
+    let o = analyze_tiny(dir, &["-o", "r.json", "--hcs-output", "regions.txt", "-q"]);
+    assert!(o.stderr.is_empty(), "-q: {}", stderr(&o));
+    // `dima hcs` can choose the format with -O instead; standard output takes JSON silently.
+    let o = run(&["hcs", "-i", "r.json", "-o", "h.out"], dir);
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    assert!(
+        stderr(&o).contains(", or choose the format with -O json or -O tsv"),
+        "{}",
+        stderr(&o)
+    );
+    let assumed = "output_format_assumed";
+    let o = run(&["hcs", "-i", "r.json", "-o", "h.out", "-O", "tsv"], dir);
+    assert!(!stderr(&o).contains(assumed), "{}", stderr(&o));
+    assert!(
+        std::fs::read_to_string(dir.join("h.out"))
+            .unwrap()
+            .starts_with("region_id\t")
+    );
+    for args in [
+        vec!["hcs", "-i", "r.json"],
+        vec!["hcs", "-i", "r.json", "-o", "-"],
+    ] {
+        let o = run(&args, dir);
+        assert_eq!(code(&o), 0, "{args:?}");
+        assert!(!stderr(&o).contains(assumed), "{args:?}: {}", stderr(&o));
+    }
+    #[cfg(unix)]
+    {
+        let o = run(&["hcs", "-i", "r.json", "-o", "/dev/stdout"], dir);
+        assert!(!stderr(&o).contains(assumed), "{}", stderr(&o));
+        assert!(serde_json::from_slice::<Value>(&o.stdout).is_ok());
+    }
+}
+
+/// B5: a folder is never an output file, and `--tsv-dir` is never a file: usage errors before
+/// anything runs, on every platform.
+#[test]
+fn folders_and_files_are_told_apart() {
+    let d = tmp();
+    let dir = d.path();
+    std::fs::create_dir(dir.join("adir")).unwrap();
+    std::fs::write(dir.join("file.txt"), "x").unwrap();
+    for (extra, message) in [
+        (
+            vec!["-o", "adir", "-O", "json"],
+            "'adir' is a folder, not a file",
+        ),
+        (
+            vec!["-o", "r.json", "--hcs-output", "adir"],
+            "'adir' is a folder, not a file",
+        ),
+        (
+            vec!["--tsv-dir", "file.txt"],
+            "'file.txt' is a file, not a folder",
+        ),
+    ] {
+        let o = analyze_tiny(dir, &extra);
+        assert_eq!(code(&o), 2, "{extra:?}: {}", stderr(&o));
+        assert!(stderr(&o).contains(message), "{extra:?}: {}", stderr(&o));
+    }
+    // The run report's own folder: refused, and no report.
+    let o = analyze_tiny(dir, &["-o", "r.json", "--run-report", "adir"]);
+    assert_eq!(code(&o), 2, "{}", stderr(&o));
+    assert!(
+        stderr(&o).contains("give a file name, such as"),
+        "{}",
+        stderr(&o)
+    );
+    assert_eq!(code(&analyze_tiny(dir, &["-o", "r.json", "-q"])), 0);
+    for args in [
+        vec!["view", "-i", "r.json", "-o", "adir", "-O", "json"],
+        vec!["hcs", "-i", "r.json", "-o", "adir"],
+        vec!["view", "-i", "r.json", "--tsv-dir", "file.txt"],
+    ] {
+        let o = run(&args, dir);
+        assert_eq!(code(&o), 2, "{args:?}: {}", stderr(&o));
+    }
+    assert!(
+        std::fs::read_dir(dir.join("adir"))
+            .unwrap()
+            .next()
+            .is_none()
+    );
+}
+
+/// B4: every pair of destinations, and each destination and the input, is checked before
+/// anything runs; the message names both in words. Nothing is written, not even the run
+/// report when it is the one that clashes.
+#[test]
+fn every_pair_of_destinations_is_checked() {
+    let d = tmp();
+    let dir = d.path();
+    std::fs::copy(tiny(), dir.join("in.fasta")).unwrap();
+    let before = std::fs::read(dir.join("in.fasta")).unwrap();
+    std::fs::create_dir(dir.join("t")).unwrap();
+    for (extra, message) in [
+        (
+            vec!["-o", "a.json", "--hcs-output", "./a.json"],
+            "'a.json' would be written twice: as the results (-o) and as the conserved sequences \
+             (--hcs-output)",
+        ),
+        (
+            vec![
+                "--tsv-dir",
+                "t",
+                "-o",
+                "t/in.variants.tsv",
+                "--table",
+                "positions",
+            ],
+            "would be written twice: as the results (-o) and as the variants table (--tsv-dir)",
+        ),
+        (
+            vec!["--tsv-dir", "t", "--hcs-output", "t/../t/in.hcs.tsv"],
+            "would be written twice: as the hcs table (--tsv-dir) and as the conserved sequences \
+             (--hcs-output)",
+        ),
+        (
+            vec!["-o", "r.json", "--run-report", "r.json"],
+            "'r.json' would be written twice: as the run report (--run-report) and as the \
+             results (-o)",
+        ),
+        (
+            vec![
+                "-o",
+                "x.json",
+                "--hcs-output",
+                "h.json",
+                "--run-report",
+                "./h.json",
+            ],
+            "as the run report (--run-report) and as the conserved sequences (--hcs-output)",
+        ),
+        (
+            vec!["-o", "x.json", "--run-report", "in.fasta"],
+            "output 'in.fasta' (the run report (--run-report)) is the input file",
+        ),
+        (
+            vec!["-O", "json", "-o", "./in.fasta"],
+            "output './in.fasta' (the results (-o)) is the input file",
+        ),
+        (
+            vec!["--tsv-dir", "t", "-o", "t", "-O", "json"],
+            "'t' is a folder, not a file",
+        ),
+        (
+            vec!["--tsv-dir", "new", "-o", "new", "-O", "json"],
+            "'new' is given both as the --tsv-dir folder and as the results (-o)",
+        ),
+        (
+            vec!["--tsv-dir", "new", "--run-report", "new"],
+            "'new' is given both as the --tsv-dir folder and as the run report (--run-report)",
+        ),
+        (
+            vec!["-o", "-", "--hcs-output", "-"],
+            "two outputs would go to standard output: the results (-o) and the conserved \
+             sequences (--hcs-output)",
+        ),
+        (
+            vec!["--run-report", "-"],
+            "two outputs would go to standard output: the run report (--run-report) and the \
+             results (standard output by default)",
+        ),
+    ] {
+        let o = analyze_tiny(dir, &extra);
+        assert_eq!(code(&o), 2, "{extra:?}: {}", stderr(&o));
+        assert!(stderr(&o).contains(message), "{extra:?}: {}", stderr(&o));
+        assert!(o.stdout.is_empty(), "{extra:?}");
+        assert_eq!(names(dir), ["in.fasta", "t"], "{extra:?}");
+        assert!(
+            std::fs::read_dir(dir.join("t")).unwrap().next().is_none(),
+            "{extra:?}"
+        );
+        assert_eq!(std::fs::read(dir.join("in.fasta")).unwrap(), before);
+    }
+    // The default results and a report on standard output: the hint explains the default.
+    let o = analyze_tiny(dir, &["--run-report", "-"]);
+    assert!(
+        stderr(&o).contains("write them to a file with -o FILE, or discard them with -o"),
+        "{}",
+        stderr(&o)
+    );
+    // Names that differ only in letter case may be one file (macOS, Windows): refused anywhere.
+    let o = analyze_tiny(dir, &["-o", "A.json", "--hcs-output", "a.JSON"]);
+    assert_eq!(code(&o), 2, "{}", stderr(&o));
+    assert!(
+        stderr(&o).contains("may be the same file as") || stderr(&o).contains("written twice"),
+        "{}",
+        stderr(&o)
+    );
+    // Devices take any number of outputs.
+    #[cfg(unix)]
+    {
+        let o = analyze_tiny(
+            dir,
+            &[
+                "-o",
+                "/dev/null",
+                "-O",
+                "json",
+                "--hcs-output",
+                "/dev/null",
+                "--run-report",
+                "/dev/null",
+                "-q",
+            ],
+        );
+        assert_eq!(code(&o), 0, "{}", stderr(&o));
+        // /dev/stdout is standard output: one output only.
+        let o = analyze_tiny(dir, &["-o", "-", "--hcs-output", "/dev/stdout"]);
+        assert_eq!(code(&o), 2, "{}", stderr(&o));
+        assert!(
+            stderr(&o).contains("two outputs would go to standard output"),
+            "{}",
+            stderr(&o)
+        );
+    }
+}
+
+/// The data-loss bug of 1.1.1 and its two variants: a run report named like a `--tsv-dir`
+/// table replaced the table, even when the run failed before its own collision check. The
+/// table is now left as it was, and no report is written.
+#[test]
+fn a_run_report_never_replaces_a_table() {
+    let d = tmp();
+    let dir = d.path();
+    let o = analyze_tiny(dir, &["--tsv-dir", "tables", "-q"]);
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    let table = dir.join("tables/in.positions.tsv");
+    let before = std::fs::read(&table).unwrap();
+    let report = "tables/in.positions.tsv";
+    for extra in [
+        vec!["--tsv-dir", "tables", "--run-report", report],
+        vec!["--tsv-dir", "tables", "-o", "x.tsv", "--run-report", report],
+        vec!["--header-format", "A|A", "--run-report", report],
+        vec!["--hcs-min-incidence", "50", "--run-report", report],
+    ] {
+        let o = analyze_tiny(dir, &extra);
+        assert_eq!(code(&o), 2, "{extra:?}: {}", stderr(&o));
+        assert_eq!(std::fs::read(&table).unwrap(), before, "{extra:?}");
+        assert_eq!(names(&dir.join("tables")).len(), 4, "{extra:?}");
+        assert_eq!(names(dir), ["in.fasta", "tables"], "{extra:?}");
+    }
+    // A report name that passes the name rules but leads to a table of the run (a symbolic
+    // link): the collision check refuses it, before anything else, and writes no report.
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink("in.positions.tsv", dir.join("tables/report.json")).unwrap();
+        for extra in [
+            vec!["--tsv-dir", "tables", "--run-report", "tables/report.json"],
+            vec![
+                "--tsv-dir",
+                "tables",
+                "-o",
+                "x.tsv",
+                "--run-report",
+                "tables/report.json",
+            ],
+            vec![
+                "--tsv-dir",
+                "tables",
+                "--header-format",
+                "A|A",
+                "--run-report",
+                "tables/report.json",
+            ],
+        ] {
+            let o = analyze_tiny(dir, &extra);
+            assert_eq!(code(&o), 2, "{extra:?}: {}", stderr(&o));
+            assert_eq!(std::fs::read(&table).unwrap(), before, "{extra:?}");
+        }
+        let o = analyze_tiny(
+            dir,
+            &["--tsv-dir", "tables", "--run-report", "tables/report.json"],
+        );
+        assert!(
+            stderr(&o).contains(
+                "'tables/report.json' would be written twice: as the run report (--run-report) \
+                 and as the positions table (--tsv-dir)"
+            ),
+            "{}",
+            stderr(&o)
+        );
+        assert!(
+            stderr(&o).contains("such as 'tables/report.run-report.json'"),
+            "{}",
+            stderr(&o)
+        );
+    }
+}
+
+/// B4 on Unix: standard input and output have no name, so they are compared with the files the
+/// run replaces by the file behind them. Appending to a log and devices are never a clash.
+#[cfg(unix)]
+#[test]
+fn standard_input_and_output_are_compared_by_file() {
+    let d = tmp();
+    let dir = d.path();
+    std::fs::copy(tiny(), dir.join("in.fasta")).unwrap();
+    let before = std::fs::read(dir.join("in.fasta")).unwrap();
+    let from_stdin = |extra: &[&str], stdout: Stdio| {
+        dima()
+            .args(["analyze"])
+            .args(TINY)
+            .args(extra)
+            .stdin(std::fs::File::open(dir.join("in.fasta")).unwrap())
+            .stdout(stdout)
+            .current_dir(dir)
+            .output()
+            .unwrap()
+    };
+    // `dima analyze < in.fasta -o in.fasta`: the input is never replaced.
+    for extra in [
+        vec!["-O", "json", "-o", "in.fasta"],
+        vec!["-o", "r.json", "--run-report", "in.fasta"],
+    ] {
+        let o = from_stdin(&extra, Stdio::piped());
+        assert_eq!(code(&o), 2, "{extra:?}: {}", stderr(&o));
+        assert!(
+            stderr(&o).contains("is the input file (read from standard input)"),
+            "{extra:?}: {}",
+            stderr(&o)
+        );
+        assert_eq!(std::fs::read(dir.join("in.fasta")).unwrap(), before);
+    }
+    // `-o r.json --hcs-output - > r.json`: the results would replace what standard output
+    // writes.
+    let o = dima()
+        .args(["analyze", "-i", "in.fasta"])
+        .args(TINY)
+        .args(["-o", "r.json", "--hcs-output", "-"])
+        .stdout(std::fs::File::create(dir.join("r.json")).unwrap())
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert_eq!(code(&o), 2, "{}", stderr(&o));
+    assert!(
+        stderr(&o).contains(
+            "standard output, where the conserved sequences (--hcs-output) would go, is the file \
+             'r.json', which is also written as the results (-o)"
+        ),
+        "{}",
+        stderr(&o)
+    );
+    // Standard output appended to the input file.
+    let appending = std::fs::OpenOptions::new()
+        .append(true)
+        .open(dir.join("in.fasta"))
+        .unwrap();
+    let o = from_stdin(&["-O", "json", "-o", "-"], Stdio::from(appending));
+    assert_eq!(code(&o), 2, "{}", stderr(&o));
+    assert!(stderr(&o).contains("is the input file"), "{}", stderr(&o));
+    assert_eq!(std::fs::read(dir.join("in.fasta")).unwrap(), before);
+    // Appending to a log (with the run report elsewhere) and devices are fine.
+    let log = dir.join("log.txt");
+    std::fs::write(&log, "LOG\n").unwrap();
+    let appending = std::fs::OpenOptions::new().append(true).open(&log).unwrap();
+    let o = dima()
+        .args(["analyze", "-i", "in.fasta", "-q"])
+        .args(TINY)
+        .args([
+            "-o",
+            "/dev/stdout",
+            "-O",
+            "json",
+            "--run-report",
+            "run.json",
+        ])
+        .stdout(appending)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    assert!(std::fs::read_to_string(&log).unwrap().starts_with("LOG\n{"));
+    let o = from_stdin(
+        &["-q", "-O", "json", "-o", "-", "--hcs-output", "/dev/null"],
+        Stdio::from(std::fs::File::create("/dev/null").unwrap()),
+    );
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+}
+
+/// C2/C3: the run report is opened before the analysis, so a report that cannot be created
+/// stops the run at once; a failed run removes every folder level it created, but keeps the one
+/// that holds its report.
+#[test]
+fn failed_runs_leave_only_their_report() {
+    let d = tmp();
+    let dir = d.path();
+    std::fs::write(dir.join("empty.fa"), "").unwrap();
+    let o = run(
+        &["analyze", "-i", "empty.fa", "--tsv-dir", "new/sub", "-q"],
+        dir,
+    );
+    assert_eq!(code(&o), 4, "{}", stderr(&o));
+    assert!(!dir.join("new").exists(), "every level the run created");
+    // The report inside a --tsv-dir that does not exist yet: the folder is created for it and
+    // kept, holding the report only.
+    for (tsv_dir, report) in [("out", "out/run.json"), ("out2/sub", "out2/run.json")] {
+        let o = run(
+            &[
+                "analyze",
+                "-i",
+                "empty.fa",
+                "--tsv-dir",
+                tsv_dir,
+                "--run-report",
+                report,
+            ],
+            dir,
+        );
+        assert_eq!(code(&o), 4, "{}", stderr(&o));
+        assert_eq!(json(&dir.join(report))["status"], "failed", "{report}");
+        let parent = dir.join(report).parent().unwrap().to_path_buf();
+        assert_eq!(names(&parent), ["run.json"], "{report}");
+    }
+    // A report that cannot be created: the run stops before reading the input.
+    let o = run(
+        &[
+            "analyze",
+            "-i",
+            "empty.fa",
+            "--run-report",
+            "missing/run.json",
+        ],
+        dir,
+    );
+    assert_eq!(code(&o), 3, "{}", stderr(&o));
+    assert!(
+        stderr(&o).contains("cannot create 'missing/run.json'"),
+        "{}",
+        stderr(&o)
+    );
+    assert!(!stderr(&o).contains("no FASTA records"), "{}", stderr(&o));
+}
+
+/// `dima view --tsv-dir` checks the tables with the names they get, the results' query name.
+#[test]
+fn view_checks_the_real_table_names() {
+    let d = tmp();
+    let dir = d.path();
+    assert_eq!(code(&analyze_tiny(dir, &["-o", "r.json", "-q"])), 0);
+    // No false alarm for a file that only the placeholder name would have reached.
+    let o = run(
+        &[
+            "view",
+            "-i",
+            "r.json",
+            "--tsv-dir",
+            "t",
+            "-o",
+            "t/dima.positions.tsv",
+            "-O",
+            "tsv",
+            "--table",
+            "positions",
+            "-q",
+        ],
+        dir,
+    );
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    assert_eq!(names(&dir.join("t")).len(), 5);
+    // A real clash is refused, and the folder is not created.
+    let o = run(
+        &[
+            "view",
+            "-i",
+            "r.json",
+            "--tsv-dir",
+            "t2",
+            "-o",
+            "t2/in.positions.tsv",
+            "-O",
+            "tsv",
+            "--table",
+            "positions",
+        ],
+        dir,
+    );
+    assert_eq!(code(&o), 2, "{}", stderr(&o));
+    assert!(
+        stderr(&o).contains("as the results (-o) and as the positions table (--tsv-dir)"),
+        "{}",
+        stderr(&o)
+    );
+    assert!(!dir.join("t2").exists());
+}
+
+/// B7: `DIMA_PROGRESS` is read by `dima analyze` itself: an empty value is unset, an invalid
+/// one is a usage error that does not repeat it; an explicit `--progress` beats
+/// `DIMA_NO_PROGRESS`, and `--progress` and `--no-progress` override each other.
+#[test]
+fn progress_settings_and_their_order() {
+    let d = tmp();
+    let dir = d.path();
+    let shown = |args: &[&str], env: &[(&str, &str)]| -> Option<bool> {
+        let mut c = dima();
+        for (k, v) in env {
+            c.env(k, v);
+        }
+        let o = c
+            .args(["analyze", "-i", s(&tiny()), "-o", "r.json"])
+            .args(TINY)
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        (code(&o) == 0).then(|| stderr(&o).contains("] counting k-mers"))
+    };
+    assert_eq!(
+        shown(&[], &[("DIMA_PROGRESS", "")]),
+        Some(false),
+        "empty = unset"
+    );
+    assert_eq!(shown(&[], &[("DIMA_PROGRESS", "plain")]), Some(true));
+    assert_eq!(
+        shown(&[], &[("DIMA_PROGRESS", "Plain")]),
+        None,
+        "case-sensitive"
+    );
+    assert_eq!(
+        shown(&["--progress", "plain"], &[("DIMA_NO_PROGRESS", "1")]),
+        Some(true),
+        "the option beats the variable"
+    );
+    assert_eq!(
+        shown(
+            &[],
+            &[("DIMA_NO_PROGRESS", "yes"), ("DIMA_PROGRESS", "plain")]
+        ),
+        Some(false)
+    );
+    assert_eq!(
+        shown(
+            &[],
+            &[("DIMA_NO_PROGRESS", "0"), ("DIMA_PROGRESS", "plain")]
+        ),
+        Some(true),
+        "a false DIMA_NO_PROGRESS"
+    );
+    assert_eq!(
+        shown(&["--progress", "plain", "--no-progress"], &[]),
+        Some(false)
+    );
+    assert_eq!(
+        shown(&["--no-progress", "--progress", "plain"], &[]),
+        Some(true)
+    );
+    // The invalid value: exit 2, and neither the message nor the run report repeats it.
+    let o = dima()
+        .env("DIMA_PROGRESS", "sparkles")
+        .args([
+            "analyze",
+            "-i",
+            s(&tiny()),
+            "-o",
+            "r.json",
+            "--run-report",
+            "run.json",
+        ])
+        .args(TINY)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert_eq!(code(&o), 2, "{}", stderr(&o));
+    assert!(
+        stderr(&o).contains(
+            "error: DIMA_PROGRESS is set, but not to a progress mode (auto, plain or off)"
+        ),
+        "{}",
+        stderr(&o)
+    );
+    assert!(!stderr(&o).contains("sparkles"));
+    assert!(
+        !std::fs::read_to_string(dir.join("run.json"))
+            .unwrap()
+            .contains("sparkles")
+    );
+    // Only `dima analyze` shows progress, so only it reads the variable.
+    let o = dima()
+        .env("DIMA_PROGRESS", "sparkles")
+        .args(["view", "-i", "r.json", "-o", "v.json"])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+}
+
+/// Spawns `dima` with standard output closed at once; returns its standard error and the exit
+/// code.
+fn with_closed_stdout(args: &[&str], dir: &Path) -> (String, i32) {
+    let mut child = dima()
+        .args(args)
+        .current_dir(dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    drop(child.stdout.take());
+    let o = child.wait_with_output().unwrap();
+    (stderr(&o), code(&o))
+}
+
+/// B8: a reader of standard output that goes away (`dima ... | head`) ends that output only:
+/// the warnings, notes and summary line are still printed, and the run report lists the files
+/// that were written.
+#[test]
+fn a_closed_pipe_keeps_the_messages() {
+    let d = tmp();
+    let dir = d.path();
+    std::fs::copy(tiny(), dir.join("in.fasta")).unwrap();
+    let t: Vec<&str> = ["analyze", "-i", "in.fasta"]
+        .into_iter()
+        .chain(TINY)
+        .collect();
+    let mut args = t.clone();
+    args.extend([
+        "-s",
+        "100",
+        "-o",
+        "-",
+        "--hcs-output",
+        "h.json",
+        "--run-report",
+        "run.json",
+    ]);
+    let (e, status) = with_closed_stdout(&args, dir);
+    assert_eq!(status, 0, "{e}");
+    assert!(
+        e.contains("warning[threshold_exceeds_sequence_count]"),
+        "{e}"
+    );
+    assert!(e.contains("analysed 8 sequences"), "{e}");
+    let r = json(&dir.join("run.json"));
+    assert_eq!(r["status"], "completed");
+    let roles: Vec<&str> = r["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|o| o["role"].as_str().unwrap())
+        .collect();
+    assert_eq!(roles, ["hcs"], "the file, not the cut-off standard output");
+    // `dima hcs`: the summary line; `dima view`: the JSONL note.
+    let mut args = t.clone();
+    args.extend(["-o", "r.json", "-q"]);
+    assert_eq!(code(&run(&args, dir)), 0);
+    let (e, status) =
+        with_closed_stdout(&["hcs", "-i", "r.json", "--hcs-min-incidence", "60"], dir);
+    assert_eq!(status, 0, "{e}");
+    assert!(e.contains("conserved regions"), "{e}");
+    let (e, status) = with_closed_stdout(&["view", "-i", "r.json", "-O", "jsonl", "-o", "-"], dir);
+    assert_eq!(status, 0, "{e}");
+    assert!(e.contains("note: JSONL holds one position per line"), "{e}");
+}
+
+/// Standard output is written last, after the other streams too: a reader of standard output
+/// that goes away never costs an output written in place, such as a FIFO.
+#[cfg(unix)]
+#[test]
+fn standard_output_is_written_last() {
+    let d = tmp();
+    let dir = d.path();
+    let fifo = dir.join("regions.fifo");
+    assert!(
+        Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let reader = std::thread::spawn({
+        let fifo = fifo.clone();
+        move || std::fs::read(fifo).unwrap()
+    });
+    let input = tiny();
+    let mut args: Vec<&str> = vec!["analyze", "-i", s(&input)];
+    args.extend(TINY);
+    args.extend(["-o", "-", "--hcs-output", "regions.fifo", "-q"]);
+    let (e, status) = with_closed_stdout(&args, dir);
+    assert_eq!(status, 0, "{e}");
+    let regions: Value = serde_json::from_slice(&reader.join().unwrap()).unwrap();
+    assert!(regions["region_count"].is_u64(), "{regions}");
+}
+
+/// B9: `dima cite --from` describes one run: conserved sequences computed from other results
+/// (another input, k or T) are refused.
+#[test]
+fn cite_describes_one_run() {
+    let d = tmp();
+    let dir = d.path();
+    let o = analyze_tiny(dir, &["-o", "a.json", "--hcs-output", "a.hcs.json", "-q"]);
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    let o = analyze_tiny(
+        dir,
+        &[
+            "-s",
+            "4",
+            "-o",
+            "b.json",
+            "--hcs-output",
+            "b.hcs.json",
+            "-q",
+        ],
+    );
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    let o = run(&["cite", "--from", "a.json", "--from", "a.hcs.json"], dir);
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    let o = run(&["cite", "--from", "b.hcs.json", "--from", "a.json"], dir);
+    assert_eq!(code(&o), 2, "{}", stderr(&o));
+    assert!(
+        stderr(&o).contains(
+            "error: the conserved sequences in 'b.hcs.json' were not computed from the results in \
+             'a.json': T is 100 in 'a.json' and 4 in 'b.hcs.json'"
+        ),
+        "{}",
+        stderr(&o)
+    );
+    assert!(
+        stderr(&o).contains(
+            "hint: compute the conserved sequences from these results: dima hcs -i a.json"
+        ),
+        "{}",
+        stderr(&o)
+    );
+    assert!(o.stdout.is_empty());
+    // Another input: the checksum tells.
+    let other = dir.join("other.fasta");
+    let text = std::fs::read_to_string(tiny()).unwrap();
+    std::fs::write(&other, text.replace("MKTAY", "MKTAW")).unwrap();
+    let o = dima()
+        .args([
+            "analyze",
+            "-i",
+            "other.fasta",
+            "-o",
+            "c.json",
+            "--hcs-output",
+            "c.hcs.json",
+            "-q",
+        ])
+        .args(TINY)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert_eq!(code(&o), 0, "{}", stderr(&o));
+    let o = run(&["cite", "--from", "a.json", "--from", "c.hcs.json"], dir);
+    assert_eq!(code(&o), 2, "{}", stderr(&o));
+    assert!(
+        stderr(&o).contains("their inputs differ (another checksum)"),
+        "{}",
+        stderr(&o)
+    );
+    // Standard input is read once.
+    // `/dev/stdin` is standard input on Unix only.
+    let pairs: &[[&str; 2]] = if cfg!(unix) {
+        &[["-", "-"], ["-", "/dev/stdin"]]
+    } else {
+        &[["-", "-"]]
+    };
+    for twice in pairs {
+        let o = run(&["cite", "--from", twice[0], "--from", twice[1]], dir);
+        assert_eq!(code(&o), 2, "{}", stderr(&o));
+        assert!(
+            stderr(&o).contains("standard input is given twice to --from"),
+            "{}",
+            stderr(&o)
+        );
+    }
+    // Standard output appended to a file the citation reads would corrupt it: refused, and the
+    // file is unchanged.
+    #[cfg(unix)]
+    {
+        let before = std::fs::read(dir.join("a.json")).unwrap();
+        let log = std::fs::OpenOptions::new()
+            .append(true)
+            .open(dir.join("a.json"))
+            .unwrap();
+        let o = dima()
+            .args(["cite", "--from", "a.json"])
+            .current_dir(dir)
+            .stdout(log)
+            .output()
+            .unwrap();
+        assert_eq!(code(&o), 2, "{}", stderr(&o));
+        assert!(
+            stderr(&o).contains(
+                "standard output, where the citation would go, is the input file 'a.json'"
+            ) && stderr(&o).contains("redirect standard output to another file"),
+            "{}",
+            stderr(&o)
+        );
+        assert_eq!(std::fs::read(dir.join("a.json")).unwrap(), before);
+    }
+}
+
+/// B6: an interruption is an error, so its message is printed with -q too.
+#[cfg(unix)]
+#[test]
+fn an_interruption_is_reported_with_q() {
+    use std::os::unix::process::ExitStatusExt;
+    let d = tmp();
+    let mut child = dima()
+        .args(["analyze", "-q", "-o", "r.json", "--run-report", "run.json"])
+        .args(TINY)
+        .current_dir(d.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // An open pipe that never ends, as in `waiting_on_stdin`: the run waits for more input.
+    let mut stdin = child.stdin.take().unwrap();
+    stdin.write_all(&std::fs::read(tiny()).unwrap()).unwrap();
+    stdin.flush().unwrap();
+    // Nothing is printed with -q: the temporary file of the results, opened just before the
+    // analysis (well after the interrupt handlers are installed), tells it is waiting.
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !names(d.path())
+        .iter()
+        .any(|n| n.starts_with(".r.json.dima-"))
+    {
+        assert!(Instant::now() < deadline, "the outputs were never opened");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    std::thread::sleep(Duration::from_millis(100));
+    let sent = Instant::now();
+    kill(&child, "TERM");
+    let status = wait_exit(&mut child, Duration::from_secs(10));
+    assert!(
+        sent.elapsed() < Duration::from_secs(2),
+        "not the grace period"
+    );
+    assert_eq!(status.signal(), Some(libc::SIGTERM));
+    drop(stdin);
+    let mut e = String::new();
+    child.stderr.take().unwrap().read_to_string(&mut e).unwrap();
+    assert_eq!(e, "error: cancelled; no results were written\n");
+    assert_eq!(json(&d.path().join("run.json"))["status"], "cancelled");
+}
+
+/// Windows has no /dev/null: its null device NUL takes any output.
+#[cfg(windows)]
+#[test]
+fn the_null_device_takes_outputs() {
+    let d = tmp();
+    for extra in [
+        vec!["-o", "NUL", "-O", "json"],
+        vec!["-o", "r.json", "--hcs-output", "NUL"],
+        vec!["-o", "NUL", "-O", "json", "--hcs-output", "nul"],
+    ] {
+        let o = analyze_tiny(d.path(), &extra);
+        assert_eq!(code(&o), 0, "{extra:?}: {}", stderr(&o));
+    }
+}
+
+/// Names and destinations refused since the review of 1.2.0: tar names behind any compression,
+/// a descriptor given to two outputs, the folder hint after `..`, and (Unix) an output on the
+/// FIFO standard input comes from, which would keep the input from ever ending.
+#[test]
+fn more_names_and_destinations_are_refused() {
+    let d = tmp();
+    let dir = d.path();
+    for (name, suffix) in [("x.tar.bz2", ".tar.bz2"), ("x.tar.gz.zst", ".tar.gz.zst")] {
+        let o = analyze_tiny(dir, &["-o", name]);
+        assert_eq!(code(&o), 2, "{name}: {}", stderr(&o));
+        assert!(
+            stderr(&o).contains(&format!(
+                "'{name}' asks for a compressed tar archive, which DiMA does not write"
+            )) && !stderr(&o).contains(".tar.gz or"),
+            "{name} ({suffix}): {}",
+            stderr(&o)
+        );
+    }
+    let o = analyze_tiny(dir, &["-o", "out.json/.."]);
+    assert_eq!(code(&o), 2, "{}", stderr(&o));
+    assert!(
+        stderr(&o).contains("hint: give a file name, such as 'results.json'"),
+        "{}",
+        stderr(&o)
+    );
+    #[cfg(unix)]
+    {
+        let o = analyze_tiny(
+            dir,
+            &["-o", "/dev/fd/2", "-O", "json", "--hcs-output", "/dev/fd/2"],
+        );
+        assert_eq!(code(&o), 2, "{}", stderr(&o));
+        assert!(
+            stderr(&o).contains("would be written twice"),
+            "{}",
+            stderr(&o)
+        );
+        // Standard input from a FIFO that an output also names: refused, not a hang.
+        let fifo = dir.join("p");
+        assert!(
+            Command::new("mkfifo")
+                .arg(&fifo)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let o = Command::new("sh")
+            .args([
+                "-c",
+                "cat \"$1\" > p & exec \"$0\" analyze -o p -O json -a protein -k 3 \
+                 --validation permissive < p",
+                env!("CARGO_BIN_EXE_dima"),
+            ])
+            .arg(tiny())
+            .current_dir(dir)
+            .env("NO_COLOR", "1")
+            .output()
+            .unwrap();
+        assert_eq!(code(&o), 2, "{}", stderr(&o));
+        assert!(
+            stderr(&o).contains("is the input pipe (read from standard input)"),
+            "{}",
+            stderr(&o)
+        );
+    }
 }

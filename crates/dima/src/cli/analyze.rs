@@ -12,11 +12,13 @@ use dima_core::header::{self, HeaderSpec};
 use dima_core::human;
 use dima_core::input::{self, Source};
 use dima_core::model::{HcsResults, Results};
+use dima_core::output::{Sink, Target};
 use dima_core::{DimaError, Result};
 
 use super::Context;
 use super::args::{AlphabetArg, AnalyzeArgs, EstimatorArg, ValidationArg};
-use super::outputs::{self, Content, Plan};
+use super::destinations::{self, Destination, Destinations, Input};
+use super::outputs::{self, Content, Folders, Ledger, Plan, Planned};
 use super::progress::{self, Display};
 use super::resources;
 use super::threads::{self, Threads};
@@ -117,15 +119,25 @@ fn command(a: &AnalyzeArgs) -> Vec<String> {
 /// Everything known about a run once it ends, for the summary and the run report.
 #[derive(Default)]
 struct Facts {
-    /// Another output goes to standard output, so the run report cannot.
-    stdout_taken: bool,
     /// The analysis was started (its phases are then recorded).
     analysis_started: bool,
     threads: Option<Threads>,
     input: Option<FileRecord>,
     execution: Option<dima_core::analysis::Execution>,
-    outputs: Vec<FileRecord>,
     writing: Option<std::time::Duration>,
+}
+
+/// The name the `--tsv-dir` tables are given: `--query-name`, else the input file's name
+/// without its FASTA and compression extensions, else `dima` (standard input, `/dev/stdin`,
+/// `<(...)`).
+fn tables_base(a: &AnalyzeArgs) -> String {
+    a.query_name
+        .clone()
+        .or_else(|| match Input::of(a.input.as_deref()) {
+            Input::Path(p) => input::query_name_from_source(&Source::Path(p.to_path_buf())),
+            Input::Stdin => None,
+        })
+        .unwrap_or_else(|| "dima".to_owned())
 }
 
 /// Runs `dima analyze`.
@@ -137,18 +149,32 @@ pub fn run(a: &AnalyzeArgs, ctx: &Context) -> Result<()> {
     let start_time = SystemTime::now();
     let progress = Arc::new(Progress::new());
     let mut facts = Facts::default();
-    // A run report that would overwrite the input or another output is refused before anything
-    // runs, because the report is written even when the run fails early (D103).
-    if let Some(path) = &a.run_report {
-        outputs::check_run_report(path, &known_paths(a, false))?;
-    }
-    let outcome = execute(a, ctx, &progress, &mut facts);
-    // A report refused because another output takes standard output is not written there.
-    let report_path = a
-        .run_report
-        .as_ref()
-        .filter(|p| !(facts.stdout_taken && p.as_os_str() == "-"));
-    if let Some(path) = report_path {
+    let destinations = Destinations::of(
+        &a.output,
+        a.hcs_output.as_deref(),
+        a.run_report.as_deref(),
+        Some(&tables_base(a)),
+    );
+    let input = Input::of(a.input.as_deref());
+    // The folders the run creates; dropped last, after the run report is written in them.
+    let mut folders = Folders::default();
+    // The run report is written even when the run fails, so it is planned, checked and opened
+    // before anything else (D103): a report that would replace the input or another output is
+    // refused and writes nothing, and one that cannot be created stops the run at once.
+    let report = destinations
+        .run_report()
+        .map(|d| open_report(d, &destinations, input, &mut folders))
+        .transpose()?;
+    let outcome = execute(
+        a,
+        ctx,
+        &progress,
+        &mut facts,
+        &destinations,
+        input,
+        &mut folders,
+    );
+    if let Some((planned, sink)) = report {
         // As `finish` ends the process: a reader of standard output that went away (`| head`)
         // after every file output was committed is a success.
         let (status, exit_code, error) = match &outcome {
@@ -158,27 +184,56 @@ pub fn run(a: &AnalyzeArgs, ctx: &Context) -> Result<()> {
             Err(e) => (Status::Failed, e.class().code(), Some(e)),
         };
         let r = build_report(
-            a, &facts, &progress, status, exit_code, error, start, start_time,
+            a,
+            &facts,
+            &ctx.ledger,
+            &progress,
+            status,
+            exit_code,
+            error,
+            start,
+            start_time,
         );
-        let planned = outputs::Planned {
-            target: dima_core::output::Target::from_arg(path),
-            compression: dima_core::output::detect(path).1,
-            content: Content::RunReport,
-        };
-        if let Err(e) = outputs::write(&planned, None, None, Some(&r)) {
+        if let Err(e) = outputs::write_report(sink, &planned, &r) {
             if status == Status::Completed {
                 return Err(e);
             }
             ctx.later_errors.borrow_mut().push(e);
         }
     }
+    if outcome.is_ok() {
+        folders.keep();
+    }
     outcome
+}
+
+/// Plans, checks and opens the run report. Its sink is not cancellable: the report is written
+/// after an interruption too. A report inside a `--tsv-dir` folder that does not exist yet gets
+/// that folder now (kept if the run fails, since it then holds the report).
+fn open_report(
+    d: &Destination,
+    destinations: &Destinations,
+    input: Input<'_>,
+    folders: &mut Folders,
+) -> Result<(Planned, Sink)> {
+    let planned = outputs::plan_run_report(d)?;
+    destinations::check_run_report(destinations, input)?;
+    if let Target::Path(path) = &planned.target {
+        if let Some(dir) = destinations.folder_for(path) {
+            // A `--tsv-dir` that is a file is a usage error here too, not a failed creation.
+            outputs::refuse_non_folder(dir)?;
+            folders.create(dir)?;
+        }
+    }
+    let sink = Sink::create(&planned.target, planned.compression)?;
+    Ok((planned, sink))
 }
 
 #[allow(clippy::too_many_arguments)]
 fn build_report(
     a: &AnalyzeArgs,
     f: &Facts,
+    ledger: &Ledger,
     progress: &Progress,
     status: Status,
     exit_code: u8,
@@ -220,7 +275,7 @@ fn build_report(
         exit_code,
         error: error
             .filter(|e| !matches!(e, DimaError::Cancelled))
-            .map(|e| report::error_text(e, &known_paths(a, true))),
+            .map(|e| report::error_text(e, &known_paths(a))),
         start_time: report::rfc3339(start_time),
         end_time: report::rfc3339(SystemTime::now()),
         threads: f.threads.as_ref().map(|t| report::Threads {
@@ -258,7 +313,18 @@ fn build_report(
             positions: f.execution.as_ref().map(|e| e.positions),
         },
         inputs: f.input.iter().cloned().collect(),
-        outputs: f.outputs.clone(),
+        // What was committed: every output after a success, the complete ones after an
+        // interruption, the files before a reader of standard output went away.
+        outputs: ledger
+            .committed()
+            .into_iter()
+            .map(|(p, w)| FileRecord {
+                role: p.content.role(),
+                name: outputs::display_name(&p.target),
+                size_bytes: w.bytes,
+                sha256: w.sha256,
+            })
+            .collect(),
     }
 }
 
@@ -281,16 +347,16 @@ fn reached_phases(progress: &Progress) -> Vec<PhaseTime> {
         .collect()
 }
 
-/// Every path given on the command line; with `run_report`, the run report's own path too.
-fn known_paths(a: &AnalyzeArgs, run_report: bool) -> Vec<&Path> {
+/// Every path given on the command line, whose folders the run report leaves out.
+fn known_paths(a: &AnalyzeArgs) -> Vec<&Path> {
     [
         a.input.as_deref(),
         a.output.output.as_deref(),
         a.output.tsv_dir.as_deref(),
         a.hcs_output.as_deref(),
+        a.run_report.as_deref(),
     ]
     .into_iter()
-    .chain(run_report.then_some(a.run_report.as_deref()))
     .flatten()
     .filter(|p| p.as_os_str() != "-")
     .collect()
@@ -311,11 +377,15 @@ fn execute(
     ctx: &Context,
     progress: &Arc<Progress>,
     facts: &mut Facts,
+    destinations: &Destinations,
+    input: Input<'_>,
+    folders: &mut Folders,
 ) -> Result<()> {
     let v = ctx.verbosity;
     let start = Instant::now();
     // Everything that can be checked before reading the input is checked first.
     let source = source_of(a)?;
+    let progress_choice = a.progress(&|k| std::env::var_os(k))?;
     let mut params = params(a)?;
     params.validate()?;
     if let Some(format) = &params.header_format {
@@ -329,26 +399,11 @@ fn execute(
         Some(t) => Percent::hcs_threshold(t)?,
         None => dima_core::config::DEFAULT_HCS_THRESHOLD,
     };
-    let tsv_base = a
-        .query_name
-        .clone()
-        .or_else(|| input::query_name_from_source(&source))
-        .unwrap_or_else(|| "dima".to_owned());
-    let plan = outputs::plan(
-        &a.output,
-        a.hcs_output.as_deref(),
-        a.run_report.as_deref(),
-        &tsv_base,
-        std::io::stdout().is_terminal(),
-    )?;
-    facts.stdout_taken = plan
-        .outputs
-        .iter()
-        .any(|o| o.target == dima_core::output::Target::Stdout);
-    let input_paths: Vec<&Path> = a.input.iter().map(PathBuf::as_path).collect();
-    outputs::check_collisions(&plan, &input_paths)?;
+    let plan = outputs::plan(&a.output, destinations, std::io::stdout().is_terminal())?;
+    destinations::check(destinations, input)?;
     // Warnings raised here count in the summary line too (D104).
     let mut cli_warnings = warn_unused_flags(a, &plan, v);
+    cli_warnings += outputs::warn_assumed_format(&plan, false, v);
     // Nothing would carry the similarity-weighted values (warned above): do not compute them.
     // The run report still records the command as typed.
     params.similarity_weighted_entropy &= plan.writes_position_values();
@@ -389,7 +444,7 @@ fn execute(
             );
         }
     }
-    let mode = progress::mode(a.progress(), v, ctx.redraw_terminal);
+    let mode = progress::mode(progress_choice, v, ctx.redraw_terminal);
     let display = Display::new(Arc::clone(progress), mode);
     let control = RunControl {
         cancel: Arc::clone(&ctx.signals.cancel),
@@ -401,7 +456,7 @@ fn execute(
     facts.threads = Some(t);
     // Every destination is opened before the analysis, so one that cannot be written is
     // reported now, not after a long computation.
-    let opened = outputs::Opened::open(&plan, &ctx.signals.cancel)?;
+    let opened = outputs::Opened::open(&plan, folders, &ctx.signals.cancel)?;
     facts.analysis_started = true;
     let analysis = dima_core::analyze(&source, &params, &control)?;
     if let Some(t) = &facts.threads {
@@ -428,15 +483,16 @@ fn execute(
     } else {
         None
     };
-    let written = opened.write(Some(&results), hcs.as_ref(), &|| control.check())?;
-    for (p, w) in plan.outputs.iter().zip(written) {
-        facts.outputs.push(FileRecord {
-            role: p.content.role(),
-            name: outputs::display_name(&p.target),
-            size_bytes: w.bytes,
-            sha256: w.sha256,
-        });
-        if let dima_core::output::Target::Path(path) = &p.target {
+    // A reader of standard output that went away (`| head`) ends that output only: the
+    // messages below are still printed.
+    outputs::unless_reader_gone(opened.write(
+        Some(&results),
+        hcs.as_ref(),
+        &|| control.check(),
+        &ctx.ledger,
+    ))?;
+    for (p, w) in ctx.ledger.committed() {
+        if let Target::Path(path) = &p.target {
             ui::verbose(
                 &format!("wrote {} ({})", path.display(), human::bytes(w.bytes)),
                 v,
@@ -471,25 +527,31 @@ fn execute(
         performance(facts, v);
     }
     summary(&results, hcs.as_ref(), warnings, start.elapsed(), v);
-    if ctx.stderr_is_terminal && v.normal() {
-        let target = plan
-            .outputs
-            .iter()
-            .find(|p| matches!(p.content, Content::Json { .. }))
-            .and_then(|p| match &p.target {
-                dima_core::output::Target::Path(path) => Some(path.display().to_string()),
-                dima_core::output::Target::Stdout => None,
-            });
-        let how = target.map_or_else(
-            || "`dima cite` prints the references".to_owned(),
-            |t| format!("`dima cite --from {t}` lists this run's references"),
-        );
-        ui::line(
-            &format!("Cite: Tharanga et al. 2025, doi:10.1093/bib/bbae607 ({how})"),
-            v,
-        );
+    if ctx.stderr_is_terminal {
+        ui::line(&cite_line(&plan), v);
     }
     Ok(())
+}
+
+/// The citation line, on terminals only (D89): `dima cite --from FILE` when the results are a
+/// regular file whose name can be typed back (quoted for the shell where needed), otherwise
+/// `dima cite`, which prints the references without the run's.
+fn cite_line(plan: &Plan) -> String {
+    let from = plan
+        .outputs
+        .iter()
+        .find(|p| matches!(p.content, Content::Json { .. }))
+        .and_then(|p| match &p.target {
+            Target::Path(path) if std::fs::metadata(path).is_ok_and(|m| m.is_file()) => {
+                ui::shell_word(path)
+            }
+            _ => None,
+        });
+    let how = from.map_or_else(
+        || "`dima cite` prints the references".to_owned(),
+        |file| format!("`dima cite --from {file}` lists this run's references"),
+    );
+    format!("Cite: Tharanga et al. 2025, doi:10.1093/bib/bbae607 ({how})")
 }
 
 /// Warns when the system refused some of the worker threads, so the run used fewer (D110);
@@ -674,4 +736,49 @@ fn performance(f: &Facts, v: Verbosity) {
         ),
         v,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dima_core::output::OutputCompression;
+
+    fn json_on(target: Target) -> Plan {
+        Plan {
+            outputs: vec![Planned {
+                target,
+                compression: OutputCompression::None,
+                content: Content::Json { pretty: false },
+            }],
+            ..Plan::default()
+        }
+    }
+
+    /// The Cite: line names the results only when they are a regular file, quoted for the
+    /// shell where needed; otherwise it names `dima cite`.
+    #[test]
+    fn the_cite_line_names_a_results_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("my results.json");
+        std::fs::write(&file, "{}").unwrap();
+        let line = cite_line(&json_on(Target::Path(file.clone())));
+        let quoted = ui::shell_word(&file).unwrap();
+        assert!(quoted.starts_with(['\'', '"']), "{quoted}");
+        assert_eq!(
+            line,
+            format!(
+                "Cite: Tharanga et al. 2025, doi:10.1093/bib/bbae607 (`dima cite --from \
+                 {quoted}` lists this run's references)"
+            )
+        );
+        let generic = "Cite: Tharanga et al. 2025, doi:10.1093/bib/bbae607 (`dima cite` prints \
+                       the references)";
+        assert_eq!(cite_line(&json_on(Target::Stdout)), generic);
+        assert_eq!(cite_line(&Plan::default()), generic, "no results JSON");
+        #[cfg(unix)]
+        assert_eq!(
+            cite_line(&json_on(Target::Path("/dev/null".into()))),
+            generic
+        );
+    }
 }

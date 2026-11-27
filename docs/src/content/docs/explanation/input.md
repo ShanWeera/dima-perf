@@ -59,8 +59,8 @@ be matched to the file it came from.
 ## The alphabet
 
 The alphabet — protein, DNA or RNA — decides which letters are residues. `--alphabet auto` (the
-default) detects it with the rules of `esl_abc_GuessAlphabet()` from Easel, the sequence library
-of HMMER [@eddy2011], ported rule by rule. They are applied to the letter counts (case
+default) detects it with the rules of `esl_abc_GuessAlphabet()` from Easel [@easel], the sequence
+library of HMMER [@eddy2011], ported rule by rule. They are applied to the letter counts (case
 insensitive) of the first batch of records — at most 10,000 records or 64 MiB, and at least the
 first 1,000 records (or all of them, if there are fewer); with $n$ letters in total:
 
@@ -73,7 +73,8 @@ first 1,000 records (or all of them, if there are fewer); with $n$ letters in to
    and at least 15 different letters: protein;
 7. otherwise undetermined.
 
-Easel tuned these rules to make no false calls; when they do not decide, DiMA stops and asks for
+Easel tuned these rules to be "very conservative, essentially never making a false call"
+[@easel, `esl_abc_GuessAlphabet()`]; when they do not decide, DiMA stops and asks for
 `--alphabet protein`, `dna` or `rna` instead of guessing. (As Easel's code is written, rule 6
 cannot fire, because without rule 3's letters at most 14 of its letters can occur; the port keeps
 this.) A sequence set with substantial amounts of both T and U is undetermined too. When an
@@ -105,8 +106,8 @@ acids [@bock1991; @srinivasan2002]; `*` marks a stop codon in translated sequenc
 non-residue in Easel, and `$` and `^` (stop), `#` (frameshift) and `?` (no consensus) are the
 symbols of the Los Alamos HIV Sequence Database alignments [@lanlcodes; @lanlgenecutter], which
 keep sequences with inactivating frameshifts [@kuiken2003]; `.` and `_` as gaps and `~` as
-missing data follow Easel [@eddy2011]; and spaces, tabs and carriage returns inside sequence
-lines are ignored as Easel's FASTA reader ignores them [@eddy2011], with vertical tabs and form
+missing data follow Easel [@easel]; and spaces, tabs and carriage returns inside sequence
+lines are ignored as Easel's FASTA reader ignores them [@easel], with vertical tabs and form
 feeds (the rest of the POSIX `space` class) ignored too. The complete table, byte by
 byte, is in [Symbol tables](/reference/symbols/).
 

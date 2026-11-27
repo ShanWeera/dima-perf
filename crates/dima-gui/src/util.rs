@@ -148,6 +148,24 @@ pub fn opt_coverage(v: Option<f64>, decimals: usize) -> String {
     )
 }
 
+/// A position's sample coverage with `decimals` places, as the facts, the table and the chart
+/// show it: as [`opt_coverage`], and, at a position below the run's minimum coverage `min`,
+/// bounded at that minimum (`> 0.9499` rather than `0.9500` for 0.94996 below 0.95), so a
+/// flagged value never reads as reaching the minimum it is below.
+#[must_use]
+pub fn position_coverage(
+    p: &dima_core::model::PositionResult,
+    min: Option<f64>,
+    decimals: usize,
+) -> String {
+    match (p.sample_coverage, min) {
+        (Some(x), Some(m)) if p.below_min_coverage == Some(true) => {
+            human::fixed_bounded(x, decimals, m)
+        }
+        _ => opt_coverage(p.sample_coverage, decimals),
+    }
+}
+
 /// An optional incidence (a percentage of the supporting sequences, at most 100%): `21.95%`,
 /// `< 0.01%`, `> 99.99%` rather than `100.00%` below 100, or `—`.
 #[must_use]
@@ -301,5 +319,29 @@ mod tests {
         let payload: Box<dyn std::any::Any + Send> = Box::new(String::from("bang"));
         assert_eq!(panic_message(payload.as_ref()), "bang");
         assert!(internal_error_details("analysis", "x").contains("dima-gui"));
+    }
+
+    /// A coverage below the run's minimum never reads as the minimum (0.94996 below 0.95 is
+    /// "> 0.9499", not "0.9500"); others read as before, and below 1 never as 1.
+    #[test]
+    fn coverage_below_the_minimum_never_reads_as_reaching_it() {
+        let mut p = crate::charts::series::tests::position(1, Some(0.1), 200, 100);
+        p.sample_coverage = Some(0.949_96);
+        p.below_min_coverage = Some(true);
+        assert_eq!(position_coverage(&p, Some(0.95), 4), "> 0.9499");
+        assert_eq!(position_coverage(&p, Some(0.95), 3), "> 0.949");
+        assert_eq!(
+            position_coverage(&p, None, 4),
+            "0.9500",
+            "no minimum: as before"
+        );
+        p.sample_coverage = Some(0.9646);
+        assert_eq!(position_coverage(&p, Some(0.98), 4), "0.9646");
+        p.below_min_coverage = Some(false);
+        p.sample_coverage = Some(0.999_96);
+        assert_eq!(position_coverage(&p, Some(0.95), 4), "> 0.9999");
+        p.sample_coverage = None;
+        p.below_min_coverage = None;
+        assert_eq!(position_coverage(&p, Some(0.95), 4), "\u{2014}");
     }
 }

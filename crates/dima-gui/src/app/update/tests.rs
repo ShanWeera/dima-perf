@@ -198,8 +198,26 @@ fn analyze_builds_the_request_from_the_form() {
         s.toasts
             .items()
             .iter()
-            .any(|t| t.text.contains("fill value"))
+            .any(|t| t.text == "Not started: the Fill value under Advanced must not be empty"),
+        "in the form's words, once"
     );
+    // Every Stratify box unticked: the boxes are named, not the command line's option.
+    for row in &mut s.setup.header.rows {
+        row.stratify = false;
+    }
+    s.setup.options.fill = "Unknown".into();
+    assert!(update(&mut s, Msg::Analyze).is_empty());
+    assert!(
+        s.toasts
+            .items()
+            .iter()
+            .any(|t| t.text == "Not started: tick at least one Stratify box"),
+        "{:?}",
+        s.toasts.items()
+    );
+    for row in &mut s.setup.header.rows {
+        row.stratify = true;
+    }
     s.setup.options.fill = "Unknown".into();
     s.setup.header.rows[0].name = "Accession".into();
     s.setup.header.rows[0].stratify = false;
@@ -389,6 +407,13 @@ fn a_run_with_fewer_threads_than_requested_warns() {
             .text
             .starts_with("Used 1 of 4 worker threads: the system refused to start more."),
         "{}",
+        warning.text
+    );
+    assert!(
+        warning
+            .text
+            .ends_with("lower Worker threads under Advanced (Setup screen)."),
+        "names the control: {}",
         warning.text
     );
     assert_eq!(s.view, View::Workspace, "the results open all the same");
@@ -868,6 +893,12 @@ fn refused_threads_are_not_reported_as_bugs() {
     assert_eq!(t.severity, Severity::Error);
     assert!(t.text.contains("refused a new thread"), "{}", t.text);
     assert!(!t.text.contains("report"), "{}", t.text);
+    assert!(
+        t.text
+            .contains("lower Worker threads under Advanced (Setup screen)"),
+        "names the control: {}",
+        t.text
+    );
 }
 
 #[test]
@@ -1011,6 +1042,196 @@ fn an_appended_extension_never_replaces_a_file_unasked() {
         },
     );
     assert!(matches!(effects.as_slice(), [Effect::Export { .. }]));
+}
+
+/// The text of the newest notification.
+fn last_toast(s: &AppState) -> String {
+    s.toasts
+        .items()
+        .last()
+        .map(|t| t.text.clone())
+        .unwrap_or_default()
+}
+
+/// Chooses `path` in the save dialog of an export of `kind`; returns the effects.
+fn export_to(s: &mut AppState, kind: ExportKind, path: PathBuf) -> Vec<Effect> {
+    s.export_busy = None;
+    update(s, Msg::Export(kind));
+    let session = s.session.as_ref().unwrap().id;
+    update(
+        s,
+        Msg::DialogClosed {
+            purpose: Purpose::Export {
+                kind,
+                session,
+                metric: ChartMetric::Entropy,
+            },
+            path: Some(path),
+            failed_fast: false,
+        },
+    )
+}
+
+/// The names the command line accepts are accepted, and written as they say; the ones it
+/// refuses are refused with its reason, and nothing is written.
+#[test]
+fn export_names_are_those_of_the_command_line() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = state();
+    with_session(&mut s);
+    for (kind, name) in [
+        (ExportKind::Jsonl, "p.ndjson.gz"),
+        (ExportKind::HcsTsv, "r.tab"),
+        (ExportKind::ResultsJson, "x.JSON.zst"),
+    ] {
+        let effects = export_to(&mut s, kind, dir.path().join(name));
+        let [Effect::Export { job, .. }] = effects.as_slice() else {
+            panic!("{name}: {effects:?}");
+        };
+        assert_eq!(job.path, dir.path().join(name), "kept as typed");
+    }
+    let bz2 = dir.path().join("x.json.bz2");
+    assert!(export_to(&mut s, ExportKind::ResultsJson, bz2.clone()).is_empty());
+    assert_eq!(s.export_busy, None);
+    assert_eq!(
+        last_toast(&s),
+        format!(
+            "Nothing was saved: '{}' asks for bzip2 compression, which DiMA does not write \
+             (DiMA compresses with gzip or Zstandard: name it {} or {})",
+            bz2.display(),
+            dir.path().join("x.json.gz").display(),
+            dir.path().join("x.json.zst").display()
+        )
+    );
+    assert!(
+        export_to(
+            &mut s,
+            ExportKind::HcsJson,
+            dir.path().join("h.json.gz.zst")
+        )
+        .is_empty()
+    );
+    assert!(
+        last_toast(&s).contains("asks for two compressions"),
+        "{}",
+        last_toast(&s)
+    );
+    assert!(!dir.path().join("x.json.bz2").exists());
+    // The save dialogs' filters list the last extension of every accepted ending, the usual
+    // one first: Windows and macOS add the first to a name typed without an extension.
+    assert_eq!(
+        filter_extensions(ExportKind::Jsonl),
+        ["jsonl", "ndjson", "gz", "zst"]
+    );
+    assert_eq!(
+        filter_extensions(ExportKind::HcsTsv),
+        ["tsv", "tab", "gz", "zst"]
+    );
+    assert_eq!(
+        filter_extensions(ExportKind::RunReport),
+        ["json", "gz", "zst"]
+    );
+    assert_eq!(
+        filter_extensions(ExportKind::ResultsJson),
+        ["json", "gz", "zst"]
+    );
+    assert_eq!(filter_extensions(ExportKind::Png), ["png"]);
+}
+
+/// An export never replaces a file the app has loaded: the results file opened, the alignment
+/// analysed, or the alignment on the Setup screen (a table of a folder export included).
+#[test]
+fn an_export_never_replaces_a_loaded_input() {
+    let dir = tempfile::tempdir().unwrap();
+    let opened = dir.path().join("results.json");
+    std::fs::write(&opened, "{}").unwrap();
+    let mut s = state();
+    let effects = update(&mut s, Msg::OpenPath(opened.clone()));
+    let Some(Effect::Open { generation, .. }) = effects.first() else {
+        panic!();
+    };
+    update(
+        &mut s,
+        Msg::Opened {
+            generation: *generation,
+            path: opened.clone(),
+            outcome: Ok(Opened::Results(Box::new((*fixtures::mers()).clone()))),
+        },
+    );
+    // The same file, also as typed without its extension (which the app adds).
+    for chosen in [opened.clone(), dir.path().join("results")] {
+        assert!(export_to(&mut s, ExportKind::ResultsJson, chosen).is_empty());
+        assert_eq!(
+            last_toast(&s),
+            "Nothing was saved: 'results.json' is the results file these results were opened \
+             from; choose another name"
+        );
+        assert_eq!(s.confirm, None, "refused before asking to replace it");
+    }
+    assert_eq!(std::fs::read_to_string(&opened).unwrap(), "{}");
+    // Another name is written.
+    assert!(matches!(
+        export_to(
+            &mut s,
+            ExportKind::ResultsJson,
+            dir.path().join("copy.json")
+        )
+        .as_slice(),
+        [Effect::Export { .. }]
+    ));
+    // The alignment on the Setup screen, as one of the four tables of a folder export.
+    let alignment = dir.path().join("mers_spike_aa.positions.tsv");
+    std::fs::write(&alignment, ">a\nACDE\n").unwrap();
+    s.setup.file = Some(alignment.clone());
+    assert!(export_to(&mut s, ExportKind::TsvFolder, dir.path().to_path_buf()).is_empty());
+    assert_eq!(
+        last_toast(&s),
+        "Nothing was saved: 'mers_spike_aa.positions.tsv' is the alignment on the Setup screen; \
+         choose another name"
+    );
+    assert_eq!(std::fs::read_to_string(&alignment).unwrap(), ">a\nACDE\n");
+}
+
+/// The alignment a run was computed from is protected too.
+#[test]
+fn an_export_never_replaces_the_analysed_alignment() {
+    let dir = tempfile::tempdir().unwrap();
+    let alignment = dir.path().join("spike.json");
+    std::fs::copy(fixtures::mers_path(), &alignment).unwrap();
+    let mut s = state();
+    s.setup.file = Some(alignment.clone());
+    let effects = update(&mut s, Msg::Analyze);
+    let [
+        Effect::Analyze {
+            request,
+            generation,
+        },
+    ] = effects.as_slice()
+    else {
+        panic!("{effects:?}");
+    };
+    let outcome = analysis::run(
+        request,
+        &Arc::new(Progress::new()),
+        Arc::new(AtomicBool::new(false)),
+    );
+    let generation = *generation;
+    update(
+        &mut s,
+        Msg::AnalysisDone {
+            generation,
+            outcome,
+        },
+    );
+    assert!(s.session.is_some());
+    // Only the analysed run protects it now.
+    s.setup.file = None;
+    assert!(export_to(&mut s, ExportKind::HcsJson, alignment.clone()).is_empty());
+    assert_eq!(
+        last_toast(&s),
+        "Nothing was saved: 'spike.json' is the alignment these results were computed from; \
+         choose another name"
+    );
 }
 
 /// The chart's metric: entropy on every load; a metric the results lack is refused, the metric

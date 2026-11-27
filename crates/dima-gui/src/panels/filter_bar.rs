@@ -19,6 +19,7 @@
 
 use egui::{RichText, Ui};
 
+use super::common::Described;
 use super::common::{fixed_width_slot, text_width, with_name};
 use super::help_text;
 use crate::app::msg::Msg;
@@ -113,7 +114,7 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
         ui.add_space(t.space_12);
         changed |= ui
             .checkbox(&mut s.filter.include_low_support, "Low support (NS, LS, ELS)")
-            .on_hover_text("Show positions with support \u{2264} T: none (NS), below T (LS) and equal to T (ELS)")
+            .described("Show positions with support \u{2264} T: none (NS), below T (LS) and equal to T (ELS)")
             .changed();
         let (shown, total) = (s.shown.len(), s.results.results.len());
         let count = format!("{shown} of {total} positions");
@@ -128,7 +129,7 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui
                 .add_enabled(!s.filter.is_everything(b, metric), egui::Button::new("Reset"))
-                .on_hover_text("Show every position")
+                .described("Show every position")
                 .clicked()
             {
                 out.push(Msg::ResetFilters);

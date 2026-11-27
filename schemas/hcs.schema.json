@@ -13,31 +13,39 @@
       "$ref": "https://shanweera.github.io/dima-perf/schemas/1.0/results.schema.json#/$defs/tool"
     },
     "source": {
+      "description": "The results the regions were computed from.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "query_name": {
+          "description": "query_name of the results.",
           "type": "string"
         },
         "kmer_length": {
+          "description": "k of the results.",
           "type": "integer",
           "minimum": 1
         },
         "support_threshold": {
+          "description": "The support threshold T of the results.",
           "type": "integer",
           "minimum": 1
         },
         "sequence_count": {
+          "description": "sequence_count of the results.",
           "type": "integer",
           "minimum": 0
         },
         "input_checksum": {
+          "description": "run.input.checksum of the results: the SHA-256 of the analysed alignment's stored bytes.",
           "$ref": "https://shanweera.github.io/dima-perf/schemas/1.0/results.schema.json#/$defs/checksum"
         },
         "tool_version": {
+          "description": "The DiMA version that wrote the results.",
           "type": "string"
         },
         "results_schema_version": {
+          "description": "schema_version of the results.",
           "type": "string"
         }
       },
@@ -167,26 +175,29 @@
           "minimum": 2
         },
         "conservation_lower_bound_95": {
-          "description": "Lowest exact 95 % Clopper–Pearson lower bound among members.",
+          "description": "The lowest per-position exact 95% Clopper–Pearson lower bound among the members (a proportion), not a bound on the share of sequences that carry the whole region.",
           "type": "number",
           "minimum": 0,
           "maximum": 1
         },
         "low_support_positions": {
+          "description": "Every position from the first to the last member with support ≤ T, member or not.",
           "type": "array",
           "items": {
             "type": "integer",
             "minimum": 1
-          },
-          "description": "Positions in the span with support ≤ T."
+          }
         },
         "flagged": {
+          "description": "true when low_support_positions is not empty.",
           "type": "boolean"
         },
         "split_from_previous": {
+          "description": "true when the region's first k-mer overlaps the previous region and disagrees with it on a shared column, which ended that region; the two then share columns.",
           "type": "boolean"
         },
         "members": {
+          "description": "The qualifying positions, in order.",
           "type": "array",
           "minItems": 1,
           "items": {
@@ -214,27 +225,33 @@
       "additionalProperties": false,
       "properties": {
         "position": {
+          "description": "The position (the first column of its k-mer).",
           "type": "integer",
           "minimum": 1
         },
         "kmer": {
+          "description": "Its Index k-mer.",
           "type": "string",
           "pattern": "^[A-Z]+$"
         },
         "count": {
+          "description": "Sequences that carry the Index k-mer.",
           "type": "integer",
           "minimum": 2
         },
         "support": {
+          "description": "Sequences with a valid k-mer at the position.",
           "type": "integer",
           "minimum": 2
         },
         "incidence": {
+          "description": "count / support × 100.",
           "type": "number",
           "exclusiveMinimum": 50,
           "maximum": 100
         },
         "conservation_lower_bound_95": {
+          "description": "Exact 95% Clopper–Pearson lower bound of count / support (a proportion).",
           "type": "number",
           "minimum": 0,
           "maximum": 1

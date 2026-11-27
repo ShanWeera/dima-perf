@@ -35,7 +35,67 @@ the difference grows: Zstandard's long window finds the repeats between sequence
 apart, while gzip only looks back 32 KB.
 
 With `-v`, DiMA reports the time spent in each phase and says so when reading the input limited
-the run; compressing with Zstandard is then the remedy.
+the run; compressing with Zstandard is then the remedy ([Read the -v report](#read-the--v-report)).
+
+## Read the -v report
+
+`-v` adds a short report on standard error: what the run used and where its time went. For
+example, 26,370 HIV-1 *pol* DNA sequences compressed with bzip2: the repository's HIV-1 *pol*
+DNA alignment with ten mutated copies of each sequence, made in a clone of the repository with
+
+```sh
+bzip2 -dc tests/data/HIV1_FLT_2022_pol_DNA.fasta.bz2 > hiv.fasta
+python3 scripts/bench/make_data.py scale hiv.fasta 10 hivx10.fasta
+bzip2 -1 hivx10.fasta
+dima analyze -i hivx10.fasta.bz2 -o x10.json -v
+```
+
+```text
+threads: 4 (available CPUs; OS 4)
+[0.00 s] opening
+[0.64 s] counting k-mers
+[1.65 s] computing statistics
+[2.68 s] writing
+wrote x10.json (278 MB)
+phases: opening 0.64 s, counting k-mers 1.01 s, computing statistics 1.03 s, writing 1.33 s
+CPU 8.70 s user + 0.24 s system, peak memory 254 MB
+analysed 26370 sequences, 3364 positions (2159 eligible) in 4.01 s; entropy mean 5.6032, min 1.3112, max 9.5310 bits
+```
+
+Line by line:
+
+| Line | Meaning |
+|---|---|
+| `threads: 4 (available CPUs; OS 4)` | The number of worker threads, and where it came from: `--threads`, `RAYON_NUM_THREADS`, a batch scheduler's variable (such as `SLURM_CPUS_ON_NODE=8`, or `PE_HOSTFILE[node12]=8`, which names this host), or `available CPUs`, the CPUs this process may use. `OS 4` is that number of CPUs. A note follows when `OMP_NUM_THREADS` is lower: DiMA does not use it ([Run on clusters](/how-to/hpc/#threads)) |
+| `[0.64 s] counting k-mers` | A phase began, at that time since the start. These lines appear with `-v` when standard error is not a terminal (a log file, a pipe); on a terminal, one line redrawn in place shows the progress instead, as below |
+| `wrote x10.json (278 MB)` | A file written, with its size (MB is 10⁶ bytes) |
+| `phases: …` | How long each phase took. **opening**: opening the input, reading its first batch (up to 10,000 records or 64 MiB, and at least 1,000 records) and detecting the alphabet; **counting k-mers**: reading the rest and counting the k-mers; **computing statistics**: the entropy, motifs and incidences of every position; **writing**: computing the conserved sequences, when an output holds them, and writing every output |
+| `reading the input limited the run (waited X of Y); zstd decompresses fastest` | Not in this example. Printed only when counting took more than half a second (Y) and the threads that count spent more than half of it waiting for the input (X). Reading, not computing, then set the pace: recompress the input with Zstandard, or read it from a faster disk. The wait counts from the start of counting: the first batch, read while opening, is part of the opening phase |
+| `CPU 8.70 s user + 0.24 s system, peak memory 254 MB` | The CPU time of all threads together (it can exceed the run time) and the peak resident memory, the most the process held at once (`unknown` where the system does not tell) |
+| `analysed …` | The [summary line](/reference/glossary/#summary-line), always last |
+
+The [run report](/how-to/reproducibility/#keep-a-run-report) (`--run-report`) records the same
+figures: its phases `opening`, `counting`, `finalising` and `writing` are the phases above (the
+last two are `computing statistics` and `writing`), `threads.source` names where the thread count
+came from (`available_parallelism` is `available CPUs`), and `resources` holds the CPU time, the
+peak memory and the time spent waiting for the input.
+
+On a terminal, without `-v`, the progress is one line redrawn in place, for example:
+
+```text
+counting k-mers: 90%, 10000 sequences, 8.4 MB of 9.3 MB
+computing statistics: 50%, 1684 of 3364 positions
+writing...
+```
+
+While counting, the percentage is that of the file's bytes as stored (compressed, for a
+compressed file) and stays at 99% until counting ends; the number of sequences grows a batch at
+a time, up to 10,000 sequences per batch, and is left out until the first batch is counted
+(`counting k-mers: 45%, 4.2 MB of 9.3 MB`). From standard input there is no total, so the line
+shows how much has been read: `counting k-mers... 5.6 MB`. A phase without a percentage shows
+how long it has lasted after 2 seconds (`writing... 3 s`). `--progress plain` prints appended
+lines instead, for logs and screen readers; see
+[Environment variables](/reference/environment/#progress-the-order).
 
 ## Memory
 
@@ -58,13 +118,24 @@ Memory therefore grows with the **diversity** of the alignment: conserved alignm
 even with millions of sequences, highly diverse ones more. The number of threads does not change
 it. `-v` prints the peak memory, and `--run-report` records it.
 
+To size a job, measure: run the analysis once with `-v` (or `--run-report`) on the full
+alignment, or on the largest you have of the same kind, and request its peak memory with a
+margin. [BENCHMARK.md](https://github.com/ShanWeera/dima-perf/blob/master/BENCHMARK.md) gives
+peaks for the repository's datasets, measured with dima 1.1.0 in its quick mode (3 runs per
+measurement, synthetic data scaled up only 10 times, on a 4-CPU virtual machine): 8 MB for the
+MERS-CoV spike protein (191 sequences), 20 MB for HIV-1 *pol* protein (3,756), 111 MB for HIV-1
+*pol* DNA (2,637), 253 MB for ten times that (26,370), 183 MB for 200 synthetic 30 kb genomes,
+and 731 MB for the same genomes stratified by two header fields. Larger and more diverse
+alignments need more; the full benchmark (`scripts/bench/run.sh` without `--quick`, 2.6 million
+sequences) measures them on your hardware.
+
 ## Metadata
 
 Header metadata multiplies the size of the results: every variant stores one count per value of
-every counted field. Count only the fields you need, and never an identifier such as an
-accession, which adds one entry per sequence to every variant. DiMA warns when a counted field
-looks like an identifier and prints the option that leaves it out; see
-[Stratify by header metadata](/how-to/metadata/#identifier-like-fields).
+every [stratified field](/reference/glossary/#stratified-field). Stratify only by the fields you
+need, and never by an identifier such as an accession, which adds one entry per sequence to
+every variant. DiMA warns when a stratified field looks like an identifier and prints the option
+that leaves it out; see [Stratify by header metadata](/how-to/metadata/#identifier-like-fields).
 
 ## Similarity-weighted entropy
 

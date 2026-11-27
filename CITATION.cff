@@ -3,10 +3,10 @@ cff-version: 1.2.0
 message: "If you use DiMA, please cite the DiMA paper (preferred-citation) and the software version you used."
 type: software
 title: "dima: sequence diversity dynamics analyser for viruses (Rust implementation)"
-version: "1.1.1"
+version: "1.2.0"
 license: MIT
 repository-code: "https://github.com/ShanWeera/dima-perf"
-url: "https://shanweera.github.io/dima-perf/v1.1/"
+url: "https://shanweera.github.io/dima-perf/v1.2/"
 authors:
   - family-names: "Tharanga"
     given-names: "Shan"
@@ -96,6 +96,22 @@ references:
     doi: "10.1890/11-1952.1"
   - type: article
     authors:
+      - family-names: "Chao"
+        given-names: "Anne"
+      - family-names: "Wang"
+        given-names: "Y. T."
+      - family-names: "Jost"
+        given-names: "Lou"
+    title: "Entropy and the species accumulation curve: a novel entropy estimator via discovery rates of new species"
+    journal: "Methods in Ecology and Evolution"
+    year: 2013
+    volume: "4"
+    issue: "11"
+    start: "1091"
+    end: "1100"
+    doi: "10.1111/2041-210X.12108"
+  - type: article
+    authors:
       - family-names: "Hu"
         given-names: "Yongli"
       - family-names: "Tan"
@@ -159,22 +175,6 @@ references:
     start: "3021"
     end: "3030"
     doi: "10.1093/nar/13.9.3021"
-  - type: article
-    authors:
-      - family-names: "Chao"
-        given-names: "Anne"
-      - family-names: "Wang"
-        given-names: "Y. T."
-      - family-names: "Jost"
-        given-names: "Lou"
-    title: "Entropy and the species accumulation curve: a novel entropy estimator via discovery rates of new species"
-    journal: "Methods in Ecology and Evolution"
-    year: 2013
-    volume: "4"
-    issue: "11"
-    start: "1091"
-    end: "1100"
-    doi: "10.1111/2041-210X.12108"
   - type: book
     authors:
       - family-names: "Miller"
@@ -214,3 +214,15 @@ references:
     start: "404"
     end: "413"
     doi: "10.1093/biomet/26.4.404"
+  - type: article
+    authors:
+      - family-names: "Castresana"
+        given-names: "J."
+    title: "Selection of Conserved Blocks from Multiple Alignments for Their Use in Phylogenetic Analysis"
+    journal: "Molecular Biology and Evolution"
+    year: 2000
+    volume: "17"
+    issue: "4"
+    start: "540"
+    end: "552"
+    doi: "10.1093/oxfordjournals.molbev.a026334"

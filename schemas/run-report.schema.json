@@ -120,18 +120,22 @@
       "description": "null when the run stopped before the thread count was resolved."
     },
     "platform": {
+      "description": "Operating system and processor.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "os": {
+          "description": "linux, macos, windows, …",
           "type": "string",
           "minLength": 1
         },
         "arch": {
+          "description": "x86_64, aarch64, …",
           "type": "string",
           "minLength": 1
         },
         "logical_cpus": {
+          "description": "Logical CPUs available to the process.",
           "type": "integer",
           "minimum": 1
         }
@@ -147,6 +151,7 @@
       "additionalProperties": false,
       "properties": {
         "wall_seconds": {
+          "description": "Wall-clock time of the run.",
           "type": "number",
           "minimum": 0
         },
@@ -175,12 +180,12 @@
           "description": "Peak resident memory; null where the platform does not report it."
         },
         "waited_for_input_seconds": {
+          "description": "Time the counting threads waited for the reader while counting k-mers (the first batch, read while opening, is not included); null when the analysis itself did not finish. A run that fails or is cancelled while its outputs are written keeps the value.",
           "type": [
             "number",
             "null"
           ],
-          "minimum": 0,
-          "description": "Time the counting threads waited for input; null when the analysis did not finish (it failed or was cancelled)."
+          "minimum": 0
         }
       },
       "required": [
@@ -192,12 +197,14 @@
       ]
     },
     "phases": {
+      "description": "Wall time of each phase reached, in order: opening (opening the input, reading its first batch, detecting the alphabet), counting (-v: counting k-mers), finalising (-v: computing statistics) and writing (the outputs, conserved sequences included). A run that failed or was cancelled lists the phases it reached, the last one until it stopped.",
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "name": {
+            "description": "The phase.",
             "enum": [
               "opening",
               "counting",
@@ -206,6 +213,7 @@
             ]
           },
           "wall_seconds": {
+            "description": "Its wall-clock time.",
             "type": "number",
             "minimum": 0
           }
@@ -217,14 +225,17 @@
       }
     },
     "work": {
+      "description": "Amount of work done.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "records": {
+          "description": "Records read; after a failure, those read until it, which can be 0.",
           "type": "integer",
           "minimum": 0
         },
         "positions": {
+          "description": "Positions analysed; null when the analysis did not finish.",
           "type": [
             "integer",
             "null"

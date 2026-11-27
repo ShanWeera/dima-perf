@@ -254,6 +254,12 @@ fn resolve_destination(path: &Path) -> Destination {
                 append: true,
             };
         }
+        if names_device(&current) {
+            return Destination::Direct {
+                path: current,
+                append: false,
+            };
+        }
         match fs::symlink_metadata(&current) {
             Ok(m) if m.file_type().is_symlink() => match fs::read_link(&current) {
                 Ok(target) if target.is_absolute() => current = target,
@@ -283,6 +289,78 @@ pub fn destination_of(path: &Path) -> PathBuf {
     match resolve_destination(path) {
         Destination::Atomic(p) | Destination::Direct { path: p, .. } => p,
     }
+}
+
+/// `true` when `path` names one of Windows' reserved devices, which exist in every folder and
+/// are opened, never replaced: `NUL` (the null device), `CON`, `PRN`, `AUX`, `COM1`–`COM9` and
+/// `LPT1`–`LPT9`, in any letter case, also with an extension or trailing spaces (`nul.json`).
+/// Always `false` elsewhere, where devices are files of their own (`/dev/null`).
+#[must_use]
+pub fn names_device(path: &Path) -> bool {
+    cfg!(windows)
+        && path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(reserved_device_name)
+}
+
+/// A file name Windows reserves for a device (see [`names_device`]).
+fn reserved_device_name(name: &str) -> bool {
+    let stem = name
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(' ')
+        .to_ascii_uppercase();
+    matches!(stem.as_str(), "NUL" | "CON" | "PRN" | "AUX")
+        || (stem.len() == 4
+            && (stem.starts_with("COM") || stem.starts_with("LPT"))
+            && stem.as_bytes()[3].is_ascii_digit()
+            && stem.as_bytes()[3] != b'0')
+}
+
+/// `true` when an output to `path` is written in place, as a stream, rather than through a
+/// temporary file renamed over it: a device such as `/dev/null`, a FIFO, a descriptor alias
+/// such as `/dev/fd/63` (from `>(…)`), or a symbolic link to one. Planners ask this to treat
+/// such names as streams exactly as [`Sink`] will write them. A folder is neither (planners
+/// refuse it).
+#[must_use]
+pub fn written_in_place(path: &Path) -> bool {
+    match resolve_destination(path) {
+        Destination::Direct { path, .. } => !path.is_dir(),
+        Destination::Atomic(_) => false,
+    }
+}
+
+/// Why no file can be written at `dest`, known before writing, which would otherwise fail only
+/// when the finished output is renamed into place: a symbolic link left unresolved (a loop,
+/// or a link that cannot be read), or a file name longer than the file system holding it
+/// accepts, which the file system itself reports (255 bytes on ext4, 255 UTF-16 units on
+/// vfat, exFAT, NTFS and HFS+).
+fn unusable_name(dest: &Path) -> Option<io::Error> {
+    match fs::symlink_metadata(dest) {
+        Ok(m) if m.file_type().is_symlink() => Some(match fs::read_link(dest) {
+            Ok(_) => io::Error::other("too many levels of symbolic links"),
+            Err(e) => e,
+        }),
+        Err(e) if name_too_long(&e) => Some(e),
+        _ => None,
+    }
+}
+
+/// The error a file system gives for a name longer than it accepts (`ENAMETOOLONG`;
+/// `ERROR_FILENAME_EXCED_RANGE` on Windows). `io::ErrorKind::InvalidFilename` is newer than the
+/// minimum supported Rust, so the code is compared.
+fn name_too_long(e: &io::Error) -> bool {
+    let code = if cfg!(any(target_os = "linux", target_os = "android")) {
+        36
+    } else if cfg!(windows) {
+        206
+    } else {
+        // macOS and the BSDs.
+        63
+    };
+    e.raw_os_error() == Some(code)
 }
 
 impl Sink {
@@ -317,6 +395,9 @@ impl Sink {
                     (Raw::File(f), None)
                 }
                 Destination::Atomic(dest) => {
+                    if let Some(e) = unusable_name(&dest) {
+                        return Err(io_err(IoAction::Create, e));
+                    }
                     let dir = match dest.parent() {
                         Some(d) if !d.as_os_str().is_empty() => d.to_path_buf(),
                         _ => PathBuf::from("."),
@@ -497,6 +578,29 @@ impl Drop for Sink {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn windows_device_names() {
+        for name in [
+            "NUL", "nul", "Nul.json", "NUL ", "con", "PRN.txt", "aux", "COM1", "lpt9.tsv",
+        ] {
+            assert!(super::reserved_device_name(name), "{name}");
+        }
+        for name in [
+            "null",
+            "nul_x",
+            "COM0",
+            "COM10",
+            "LPT",
+            "x.nul",
+            "results.json",
+            "",
+        ] {
+            assert!(!super::reserved_device_name(name), "{name}");
+        }
+        // Only Windows has them.
+        assert_eq!(super::names_device(Path::new("NUL")), cfg!(windows));
+    }
+
     use super::*;
     use std::io::Read;
 
@@ -616,6 +720,56 @@ mod tests {
                 append: false
             }
         );
+        // What planners treat as a stream is exactly what is written in place.
+        assert!(written_in_place(Path::new("/dev/null")));
+        assert!(written_in_place(Path::new("/dev/stdout")));
+        assert!(written_in_place(&to_stdout));
+        assert!(!written_in_place(&file));
+        assert!(!written_in_place(&link));
+        assert!(!written_in_place(&missing));
+        assert!(!written_in_place(dir.path()), "a folder is not a stream");
+        let to_dir = dir.path().join("to_dir");
+        std::os::unix::fs::symlink(dir.path(), &to_dir).unwrap();
+        assert!(!written_in_place(&to_dir), "nor is a link to one");
+    }
+
+    /// A link loop and a name too long for any file system fail when the sink is created,
+    /// before anything is computed, and nothing is left behind.
+    #[cfg(unix)]
+    #[test]
+    fn unusable_names_fail_at_creation() {
+        let dir = tempfile::tempdir().unwrap();
+        let (a, b) = (dir.path().join("a.json"), dir.path().join("b.json"));
+        std::os::unix::fs::symlink("b.json", &a).unwrap();
+        std::os::unix::fs::symlink("a.json", &b).unwrap();
+        let Err(e) = Sink::create(&Target::Path(a.clone()), OutputCompression::None) else {
+            panic!("a link loop is refused");
+        };
+        assert!(
+            e.to_string().contains("too many levels of symbolic links") || {
+                let cause = std::error::Error::source(&e).map(ToString::to_string);
+                cause.is_some_and(|c| c.contains("too many levels"))
+            },
+            "{e:?}"
+        );
+        assert!(fs::symlink_metadata(&a).unwrap().file_type().is_symlink());
+        let long = dir.path().join(format!("{}.json", "a".repeat(300)));
+        let Err(e) = Sink::create(&Target::Path(long), OutputCompression::None) else {
+            panic!("a name too long is refused");
+        };
+        assert!(
+            std::error::Error::source(&e)
+                .and_then(|c| c.downcast_ref::<io::Error>())
+                .is_some_and(name_too_long),
+            "{e:?}"
+        );
+        assert_eq!(entries(dir.path()).len(), 2, "only the two links");
+        // The longest name that fits is written.
+        let fits = dir.path().join(format!("{}.json", "a".repeat(250)));
+        let mut sink = Sink::create(&Target::Path(fits.clone()), OutputCompression::None).unwrap();
+        sink.write_all(b"{}").unwrap();
+        sink.commit().unwrap();
+        assert_eq!(fs::read(&fits).unwrap(), b"{}");
     }
 
     #[test]

@@ -8,6 +8,7 @@
 use dima_core::config::{
     Alphabet, AnalysisParams, DEFAULT_FILL, DEFAULT_SUPPORT_THRESHOLD, Estimator, ValidationMode,
 };
+use dima_core::validation::Inspection;
 
 use super::header_editor::HeaderEditor;
 use super::settings::Settings;
@@ -193,33 +194,76 @@ impl AnalysisOptions {
         }
     }
 
-    /// Problems that would make the run fail before reading, from the library's own checks
-    /// (G2, G8, G52), plus k against the inspected alignment length (D36).
+    /// Problems that would make the run fail before reading, in the app's words, first the one
+    /// shown under Analyze: the library's own checks (G2, G8, G52) without the command line's
+    /// hints, the header fields (named in the editor, at least one Stratify box ticked), the
+    /// fill value when variants are stratified (it is not used otherwise), and k, given or the
+    /// alphabet's default, against the inspected alignment length (D36).
     #[must_use]
-    pub fn problems(&self, header: &HeaderEditor, alignment_length: Option<usize>) -> Vec<String> {
-        let params = self.to_params(header);
+    pub fn problems(&self, header: &HeaderEditor, inspection: Option<&Inspection>) -> Vec<String> {
+        let mut params = self.to_params(header);
+        // The fill value is checked once, below, in the form's words.
+        params.header_fill = None;
         let mut out = Vec::new();
         if let Err(e) = params.validate() {
-            out.push(e.report());
+            out.push(e.to_string());
         }
-        if header.enabled
-            && let Err(e) = header.validate(&self.fill)
-        {
-            out.push(e.report());
+        if header.enabled {
+            out.extend(header.problem());
+            if self.fill.trim().is_empty() {
+                out.push(FILL_EMPTY.to_owned());
+            }
         }
-        if self.fill.trim().is_empty() {
-            out.push("the fill value must not be empty".to_owned());
-        }
-        if let (Some(k), Some(l)) = (self.kmer_length, alignment_length)
-            && k > l
-        {
-            out.push(format!(
-                "k = {k} exceeds the alignment length ({l} columns)"
-            ));
-        }
-        out.dedup();
+        out.extend(inspection.and_then(|i| self.kmer_problem(i)));
+        let mut seen = std::collections::HashSet::new();
+        out.retain(|p| seen.insert(p.clone()));
         out
     }
+
+    /// k against the inspected alignment, whether given or the alphabet's default (which the
+    /// run would use): `None` when it fits, or while the alphabet, and so the default, is
+    /// unknown.
+    fn kmer_problem(&self, i: &Inspection) -> Option<String> {
+        let l = i.alignment_length;
+        let (k, which) = match self.kmer_length {
+            Some(k) => (k, format!("k = {k}")),
+            None => {
+                let a = self.effective_alphabet(i.alphabet)?;
+                let k = a.default_kmer_length();
+                let of = match a {
+                    Alphabet::Protein => "proteins",
+                    Alphabet::Dna => "DNA",
+                    Alphabet::Rna => "RNA",
+                };
+                (k, format!("the default k for {of} ({k})"))
+            }
+        };
+        if k <= l {
+            return None;
+        }
+        let columns = dima_core::human::plural(l as u64, "column", "columns");
+        let fix = if l == 0 {
+            String::new()
+        } else {
+            format!(": choose a k-mer length of at most {l}")
+        };
+        Some(format!(
+            "{which} exceeds the alignment length ({columns}){fix}"
+        ))
+    }
+}
+
+/// The problem of an empty fill value, in the form's words.
+pub const FILL_EMPTY: &str = "the Fill value under Advanced must not be empty";
+
+/// Why the pre-check could not detect the alphabet, in the library's words (too few letters,
+/// both T and U, or a composition that does not decide it; Easel's rules), without the command
+/// line's hint; `None` when it detected one.
+#[must_use]
+pub fn undetected_alphabet(i: &Inspection) -> Option<String> {
+    dima_core::alphabet::resolve(None, &i.probe.letters, i.probe.records)
+        .err()
+        .map(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -320,27 +364,137 @@ mod tests {
         assert_eq!(o.to_params(&HeaderEditor::default()).header_fill, None);
     }
 
+    /// The pre-check of an alignment written to a temporary file.
+    fn inspected(text: &str) -> (tempfile::TempDir, Inspection) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.fasta");
+        std::fs::write(&path, text).unwrap();
+        let i = dima_core::validation::inspect(&dima_core::input::Source::Path(path)).unwrap();
+        (dir, i)
+    }
+
     #[test]
     fn problems_come_from_the_library() {
+        let mers = dima_core::validation::inspect(&dima_core::input::Source::Path(
+            crate::tests::fixtures::mers_path(),
+        ))
+        .unwrap();
         let mut o = AnalysisOptions::default();
-        assert!(o.problems(&HeaderEditor::default(), Some(100)).is_empty());
+        assert!(o.problems(&HeaderEditor::default(), Some(&mers)).is_empty());
         o.fill = " ".into();
         o.min_coverage = Some(2.0);
-        o.kmer_length = Some(500);
-        let p = o.problems(&HeaderEditor::default(), Some(100));
-        assert!(p.iter().any(|m| m.contains("minimum coverage")), "{p:?}");
-        assert!(p.iter().any(|m| m.contains("fill value")), "{p:?}");
-        assert!(
-            p.iter().any(|m| m.contains("exceeds the alignment length")),
-            "{p:?}"
+        o.kmer_length = Some(5000);
+        let p = o.problems(&HeaderEditor::default(), Some(&mers));
+        assert_eq!(
+            p,
+            [
+                "minimum coverage 2 is outside [0, 1]",
+                "k = 5000 exceeds the alignment length (1353 columns): choose a k-mer length of \
+                 at most 1353"
+            ],
+            "no command-line hints; an unused fill value is no problem"
         );
-        // Duplicate header names are the library's error (G8).
+        // Duplicate header names are the library's error (G8); an empty fill value is one
+        // problem, in the form's words.
         let mut header = HeaderEditor::default();
         header.set_names(&["Host".into(), "Host".into()]);
         header.enabled = true;
-        let o = AnalysisOptions::default();
         let p = o.problems(&header, None);
         assert!(p.iter().any(|m| m.contains("more than once")), "{p:?}");
+        assert_eq!(
+            p.iter()
+                .filter(|m| m.to_lowercase().contains("fill value"))
+                .count(),
+            1,
+            "{p:?}"
+        );
+        assert!(p.contains(&FILL_EMPTY.to_owned()), "{p:?}");
+        // No Stratify box ticked.
+        header.set_names(&["Accession".into(), "Host".into()]);
+        for r in &mut header.rows {
+            r.stratify = false;
+        }
+        let p = AnalysisOptions::default().problems(&header, None);
+        assert_eq!(p, ["tick at least one Stratify box"]);
+    }
+
+    /// The pre-check covers the default k too, which the run would use: a 6-column protein
+    /// alignment is too short for 9-mers. The message counts one column in the singular.
+    #[test]
+    fn a_default_k_longer_than_the_alignment_is_a_problem() {
+        let (_dir, six) = inspected(">a\nMKVLAE\n>b\nMKVLAE\n>c\nMKVLAQ\n");
+        assert_eq!(six.alphabet, Some(Alphabet::Protein));
+        assert_eq!(six.alignment_length, 6);
+        let mut o = AnalysisOptions::default();
+        assert_eq!(
+            o.problems(&HeaderEditor::default(), Some(&six)),
+            [
+                "the default k for proteins (9) exceeds the alignment length (6 columns): choose a \
+              k-mer length of at most 6"
+            ]
+        );
+        o.kmer_length = Some(6);
+        assert!(o.problems(&HeaderEditor::default(), Some(&six)).is_empty());
+        o.kmer_length = None;
+        o.alphabet = AlphabetChoice::Rna;
+        assert!(
+            o.problems(&HeaderEditor::default(), Some(&six))[0]
+                .starts_with("the default k for RNA (27) exceeds")
+        );
+        let (_dir, one) = inspected(">a\nM\n");
+        assert_eq!(one.alphabet, None, "too few letters to detect");
+        let mut o = AnalysisOptions::default();
+        assert!(
+            o.problems(&HeaderEditor::default(), Some(&one)).is_empty(),
+            "no default k while the alphabet is unknown"
+        );
+        o.alphabet = AlphabetChoice::Protein;
+        assert_eq!(
+            o.problems(&HeaderEditor::default(), Some(&one)),
+            [
+                "the default k for proteins (9) exceeds the alignment length (1 column): choose a \
+              k-mer length of at most 1"
+            ]
+        );
+    }
+
+    /// The real reason the alphabet was not detected, in the library's words and without the
+    /// command line's hint: too few letters, both T and U, or a composition that decides
+    /// nothing (the PSTVd alignments of the repository).
+    #[test]
+    fn the_reason_the_alphabet_was_not_detected() {
+        let (_dir, few) = inspected(">a\nACD\n");
+        assert_eq!(
+            undetected_alphabet(&few).as_deref(),
+            Some(
+                "only 3 residue letters in the first record; that is too few to tell protein \
+                 from nucleotide sequences"
+            )
+        );
+        let (_dir, tu) = inspected(">a\nACGTACGUAC\n>b\nACGTACGUAA\n");
+        assert_eq!(
+            undetected_alphabet(&tu).as_deref(),
+            Some("the sequences contain both T (2) and U (2), so DNA and RNA cannot be told apart")
+        );
+        let pstvd = dima_core::validation::inspect(&dima_core::input::Source::Path(
+            crate::tests::fixtures::repo().join("tests/data/pstvd_loop27_ir1.fasta.bz2"),
+        ))
+        .unwrap();
+        assert_eq!(
+            undetected_alphabet(&pstvd).as_deref(),
+            Some(
+                "the residue composition of the first 10000 records (60000 letters) does not \
+                 identify the alphabet"
+            )
+        );
+        for reason in [few, tu, pstvd].iter().filter_map(undetected_alphabet) {
+            assert!(!reason.contains("--alphabet"), "{reason}");
+        }
+        let mers = dima_core::validation::inspect(&dima_core::input::Source::Path(
+            crate::tests::fixtures::mers_path(),
+        ))
+        .unwrap();
+        assert_eq!(undetected_alphabet(&mers), None);
     }
 
     #[test]

@@ -20,11 +20,12 @@ use crate::util::truncate_display;
 
 const STRIP_HEIGHT: f32 = 22.0;
 
-/// The tooltip of a region (pure, for tests).
+/// The tooltip of a region (pure, for tests). Its minimum incidence, minimum support and lower
+/// bound are the lowest among its members, position by position.
 #[must_use]
 pub fn region_tooltip(r: &HcsRegion, t: u64) -> String {
     let mut s = format!(
-        "Region {}: columns {}\u{2013}{} ({} columns)\n{}\nminimum Index incidence {}\nminimum support {}\n95% lower bound of conservation {} (Clopper\u{2013}Pearson)",
+        "Region {}: columns {}\u{2013}{} ({} columns)\n{}\nminimum Index incidence {}\nminimum support {}\nlowest per-position 95% lower bound {} (Clopper\u{2013}Pearson)",
         r.id,
         r.start_column,
         r.end_column,
@@ -61,6 +62,18 @@ pub fn region_tooltip(r: &HcsRegion, t: u64) -> String {
         s.push_str("\nsplit from the previous region (their overlapping k-mers disagree)");
     }
     s
+}
+
+/// What the strip says to screen readers (it is painted): "Conserved regions: 1 region, 0
+/// flagged", counted in words that fit one.
+#[must_use]
+pub fn strip_label(r: &HcsResults) -> String {
+    format!(
+        "Conserved regions: {}{}{} flagged",
+        dima_core::human::plural(r.region_count, "region", "regions"),
+        dima_core::human::separators::ITEM,
+        r.flagged_region_count
+    )
 }
 
 /// Draws the controls and the strip; `shared` is the chart's mapping (none when the chart has
@@ -134,11 +147,7 @@ pub fn show(
         return;
     };
     draw_regions(&painter, &r, shared, strip, t);
-    let flagged = r.flagged_region_count;
-    let label = format!(
-        "Conserved regions: {} regions, {flagged} flagged",
-        r.region_count
-    );
+    let label = strip_label(&r);
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, &label));
     if r.regions.is_empty() {
         painter.text(
@@ -222,7 +231,10 @@ mod tests {
         let text = region_tooltip(flagged, results.support_threshold);
         assert!(text.contains("columns 3518\u{2013}3572"), "{text}");
         assert!(text.contains("minimum support 2"), "{text}");
-        assert!(text.contains("lower bound of conservation 15.8%"), "{text}");
+        assert!(
+            text.contains("lowest per-position 95% lower bound 15.8% (Clopper\u{2013}Pearson)"),
+            "{text}"
+        );
         assert!(text.contains("* flagged: 29 positions"), "{text}");
         assert!(text.contains("and 17 more"), "{text}");
         // An incidence or a bound below 100% never reads as 100%.
@@ -234,8 +246,22 @@ mod tests {
         let text = region_tooltip(&near, results.support_threshold);
         assert!(text.contains("minimum Index incidence > 99.99%"), "{text}");
         assert!(
-            text.contains("lower bound of conservation > 99.9%"),
+            text.contains("lowest per-position 95% lower bound > 99.9%"),
             "{text}"
         );
+    }
+
+    /// The strip's name for screen readers counts its regions in words that fit one.
+    #[test]
+    fn the_strip_label_counts_in_words() {
+        let results = crate::tests::fixtures::mers();
+        let mut hcs =
+            dima_core::hcs::compute(&results, &dima_core::hcs::HcsParams::default()).unwrap();
+        assert_eq!(
+            strip_label(&hcs),
+            "Conserved regions: 44 regions, 0 flagged"
+        );
+        hcs.region_count = 1;
+        assert_eq!(strip_label(&hcs), "Conserved regions: 1 region, 0 flagged");
     }
 }

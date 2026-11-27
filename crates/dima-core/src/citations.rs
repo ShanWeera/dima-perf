@@ -191,6 +191,22 @@ static OTHER_CITATIONS: &[Citation] = &[
         tier: Tier::Standard,
     },
     Citation {
+        key: "easel",
+        authors: &[("Eddy", "Sean R.")],
+        year: 2023,
+        title: "Easel: a library of C functions for biological sequence analysis (esl_alphabet.c and esl_sqio_ascii.c, commit 07ca83ba9ef0414dba9ce0a9331d465b5eb58f2b)",
+        venue: "Source code",
+        volume: None,
+        issue: None,
+        pages: None,
+        doi: None,
+        url: Some(
+            "https://github.com/EddyRivasLab/easel/tree/07ca83ba9ef0414dba9ce0a9331d465b5eb58f2b",
+        ),
+        kind: Kind::Standard,
+        tier: Tier::Standard,
+    },
+    Citation {
         key: "kuiken2003",
         authors: &[
             ("Kuiken", "Carla"),

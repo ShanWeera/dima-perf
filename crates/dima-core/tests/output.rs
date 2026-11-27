@@ -194,6 +194,93 @@ fn reading_rejects_foreign_files() {
     assert_eq!(e.class(), dima_core::error::ExitClass::Io);
 }
 
+/// Results compressed in a format DiMA reads alignments from (bzip2) or in none it reads are
+/// named by their format, without claiming that the file holds results (it may hold an
+/// alignment); every reader of DiMA's JSON files says the same.
+#[test]
+fn results_in_formats_dima_does_not_read_are_named() {
+    use std::io::Write as _;
+    let r = results();
+    let dir = tempfile::tempdir().unwrap();
+    let plain = dir.path().join("r.json");
+    write(&plain, |s| output::write_json(&r, false, s).unwrap());
+    let json = std::fs::read(&plain).unwrap();
+    let p = dir.path().join("r.json.bz2");
+    let mut bz = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::best());
+    bz.write_all(&json).unwrap();
+    std::fs::write(&p, bz.finish().unwrap()).unwrap();
+    for e in [
+        output::read_results(&p).unwrap_err(),
+        output::read_document(&p).unwrap_err(),
+        output::read_hcs(&p).unwrap_err(),
+    ] {
+        assert_eq!(e.class(), dima_core::error::ExitClass::InvalidInput);
+        assert_eq!(
+            e.to_string(),
+            format!(
+                "{}: compressed with bzip2, which DiMA does not read results from",
+                p.display()
+            )
+        );
+        assert_eq!(
+            e.hint(),
+            Some(
+                "if it holds DiMA results, decompress it or recompress it with gzip or zstd (an \
+                 alignment is read by dima analyze, not by dima view, hcs or cite)"
+            )
+        );
+    }
+    // The formats the alignment reader refuses, by their signatures.
+    let cases: [(&[u8], &str, &str); 4] = [
+        (
+            &[0xFD, b'7', b'z', b'X', b'Z', 0x00],
+            "compressed with xz (.xz)",
+            "decompress it or recompress it with gzip or zstd",
+        ),
+        (
+            &[0x04, 0x22, 0x4D, 0x18],
+            "compressed with LZ4",
+            "decompress it or recompress it with gzip or zstd",
+        ),
+        (
+            b"PK\x03\x04",
+            "a zip archive",
+            "extract them from the archive",
+        ),
+        (
+            &[b'7', b'z', 0xBC, 0xAF, 0x27, 0x1C],
+            "a 7z archive",
+            "extract them from the archive",
+        ),
+    ];
+    for (signature, what, fix) in cases {
+        let q = dir.path().join("packed.json");
+        let mut bytes = signature.to_vec();
+        bytes.extend_from_slice(&[0; 32]);
+        std::fs::write(&q, bytes).unwrap();
+        let e = output::read_results(&q).unwrap_err();
+        assert_eq!(
+            e.to_string(),
+            format!(
+                "{}: {what}, which DiMA does not read results from",
+                q.display()
+            )
+        );
+        // `dima analyze` does not read alignments in these formats either: no word about it.
+        assert_eq!(
+            e.hint().unwrap(),
+            format!("if it holds DiMA results, {fix}"),
+            "{e:?}"
+        );
+    }
+    // Zstandard data that starts with a skippable frame, as pzstd writes it, is read.
+    let q = dir.path().join("r.json.zst");
+    let mut framed = vec![0x50, 0x2A, 0x4D, 0x18, 4, 0, 0, 0, 1, 2, 3, 4];
+    framed.extend(zstd::encode_all(&json[..], 3).unwrap());
+    std::fs::write(&q, framed).unwrap();
+    assert_eq!(output::read_results(&q).unwrap(), r);
+}
+
 #[test]
 fn non_finite_values_are_refused() {
     let mut r = results();

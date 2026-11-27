@@ -112,9 +112,21 @@ git diff --stat crates/dima-gui/tests/golden/
 
 - `schema.rs`: every output validates against its JSON Schema (`schemas/`), and the schemas
   against the Draft 2020-12 meta-schema.
-- `output.rs`: JSON round trips, JSON Lines, the tables, compression.
-- `crates/dima/tests/cli.rs`: the binary end to end — exit codes, standard input, output rules,
-  run reports, messages.
+- `output.rs`: JSON round trips, JSON Lines, the tables, compression, results compressed in a
+  format DiMA does not read; unit tests of `output::name` check every class of output name
+  (format, compression, refused and assumed names).
+- `methods.rs`: the methods paragraph of `dima cite --from` cites every reference its run
+  recorded, on real analyses, and the example on [Citing DiMA](/reference/citing/) is the
+  paragraph DiMA writes (update the page when the paragraph changes).
+- `diagnostics.rs`: each diagnostic is raised exactly when its rule says, with its count,
+  examples and hint, on real analyses (for example `uncorrected_eligible_positions` on the
+  HIV-1 *pol* protein data set, on the 26 sequences of DiMA v5.0.9's test data at T = 25 and
+  T = 20, and at T = 2 with 3 sequences); the unit tests next to each rule add the edge cases
+  (for that warning, positions with a single k-mer only, which give none).
+- `crates/dima/tests/cli.rs`: the binary end to end — exit codes, standard input, output rules
+  and names, every pair of outputs that could be the same file (spelled with `./`, `..`, other
+  letter case or symbolic links, and the input or a redirected standard input or output), run
+  reports, messages.
 - Interruption tests send real signals and check that the process ends by the signal and leaves
   no temporary files, including as process 1 of a container.
 - The desktop app has its own tests: the pure state machine, and interface flows run headless.

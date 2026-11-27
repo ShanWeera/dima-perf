@@ -17,6 +17,7 @@ use std::sync::Arc;
 use dima_core::human;
 use egui::{Color32, Pos2, Rect, Stroke, Ui};
 
+use super::common::Described;
 use super::common::{
     Swatch, fixed_width_slot, hatch_rect, heading, legend_entry, legend_entry_at_least,
     legend_entry_width, row_with_trailing, text_width, with_help,
@@ -207,17 +208,38 @@ pub fn show(
     }
 
     // Accessibility: the chart is painted, so it describes itself (AccessKit).
-    let description = format!(
-        "{} chart: {} positions shown, {} with support \u{2264} {threshold}, {} spans with {NS_LABEL}",
-        metric.name(),
+    let description = chart_description(
+        metric,
         s.shown.len(),
         series.count(Style::LowSupport),
-        series.ns_spans.len()
+        series.ns_spans.len(),
+        threshold,
     );
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, &description));
 
     interact(ui, &response, s, chart, &series, x, y, plot, full, t, out);
     Some(Shared { x })
+}
+
+/// What the chart says to screen readers (it is painted): the metric, the positions shown, how
+/// many of them have support ≤ T and how many no-support spans there are, counted in words that
+/// fit one ("1 span").
+#[must_use]
+pub fn chart_description(
+    metric: ChartMetric,
+    shown: usize,
+    low_support: usize,
+    ns_spans: usize,
+    threshold: u64,
+) -> String {
+    let count = |n: usize, one: &str, many: &str| human::plural(n as u64, one, many);
+    format!(
+        "{} chart: {} shown, {} with support \u{2264} {threshold}, {} with {NS_LABEL}",
+        metric.name(),
+        count(shown, "position", "positions"),
+        low_support,
+        count(ns_spans, "span", "spans"),
+    )
 }
 
 /// "Metric:" and its options, on a left-aligned row of their own above the heading row. The
@@ -361,7 +383,7 @@ fn zoom_buttons(ui: &mut Ui, s: &Session) -> Option<Option<(f64, f64)>> {
     let mut asked = None;
     if ui
         .add_enabled(zoomed, egui::Button::new("Fit").small())
-        .on_hover_text("Show every shown position (or double-click the chart)")
+        .described("Show every shown position (or double-click the chart)")
         .clicked()
     {
         asked = Some(None);
@@ -369,14 +391,14 @@ fn zoom_buttons(ui: &mut Ui, s: &Session) -> Option<Option<(f64, f64)>> {
     if let Some(full) = s.extent() {
         if ui
             .small_button("+")
-            .on_hover_text("Zoom in (or scroll over the chart)")
+            .described("Zoom in (or scroll over the chart)")
             .clicked()
         {
             asked = Some(viewport::zoom(s.viewport, full, 0.8, 0.5));
         }
         if ui
             .add_enabled(zoomed, egui::Button::new("\u{2212}").small())
-            .on_hover_text("Zoom out")
+            .described("Zoom out")
             .clicked()
         {
             asked = Some(viewport::zoom(s.viewport, full, 1.25, 0.5));
@@ -661,11 +683,7 @@ pub fn point_tooltip(s: &Session, position: u64) -> Option<String> {
     let mut text = format!("Position {}\n", p.position);
     match p.entropy {
         Some(e) => {
-            text.push_str(&format!(
-                "entropy {} bits ({})",
-                human::fixed(e, 4),
-                p.entropy_method.as_str()
-            ));
+            text.push_str(&format!("entropy {} bits", human::fixed(e, 4)));
             if let Some(o) = p.observed_entropy {
                 text.push_str(&format!(", observed {}", human::fixed(o, 4)));
             }
@@ -674,7 +692,8 @@ pub fn point_tooltip(s: &Session, position: u64) -> Option<String> {
         None => text.push_str("no entropy\n"),
     }
     text.push_str(&format!(
-        "support {}\n{}",
+        "method: {}\nsupport {}\n{}",
+        super::position_summary::method_text(p),
         p.support,
         class.describe(
             t,
@@ -685,7 +704,7 @@ pub fn point_tooltip(s: &Session, position: u64) -> Option<String> {
     if p.below_min_coverage == Some(true) {
         text.push_str(&format!(
             "\nsample coverage {} below the minimum",
-            crate::util::opt_coverage(p.sample_coverage, 3)
+            crate::util::position_coverage(p, s.results.coverage_summary.min_coverage, 3)
         ));
     }
     if ChartMetric::SimilarityWeighted.available(&s.results) {
@@ -829,10 +848,13 @@ mod tests {
         assert!(c.contains("LS") && c.contains("uncorrected"), "{c}");
         let b = point_tooltip(&s, 2).unwrap();
         assert!(b.contains("no entropy") && !b.contains("0.0000"), "{b}");
+        assert!(b.contains("\nmethod: no entropy (not_estimable)\n"), "{b}");
+        assert!(a.contains("entropy 0.5000 bits, observed 0.5000\n"), "{a}");
         assert!(
-            a.contains("entropy 0.5000 bits (dima), observed 0.5000"),
-            "{a}"
+            a.contains("\nmethod: paper's correction (dima)\n"),
+            "the method in words and as the file names it: {a}"
         );
+        assert!(c.contains("method: observed entropy (plug_in)"), "{c}");
         assert_eq!(
             band_tooltip(NsSpan { first: 4, last: 9 }),
             "Positions 4\u{2013}9: no usable support (support 0, no entropy)"
@@ -852,7 +874,7 @@ mod tests {
         let s = Session::new(1, Arc::new(r), Origin::Opened("x.json".into()));
         let a = point_tooltip(&s, 1).unwrap();
         assert!(
-            a.contains("entropy < 0.0001 bits (dima), observed < 0.0001"),
+            a.contains("entropy < 0.0001 bits, observed < 0.0001"),
             "{a}"
         );
         assert!(
@@ -861,8 +883,20 @@ mod tests {
         );
         let b = point_tooltip(&s, 2).unwrap();
         assert!(
-            b.contains("entropy 0.0000 bits (dima), observed 0.0000"),
+            b.contains("entropy 0.0000 bits, observed 0.0000"),
             "an exact zero is zero: {b}"
+        );
+        // A coverage below the run's minimum never reads as the minimum.
+        let mut near = position(1, Some(0.5), 200, 100);
+        near.sample_coverage = Some(0.949_96);
+        near.below_min_coverage = Some(true);
+        let mut r = results_of(vec![near]);
+        r.coverage_summary.min_coverage = Some(0.95);
+        let s = Session::new(2, Arc::new(r), Origin::Opened("x.json".into()));
+        let text = point_tooltip(&s, 1).unwrap();
+        assert!(
+            text.contains("sample coverage > 0.949 below the minimum"),
+            "{text}"
         );
     }
 

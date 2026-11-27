@@ -1,5 +1,7 @@
 //! The results header: the query name and the run's facts as chips — sequences, positions, k,
-//! T with "support > T eligible" (G42), the eligible mean, the similarity-weighted mean with the
+//! T with "support > T eligible" (G42; its tooltip says what the run's estimator does with the
+//! eligible positions: the paper's corrects them where possible), the eligible mean, the
+//! similarity-weighted mean with the
 //! observed mean of the same positions (when the run computed it), lowest and highest entropy
 //! with their positions and tie counts (D43, D88), the NS/LS/ELS counts and the low-support
 //! total, and the total-variants incidence at the selected position (G60).
@@ -49,9 +51,7 @@ pub fn chips(r: &Results, session: &Session) -> Vec<(String, String)> {
         (format!("k = {}", r.kmer_length), "k-mer length".to_owned()),
         (
             format!("T = {} (support > T eligible)", r.support_threshold),
-            "Positions supported by more than T sequences are eligible: they enter the \
-             summaries, and the DiMA estimator corrects their entropy"
-                .to_owned(),
+            super::help_text::threshold_chip(r.support_threshold, r.run.parameters.estimator.value),
         ),
         (
             format!(
@@ -87,8 +87,12 @@ pub fn chips(r: &Results, session: &Session) -> Vec<(String, String)> {
             ),
             format!(
                 "Positions with support \u{2264} T: none (NS), below T (LS), equal to T (ELS). \
-                 They are excluded from the summaries; {} positions are eligible.",
-                c.eligible
+                 They are excluded from the summaries; {} eligible.",
+                if c.eligible == 1 {
+                    "1 position is".to_owned()
+                } else {
+                    format!("{} positions are", c.eligible)
+                }
             ),
         ),
     ]);

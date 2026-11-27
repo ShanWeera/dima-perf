@@ -143,14 +143,17 @@
       "description": "Summary with DiMA v5.0.9's averaging rule."
     },
     "coverage_summary": {
+      "description": "Sample coverage over every position with support of at least 2, eligible and low-support (LS, ELS) positions alike.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "evaluated": {
+          "description": "Positions with a sample coverage (support of at least 2).",
           "type": "integer",
           "minimum": 0
         },
         "min": {
+          "description": "Lowest sample coverage of the evaluated positions; null when no position is evaluated.",
           "type": [
             "number",
             "null"
@@ -159,6 +162,7 @@
           "maximum": 1
         },
         "mean": {
+          "description": "Mean sample coverage of the evaluated positions; null when no position is evaluated.",
           "type": [
             "number",
             "null"
@@ -167,6 +171,7 @@
           "maximum": 1
         },
         "min_coverage": {
+          "description": "--min-coverage; null when it was not given.",
           "type": [
             "number",
             "null"
@@ -175,6 +180,7 @@
           "maximum": 1
         },
         "below_min_count": {
+          "description": "Evaluated positions with a sample coverage below min_coverage; null when --min-coverage was not given.",
           "type": [
             "integer",
             "null"
@@ -611,7 +617,7 @@
           "minimum": 0
         },
         "observed_entropy": {
-          "description": "Plug-in (observed) entropy in bits.",
+          "description": "Plug-in (observed) entropy in bits; null without support (NS).",
           "type": [
             "number",
             "null"
@@ -619,6 +625,7 @@
           "minimum": 0
         },
         "entropy_method": {
+          "description": "The method that produced entropy: dima (the paper's correction), chao_wang_jost, miller_madow, plug_in (the observed entropy: estimator raw, or a fallback named by entropy_fallback) or not_estimable (no support).",
           "enum": [
             "dima",
             "chao_wang_jost",
@@ -628,7 +635,7 @@
           ]
         },
         "entropy_fallback": {
-          "description": "Why the requested estimator was not used.",
+          "description": "Why the requested estimator was not used: support_at_or_below_threshold (support ≤ T), too_few_points (support below 1.25 × T, rounded up: fewer than five regression points) or degenerate_regression (T = 2, support 3: equal subsample sizes) for dima; single_observation (support 1) for chao_wang_jost and miller_madow. Null when the estimator was used, with estimator raw, and without support.",
           "enum": [
             "support_at_or_below_threshold",
             "too_few_points",
@@ -656,7 +663,7 @@
           "maximum": 100
         },
         "sample_coverage": {
-          "description": "Estimated sample coverage (Chao & Jost 2012).",
+          "description": "Estimated sample coverage (Chao & Jost 2012), the probability that one more sequence carries a k-mer already seen here; null when support is below 2.",
           "type": [
             "number",
             "null"
@@ -665,6 +672,7 @@
           "maximum": 1
         },
         "below_min_coverage": {
+          "description": "Whether sample_coverage is below --min-coverage; null without the option, and where sample_coverage is null.",
           "type": [
             "boolean",
             "null"
@@ -957,31 +965,38 @@
           ]
         },
         "alphabet": {
+          "description": "The alphabet decision.",
           "type": "object",
           "additionalProperties": false,
           "properties": {
             "resolved": {
+              "description": "The alphabet used.",
               "$ref": "#/$defs/alphabet"
             },
             "method": {
+              "description": "detected (from the letters of the first records, with the rules of esl_abc_GuessAlphabet in Easel, the sequence library of HMMER) or user (--alphabet).",
               "enum": [
                 "detected",
                 "user"
               ]
             },
             "records_examined": {
+              "description": "Records of the first batch, whose letters detection examines: at most 10,000 records or 64 MiB, and at least the first 1,000 records (or all, if there are fewer). Recorded also when the alphabet was given.",
               "type": "integer",
               "minimum": 0
             },
             "residues_examined": {
+              "description": "Letters A–Z, in either case, in those records: ambiguity codes and letters outside the alphabet included.",
               "type": "integer",
               "minimum": 0
             },
             "t_u_folded": {
+              "description": "U letters read as T (DNA) or T letters read as U (RNA), in the whole input.",
               "type": "integer",
               "minimum": 0
             },
             "contradiction": {
+              "description": "Why the residue composition contradicts an explicit --alphabet; null when it does not, and when the alphabet was detected.",
               "type": [
                 "string",
                 "null"
@@ -1034,29 +1049,36 @@
           ]
         },
         "validation": {
+          "description": "What reading the input found.",
           "type": "object",
           "additionalProperties": false,
           "properties": {
             "mode": {
+              "description": "The validation mode.",
               "$ref": "#/$defs/validation_mode"
             },
             "records": {
+              "description": "Records read.",
               "type": "integer",
               "minimum": 0
             },
             "lowercase_folded": {
+              "description": "Lower-case letters read as upper case.",
               "type": "integer",
               "minimum": 0
             },
             "whitespace": {
+              "description": "Sequence lines with white space.",
               "type": "object",
               "additionalProperties": false,
               "properties": {
                 "trailing": {
+                  "description": "Sequence lines that end in white space.",
                   "type": "integer",
                   "minimum": 0
                 },
                 "interior": {
+                  "description": "Sequence lines with white space between residues (ignored).",
                   "type": "integer",
                   "minimum": 0
                 }
@@ -1067,12 +1089,14 @@
               ]
             },
             "characters": {
+              "description": "Every byte value found in sequence lines (line endings excluded), one entry per byte value in byte order, so A and a are separate entries.",
               "type": "array",
               "items": {
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
                   "char": {
+                    "description": "The character when the byte is a visible ASCII character; null otherwise (space, tab and other control bytes, non-ASCII bytes).",
                     "type": [
                       "string",
                       "null"
@@ -1081,11 +1105,13 @@
                     "maxLength": 1
                   },
                   "byte": {
+                    "description": "The byte value, 0–255.",
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 255
                   },
                   "class": {
+                    "description": "Its symbol class in the alphabet used.",
                     "enum": [
                       "residue",
                       "gap",
@@ -1098,6 +1124,7 @@
                     ]
                   },
                   "count": {
+                    "description": "Occurrences.",
                     "type": "integer",
                     "minimum": 1
                   }
@@ -1111,14 +1138,17 @@
               }
             },
             "unknown_total": {
+              "description": "Characters of class unknown, whose k-mers were excluded (permissive and report modes); 0 in strict mode, which stops at the first.",
               "type": "integer",
               "minimum": 0
             },
             "header_utf8_replacements": {
+              "description": "Invalid UTF-8 sequences in headers replaced by U+FFFD (permissive and report modes); 0 without --header-format, whose headers are not checked.",
               "type": "integer",
               "minimum": 0
             },
             "header_cleaning": {
+              "description": "What cleaning changed in the values of stratified header fields; null without --header-format.",
               "type": [
                 "object",
                 "null"
@@ -1126,23 +1156,28 @@
               "additionalProperties": false,
               "properties": {
                 "unicode_version": {
+                  "description": "Version of the Unicode tables used for NFC normalisation; another version can clean some values differently.",
                   "type": "string"
                 },
                 "trimmed": {
+                  "description": "Values whose leading or trailing white space was removed.",
                   "type": "integer",
                   "minimum": 0
                 },
                 "invisible_removed": {
+                  "description": "Invisible characters removed, by code point.",
                   "type": "array",
                   "items": {
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
                       "code_point": {
+                        "description": "The code point, U+XXXX.",
                         "type": "string",
                         "pattern": "^U\\+[0-9A-F]{4,6}$"
                       },
                       "count": {
+                        "description": "Occurrences removed.",
                         "type": "integer",
                         "minimum": 1
                       }
@@ -1154,10 +1189,12 @@
                   }
                 },
                 "nfc_changed": {
+                  "description": "Values changed by NFC normalisation.",
                   "type": "integer",
                   "minimum": 0
                 },
                 "fill_uses": {
+                  "description": "Values replaced by the fill value, as run.metadata.fill_uses.",
                   "type": "integer",
                   "minimum": 0
                 }
@@ -1183,6 +1220,7 @@
           ]
         },
         "metadata": {
+          "description": "Header metadata; null without --header-format.",
           "type": [
             "object",
             "null"
@@ -1190,30 +1228,36 @@
           "additionalProperties": false,
           "properties": {
             "fields": {
+              "description": "Every field name of --header-format, in order, trimmed and NFC-normalised.",
               "type": "array",
               "items": {
                 "type": "string"
               }
             },
             "stratified": {
+              "description": "The stratified fields (--metadata-fields, or every field), in header-format order.",
               "type": "array",
               "items": {
                 "type": "string"
               }
             },
             "probe_records": {
+              "description": "Records of the first batch (as run.alphabet.records_examined), whose headers the identifier-like check examines; identifier_like_field needs at least 100.",
               "type": "integer",
               "minimum": 0
             },
             "mismatches": {
+              "description": "Headers whose number of |-separated fields differs from --header-format.",
               "type": "object",
               "additionalProperties": false,
               "properties": {
                 "count": {
+                  "description": "How many.",
                   "type": "integer",
                   "minimum": 0
                 },
                 "first": {
+                  "description": "The first 20 of them, in input order.",
                   "type": "array",
                   "maxItems": 20,
                   "items": {
@@ -1221,21 +1265,26 @@
                     "additionalProperties": false,
                     "properties": {
                       "record": {
+                        "description": "Record number, from 1.",
                         "type": "integer",
                         "minimum": 1
                       },
                       "line": {
+                        "description": "Line of the header, from 1.",
                         "type": "integer",
                         "minimum": 1
                       },
                       "header": {
+                        "description": "The header, without the leading >.",
                         "type": "string"
                       },
                       "expected": {
+                        "description": "Fields of --header-format.",
                         "type": "integer",
                         "minimum": 0
                       },
                       "found": {
+                        "description": "Fields of this header.",
                         "type": "integer",
                         "minimum": 0
                       }
@@ -1256,6 +1305,7 @@
               ]
             },
             "fill_uses": {
+              "description": "Stratified values replaced by the fill value: empty values and, in permissive mode, every stratified field of a header with the wrong number of fields.",
               "type": "integer",
               "minimum": 0
             }
@@ -1269,16 +1319,20 @@
           ]
         },
         "entropy": {
+          "description": "Entropy settings of the run.",
           "type": "object",
           "additionalProperties": false,
           "properties": {
             "estimator": {
+              "description": "The estimator, spelled with underscores (chao_wang_jost, miller_madow).",
               "$ref": "#/$defs/estimator"
             },
             "log_base": {
+              "description": "Entropies are in bits.",
               "const": 2
             },
             "rarefaction": {
+              "description": "The constants of the paper's correction (Fig. 2) with the dima estimator; null with the others.",
               "type": [
                 "object",
                 "null"
@@ -1286,18 +1340,23 @@
               "additionalProperties": false,
               "properties": {
                 "grid": {
+                  "description": "Subsample percentages from the start to 95 in steps of 5 (the step of DiMA v5.0.9), plus 100%, the full data set.",
                   "const": "paper_fig2"
                 },
                 "size_rounding": {
+                  "description": "A subsample of R% of N sequences has R·N/100 sequences, rounded up.",
                   "const": "ceil"
                 },
                 "start_rounding": {
+                  "description": "The grid starts at 100·T/N rounded up to a whole number and then to a multiple of 5, and at 50 at least.",
                   "const": "ceil_to_5"
                 },
                 "sampling": {
+                  "description": "The intercept is the exact average over all with-replacement subsamples, not one random draw.",
                   "const": "expected_with_replacement"
                 },
                 "min_points": {
+                  "description": "With fewer regression points (support below 1.25 × T, rounded up) a position keeps its observed entropy (too_few_points); DiMA v5.0.9's minimum, which the paper does not state.",
                   "const": 5
                 }
               },

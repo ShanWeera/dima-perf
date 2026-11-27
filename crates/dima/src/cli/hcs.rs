@@ -10,7 +10,8 @@ use dima_core::output;
 
 use super::Context;
 use super::args::HcsArgs;
-use super::outputs::{self, Plan};
+use super::destinations::{self, Destinations, Input};
+use super::outputs::{self, Folders};
 use super::ui;
 
 /// Runs `dima hcs`.
@@ -22,20 +23,18 @@ pub fn run(a: &HcsArgs, ctx: &Context) -> Result<()> {
         Some(t) => Percent::hcs_threshold(t)?,
         None => DEFAULT_HCS_THRESHOLD,
     };
-    let target = a.output.clone().unwrap_or_else(|| "-".into());
-    let planned = outputs::hcs_planned(
-        &target,
+    let destination = Destinations::of_hcs(a.output.as_deref());
+    let plan = outputs::plan_hcs(
+        &destination,
         a.output_format,
         a.pretty,
         std::io::stdout().is_terminal(),
     )?;
-    let plan = Plan {
-        outputs: vec![planned],
-        ..Plan::default()
-    };
-    outputs::check_collisions(&plan, &[a.input.as_path()])?;
+    destinations::check(&destination, Input::of(Some(&a.input)))?;
     outputs::warn_unused_pretty(a.pretty, &plan, ctx.verbosity);
-    let opened = outputs::Opened::open(&plan, &ctx.signals.cancel)?;
+    outputs::warn_assumed_format(&plan, true, ctx.verbosity);
+    let mut folders = Folders::default();
+    let opened = outputs::Opened::open(&plan, &mut folders, &ctx.signals.cancel)?;
     let results = output::read_results(&a.input)?;
     let h = hcs::compute(
         &results,
@@ -44,7 +43,14 @@ pub fn run(a: &HcsArgs, ctx: &Context) -> Result<()> {
             eligible_only: a.hcs.hcs_eligible_only,
         },
     )?;
-    opened.write(Some(&results), Some(&h), &|| ctx.signals_check())?;
+    // A reader of standard output that went away (`| head`) ends that output only: the
+    // diagnostics and the summary line are still printed.
+    outputs::unless_reader_gone(opened.write(
+        Some(&results),
+        Some(&h),
+        &|| ctx.signals_check(),
+        &ctx.ledger,
+    ))?;
     for d in &h.diagnostics {
         ui::diagnostic(d, ctx.verbosity);
     }

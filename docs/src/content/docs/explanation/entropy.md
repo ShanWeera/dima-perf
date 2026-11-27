@@ -10,9 +10,9 @@ samples [@tharanga2025], the way DiMA evaluates that correction exactly, the opt
 alternative estimators, the sample coverage reported next to them, and the optional
 [similarity-weighted entropy](#similarity-weighted-entropy-opt-in).
 
-Notation: a position has support $N$ (sequences with a valid k-mer) and $D$ distinct variants with
-counts $c_1, \dots, c_D$; $f_c$ is the number of variants seen exactly $c$ times (so $f_1$ counts
-singletons and $f_2$ doubletons); $T$ is the support threshold.
+Notation: a position has support $N$ (sequences with a valid k-mer) and $D$ distinct variants, the
+Index included, with counts $c_1, \dots, c_D$; $f_c$ is the number of variants seen exactly $c$
+times (so $f_1$ counts singletons and $f_2$ doubletons); $T$ is the support threshold.
 
 ## Observed (plug-in) entropy
 
@@ -31,6 +31,44 @@ variants that are present in the population but absent from the sample contribut
 first order the expected value falls short of the true entropy by about $(D-1)/(2N\ln 2)$ bits
 [@miller1955; @paninski2003]. The bias grows with diversity and shrinks with support, so
 positions with different support are not directly comparable without a correction.
+
+**How large an entropy is.** The observed entropy is 0 bits at a position with a single variant
+and at most $\log_2 D$ bits with $D$ variants, a maximum reached only when they are equally common:
+1 bit for two equally common variants, 2 bits for four, $\log_2 10 = 3.32$ bits for ten. At
+MERS-CoV spike position 25, ten variants of which the Index carries 76% give 1.4224 bits, well
+below the 3.32 bits of ten equally common ones. The bound is that of the observed entropy; the
+corrected entropy estimates that of the population.
+
+**The effective number of variants.** An entropy is easier to read as a count: $2^H$ is the
+number of *equally common* variants that would give the same entropy. Ecology calls this the
+Hill number of order 1, or Shannon diversity, and expresses diversity in "effective numbers": *"the
+number of equally abundant species that would be needed to give the same value of a diversity
+measure"* [@chao2014, p. 48]; the effective number of species is $\exp(H)$, the exponential of the
+entropy in natural logarithms [@chao2013, Introduction; @chao2014, Eq. 3b]. DiMA's entropies are in
+bits, so the same number is $2^H$ (a change of base, nothing more):
+
+| Entropy | Effective number of variants |
+|---|---|
+| 0 bits | 1: one k-mer in every sequence |
+| 1 bit | 2 equally common k-mers |
+| 1.4617 bits (MERS-CoV spike position 25, corrected) | about 2.75 |
+| 2 bits | 4 |
+| 5.3504 bits (HIV-1 *pol* DNA, eligible mean) | about 41 |
+| 9.4755 bits (HIV-1 *pol* DNA, most diverse position) | about 712 |
+
+So position 25, with ten distinct 9-mers of which one carries 76% of the sequences, is as diverse
+as fewer than three equally common ones. The effective number is a reading aid that DiMA does not
+report: it inherits every limitation of the entropy it comes from, including its dependence on
+the number of sequences, so read it next to the support and the sample coverage. The concept was
+developed for species in an ecological community [@chao2014]; applying it to the k-mers of an
+alignment position is DiMA's reading, as for [similarity-weighted entropy](#similarity-weighted-entropy-opt-in).
+
+**The largest possible entropy** of a k-mer, when every possible k-mer is equally common, is
+$\log_2$ of the number of possible k-mers: about 39 bits for a 9-residue protein k-mer
+($\log_2 20^9$) and 54 bits for a 27-nucleotide one ($\log_2 4^{27}$); real alignments stay far
+below it, *"in practice, however, the upper bound is very much lower for alignments of closely
+related sequences"* [@khan2008, Methods; @tharanga2025, Methods and Results]. At a position the observed
+entropy is also at most $\log_2 N$, since there cannot be more variants than sequences.
 
 ## The paper's correction (Fig. 2)
 
@@ -68,9 +106,11 @@ $N > T$:
 4. **Regression.** The points $(1/n_R, \hat H_{n_R})$ are fitted by ordinary least squares,
    $\hat H_n \approx \beta_0 + \beta_1 / n$, and the **intercept** $\beta_0$ — the entropy
    extrapolated to $n \to \infty$ — is the corrected entropy.
-5. **Fallbacks.** The observed entropy $\hat H$ is reported instead when $N \le T$, when there are
-   fewer than five points, when all subsample sizes are equal (no line is defined), or when the
-   intercept is negative (which never happens to the exact expectation DiMA computes; see
+5. **Fallbacks.** The observed entropy $\hat H$ is reported instead (`entropy_method` `plug_in`),
+   and `entropy_fallback` says why: `support_at_or_below_threshold` when $N \le T$,
+   `too_few_points` when there are fewer than five points, `degenerate_regression` when all
+   subsample sizes are equal (no line is defined). The paper's fourth case, a negative intercept,
+   never happens to the exact expectation DiMA computes (see
    [the negative-intercept rule](#the-negative-intercept-rule)).
 
 Rounding $x$ up in $\eqref{eq:start}$ guarantees that every subsample has at least $T$ k-mers:
@@ -85,9 +125,26 @@ the usual thresholds $T = 30$ and $T = 100$ the two agree for every $N$ up to tw
 range checked).
 
 With fewer than five points the correction is not applied — a minimum the paper does not state,
-taken from DiMA v5.0.9 — which happens when $x > 80$, that is for $N$ below about $1.25\,T$ (for
-$T = 100$: $N = 101$ to 124). Duplicate subsample sizes are kept, as in DiMA v5.0.9 (the paper
-does not say).
+taken from DiMA v5.0.9. The grid has at least five points (four below 100% and the full data set)
+exactly when it starts at 80 or lower, that is when $x \le 80$, which holds exactly when
+$N \ge 1.25\,T$. So, with the paper's estimator, an eligible position's entropy is corrected
+*where possible*: only when its support is at least $\lceil 1.25\,T \rceil$ — 125 sequences for
+$T = 100$, 38 for $T = 30$, 32 for $T = 25$. With support between $T$ and that ($N = 101$ to 124
+for $T = 100$) it keeps its observed entropy (`too_few_points`). It does so too in the one tiny
+case $T = 2$, $N = 3$, where every subsample has 3 sequences, as many as the position, so all the
+points share one value of $1/n$ (`degenerate_regression`; support 4 is the smallest corrected
+there). Such positions are still eligible and are included in
+the summaries; the warning
+[`uncorrected_eligible_positions`](/reference/diagnostics/#uncorrected_eligible_positions)
+reports those with more than one k-mer. Conversely, for positions supported by all $N$ sequences
+to be corrected, choose $T \le 0.8\,N$. Duplicate subsample sizes are kept, as in DiMA v5.0.9 (the
+paper does not say).
+
+On the HIV-1 *pol* protein alignment with the defaults, positions 42 and 43 are supported by 105
+sequences: eligible, but below 125, so they keep their observed entropies, 4.0041 and 3.5039
+bits, inside the eligible mean. With $T = 30$ one such position remains (position 22, support 34,
+below 38). On the 26 sequences of DiMA v5.0.9's test data with $T = 25$, none of the 997 eligible
+positions is corrected (support 26 is below 32); with $T = 20$, all 1,031 are.
 
 **Example.** At MERS-CoV spike position 25 ($N = 170$) with $T = 100$: $x = \lceil 58.8 \rceil =
 59$, so the grid is 60, 65, …, 95 and 100%, nine points, with subsample sizes 102, 111, 119, 128,
@@ -155,7 +212,7 @@ the AVANA tool extrapolated from 100 random sub-alignments by default [@khan2017
 **Consequences.**
 
 - Results are reproducible bit for bit; no random seed is involved.
-- On the paper's HIV-1 *pol* dataset the mean corrected entropy is 5.3504 bits; the paper reports
+- On the paper's HIV-1 *pol* DNA dataset the mean corrected entropy is 5.3504 bits; the paper reports
   about 5.35, <!-- docs-numbers:hiv-run-mean:start -->
   and the mean intercept of one run of the random procedure, before its negative-intercept rule, has
   a standard deviation of 0.0020 bits around it<!-- docs-numbers:hiv-run-mean:end --> (see
@@ -337,12 +394,21 @@ $$
 $$
 
 with $(N-1)(f_1-1)/((N-1)(f_1-1)+2)$ as the second factor when $f_2 = 0$ (the same convention as
-$A$ in $\eqref{eq:cwj-a}$, so that $\hat C = 1 - (f_1/N)(1-A)$), and $\hat C = 1$ when $f_1 = 0$.
+$A$ in $\eqref{eq:cwj-a}$ [@chao2013, Materials and methods], so that
+$\hat C = 1 - (f_1/N)(1-A)$), and $\hat C = 1$ when $f_1 = 0$.
 It is undefined (`null`) for $N < 2$. Low coverage means that much of the diversity at that
 position has probably not been sampled: its entropy, corrected or not, rests on an incomplete
 picture. `--min-coverage X` flags positions with $\hat C < X$ (`below_min_coverage`) and adds a
 warning; coverage is always reported. At MERS-CoV spike position 25, $f_1 = 4$ and $f_2 = 0$, so
 $\hat C = 1 - \frac{4}{170}\cdot\frac{507}{509} = 0.9766$.
+
+Coverage is exactly 1 in two cases. With no singleton ($f_1 = 0$) it is 1 by definition. With
+exactly one singleton and no doubleton ($f_1 = 1$, $f_2 = 0$) the second factor of the $f_2 = 0$
+form is $(N-1) \cdot 0 / ((N-1) \cdot 0 + 2) = 0$, so $\hat C = 1$ as well. On the MERS-CoV spike
+sample, 1,002 of the 1,345 positions
+have coverage 1: 608 without a singleton and 394 with exactly one, such as position 3, whose two
+9-mers are carried by 170 sequences and 1. Coverage is not sequencing depth: it describes the
+variety of k-mers among the sequences, not how many reads support each one.
 
 ## Positions without support
 
@@ -360,7 +426,7 @@ than calling them conserved [@capra2007]; and tidy data use an explicit missing-
 [@broman2018].
 
 A 0 in the output would also be averaged as a real value by any later summary that does not
-filter on the tag, biasing it towards conservation. On the paper's HIV-1 *pol* dataset (680 NS
+filter on the tag, biasing it towards conservation. On the paper's HIV-1 *pol* DNA dataset (680 NS
 positions) the mean over all positions with NS counted as 0 — DiMA v5.0.9's rule, still reported
 as `all_positions_summary` for comparison — is 3.443 bits, against 5.350 bits over the eligible
 positions.
@@ -554,7 +620,7 @@ one sample but not for the other (see [Comparison with the papers](/explanation/
 The three values describe the k-mers observed at a position, not the population they were
 sampled from, and none of them is corrected for sample size. Observed entropy is lower on average
 with fewer sequences [@zhao2019, Section 3.1], normalised entropy also depends on sample size
-[@gregori2014, Sections 2.4 and 3.2], and similarity-weighted entropy changes too: with fewer
+[@gregori2014, Sections 2.4 and 3.2; @chao2014, Discussion, p. 64], and similarity-weighted entropy changes too: with fewer
 sequences the values can be higher or lower. Table 1 shows this at MERS-CoV spike position 25 by
 averaging each value over every subset of $n$ of the position's sequences; its last row is the
 position itself. The observed and similarity-weighted entropies fall as $n$ falls, while the
@@ -621,7 +687,8 @@ without bound as $p \to 0$, which a polynomial's never does.
 support can rank differently from their populations, as shown for observed and normalised entropy
 [@zhao2019, Section 3.1; @gregori2014, Section 3.2]. Compare positions of similar support and
 similar sample coverage (both are reported): equally complete samples can be compared directly,
-as shown for species richness [@chao2012, p. 2538]. For quasispecies data, Gregori et al. recommend rarefying the larger sample
+as shown for species richness [@chao2012, p. 2538] and extended to Shannon diversity
+[@chao2014, Discussion]. For quasispecies data, Gregori et al. recommend rarefying the larger sample
 to the size of the smaller by repeated subsampling without replacement [@gregori2014, Sections
 2.5 and 3.2]; DiMA does not.
 
@@ -678,12 +745,12 @@ compensated (Neumaier) summation; each position is computed by one thread and su
 reduced in position order. Identical inputs therefore give byte-identical outputs.
 
 Rounding error is present in every value, as in any floating-point program, and grows with the
-number of sequences at a position. On the bundled datasets every entropy is within about
+number of sequences at a position. On the paper's four datasets in the repository (up to 3,756 sequences) every entropy is within about
 $5 \times 10^{-15}$ of the exact value (relative), and at the 2.2 million sequences per position
 of the paper's SARS-CoV-2 analysis within about $8 \times 10^{-12}$. That is $10^{10}$ to
 $10^{12}$ times smaller than the sampling error of the estimate. Similarity-weighted entropy has
 the same absolute error as observed entropy, but is smaller, so its relative error is larger: up
-to $2 \times 10^{-14}$ on the bundled datasets and $1.2 \times 10^{-10}$ at 2.2 million sequences.
+to $2 \times 10^{-14}$ on the paper's four datasets in the repository and $1.2 \times 10^{-10}$ at 2.2 million sequences.
 [Numerical accuracy](/explanation/numerical-accuracy/) gives the measurements, the one limit
 (more than $9 \times 10^{15}$ sequences at a position) and why a prototyped fix for the last
 digits is deferred.

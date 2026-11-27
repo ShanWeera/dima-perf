@@ -160,9 +160,60 @@ pub fn line(message: &str, v: Verbosity) {
     }
 }
 
+/// `path` as one word to type back in a shell, for commands suggested in messages: unchanged
+/// when it holds only characters no shell treats specially, otherwise quoted (single quotes on
+/// Unix; double quotes on Windows, where file names cannot hold them); a leading `-` gets `./`,
+/// so it is not read as an option. `None` when the name is not valid Unicode or holds a
+/// control character, since then it cannot be shown exactly (messages escape control
+/// characters, and the escaped form names another file).
+#[must_use]
+pub fn shell_word(path: &std::path::Path) -> Option<String> {
+    let word = path.to_str().filter(|w| !w.chars().any(char::is_control))?;
+    let word = if word.starts_with('-') {
+        format!(".{}{word}", std::path::MAIN_SEPARATOR)
+    } else {
+        word.to_owned()
+    };
+    let plain = |c: char| {
+        c.is_ascii_alphanumeric()
+            || if cfg!(windows) {
+                "_.:\\/-".contains(c)
+            } else {
+                "_./:@%+=,-".contains(c)
+            }
+    };
+    Some(if !word.is_empty() && word.chars().all(plain) {
+        word
+    } else if cfg!(windows) {
+        format!("\"{word}\"")
+    } else {
+        format!("'{}'", word.replace('\'', r"'\''"))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::safe;
+
+    #[test]
+    fn shell_words() {
+        let w = |s: &str| super::shell_word(std::path::Path::new(s)).unwrap();
+        assert_eq!(w("results/r.json.gz"), "results/r.json.gz");
+        if cfg!(windows) {
+            assert_eq!(w("my results.json"), "\"my results.json\"");
+        } else {
+            assert_eq!(w("my results.json"), "'my results.json'");
+            assert_eq!(w("it's.json"), r"'it'\''s.json'");
+            assert_eq!(w("-x.json"), "./-x.json");
+            assert_eq!(w("~/r.json"), "'~/r.json'");
+            assert_eq!(
+                super::shell_word(std::path::Path::new("esc\u{1b}[31m.json")),
+                None,
+                "a control character cannot be typed back"
+            );
+            assert_eq!(w("r\u{e9}sultats.json"), "'r\u{e9}sultats.json'");
+        }
+    }
 
     #[test]
     fn terminal_controls_are_escaped() {

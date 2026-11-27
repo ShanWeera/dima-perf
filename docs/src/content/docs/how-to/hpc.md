@@ -48,28 +48,73 @@ dima analyze -i alignment.fasta.zst -o results.json.zst --tsv-dir tables \
     --hcs-output conserved.tsv --run-report run-report.json -v
 ```
 
+`--mem=8G` is an example, not a requirement: DiMA's memory grows with the diversity of the
+alignment, not with its size alone. Run the analysis once with `-v` (or `--run-report`), read its
+peak memory, and request that with a margin; see
+[Memory](/how-to/large-alignments/#memory) for what it depends on and typical values.
+
 ### Many alignments
 
 DiMA parallelises within one alignment, so run alignments one after another with all threads, or
-several at once with fewer threads each (`-t`):
+several at once with fewer threads each (`-t`). Only `--tsv-dir` creates its folder, so create
+the folder of the other outputs first:
 
 ```bash
+mkdir -p results
 for f in alignments/*.fasta.zst; do
   name=$(basename "$f" .fasta.zst)
   dima analyze -i "$f" -o "results/$name.json.zst" --run-report "results/$name.run.json" -q
 done
 ```
 
-In a Slurm array job, give each task its own alignment and let DiMA read the task's CPUs.
+The loop goes on after a failed alignment; every run, failed or not, leaves its run report. To
+list the ones that did not complete, with their exit status and error:
+
+```bash
+jq -r 'select(.status != "completed") | "\(.command[3]): \(.status), exit \(.exit_code): \(.error)"' results/*.run.json
+```
+
+```text
+broken.fasta.zst: failed, exit 4: broken.fasta.zst: only 3 residue letters in the first record; that is too few to tell protein from nucleotide sequences
+hint: pass --alphabet protein, --alphabet dna or --alphabet rna
+```
+
+### A Slurm array job
+
+An array job runs one task per alignment, each with its own CPUs, which DiMA reads from the
+task's allocation. Set `--array` to `0-` the number of alignments minus one:
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=dima
+#SBATCH --array=0-2
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=2G
+#SBATCH --time=01:00:00
+set -euo pipefail
+
+files=(alignments/*.fasta.zst)
+f=${files[$SLURM_ARRAY_TASK_ID]}
+name=$(basename "$f" .fasta.zst)
+mkdir -p results
+dima analyze -i "$f" -o "results/$name.json.zst" --run-report "results/$name.run.json" -v
+```
+
+Each task's log (Slurm's `slurm-JOB_TASK.out`) then ends with its summary line, and the `jq`
+command above lists the tasks that failed.
 
 ## Logs
 
 Messages go to standard error and data to standard output or files, so `2> dima.log` captures
 the messages alone. The redrawn progress line appears only on terminals; in a batch log, `-v`
 (or `--progress plain`) prints one line per phase and the progress at most every 10 seconds and
-at least once a minute, with the elapsed time, and `-q` limits the output to errors. Warnings are
-printed once per kind of problem, with counts and examples, and are also stored in the results
-(`run.diagnostics`).
+at least once a minute, with the elapsed time, and `-q` limits the output to errors. The
+[summary line](/reference/glossary/#summary-line) is always the last line, after the `-v` report.
+Warnings are printed once per kind of problem, with counts and examples. Those about the data
+(the library's diagnostics) are also stored in the results (`run.diagnostics`); the command
+line's own warnings — `threads_exceed_cpus`, `threads_refused`, `flag_has_no_effect`,
+`output_format_assumed` and, from `dima view`, `newer_schema` — are only printed (and counted
+in the summary line of `dima analyze`), so keep the log if you need them.
 
 ## Exit codes and interruptions
 
@@ -80,12 +125,15 @@ printed once per kind of problem, with counts and examples, and are also stored 
 | 3 | a file could not be read or written |
 | 4 | invalid input data |
 | 1 | internal error (please report it) |
-| 143, 130, 129 | interrupted by SIGTERM, SIGINT, SIGHUP |
+| 128 + N | interrupted by signal N: 143 SIGTERM, 130 SIGINT, 129 SIGHUP; on Linux 138 SIGUSR1, 140 SIGUSR2, 142 SIGALRM, 152 SIGXCPU (on macOS 158 SIGUSR1, 159 SIGUSR2) |
 
 When a scheduler stops a job — at its time limit Slurm sends SIGTERM and, after a grace period,
-SIGKILL — DiMA removes its unfinished temporary files within a few seconds and ends by the same
-signal, so the job ends with the conventional status and no partial output is left. Re-run the
-job to produce the results. See [Exit codes](/reference/exit-codes/).
+SIGKILL; Grid Engine can warn first with SIGUSR1 or SIGUSR2 — DiMA removes its unfinished
+temporary files within a few seconds and ends by the same signal, so the job ends with the
+conventional status and no partial output file is left. Re-run the job to produce the results.
+Standard output is the exception: it is written as it is produced, so with `> results.json` an
+interrupted run can leave a partial file. Use `-o results.json`, which is written to a temporary
+file and moved into place only when complete. See [Exit codes](/reference/exit-codes/).
 
 ## Run reports
 
@@ -129,6 +177,30 @@ In Snakemake or Nextflow rules, give DiMA the task's CPUs explicitly (`-t {threa
 DiMA can read — and use `-q` or `-v` as you prefer for the task log. Outputs are complete or
 absent, never partial, so a failed task never leaves a file a later rule could mistake for a
 result.
+
+A Snakemake rule that keeps the run report and the messages as logs, which Snakemake keeps when
+a job fails:
+
+```python
+rule dima:
+    input:
+        "alignments/{name}.fasta.zst"
+    output:
+        results="results/{name}.json.zst",
+        tables=directory("results/{name}_tables"),
+    log:
+        report="logs/{name}.run.json",
+        messages="logs/{name}.log",
+    threads: 4
+    shell:
+        "dima analyze -i {input} -o {output.results} --tsv-dir {output.tables} "
+        "--run-report {log.report} -t {threads} -v 2> {log.messages}"
+```
+
+Snakemake creates the `results` and `logs` folders; DiMA creates the tables folder, and removes
+it again when the run fails. `snakemake -c 8 results/mers.json.zst` runs it for
+`alignments/mers.fasta.zst`; for a job that failed, `logs/NAME.run.json` holds its status, exit
+code and error, and `logs/NAME.log` its messages.
 
 ## References
 

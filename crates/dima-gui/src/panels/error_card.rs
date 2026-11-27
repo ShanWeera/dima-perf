@@ -3,6 +3,7 @@
 
 use egui::{RichText, Ui};
 
+use super::common::Described;
 use crate::app::msg::Msg;
 use crate::state::ErrorCard;
 use crate::theme::DesignTokens;
@@ -88,7 +89,7 @@ pub fn show(ui: &mut Ui, card: &ErrorCard, t: &DesignTokens, out: &mut Vec<Msg>,
                     && card.failed_run.is_some()
                     && ui
                         .button("Save run report\u{2026}")
-                        .on_hover_text(super::help_text::export(
+                        .described(super::help_text::export(
                             crate::workers::export::ExportKind::RunReport,
                             crate::charts::metric::ChartMetric::Entropy,
                         ))

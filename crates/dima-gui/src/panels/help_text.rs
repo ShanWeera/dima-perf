@@ -38,7 +38,9 @@ pub fn export(kind: crate::workers::export::ExportKind, metric: ChartMetric) -> 
                            Name the file .json.gz or .json.zst to compress it. The app can open \
                            it again."
             .to_owned(),
-        K::Jsonl => "One position per line; provenance and summaries are in the JSON.".to_owned(),
+        K::Jsonl => "One position per line; provenance and summaries are in the JSON. Name the \
+                     file .jsonl.gz or .jsonl.zst to compress it."
+            .to_owned(),
         K::TsvFolder => format!(
             "Tidy tables <name>.positions/variants/metadata/hcs.tsv, as `dima analyze \
              --tsv-dir` writes them: one row per observation, tab-separated with RFC 4180 \
@@ -46,12 +48,14 @@ pub fn export(kind: crate::workers::export::ExportKind, metric: ChartMetric) -> 
             refs(&TABLES)
         ),
         K::HcsJson => format!(
-            "The conserved regions at the current threshold, with their flags and the 95% \
-             Clopper-Pearson lower bound of their conservation.{}",
+            "The conserved regions at the current threshold, with their flags and, for each, \
+             the lowest per-position 95% Clopper\u{2013}Pearson lower bound among its members. \
+             Name the file .json.gz or .json.zst to compress it.{}",
             refs(&HCS)
         ),
         K::HcsTsv => format!(
-            "The conserved regions at the current threshold, one row per region.{}",
+            "The conserved regions at the current threshold, one row per region. Name the file \
+             .tsv.gz or .tsv.zst to compress it.{}",
             refs(&[HCS.as_slice(), TABLES.as_slice()].concat())
         ),
         K::Png => format!(
@@ -65,7 +69,7 @@ pub fn export(kind: crate::workers::export::ExportKind, metric: ChartMetric) -> 
         K::RunReport => format!(
             "How the analysis ran: version, equivalent command, threads, phase times, platform, \
              and the size and SHA-256 of the input and of the exported files. No paths, user or \
-             host names.{}",
+             host names. Name the file .json.gz or .json.zst to compress it.{}",
             refs(&[c("taschuk2017").at("Rule 10"), c("khan2019"), c("leo2024")])
         ),
         K::Methods => {
@@ -77,15 +81,16 @@ pub fn export(kind: crate::workers::export::ExportKind, metric: ChartMetric) -> 
     }
 }
 
-/// Alphabet.
+/// Alphabet. Eddy (2011) is cited as HMMER's paper only: it does not describe Easel's
+/// alphabet detection, which is the library's port of Easel's code (engineering).
 #[must_use]
 pub fn alphabet() -> String {
     format!(
-        "Sequence alphabet. Auto detects it from the first records with Easel's rules (as in \
-         HMMER), which make no false calls and otherwise ask you to choose. T and U are folded to \
-         the alphabet's letter and lower case to upper case. Gaps (- . _), missing data (~ ?), \
-         stops (* $ ^), frameshifts (#) and ambiguity codes exclude the k-mers that contain them; \
-         protein U and O are residues.{}",
+        "Sequence alphabet. Auto detects it from the residues of the first records with the \
+         rules of Easel's esl_abc_GuessAlphabet, the sequence library of HMMER; when they cannot \
+         tell, choose it here. T and U are folded to the alphabet's letter and lower case to \
+         upper case. Gaps (- . _), missing data (~ ?), stops (* $ ^), frameshifts (#) and \
+         ambiguity codes exclude the k-mers that contain them; protein U and O are residues.{}",
         refs(&[
             c("eddy2011"),
             c("cornishbowden1985"),
@@ -108,19 +113,36 @@ pub fn kmer_length() -> String {
     )
 }
 
+/// The rule of the paper's correction, in the words the documentation and the command line
+/// use: an eligible position is corrected where possible. `t` is the run's threshold, which
+/// the example then uses; without one (an option being edited) the example is T = 100.
+#[must_use]
+pub fn corrected_where_possible(t: Option<u64>) -> String {
+    let t = t.unwrap_or(DEFAULT_SUPPORT_THRESHOLD);
+    format!(
+        "With the paper's estimator, an eligible position's entropy is corrected where \
+         possible. The correction needs at least five regression points (the full data set \
+         included; a minimum taken from DiMA v5.0.9, which the paper does not state), so a \
+         position is corrected only when its support is at least 1.25 T ({} sequences for T = \
+         {t}). Between T and that, and in the one tiny case T = 2, N = 3, it keeps its observed \
+         entropy. Such positions are still eligible and in the summaries.",
+        dima_core::entropy::min_corrected_support(t)
+    )
+}
+
 /// Support threshold.
 #[must_use]
 pub fn support_threshold() -> String {
     format!(
-        "Support threshold T. A position's support is the number of sequences with a valid k-mer \
-         there. Positions with support above T are eligible: they enter the summaries, and the \
-         DiMA estimator corrects their entropy for sample size. Support 0 (NS), below T (LS) and \
-         equal to T (ELS) are labelled and excluded from the summaries; the DiMA estimator \
-         reports the observed entropy at LS and ELS. NS has no entropy, where the paper assigns \
-         a pseudo-entropy of 0: a value that was not observed is missing, not zero. Default: \
-         {DEFAULT_SUPPORT_THRESHOLD}, as in the paper.{}",
+        "Support threshold T. A position's support N is the number of sequences with a valid \
+         k-mer there. Positions with support above T are eligible: they enter the summaries. {} \
+         Support 0 (NS), below T (LS) and equal to T (ELS) are labelled and left out of the \
+         summaries; the paper's estimator reports the observed entropy at LS and ELS. NS has no \
+         entropy, where the paper assigns a pseudo-entropy of 0: a value that was not observed \
+         is missing, not zero. Default: {DEFAULT_SUPPORT_THRESHOLD}, as in the paper.{}",
+        corrected_where_possible(None),
         refs(&[
-            c("tharanga2025").at("Methods"),
+            c("tharanga2025").at("Methods and Fig. 2"),
             c("rubin1976"),
             c("silverman2020")
         ])
@@ -154,9 +176,9 @@ pub fn hcs_threshold() -> String {
         "Historically conserved sequences: consecutive positions whose most common (Index) k-mer \
          reaches this incidence, joined where the k-mers overlap or abut. Above 50% and at most \
          100% (compared exactly). Regions that include positions with support \u{2264} T are \
-         flagged (*), and each reports the exact 95% Clopper\u{2013}Pearson lower bound of its \
-         conservation. Default: 100%, the paper's (every sequence with a valid k-mer has the \
-         Index).{}",
+         flagged (*), and each reports the lowest per-position exact 95% \
+         Clopper\u{2013}Pearson lower bound among its members. Default: 100%, the paper's \
+         (every sequence with a valid k-mer has the Index).{}",
         refs(&[
             c("tharanga2025"),
             c("raman2020"),
@@ -180,14 +202,18 @@ pub fn hcs_eligible_only() -> String {
 #[must_use]
 pub fn estimator() -> String {
     format!(
-        "Entropy estimator. DiMA is the paper's correction: entropies of subsamples are regressed \
-         on 1/n and the intercept is the estimate, computed as the exact expectation of the \
-         paper's random subsampling (reproducible; the limit of averaging many random subsets, \
-         as in the original method); positions \
-         with support \u{2264} T keep the observed entropy, as in the paper. \
-         Chao\u{2013}Wang\u{2013}Jost (the least biased in its authors' comparison) and \
+        "Entropy estimator. At a position, N is its support (the sequences with a valid k-mer \
+         there), n the size of a subsample of R% of them (R \u{d7} N / 100, rounded up) and D \
+         the number of distinct k-mers (the Index included). DiMA (paper, Fig. 2) is the \
+         paper's correction: entropies of subsamples are regressed on 1/n and the intercept is \
+         the estimate, computed as the exact expectation of the paper's random subsampling \
+         (reproducible; the limit of averaging many random subsets, as in the original \
+         method). {} Positions with support \u{2264} T keep the observed entropy, as in the \
+         paper. Chao\u{2013}Wang\u{2013}Jost (the least biased in its authors' comparison) and \
          Miller\u{2013}Madow (which adds (D \u{2212} 1)/(2N ln 2)) apply to every position with \
-         at least 2 sequences; Raw is the observed entropy everywhere.{}",
+         at least 2 sequences, whatever its support; a position with one sequence keeps its \
+         observed entropy (0 bits). Raw (plug-in) is the observed entropy everywhere.{}",
+        corrected_where_possible(None),
         refs(&[
             c("tharanga2025").at("Fig. 2"),
             c("shannon1948"),
@@ -216,13 +242,15 @@ pub fn similarity_weighted_entropy() -> String {
     )
 }
 
-/// Validation mode.
+/// Validation mode. Report differs from Permissive only on the command line, which then prints
+/// the table of characters; the app's Diagnostics window shows that table after every run.
 #[must_use]
 pub fn validation() -> String {
     "How characters outside the alphabet are handled. Strict stops at the first one with its \
      record, line and column; Permissive excludes the k-mers that contain them and reports one \
-     warning; Report also lists every character found (Diagnostics). Structural problems \
-     (unequal lengths, NUL bytes) always stop the run."
+     warning. Report runs as Permissive; on the command line it also prints the table of every \
+     character found, which the Diagnostics window shows after every run, whatever the mode. \
+     Structural problems (unequal lengths, NUL bytes) always stop the run. Default: Strict."
         .to_owned()
 }
 
@@ -231,9 +259,13 @@ pub fn validation() -> String {
 pub fn min_coverage() -> String {
     format!(
         "Flag positions whose estimated sample coverage (the probability that one more sequence \
-         carries an already seen k-mer) is below this value. Coverage is always reported; this \
-         adds the flag, a chart mark and a warning.{}",
-        refs(&[c("chao2012").at("Eq. 4a")])
+         carries an already seen k-mer) is below this value. Coverage is estimated with Chao and \
+         Jost's formula and, where no k-mer is seen exactly twice, with the form of Chao, Wang \
+         and Jost. It is always reported; this adds the flag, a chart mark and a warning.{}",
+        refs(&[
+            c("chao2012").at("Eq. 4a"),
+            c("chao2013").at("Materials and methods")
+        ])
     )
 }
 
@@ -266,17 +298,25 @@ pub fn chart_encoding(t: u64, estimator: Estimator, metric: ChartMetric) -> Stri
              similarity-weighted value is corrected for sample size."
         ),
         (ChartMetric::Entropy, Estimator::Dima) => format!(
-            "Solid blue: corrected entropy at positions with support > {t}. Dashed vermillion: \
-             the observed (uncorrected) entropy at positions with support \u{2264} {t} (LS, ELS)."
+            "Solid blue: eligible positions (support > {t}). {} Dashed vermillion: the observed \
+             (uncorrected) entropy at positions with support \u{2264} {t} (LS, ELS).",
+            corrected_where_possible(Some(t))
         ),
-        (
-            ChartMetric::Entropy,
-            Estimator::ChaoWangJost | Estimator::MillerMadow | Estimator::Raw,
-        ) => format!(
+        (ChartMetric::Entropy, Estimator::Raw) => format!(
             "Solid blue: positions with support > {t}, which enter the summaries. Dashed \
-             vermillion: positions with support \u{2264} {t} (LS, ELS), estimated the same way \
-             from fewer sequences and left out of the summaries."
+             vermillion: positions with support \u{2264} {t} (LS, ELS), from fewer sequences and \
+             left out of the summaries. Every value is the observed (plug-in) entropy."
         ),
+        (ChartMetric::Entropy, e @ (Estimator::ChaoWangJost | Estimator::MillerMadow)) => {
+            format!(
+                "Solid blue: positions with support > {t}, which enter the summaries. Dashed \
+                 vermillion: positions with support \u{2264} {t} (LS, ELS), from fewer sequences \
+                 and left out of the summaries. The {} estimate applies to every position with \
+                 at least 2 sequences; a position with one sequence keeps its observed entropy \
+                 (0 bits).",
+                crate::state::options::estimator_label(e)
+            )
+        }
     };
     const ENCODING: [Cite; 6] = [
         c("tharanga2025"),
@@ -360,6 +400,25 @@ pub fn normalised_similarity_weighted_fact() -> String {
          support) come from support \u{2264} T: they are less reliable and can be higher or \
          lower than with more sequences.{}",
         normalised_refs()
+    )
+}
+
+/// The summary chip of the threshold: which positions are eligible, and what the run's
+/// estimator does with them (the paper's corrects them where possible).
+#[must_use]
+pub fn threshold_chip(t: u64, estimator: Estimator) -> String {
+    let what = match estimator {
+        Estimator::Dima => corrected_where_possible(Some(t)),
+        Estimator::Raw => "Every entropy is the observed (plug-in) entropy.".to_owned(),
+        Estimator::ChaoWangJost | Estimator::MillerMadow => format!(
+            "The {} estimate applies to every position with at least 2 sequences, eligible or \
+             not.",
+            crate::state::options::estimator_label(estimator)
+        ),
+    };
+    format!(
+        "Positions supported by more than {} (T) are eligible: they enter the summaries. {what}",
+        dima_core::human::plural(t, "sequence", "sequences")
     )
 }
 
@@ -464,13 +523,23 @@ mod tests {
         ] {
             assert!(text.contains("\n\nRef: "), "{text}");
         }
-        assert!(super::support_threshold().contains("Tharanga et al. 2025, Methods"));
-        // The entropy texts are those of 1.0.0; similarity-weighted entropy cites Wu first and
-        // never calls itself corrected.
+        assert!(
+            super::support_threshold().contains("Tharanga et al. 2025, Methods and Fig. 2"),
+            "{}",
+            super::support_threshold()
+        );
+        // The paper's estimator corrects where possible (the shared wording, with the run's
+        // threshold); similarity-weighted entropy cites Wu first and never calls itself
+        // corrected.
         let entropy = super::chart_encoding(100, Estimator::Dima, ChartMetric::Entropy);
         assert!(
-            entropy.starts_with("Solid blue: corrected entropy at positions with support > 100.")
+            entropy.starts_with(
+                "Solid blue: eligible positions (support > 100). With the paper's estimator, an \
+                 eligible position's entropy is corrected where possible."
+            ),
+            "{entropy}"
         );
+        assert!(entropy.contains(&super::corrected_where_possible(Some(100))));
         assert!(entropy.contains("which have no entropy (they are never drawn as 0)"));
         assert!(
             entropy.contains("Ref: Tharanga et al. 2025; Wong 2011"),
@@ -518,6 +587,90 @@ mod tests {
             super::export(K::Svg, ChartMetric::SimilarityWeighted)
                 .starts_with("The similarity-weighted entropy chart as shown")
         );
+    }
+
+    /// The shared wording of the paper's correction: corrected where possible, from support
+    /// ⌈1.25 T⌉ (the five-point minimum of DiMA v5.0.9), with the run's threshold in the example.
+    #[test]
+    fn the_correction_is_described_where_possible() {
+        // The rule itself is the library's (checked there against the estimator); the text
+        // gives its value for the run's threshold.
+        assert!(super::corrected_where_possible(Some(2)).contains("(4 sequences for T = 2)"));
+        assert!(super::corrected_where_possible(Some(25)).contains("(32 sequences for T = 25)"));
+        assert_eq!(
+            super::corrected_where_possible(None),
+            "With the paper's estimator, an eligible position's entropy is corrected where \
+             possible. The correction needs at least five regression points (the full data set \
+             included; a minimum taken from DiMA v5.0.9, which the paper does not state), so a \
+             position is corrected only when its support is at least 1.25 T (125 sequences for \
+             T = 100). Between T and that, and in the one tiny case T = 2, N = 3, it keeps its \
+             observed entropy. Such positions are still eligible and in the summaries."
+        );
+        assert!(super::corrected_where_possible(Some(30)).contains("(38 sequences for T = 30)"));
+        // Every text about the paper's estimator says it, in the same words.
+        let shared = super::corrected_where_possible(None);
+        for text in [super::support_threshold(), super::estimator()] {
+            assert!(text.contains(&shared), "{text}");
+        }
+        assert!(super::threshold_chip(100, Estimator::Dima).contains(&shared));
+        assert!(
+            super::threshold_chip(30, Estimator::Dima)
+                .starts_with("Positions supported by more than 30 sequences (T) are eligible")
+        );
+        // The other estimators: no correction rule, and no claim that a position with one
+        // sequence is estimated like the others.
+        for e in [
+            Estimator::ChaoWangJost,
+            Estimator::MillerMadow,
+            Estimator::Raw,
+        ] {
+            let chart = super::chart_encoding(100, e, ChartMetric::Entropy);
+            assert!(!chart.contains("corrected where possible"), "{chart}");
+            assert!(!chart.contains("estimated the same way"), "{chart}");
+            assert!(!super::threshold_chip(100, e).contains("corrected where possible"));
+        }
+        let cwj = super::chart_encoding(100, Estimator::ChaoWangJost, ChartMetric::Entropy);
+        assert!(
+            cwj.contains(
+                "The Chao\u{2013}Wang\u{2013}Jost estimate applies to every position with at \
+                 least 2 sequences; a position with one sequence keeps its observed entropy (0 \
+                 bits)."
+            ),
+            "{cwj}"
+        );
+        let raw = super::chart_encoding(100, Estimator::Raw, ChartMetric::Entropy);
+        assert!(raw.contains("Every value is the observed (plug-in) entropy."));
+        assert!(
+            super::estimator().contains("N is its support")
+                && super::estimator().contains("D the number of distinct k-mers")
+        );
+    }
+
+    /// Alphabet detection is named as Easel's code, HMMER's sequence library; Eddy (2011) is
+    /// HMMER's paper and is not cited for the rules, which it does not describe.
+    #[test]
+    fn the_alphabet_tooltip_names_easels_code() {
+        let a = super::alphabet();
+        assert!(
+            a.starts_with(
+                "Sequence alphabet. Auto detects it from the residues of the first records with \
+                 the rules of Easel's esl_abc_GuessAlphabet, the sequence library of HMMER;"
+            ),
+            "{a}"
+        );
+        assert!(!a.contains("no false calls"), "{a}");
+        assert!(a.contains("Ref: Eddy 2011"), "{a}");
+    }
+
+    /// Report runs as Permissive in the app: the tooltip never says it adds something there.
+    #[test]
+    fn the_validation_tooltip_says_where_report_differs() {
+        let v = super::validation();
+        assert!(
+            v.contains("Report runs as Permissive; on the command line"),
+            "{v}"
+        );
+        assert!(!v.contains("Report also lists"), "{v}");
     }
 
     /// The mean line's legend tooltip names the metric, the positions it covers and the chip

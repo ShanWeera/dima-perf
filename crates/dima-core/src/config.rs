@@ -538,6 +538,32 @@ impl AnalysisParams {
         )
     }
 
+    /// [`Self::kmer_length`] for an alignment of `width` columns, checked to fit it.
+    ///
+    /// # Errors
+    /// A usage error when k is longer than the alignment; it names the alphabet's default when
+    /// k was not given, so the user knows where the value came from and that `-k` sets it.
+    pub fn kmer_length_for(&self, alphabet: Alphabet, width: usize) -> Result<Param<usize>> {
+        let k = self.kmer_length(alphabet);
+        if k.value <= width {
+            return Ok(k);
+        }
+        let what = if k.origin == Origin::User {
+            format!("k-mer length {}", k.value)
+        } else {
+            format!(
+                "k-mer length {} (the default for {})",
+                k.value,
+                if alphabet.is_nucleotide() {
+                    "DNA and RNA"
+                } else {
+                    "proteins"
+                }
+            )
+        };
+        Err(kmer_too_long(&what, width))
+    }
+
     /// The header fill value with its origin.
     #[must_use]
     pub fn header_fill(&self) -> Param<String> {
@@ -547,6 +573,21 @@ impl AnalysisParams {
             Origin::Default,
         )
     }
+}
+
+/// The error for a k-mer length longer than an alignment of `width` columns; `what` names the
+/// length (`k-mer length 27`).
+pub(crate) fn kmer_too_long(what: &str, width: usize) -> DimaError {
+    let hint = if width == 1 {
+        "use -k 1: an alignment of 1 column holds nothing longer".to_owned()
+    } else {
+        format!("choose a k-mer length from 1 to {width} with -k")
+    };
+    DimaError::usage(format!(
+        "{what} is longer than the alignment ({})",
+        crate::human::plural(width as u64, "column", "columns")
+    ))
+    .with_hint(hint)
 }
 
 #[cfg(test)]

@@ -50,7 +50,7 @@
   "run": {
     "tool": {
       "name": "dima",
-      "version": "1.1.1"
+      "version": "1.2.0"
     },
     "parameters": {
       "alphabet": {
@@ -392,7 +392,7 @@
       },
       {
         "key": "dima_software",
-        "citation": "Tharanga S. dima: sequence diversity dynamics analyser for viruses (Rust implementation), version 1.1.1 [software]. https://github.com/ShanWeera/dima-perf",
+        "citation": "Tharanga S. dima: sequence diversity dynamics analyser for viruses (Rust implementation), version 1.2.0 [software]. https://github.com/ShanWeera/dima-perf",
         "doi": null,
         "url": "https://github.com/ShanWeera/dima-perf"
       },
@@ -418,6 +418,12 @@
         "key": "chao2012",
         "citation": "Chao A, Jost L. Coverage-based rarefaction and extrapolation: standardizing samples by completeness rather than size. Ecology. 2012;93(12):2533-2547. doi:10.1890/11-1952.1",
         "doi": "10.1890/11-1952.1",
+        "url": null
+      },
+      {
+        "key": "chao2013",
+        "citation": "Chao A, Wang YT, Jost L. Entropy and the species accumulation curve: a novel entropy estimator via discovery rates of new species. Methods in Ecology and Evolution. 2013;4(11):1091-1100. doi:10.1111/2041-210X.12108",
+        "doi": "10.1111/2041-210X.12108",
         "url": null
       },
       {

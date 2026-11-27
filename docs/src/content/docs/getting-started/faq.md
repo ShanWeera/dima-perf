@@ -20,9 +20,35 @@ which stays installable from PyPI but is no longer developed, and the web server
 The analysis is now a subcommand: `dima analyze -i alignment.fasta`. Several options were renamed,
 and short options now have the meanings common to command-line tools: `-t` sets the number of
 threads, `-q` and `-v` how much is printed, and `-k` the k-mer length (see
-[the command line](/reference/cli/)). The default support threshold is now the paper's 100
-(5.x used 30). Some results differ by design; each difference is listed with its reason in
-[Differences from DiMA v5.0.9](/explanation/differences/).
+[the command line](/reference/cli/)). The options of `dima-cli` 5.0.9 and their equivalents:
+
+| `dima-cli` 5.0.9 | `dima` | Note |
+|---|---|---|
+| `dima-cli -i FILE -o OUT` | `dima analyze -i FILE -o OUT.json` | Without `-o`, the results go to standard output |
+| `-t json` (`--type`) | `-O json` (`--output-format`) | Also `jsonl` and `tsv`; the file extension usually says it. `-t` is now the number of threads |
+| `-l K` (`--length`) | `-k K` (`--kmer-length`) | Default 9 for proteins and 27 for nucleotides (5.0.9: 9 for both) |
+| `-s T` (`--sthresh`) | `-s T` (`--support-threshold`) | Default 100, the paper's (5.0.9: 30) |
+| `-a protein`, `-a nucleotide` | `-a protein`, `-a dna` or `-a rna` (`nucleotide` is accepted for `dna`) | Default: detected from the data (5.0.9: `protein`) |
+| `-f FIELDS` (`--format`) | `--header-format FIELDS` | `--metadata-fields` then chooses which fields to stratify by (default: all) |
+| `-n VALUE` (`--fillna`) | `--header-fillna VALUE` | Default `Unknown` |
+| `-q NAME` (`--query`) | `--query-name NAME` | Default: the file name (5.0.9: `Unknown Query`). `-q` is now quiet |
+| `-c FILE` (`--hcsout`) | `--hcs-output FILE` | `.json` or `.tsv` |
+| `-e PERCENT` (`--htresh`) | `--hcs-min-incidence PERCENT` | Above 50 and at most 100, compared exactly |
+| `-v` (`--version`) | `-V` (`--version`) | `-v` is now verbose |
+
+To run with 5.0.9's defaults, give its k and threshold explicitly — `-s 30`, and `-k 9` for a
+nucleotide alignment, here a file of your own named `spike_nt.fasta`:
+
+```sh
+dima analyze -i spike_nt.fasta -a dna -k 9 -s 30 -o spike_nt.json
+```
+
+Even then, some results differ by design: the entropy correction is computed exactly instead of
+from random subsamples, positions without support have no entropy (`null`) instead of 0, and
+`average_entropy` is the mean of the eligible positions only (v5.0.9's mean over every position
+is `all_positions_summary.average_entropy`). [Compare with DiMA v5.0.9](/how-to/reproducibility/#compare-with-dima-v509)
+shows how to compare the keys, and [Differences from DiMA v5.0.9](/explanation/differences/)
+lists each difference with its reason.
 
 ### Does my data leave my computer?
 
@@ -49,11 +75,24 @@ with Biopython's `AlignIO.convert` [@cock2009]. See [Reading alignments](/explan
 
 ### How many sequences do I need?
 
-A position needs more sequences with a valid k-mer than the support threshold (`-s`, default 100)
-for the paper's corrected entropy and to enter the summary statistics. With smaller alignments,
-lower `-s` and report the value you used, or choose `--estimator chao-wang-jost`, which corrects
-every position with at least two sequences [@chao2013]. See
-[Choose the support threshold](/how-to/analyse/#choose-the-support-threshold) and
+Two numbers matter, the support threshold $T$ (`-s`, default 100) and a position's support $N$,
+the sequences with a valid k-mer there:
+
+- A position enters the summary statistics only with support **above** $T$, whatever the
+  estimator. With 26 sequences and the default $T = 100$, no position is eligible and the
+  summaries are empty, even with `--estimator chao-wang-jost`.
+- The paper's correction, the default estimator, needs at least five points (a minimum taken
+  from DiMA v5.0.9, which the paper does not state), so it corrects a position only when its
+  support is at least $1.25\,T$. For positions that all $N$ sequences support to be corrected,
+  choose $T$ at most $0.8\,N$: $T = 20$ for 26 sequences (and $T = 1$ for 3 sequences, where
+  $T = 2$ gives subsamples of a single size, so no regression line).
+
+So with a small alignment, lower `-s` and report the value you used. The alternative estimators
+`--estimator chao-wang-jost` [@chao2013] and `--estimator miller-madow` [@miller1955] estimate
+the entropy of every position with at least two sequences, low-support ones included, but those
+positions still stay out of the summaries. See
+[Choose the support threshold](/how-to/analyse/#choose-the-support-threshold), which shows how to
+check which positions were corrected, and
 [Alternative estimators](/explanation/entropy/#alternative-estimators).
 
 ### Which version of this documentation should I read?
@@ -79,7 +118,18 @@ support threshold, and between positions of similar support: the scale of entrop
 window length and the alphabet, and entropy estimates grow with the number of sequences
 [@miller1955; @chao2013], a dependence the paper's correction reduces but does not remove. Report
 the support and the sample coverage of both analyses, and check that the conclusion holds with
-`--estimator chao-wang-jost`. See [Entropy and its correction](/explanation/entropy/).
+`--estimator chao-wang-jost`. [Compare two alignments](/how-to/analyse/#compare-two-alignments)
+shows which numbers to set side by side — the eligible mean, the share of the alignment it
+covers, and the support behind it — with a worked example. See also
+[Entropy and its correction](/explanation/entropy/).
+
+The DiMA lineage compares proteins by their mean entropy over eligible positions, by their
+highest entropy, and by the share of positions that are highly conserved (Index incidence of 90%
+or more), mixed-variable or highly diverse (20% or less) [@tharanga2025, Results; @hu2013,
+Results and Fig. 3]. It reports no statistical test of a difference, and neither does DiMA.
+Datasets of very different size can still rank the wrong way round [@zhao2019, Section 3.1]:
+[Read the comparison](/how-to/analyse/#read-the-comparison) gives three ways to check, from
+comparing at similar sample coverage to subsampling the larger dataset.
 
 The optional similarity-weighted and normalised entropies need the same care, and they are not
 corrected for sample size at all: the observed entropy is lower on average with fewer sequences
@@ -149,7 +199,7 @@ The average entropy of the eligible positions, the positions with support above 
 threshold $T$, each position counted once. It is the run's mean entropy: `average_entropy` in the
 results, `entropy mean` in the line `dima analyze` prints at the end, the *mean* chip of the
 desktop app and the dashed grey line labelled *eligible mean* on the app's entropy chart. For the
-bundled MERS-CoV spike sample it is 0.1261 bits. Positions with support at or below $T$ are not in
+MERS-CoV spike sample (`samples/mers_spike_aa.fasta` in the repository) it is 0.1261 bits. Positions with support at or below $T$ are not in
 it, so it is not the mean of every point the chart draws. When the chart shows
 similarity-weighted entropy, the same line is the eligible mean of similarity-weighted entropy
 (0.0363 bits for the same sample). See
@@ -173,10 +223,11 @@ threads, and every result file records the version that produced it
 ### How exact are the numbers?
 
 Exact to far more digits than any analysis needs, but not to the last digit. Like any
-floating-point program, DiMA rounds. Its values are accurate to about 14 significant digits on
-alignments of thousands of sequences, and to at least 10 at 17.5 million sequences per
-position (the opt-in Chao–Wang–Jost estimator to about 15 digits at any size, the opt-in
-similarity-weighted entropy to at least 9). The error is at least $10^{10}$ times smaller than
+floating-point program, DiMA rounds. On the paper's four datasets in the repository (up to 3,756
+sequences), the rounding error is in the last one or two of the 17 significant digits written to
+the results, and at 17.5 million sequences per position it reaches at most the 11th digit (the
+opt-in Chao–Wang–Jost estimator stays within a few units in the last place at any size; the
+opt-in similarity-weighted entropy reaches at most the 10th digit). The error is at least $10^{10}$ times smaller than
 the sampling error of the estimate ($10^9$ times for similarity-weighted entropy). [Numerical accuracy](/explanation/numerical-accuracy/)
 has the measurements.
 

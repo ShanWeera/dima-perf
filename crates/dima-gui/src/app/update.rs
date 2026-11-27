@@ -230,8 +230,8 @@ pub fn update(state: &mut AppState, msg: Msg) -> Vec<Effect> {
                 Severity::Error,
                 format!(
                     "Could not start {what}: the system refused a new thread ({reason}). Nothing \
-                     was written. Close other programs or lower the number of threads in the \
-                     settings, then try again."
+                     was written. Close other programs or lower Worker threads under Advanced \
+                     (Setup screen), then try again."
                 ),
                 None,
                 state.now,
@@ -262,6 +262,33 @@ fn name_of(path: &Path) -> String {
     dima_core::run_report::file_name(path)
 }
 
+/// The extensions of a save dialog's filter for `kind`: native filters match a name's last
+/// extension, so the endings it accepts are cut to theirs (`json.gz` → `gz`), and compound
+/// names pass. The format's usual extension comes first, then its others, then the
+/// compressions: a dialog adds the first one to a name typed without any (Windows' default
+/// extension, the first type macOS allows), so `results` becomes `results.json`, never
+/// `results.gz`.
+fn filter_extensions(kind: ExportKind) -> Vec<String> {
+    let compression = |e: &str| {
+        [
+            dima_core::output::OutputCompression::Gzip,
+            dima_core::output::OutputCompression::Zstd,
+        ]
+        .iter()
+        .any(|c| c.extension().trim_start_matches('.') == e)
+    };
+    let mut exts: Vec<String> = Vec::new();
+    for a in kind.accepted() {
+        let last = a.rsplit('.').next().unwrap_or(a.as_str()).to_owned();
+        if !exts.contains(&last) {
+            exts.push(last);
+        }
+    }
+    // Stable: the format's extensions keep their order, ahead of the compressions.
+    exts.sort_by_key(|e| compression(e));
+    exts
+}
+
 fn dialog_effect(state: &AppState, purpose: Purpose, built_in: bool) -> Effect {
     let query = state
         .session
@@ -283,17 +310,9 @@ fn dialog_effect(state: &AppState, purpose: Purpose, built_in: bool) -> Effect {
             DialogKind::Save {
                 default_name: kind.default_name(&query, metric),
                 filter: kind.extension().map(|_| {
-                    // Native filters match the last extension; compound names (.json.gz) pass.
-                    let mut exts: Vec<String> = kind
-                        .accepted()
-                        .iter()
-                        .map(|a| a.rsplit('.').next().unwrap_or(a).to_owned())
-                        .collect();
-                    exts.sort();
-                    exts.dedup();
                     (
                         kind.label(metric).trim_end_matches('\u{2026}').to_owned(),
-                        exts,
+                        filter_extensions(kind),
                     )
                 }),
             },
@@ -309,7 +328,10 @@ fn dialog_effect(state: &AppState, purpose: Purpose, built_in: bool) -> Effect {
                         .as_deref()
                         .map_or_else(|| "dima".to_owned(), |p| file_stem(&name_of(p)))
                 ),
-                filter: Some(("Run report (JSON)".to_owned(), vec!["json".to_owned()])),
+                filter: Some((
+                    "Run report (JSON)".to_owned(),
+                    filter_extensions(ExportKind::RunReport),
+                )),
             },
             "Save run report".to_owned(),
         ),
@@ -569,15 +591,10 @@ fn analyze(state: &mut AppState) -> Vec<Effect> {
     let Some(path) = state.setup.file.clone() else {
         return Vec::new();
     };
-    let alignment_length = state.setup.inspection.as_ref().map(|i| i.alignment_length);
-    let problems = state
-        .setup
-        .options
-        .problems(&state.setup.header, alignment_length);
-    if let Some(first) = problems.first() {
+    if let Some(reason) = state.not_ready() {
         state.toasts.push(
             Severity::Warning,
-            format!("Not started: {first}"),
+            format!("Not started: {reason}"),
             None,
             state.now,
         );
@@ -639,7 +656,7 @@ fn analysis_done(state: &mut AppState, generation: u64, outcome: Outcome) -> Vec
                     format!(
                         "Used {started} of {} worker threads: the system refused to start more. \
                          Results are the same with any number of threads; to avoid this, close \
-                         other programs or lower the number of threads in the settings.",
+                         other programs or lower Worker threads under Advanced (Setup screen).",
                         facts.threads
                     ),
                     None,
@@ -900,9 +917,37 @@ fn dialog_closed(
         Purpose::Export { kind, .. } => kind,
         Purpose::FailedRunReport => ExportKind::RunReport,
     };
+    // The names the command line refuses are refused; others get the extension (D100).
+    let full = match kind.destination(path.clone()) {
+        Ok(full) => full,
+        Err(e) => {
+            let (message, hint) = e.describe(&path);
+            let hint = match e {
+                // The library's hint names `--tsv-dir`; here the tables have their export.
+                dima_core::output::NameError::Folder => {
+                    "give a file name, such as results.json".to_owned()
+                }
+                _ => hint,
+            };
+            state.toasts.push(
+                Severity::Warning,
+                format!("Nothing was saved: {message} ({hint})"),
+                None,
+                state.now,
+            );
+            return Vec::new();
+        }
+    };
+    // Never over a file the app has loaded: the export would destroy it. A read-only look at
+    // the file system.
+    if let Some(refusal) = replaced_input(state, kind, &full) {
+        state
+            .toasts
+            .push(Severity::Warning, refusal, None, state.now);
+        return Vec::new();
+    }
     // The dialog asked about the name as typed; when the extension is added to it, ask about
-    // the file that would actually be replaced (D100). A read-only look at the file system.
-    let full = kind.with_extension(path.clone());
+    // the file that would actually be replaced (D100).
     if full != path && full.exists() {
         state.confirm = Some(Confirm::Overwrite {
             purpose,
@@ -911,6 +956,52 @@ fn dialog_closed(
         return Vec::new();
     }
     write_chosen(state, purpose, full)
+}
+
+/// Why an export of `kind` to `dest` must not be written, when it would replace a file the app
+/// has loaded (the alignment analysed or on the Setup screen, or the results file opened): the
+/// message that says which, `None` when it replaces none of them.
+fn replaced_input(state: &AppState, kind: ExportKind, dest: &Path) -> Option<String> {
+    let mut inputs: Vec<(&Path, &str)> = Vec::new();
+    if let Some(s) = &state.session {
+        inputs.push(match &s.origin {
+            Origin::Analysed(run) => (
+                run.path.as_path(),
+                "the alignment these results were computed from",
+            ),
+            Origin::Opened(path) => (
+                path.as_path(),
+                "the results file these results were opened from",
+            ),
+        });
+    }
+    if let Some(card) = &state.setup.failure
+        && let Some(run) = &card.failed_run
+    {
+        inputs.push((run.path.as_path(), "the alignment of the failed run"));
+    }
+    if let Some(file) = &state.setup.file {
+        inputs.push((file.as_path(), "the alignment on the Setup screen"));
+    }
+    let written = match (kind, &state.session) {
+        (ExportKind::TsvFolder, Some(s)) => {
+            crate::workers::export::table_paths(dest, &s.results.query_name)
+        }
+        _ => vec![dest.to_path_buf()],
+    };
+    written.iter().find_map(|file| {
+        inputs.iter().find_map(|&(input, what)| {
+            let name = name_of(file);
+            crate::workers::export::replaces(file, input).map(|r| match r {
+                crate::workers::export::Replaces::Certainly => {
+                    format!("Nothing was saved: '{name}' is {what}; choose another name")
+                }
+                crate::workers::export::Replaces::Possibly(why) => format!(
+                    "Nothing was saved: '{name}' may be {what} ({why}); choose another name"
+                ),
+            })
+        })
+    })
 }
 
 /// Writes an export to the destination chosen for it (with its extension).

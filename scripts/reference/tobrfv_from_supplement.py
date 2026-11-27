@@ -59,6 +59,9 @@ def read_sheets(path: Path) -> dict[str, list[tuple[str, str, int]]]:
 
 
 def main() -> int:
+    if sys.argv[1:] in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
     if len(sys.argv) != 3:
         print(__doc__.strip().splitlines()[-1], file=sys.stderr)
         return 2

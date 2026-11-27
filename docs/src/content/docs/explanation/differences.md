@@ -53,11 +53,11 @@ regions flagged, with lower bounds of 29.2% and 15.8%. See
 | Line-wrapped FASTA | lines joined after trimming their ends | all white space inside sequence lines ignored | FASTA files are commonly wrapped; formatting must not change results |
 | Lines before the first record | any line, even a blank one, stops the program | blank and white-space-only lines skipped; anything else is an error with its line and column | they carry no data; MAFFT, Clustal Omega and EMBOSS, which these pages recommend, skip them too |
 | Case | case-sensitive (`a` and `A` differ) | folded to upper case, count reported | soft-masked and lower-case alignments are common |
-| Alphabet | not detected | detected with Easel's rules, or set with `--alphabet` [@eddy2011] | no false calls; asks when undetermined |
+| Alphabet | not detected | detected with the rules of `esl_abc_GuessAlphabet` in Easel, the sequence library of HMMER [@eddy2011], or set with `--alphabet` | no false calls [@easel]; asks when undetermined |
 | T and U | different symbols | one symbol, spelled per alphabet | a mixed T/U file is a formatting artefact |
 | Protein U and O | excluded | residues | selenocysteine and pyrrolysine are encoded amino acids [@bock1991; @srinivasan2002] |
 | Nucleotide X and I | residues | ambiguity codes, excluded | not one of A, C, G, T/U [@cornishbowden1985] |
-| `.` `*` `#` `$` and spaces between residues | residues | gap, stop, frameshift, stop: excluded; spaces ignored | LANL and Easel symbol conventions [@lanlcodes; @eddy2011] |
+| `.` `*` `#` `$` and spaces between residues | residues | gap, stop, frameshift, stop: excluded; spaces ignored | the symbol conventions of LANL alignments [@lanlcodes] and of Easel, the sequence library of HMMER [@eddy2011; @easel] |
 | Other characters (digits, punctuation) | residues | an error (strict) or excluded with a warning | a digit or stray symbol is never a residue |
 
 ## Headers and metadata
@@ -77,9 +77,29 @@ where the records that carry the variant give 80 and 4 (the other hosts agree).
 ## Outputs
 
 The JSON keys of v5.0.9 are kept (`query_name`, `support_threshold`, `low_support_count`,
-`highest_entropy`, `results`, `position`, `low_support`, `entropy`, `support`,
+`average_entropy`, `highest_entropy`, `results`, `position`, `low_support`, `entropy`, `support`,
 `distinct_variants_count`, `distinct_variants_incidence`, `total_variants_incidence`,
-`diversity_motifs`, `sequence`, `count`, `incidence`, `motif_short`, `motif_long`, `metadata`).
+`diversity_motifs`, `sequence`, `count`, `incidence`, `motif_short`, `motif_long`, `metadata`),
+but some hold a different value under the same name. To compare a DiMA result with one of v5.0.9,
+compare these:
+
+| Key | DiMA v5.0.9 | This implementation | Compare v5.0.9's value with |
+|---|---|---|---|
+| `average_entropy` | the mean over every position, NS counted as 0 bits | the [eligible mean](/reference/glossary/#eligible-mean): positions with support above $T$ only | `all_positions_summary.average_entropy` |
+| `highest_entropy` | the **last** position with the highest entropy over every position, numbered from 0, without a tie count | the **first** eligible position with the highest entropy, numbered from 1, with `tied_position_count` | `all_positions_summary.highest_entropy` (first position, from 1) |
+| `entropy`, `distinct_variants_incidence`, `total_variants_incidence` at NS positions | 0 | `null` (`NA` in tables) | DiMA's `null` where v5.0.9 wrote 0 |
+| `distinct_variants_incidence` at a fully conserved position | 0 | `null` ($0/0$) | DiMA's `null` where v5.0.9 wrote 0 |
+| `diversity_motifs` at NS positions | `null` | `[]`, an empty list | |
+
+On the 26 sequences of v5.0.9's test data (`tests/data/dima-v5.0.9/input.afa.bz2`) with
+`-s 30`, v5.0.9's `average_entropy` is 0.06854034285524647 bits and DiMA's
+`all_positions_summary.average_entropy` 0.06854034285524646 (the last digit is rounding); there
+DiMA's own `average_entropy` is `null`, because no position has support above 30. v5.0.9's
+`highest_entropy` names position 186, counted from 0: the last of eight tied positions, which
+DiMA numbers 180 to 187; DiMA's `all_positions_summary.highest_entropy` names position 180 with
+8 tied positions. On the HIV-1 *pol* DNA alignment, the mean over every position is 3.443 bits
+and the eligible mean 5.350 bits.
+
 New keys add what v5.0.9 left implicit: positions are 1-based, the method and fallback of each
 entropy, the observed entropy, the sample coverage, the summaries described above, and the full
 provenance of the run (`run`: parameters with their origin, input checksum, alphabet decision,

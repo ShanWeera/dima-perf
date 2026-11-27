@@ -253,6 +253,18 @@ pub fn with_help(response: egui::Response, text: &str) -> egui::Response {
     response.on_hover_text(text)
 }
 
+/// [`with_help`] as a method, for controls built in a chain (`ui.button("Fit").described(…)`).
+pub trait Described {
+    /// The tooltip, also the control's screen-reader description.
+    fn described(self, text: impl AsRef<str>) -> egui::Response;
+}
+
+impl Described for egui::Response {
+    fn described(self, text: impl AsRef<str>) -> egui::Response {
+        with_help(self, text.as_ref())
+    }
+}
+
 /// Names a control whose own text does not say what it is (a field that shows only its value):
 /// `name` is its AccessKit name, which a screen reader says first, and its hover text. Call it
 /// after the control is added, whose own AccessKit node it completes.

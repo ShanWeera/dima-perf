@@ -5,6 +5,7 @@
 
 use egui::Ui;
 
+use super::common::Described;
 use crate::app::msg::Msg;
 use crate::state::AppState;
 use crate::state::session::Origin;
@@ -32,7 +33,7 @@ pub fn show(ui: &mut Ui, state: &AppState, out: &mut Vec<Msg>) {
             let enabled = busy.is_none() && !dialog && (kind != ExportKind::RunReport || analysed);
             let response = ui
                 .add_enabled(enabled, egui::Button::new(kind.label(metric)))
-                .on_hover_text(super::help_text::export(kind, metric));
+                .described(super::help_text::export(kind, metric));
             let response = if kind == ExportKind::RunReport && !analysed {
                 response.on_disabled_hover_text("Available for analyses run in this app")
             } else if dialog {
@@ -47,5 +48,5 @@ pub fn show(ui: &mut Ui, state: &AppState, out: &mut Vec<Msg>) {
         }
     })
     .response
-    .on_hover_text("Save the results, the chart, the run report or the methods text");
+    .described("Save the results, the chart, the run report or the methods text");
 }

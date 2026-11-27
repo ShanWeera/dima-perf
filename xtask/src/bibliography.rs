@@ -35,6 +35,8 @@ pub fn method_references() -> Vec<&'static Citation> {
         }
     }
     keys.extend(dima_core::hcs::REFERENCES.iter().map(|k| (*k).to_owned()));
+    // Conserved regions of eligible positions only (`--hcs-eligible-only`) cite it too.
+    keys.push(dima_core::hcs::ELIGIBLE_ONLY_REFERENCE.to_owned());
     let mut seen = std::collections::BTreeSet::new();
     keys.into_iter()
         .filter(|k| k != citations::DIMA_PAPER && seen.insert(k.clone()))

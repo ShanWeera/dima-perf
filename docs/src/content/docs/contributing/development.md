@@ -12,7 +12,12 @@ are in [Working agreements](/contributing/working-agreements/) (the repository's
 
 - **Rust** through [rustup](https://rustup.rs/): the repository's `rust-toolchain.toml` selects
   the stable toolchain with `clippy` and `rustfmt`. The minimum supported versions are 1.85 for
-  the library and the command line and 1.95 for the desktop app, and both are tested.
+  the library and the command line and 1.95 for the desktop app, and both are tested; install
+  them once with `rustup toolchain install 1.85 1.95 --profile minimal`.
+- **Dependency checks** (only after changing dependencies):
+  [cargo-deny](https://github.com/EmbarkStudios/cargo-deny) 0.20 or newer and
+  [cargo-about](https://github.com/EmbarkStudios/cargo-about), both installed with
+  `cargo install --locked`.
 - **Desktop app on Linux**: the X11, Wayland and Vulkan development packages listed in
   `scripts/ci/install-gui-deps.sh`.
 - **Python 3.10 or newer**, standard library only, for the reference implementation.
@@ -53,6 +58,19 @@ python3 -I -B scripts/reference/docs_numbers.py --check            # the documen
 pnpm -C docs install --frozen-lockfile && pnpm -C docs build       # after documentation changes
 ```
 
+After changing dependencies, also run:
+
+```sh
+python3 scripts/notices/generate.py --check                       # third-party notices (cargo-about)
+cargo deny check bans licenses sources
+cargo deny --config deny-strict.toml --exclude dima-gui --exclude xtask --exclude-dev check bans
+```
+
+The `docs` scripts (`pnpm -C docs build`, `check`, `dev`) set an environment variable in the
+POSIX way (`ASTRO_TELEMETRY_DISABLED=1 astro …`), which Windows' default shell for pnpm does not
+understand. On Windows, run them from Git Bash or WSL, or set pnpm's script shell once:
+`pnpm config set script-shell "C:\\Program Files\\Git\\bin\\bash.exe"`.
+
 ## Generated files
 
 Some files are generated from the code and must never be edited by hand:
@@ -64,7 +82,7 @@ Some files are generated from the code and must never be edited by hand:
 | `CITATION.cff`, `.zenodo.json` | the citation registry and the workspace version |
 | `README.md` (its citation section only) | the citation registry |
 | `THIRD-PARTY-NOTICES.md` | the dependency tree (`python3 scripts/notices/generate.py`, with cargo-about) |
-| `crates/dima-core/tests/paper_expected/mod.rs` | the reference implementation on the bundled datasets (`python3 scripts/reference/paper_values.py`) |
+| `crates/dima-core/tests/paper_expected/mod.rs` | the reference implementation on the test datasets (`python3 scripts/reference/paper_values.py`) |
 | The marked regions `<!-- docs-numbers:NAME:start -->` … `:end -->` of `entropy.md`, `paper-comparison.md` and `scripts/validate_paper.sh` | expectations and simulations (`python3 -I -B scripts/reference/docs_numbers.py`) |
 
 ```sh

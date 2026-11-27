@@ -5,9 +5,13 @@
 //! be pasted (G37). Names are validated by the library (`HeaderSpec`), which also rejects empty
 //! and duplicate names (G2, G8). Stratification is per row, so renaming a field keeps it (G9).
 
-use dima_core::DimaError;
+use dima_core::config::DEFAULT_FILL;
 use dima_core::header::{HeaderSpec, split_format};
 use dima_core::validation::HeaderField;
+
+/// Why stratified fields cannot be used when no field is stratified: the app's words for the
+/// library's "no metadata fields were given".
+pub const NO_STRATIFIED_FIELD: &str = "tick at least one Stratify box";
 
 /// The predefined metadata tags of the paper (Tharanga et al. 2025, "Metadata").
 pub const PAPER_TAGS: [&str; 6] = [
@@ -104,12 +108,22 @@ impl HeaderEditor {
         }
     }
 
-    /// Validates the names and the stratified subset with the library.
-    ///
-    /// # Errors
-    /// The library's usage error (empty or repeated name, no stratified field, empty fill).
-    pub fn validate(&self, fill: &str) -> Result<(), DimaError> {
-        HeaderSpec::new(&self.names(), self.metadata_fields().as_deref(), fill).map(|_| ())
+    /// What keeps the fields from being used, in the app's words, `None` when nothing does: a
+    /// name the library refuses (`HeaderSpec`: empty or repeated, its message without the
+    /// command line's hint), or no Stratify box ticked. The fill value is an option of its own,
+    /// checked with the options.
+    #[must_use]
+    pub fn problem(&self) -> Option<String> {
+        let names = self.names();
+        if let Err(e) = HeaderSpec::new(&names, None, DEFAULT_FILL) {
+            return Some(e.to_string());
+        }
+        if !self.rows.iter().any(|r| r.stratify) {
+            return Some(NO_STRATIFIED_FIELD.to_owned());
+        }
+        HeaderSpec::new(&names, self.metadata_fields().as_deref(), DEFAULT_FILL)
+            .err()
+            .map(|e| e.to_string())
     }
 
     /// Renames the rows from a list; extra names add rows, missing ones remove rows. Samples
@@ -190,7 +204,7 @@ mod tests {
             None,
             "all stratified = the library default"
         );
-        assert!(e.validate("Unknown").is_ok());
+        assert_eq!(e.problem(), None);
     }
 
     #[test]
@@ -206,31 +220,39 @@ mod tests {
         assert_eq!(e.rows[0].tag(), None);
     }
 
+    /// The problems shown in the app: the library's messages without the command line's hints,
+    /// and the Stratify boxes for "no metadata fields were given".
     #[test]
-    fn library_validation() {
-        let mut e = HeaderEditor::from_inspection(&fields(2), 0);
-        e.rows[1].name = "field_1".into();
-        assert!(
-            e.validate("Unknown")
-                .unwrap_err()
-                .to_string()
-                .contains("more than once")
+    fn problems_in_the_apps_words() {
+        let mut e = HeaderEditor::from_inspection(&fields(3), 0);
+        assert_eq!(e.problem(), None);
+        e.rows[2].name = "field_1".into();
+        assert_eq!(
+            e.problem().as_deref(),
+            Some("header format field \"field_1\" appears more than once")
         );
-        e.rows[1].name = " ".into();
-        assert!(
-            e.validate("Unknown")
-                .unwrap_err()
-                .to_string()
-                .contains("no name")
+        e.rows[2].name = "  ".into();
+        assert_eq!(
+            e.problem().as_deref(),
+            Some("header format field 3 has no name")
         );
-        e.rows[1].name = "Host".into();
+        e.rows[2].name = "Host".into();
         for r in &mut e.rows {
             r.stratify = false;
         }
-        assert!(
-            e.validate("Unknown").is_err(),
-            "at least one stratified field"
+        assert_eq!(e.problem().as_deref(), Some(NO_STRATIFIED_FIELD));
+        assert_eq!(NO_STRATIFIED_FIELD, "tick at least one Stratify box");
+        // A name problem is named first: it is what the user sees in the editor's rows.
+        e.rows[0].name = String::new();
+        assert_eq!(
+            e.problem().as_deref(),
+            Some("header format field 1 has no name")
         );
+        // Every row's name and choice as the library takes them: what the editor accepts the
+        // library accepts (with the default fill value).
+        let ok = HeaderEditor::from_inspection(&fields(2), 0);
+        assert_eq!(ok.problem(), None);
+        assert!(HeaderSpec::new(&ok.names(), ok.metadata_fields().as_deref(), "Unknown").is_ok());
     }
 
     #[test]

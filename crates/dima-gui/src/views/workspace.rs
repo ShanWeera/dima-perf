@@ -42,22 +42,8 @@ pub fn show(
                 .id_salt("inspector_scroll")
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    let threshold = session.results.support_threshold;
-                    let estimator = session.results.run.parameters.estimator.value;
-                    let similarity = session
-                        .results
-                        .run
-                        .parameters
-                        .similarity_weighted_entropy
-                        .value;
-                    position_summary::show(
-                        ui,
-                        session.selected(),
-                        threshold,
-                        estimator,
-                        similarity,
-                        t,
-                    );
+                    let run = position_summary::RunFacts::of(&session.results);
+                    position_summary::show(ui, session.selected(), run, t);
                     if let Some(p) = session.selected() {
                         motif_composition::show(ui, &p.diversity_motifs, t);
                         ui.add_space(t.space_8);

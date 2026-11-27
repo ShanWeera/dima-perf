@@ -27,8 +27,8 @@ the results contain no timestamps, host names, paths or thread counts. These gua
 checked by the test suite on every change [@taschuk2017, Rule 10].
 
 Byte-identical is not the same as exact. Like any floating-point program, DiMA rounds, and its
-values carry a small rounding error. On the bundled datasets it is in the last one or two of
-the 17 significant digits (the last three or four for the opt-in similarity-weighted entropy). It
+values carry a small rounding error. On the paper's four datasets in the repository (up to 3,756 sequences) it is in the last
+one or two of the 17 significant digits (the last three or four for the opt-in similarity-weighted entropy). It
 grows with the number of sequences at a position, to at most the 11th digit at 17.5 million
 sequences (the 10th for similarity-weighted entropy). That is always at least $10^{10}$ times
 smaller than the sampling error of an entropy estimate ($10^9$ times for
@@ -66,9 +66,13 @@ vary from run to run, so they are kept out of the results. Ask for them in a sep
 dima analyze -i alignment.fasta.zst -o results.json.zst --run-report run-report.json
 ```
 
-The run report is written even when a run fails or is interrupted, and contains the equivalent
-command with file names but without directories; it never contains user or host names,
-directories or environment values. Its structure is in [JSON outputs](/reference/json/#run-report).
+The run report is written even when a run fails or is interrupted — after an interruption it
+lists the outputs that are complete — and contains the equivalent command with file names but
+without directories; it never contains user or host names, directories or environment values.
+It is checked and opened before anything else, so a report that would replace another output or
+the input is refused and not written, and one that cannot be created stops the run at once
+([Choose and read outputs](/how-to/outputs/#outputs-that-would-overwrite-each-other)). Its
+structure is in [JSON outputs](/reference/json/#run-report).
 The desktop app saves a report in the same format (**Export ▸ Run report…**, and **Save run
 report…** on a failed run), with two differences: CPU time and peak memory are not recorded
 (`null`), because the app's own work runs in the same process, and a cancelled run has no
@@ -125,6 +129,60 @@ leave out what this version does not know: dima 1.0.0's `dima cite --from`, for 
 no sentence for similarity-weighted entropy, although the run computed it and the references list
 Wu 2025. Read results with the version that wrote them, or a newer one. See
 [Troubleshooting](/how-to/troubleshooting/#results-written-by-another-dima-version).
+
+## Compare with DiMA v5.0.9
+
+Results of the earlier implementation, DiMA v5.0.9 (`dima-cli` 5.x on PyPI), share many key
+names with these results, but some keys with the same name hold a different quantity. Compare
+like with like:
+
+| Key | DiMA v5.0.9 | This DiMA | Compare v5.0.9's value with |
+|---|---|---|---|
+| `average_entropy` | The mean over **all** positions, those without support counted as 0 bits | The [eligible mean](/reference/glossary/#eligible-mean): positions with support above $T$ only | `all_positions_summary.average_entropy`, which follows v5.0.9's rule |
+| `highest_entropy` | The **last** position with the highest entropy, its position counted **from 0** | The **first** eligible position with the highest entropy, counted from 1, with `tied_position_count` | `all_positions_summary.highest_entropy` (the first maximum over all positions, from 1) |
+| `entropy` at positions without support (NS) | `0.0` | `null`: there is nothing to measure | — |
+| `diversity_motifs` at NS | `null` | `[]` | — |
+
+For example, the 26-sequence alignment of v5.0.9's own tests, with v5.0.9's `-s 30`:
+
+```sh
+curl -fLO https://raw.githubusercontent.com/ShanWeera/dima-perf/master/tests/data/dima-v5.0.9/input.afa.bz2
+dima analyze -i input.afa.bz2 -s 30 -o v509cmp.json
+jq -c '{average_entropy, all: .all_positions_summary | {average_entropy, highest_entropy}}' v509cmp.json
+```
+
+```json
+{"average_entropy":null,"all":{"average_entropy":0.06854034285524646,"highest_entropy":{"position":180,"entropy":1.3921472236645345,"tied_position_count":8}}}
+```
+
+v5.0.9's own output for the same run (`tests/data/dima-v5.0.9/basic_output.json.bz2`) has
+`average_entropy` 0.06854034285524647 — the same mean, but for a rounding difference in the last
+digit — and `highest_entropy` at position 186, counted from 0: position 187 counted from 1, the
+last of the eight tied positions 180 to 187. This DiMA's `average_entropy` is `null`, because with $T = 30$ above the 26
+sequences no position is eligible. On the HIV-1 *pol* DNA alignment, the eligible mean is 5.3504 bits, and the
+mean by v5.0.9's rule is 3.4425 bits.
+
+Where positions are eligible, the entropies themselves differ too: v5.0.9 corrects with random
+subsamples, which change from run to run, and this DiMA computes the expected value of that
+correction exactly (see [Entropy and its correction](/explanation/entropy/#the-exact-expectation)).
+[Differences from DiMA v5.0.9](/explanation/differences/) lists every difference.
+
+## Reproduce the paper's values
+
+The script that compares DiMA with the values published in the paper uses the paper's datasets,
+which are in the repository, so it needs a clone; it runs any `dima` binary, such as an installed
+one:
+
+```sh
+git clone https://github.com/ShanWeera/dima-perf.git
+cd dima-perf
+scripts/validate_paper.sh "$(command -v dima)"
+```
+
+It prints a Markdown table of each published value next to DiMA's, with a note where they differ
+and why. Without an argument it builds and uses `target/release/dima`. It needs `python3`
+(standard library only). [Comparison with the papers](/explanation/paper-comparison/) explains
+every row.
 
 ## References
 

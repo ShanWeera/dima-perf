@@ -81,8 +81,9 @@ pub struct Resources {
     pub cpu_system_seconds: Option<f64>,
     /// Peak resident memory; `None` where it is not measured.
     pub peak_rss_bytes: Option<u64>,
-    /// Time the counting threads waited for input; `None` when the analysis did not finish (it
-    /// failed or was cancelled).
+    /// Time the counting threads waited for input while counting k-mers (the first batch, read
+    /// while opening, is not included); `None` when the analysis itself did not finish. A run
+    /// that fails or is cancelled while its outputs are written keeps the value.
     pub waited_for_input_seconds: Option<f64>,
 }
 
