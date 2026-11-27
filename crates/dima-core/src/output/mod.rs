@@ -252,7 +252,8 @@ pub fn write_tsv(
 ///
 /// # Errors
 /// [`DimaError::Io`] if it cannot be read; [`DimaError::InputData`] if it is not a DiMA results
-/// file of this schema major version, or its compressed data is corrupt or truncated.
+/// file of this schema major version, its compressed data is corrupt or truncated, or it is
+/// compressed in a format results are not read from ([`unreadable_results_compression`]).
 pub fn read_results(path: &Path) -> Result<Results> {
     read_results_from(open_json(path, None)?)
 }
@@ -459,16 +460,21 @@ fn open_json<'a>(path: &Path, cancel: Option<&'a AtomicBool>) -> Result<JsonFile
     let mut packed = Packed::Plain;
     let read_err = |e: io::Error, packed: Packed| stream_error(e, &target, &name, packed);
     // Sniffing reads fixed prefixes however the input is split into reads (pipes, slow
-    // decompression), then puts them back in front of the stream.
+    // decompression), then puts them back in front of the stream. The signatures are those of
+    // the alignment reader, so both recognise the same formats.
     let mut raw = Stored { raw, cancel };
-    let head = read_prefix(&mut raw, 4).map_err(|e| read_err(e, packed))?;
+    let head =
+        read_prefix(&mut raw, RESULTS_SIGNATURE_LEN as u64).map_err(|e| read_err(e, packed))?;
+    if let Some(format) = unreadable_results_compression(&head) {
+        return Err(unreadable_compression(&name, format));
+    }
     let stored = BufReader::with_capacity(1 << 20, io::Cursor::new(head.clone()).chain(raw));
-    let mut decoded: Box<dyn Read + 'a> = match head.as_slice() {
-        [0x1F, 0x8B, ..] => {
+    let mut decoded: Box<dyn Read + 'a> = match crate::input::sniff(&head) {
+        crate::input::Sniffed::Supported(crate::model::Compression::Gzip) => {
             packed = Packed::Gzip;
             Box::new(flate2::bufread::MultiGzDecoder::new(stored))
         }
-        [0x28, 0xB5, 0x2F, 0xFD, ..] => {
+        crate::input::Sniffed::Supported(crate::model::Compression::Zstd) => {
             packed = Packed::Zstd;
             Box::new(
                 zstd::stream::read::Decoder::with_buffer(stored)
@@ -564,6 +570,29 @@ impl JsonFile<'_> {
         check_schema_major(value.schema_version(), kind, &name)?;
         Ok(value)
     }
+}
+
+/// The error for a file compressed in a format (or packed in an archive) that DiMA does not
+/// read results from (exit 4). The file may as well hold an alignment, which `dima analyze`
+/// reads from bzip2, so the message does not say that it holds results.
+fn unreadable_compression(name: &str, format: &str) -> DimaError {
+    // `unreadable_results_compression` names archives "a zip archive", "a 7z archive".
+    let (what, fix) = if format.ends_with("archive") {
+        (format.to_owned(), "extract them from the archive")
+    } else {
+        (
+            format!("compressed with {format}"),
+            "decompress it or recompress it with gzip or zstd",
+        )
+    };
+    DimaError::input_data(
+        Some(Location::new(name.to_owned())),
+        format!("{what}, which DiMA does not read results from"),
+    )
+    .with_hint(format!(
+        "if it holds DiMA results, {fix} (an alignment is read by dima analyze, not by dima \
+         view, hcs or cite)"
+    ))
 }
 
 /// An error while reading a JSON file: a cancellation, an I/O error on the stored bytes,

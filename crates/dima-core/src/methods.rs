@@ -84,45 +84,93 @@ fn alphabet_text(a: Alphabet) -> &'static str {
     }
 }
 
-/// What eligibility (support above T) meant for a run: only the paper's estimator corrects
-/// eligible positions alone; the others estimate every position alike.
-fn eligible_for(e: Estimator) -> &'static str {
+/// Where the estimator was applied: the paper's correction needs support of at least
+/// ⌈1.25·T⌉ (its five regression points, a minimum taken from DiMA v5.0.9; at T = 2, support 3
+/// gives equal subsample sizes); the alternatives apply wherever there are two sequences.
+fn estimator_scope(e: Estimator, threshold: u64) -> String {
     match e {
-        Estimator::Dima => "the corrected entropy and the summary statistics",
-        Estimator::ChaoWangJost | Estimator::MillerMadow | Estimator::Raw => {
-            "the summary statistics"
-        }
+        Estimator::Dima if threshold == 2 => ", at eligible positions supported by at least 4 \
+             sequences (with 3, its subsamples all have the same size, so no regression line \
+             exists); the other positions with support kept their observed entropy"
+            .to_owned(),
+        Estimator::Dima => format!(
+            ", at eligible positions supported by at least {} (with fewer, it has fewer than \
+             the five regression points it needs, a minimum taken from DiMA v5.0.9); the other \
+             positions with support kept their observed entropy",
+            plural(
+                crate::entropy::min_corrected_support(threshold),
+                "sequence",
+                "sequences"
+            )
+        ),
+        Estimator::ChaoWangJost | Estimator::MillerMadow => " at every position supported by at \
+             least 2 sequences; positions supported by one kept their observed entropy, 0 bits"
+            .to_owned(),
+        Estimator::Raw => String::new(),
     }
 }
 
-/// A methods paragraph describing the run.
+// `estimator_scope` spells the minimum out.
+const _: () = assert!(crate::entropy::RAREFACTION_MIN_POINTS == 5);
+
+/// `true` when the run recorded the reference `key`: the sentences that cite optional methods
+/// follow `run.references`, so the paragraph cites what the reference list holds, for results
+/// written by any version.
+fn uses(r: &Results, key: &str) -> bool {
+    r.run.references.iter().any(|x| x.key == key)
+}
+
+/// A methods paragraph describing the run. It cites every reference the run recorded that this
+/// version knows (the software by its version).
 #[must_use]
 pub fn sentence(r: &Results) -> String {
     let p = &r.run.parameters;
+    let k = r.kmer_length;
     let mut s = format!(
-        "Sequence diversity was analysed with DiMA {} using dima {}. In the {} \
-         alignment of {} ({} columns), the overlapping {}-mers at {} were counted; \
-         positions supported by more than {} were eligible for {}. Shannon entropy {} was \
-         estimated with {}, and sample coverage after {}. Variants were classified as Index, \
-         Major, Minor and Unique motifs {}.",
+        "Sequence diversity was analysed with DiMA {} using dima {}.",
         cited(&[citations::DIMA_PAPER]),
         r.run.tool.version,
+    );
+    // Eddy (2011) is HMMER's paper; it does not describe Easel or its alphabet detection, so
+    // it is cited for HMMER only.
+    if uses(r, "eddy2011") {
+        s.push_str(&format!(
+            " The alphabet was detected from the residues of the first records with the rules \
+             of esl_abc_GuessAlphabet in Easel, the sequence library of HMMER {}.",
+            cited(&["eddy2011"])
+        ));
+    }
+    s.push_str(&format!(
+        " In the {} alignment of {} ({} columns), the overlapping {k}-mers at {} were counted. \
+         A position's support is the number of sequences with a valid {k}-mer there: one \
+         without gaps, missing-data symbols, stops, frameshifts or ambiguity codes.",
         alphabet_text(p.alphabet.value),
         plural(r.sequence_count, "sequence", "sequences"),
         r.run.alignment_length,
-        r.kmer_length,
         if r.position_count == 1 {
             "its one position".to_owned()
         } else {
             format!("each of the {} positions", r.position_count)
         },
+    ));
+    if uses(r, "cornishbowden1985") {
+        s.push_str(&format!(
+            " Nucleotide ambiguity codes were those of the IUPAC-IUB nomenclature {}, with X and \
+             I treated as ambiguous too.",
+            cited(&["cornishbowden1985"])
+        ));
+    }
+    s.push_str(&format!(
+        " Positions supported by more than {} were eligible for the summary statistics. Shannon \
+         entropy {} was estimated with {}{}. Sample coverage was estimated after {}. Variants \
+         were classified as Index, Major, Minor and Unique motifs {}.",
         plural(r.support_threshold, "sequence", "sequences"),
-        eligible_for(p.estimator.value),
         cited(&["shannon1948"]),
         estimator_text(p.estimator.value),
+        estimator_scope(p.estimator.value, r.support_threshold),
         Cite::new("chao2012").narrative(),
         cited(&["hu2013"]),
-    );
+    ));
     if p.similarity_weighted_entropy.value {
         s.push_str(&format!(
             " Similarity-weighted entropy and the observed and similarity-weighted entropies \
@@ -130,10 +178,10 @@ pub fn sentence(r: &Results) -> String {
              {}, with the similarity of two k-mers taken as their proportion of identical \
              residues{}.",
             Cite::new("wu2025").narrative(),
-            if p.alphabet.value.is_nucleotide() {
-                String::new()
-            } else {
+            if uses(r, "grishin1995") {
                 format!(" {}", cited(&["grishin1995"]))
+            } else {
+                String::new()
             },
         ));
     }
@@ -281,8 +329,9 @@ pub fn hcs_sentence(h: &HcsResults) -> String {
     let mut s = format!(
         "Historically conserved sequences were identified as runs of {}-mer positions whose \
          Index k-mer had an incidence of at least {}% {}, joining k-mers that overlap or are \
-         adjacent and agree on their shared columns {}; each was given the exact 95% \
-         Clopper–Pearson lower bound of its conservation {}.",
+         adjacent and agree on their shared columns {}; each region was given the lowest \
+         per-position exact 95% Clopper–Pearson lower bound of the Index incidence among its \
+         members {}.",
         h.source.kmer_length,
         p.threshold_percent,
         cited(&[citations::DIMA_PAPER]),
@@ -293,14 +342,17 @@ pub fn hcs_sentence(h: &HcsResults) -> String {
         HcsEligibility::AllPositions => {
             let _ = write!(
                 s,
-                " Regions that include positions supported by at most {t} were flagged."
+                " Regions that include positions supported by at most {t} were flagged, as \
+                 such positions were marked in earlier work {}.",
+                cited(&["raman2020", "hu2013"])
             );
         }
         HcsEligibility::SupportGtThreshold => {
             let _ = write!(
                 s,
-                " Only positions supported by more than {t} were used; positions with less \
-                 support ended a region {}.",
+                " Only positions supported by more than {t} were used, the analysis set of {}; \
+                 positions with less support ended a region {}.",
+                Cite::new("hu2013").narrative(),
                 cited(&["castresana2000"])
             );
         }
@@ -450,7 +502,7 @@ mod tests {
         for cite in [
             "DiMA (Tharanga et al. 2025)",
             "Shannon entropy (Shannon 1948)",
-            "sample coverage after Chao & Jost (2012)",
+            "Sample coverage was estimated after Chao & Jost (2012).",
             "motifs (Hu et al. 2013).",
         ] {
             assert!(s.contains(cite), "{cite:?} not in {s:?}");
@@ -468,26 +520,94 @@ mod tests {
             estimator_text(Estimator::MillerMadow),
             "the Miller–Madow correction (Miller 1955)"
         );
-        assert!(s.contains("were eligible for the corrected entropy and the summary statistics"));
-        assert!(s.contains(&format!(
-            "-mers at each of the {} positions were",
-            r.position_count
-        )));
+        // Support is defined; eligibility (support above T) is for the summaries; the paper's
+        // correction applies from ⌈1.25·T⌉ (T = 4 in the tiny file: 5 sequences).
+        assert!(
+            s.contains(
+                "the overlapping 3-mers at each of the 18 positions were counted. A position's \
+                 support is the number of sequences with a valid 3-mer there: one without gaps, \
+                 missing-data symbols, stops, frameshifts or ambiguity codes. Positions \
+                 supported by more than 4 sequences were eligible for the summary statistics."
+            ),
+            "{s}"
+        );
+        assert!(
+            s.contains(
+                "(Rao 1945; Blackwell 1947), at eligible positions supported by at least 5 \
+                 sequences (with fewer, it has fewer than the five regression points it needs, \
+                 a minimum taken from DiMA v5.0.9); the other positions with support kept their \
+                 observed entropy. "
+            ),
+            "{s}"
+        );
         let mut one = r.clone();
         one.position_count = 1;
         assert!(sentence(&one).contains("-mers at its one position were counted"));
-        // Other estimators estimate every position alike: eligibility is only for summaries.
+        // T = 2: support 3 gives equal subsample sizes, so the correction starts at 4.
+        let mut two = r.clone();
+        two.support_threshold = 2;
+        assert!(
+            sentence(&two).contains(
+                "at eligible positions supported by at least 4 sequences (with 3, its subsamples \
+                 all have the same size, so no regression line exists)"
+            ),
+            "{}",
+            sentence(&two)
+        );
+        // The alternatives apply from two sequences, whatever T is.
+        let mut cwj = r.clone();
+        cwj.run.parameters.estimator.value = Estimator::ChaoWangJost;
+        assert!(sentence(&cwj).contains(
+            "the estimator of Chao et al. (2013) at every position supported by at least 2 \
+             sequences; positions supported by one kept their observed entropy, 0 bits. "
+        ));
         let mut raw = r.clone();
         raw.run.parameters.estimator.value = Estimator::Raw;
         raw.run.validation.unknown_total = 3;
         let s = sentence(&raw);
         assert!(
-            s.contains("were eligible for the summary statistics. "),
+            s.contains("with the plug-in (observed) estimator. Sample coverage"),
             "{s}"
         );
-        assert!(s.contains("the plug-in (observed) estimator"), "{s}");
         assert!(
             s.contains("not symbols of the protein alphabet (3 occurrences) were excluded."),
+            "{s}"
+        );
+    }
+
+    /// The sentences on alphabet detection and nucleotide codes follow the references the run
+    /// recorded, so the paragraph cites every one of them, for results of any version.
+    #[test]
+    fn optional_sentences_follow_the_recorded_references() {
+        let mut r: Results = serde_json::from_slice(
+            &std::fs::read(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../tests/golden/tiny/results.json"
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        let s = sentence(&r);
+        assert!(!s.contains("Eddy") && !s.contains("Cornish-Bowden"), "{s}");
+        for key in ["eddy2011", "cornishbowden1985"] {
+            r.run.references.push(Reference::of(key));
+        }
+        let s = sentence(&r);
+        assert!(
+            s.contains(&format!(
+                "using dima {}. The alphabet was detected from the residues of the first records \
+                 with the rules of esl_abc_GuessAlphabet in Easel, the sequence library of HMMER \
+                 (Eddy 2011). In the protein alignment",
+                r.run.tool.version
+            )),
+            "{s}"
+        );
+        assert!(
+            s.contains(
+                "ambiguity codes. Nucleotide ambiguity codes were those of the IUPAC-IUB \
+                 nomenclature (Cornish-Bowden 1985), with X and I treated as ambiguous too. \
+                 Positions supported"
+            ),
             "{s}"
         );
     }

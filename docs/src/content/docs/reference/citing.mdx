@@ -24,9 +24,28 @@ The same entries in BibTeX, for this version of DiMA:
 
 <CitationBibtex />
 
+The software's BibTeX key names its version, with underscores for the dots: `dima_rs_1_2_0` for
+version 1.2.0, so entries for two versions never clash in one bibliography. Inside a results
+file, `run.references` lists the software under the fixed key `dima_software`, with the version
+that wrote the file in its text; `dima cite --from` turns it back into the entry of that version.
+
 The repository's `CITATION.cff` holds the same information (GitHub shows it as "Cite this
 repository"), with the paper as the preferred citation and the references of every method DiMA
 can use.
+
+### The Cite: line
+
+When standard error is a terminal, `dima analyze` ends with a reminder after its
+[summary line](/reference/glossary/#summary-line):
+
+```text
+Cite: Tharanga et al. 2025, doi:10.1093/bib/bbae607 (`dima cite --from mers.json` lists this run's references)
+```
+
+It names the results file only when the results were written to a regular file, quoted for the
+shell when the name needs it; otherwise (results on standard output) it says that `dima cite`
+prints the references. It is not printed when standard error is redirected to a file or a pipe,
+and `-q` hides it.
 
 ## The methods of a run
 
@@ -38,23 +57,67 @@ paragraph and a numbered reference list, ready to adapt for a manuscript:
 
 ```sh
 dima cite --from results.json            # methods paragraph and references, plain text
-dima cite --from results.json --format bibtex
+dima cite --from results.json --format bibtex   # the references only, as BibTeX
 dima cite --from results.json --from conserved.json   # with the conserved sequences
 ```
+
+- **Text only has the paragraph.** With `--format bibtex`, `ris` or `cff`, `dima cite --from`
+  prints the run's reference list in that format, without the methods paragraph: those formats
+  hold references, not prose.
+- **Standard input.** `--from -` reads the file from standard input, for example
+  `cat results.json | dima cite --from -`. Results compressed with gzip or Zstandard are read
+  as they are, from a file or from standard input.
+- **One run.** `--from` takes at most one results file and one conserved-sequences file, and both
+  must describe the same run: give the conserved sequences computed from those results
+  (`--hcs-output` of the same `dima analyze`, or `dima hcs -i results.json`). Files of different
+  runs (another input, k or support threshold) are refused, because the paragraph would mix them.
 
 Conserved sequences are computed separately (`--hcs-output` or `dima hcs`), so their method and
 references are in their own file; give it as a second `--from` to add a sentence on them and
 their sources (the Clopper–Pearson bounds, the joining rule) to the text and the list.
 
-For the MERS-CoV spike sample with the defaults, the paragraph reads:
+For the MERS-CoV spike sample with the defaults (`dima analyze -i samples/mers_spike_aa.fasta
+-o mers.json`, then `dima cite --from mers.json`), the paragraph reads:
 
-> Sequence diversity was analysed with DiMA (Tharanga et al. 2025) using dima 1.1.1. In the
-> protein alignment of 191 sequences (1353 columns), the overlapping 9-mers at each of the 1345
-> positions were counted; positions supported by more than 100 sequences were eligible for the
-> corrected entropy and the summary statistics. Shannon entropy (Shannon 1948) was estimated with
-> the rarefaction-regression correction of Tharanga et al. (2025, Fig. 2), computed as its exact
-> expectation (Rao 1945; Blackwell 1947), and sample coverage after Chao & Jost (2012). Variants
-> were classified as Index, Major, Minor and Unique motifs (Hu et al. 2013).
+> Sequence diversity was analysed with DiMA (Tharanga et al. 2025) using dima 1.1.1. The
+> alphabet was detected from the residues of the first records with the rules of
+> esl_abc_GuessAlphabet in Easel, the sequence library of HMMER (Eddy 2011). In the protein
+> alignment of 191 sequences (1353 columns), the overlapping 9-mers at each of the 1345
+> positions were counted. A position's support is the number of sequences
+> with a valid 9-mer there: one without gaps, missing-data symbols, stops, frameshifts or
+> ambiguity codes. Positions supported by more than 100 sequences were eligible for the summary
+> statistics. Shannon entropy (Shannon 1948) was estimated with the rarefaction-regression
+> correction of Tharanga et al. (2025, Fig. 2), computed as its exact expectation (Rao 1945;
+> Blackwell 1947), at eligible positions supported by at least 125 sequences (with fewer, it has
+> fewer than the five regression points it needs, a minimum taken from DiMA v5.0.9); the other
+> positions with support kept their observed entropy. Sample coverage was estimated after Chao &
+> Jost (2012). Variants were classified as Index, Major, Minor and Unique motifs (Hu et al.
+> 2013).
+
+The paragraph states what this run did, so parts of it change with the run:
+
+- **Alphabet.** The sentence on alphabet detection appears when the alphabet was detected; with
+  `--alphabet` it is left out. It cites the paper of HMMER [@eddy2011], whose sequence library,
+  Easel, holds the detection rules; the paper itself does not describe them. For DNA and RNA a
+  sentence follows the definition of support: "Nucleotide ambiguity codes were those of the
+  IUPAC-IUB nomenclature (Cornish-Bowden 1985), with X and I treated as ambiguous too." The
+  nomenclature's codes for incompletely specified bases are R, Y, M, K, S, W, H, B, V, D and N
+  [@cornishbowden1985, Table 1]; X and I are DiMA's additions, so the sentence names them apart.
+- **Support and the correction.** [Support](/reference/glossary/#support) is defined as DiMA
+  counts it. The paper's correction applies only at eligible positions supported by at least
+  1.25 × T sequences, rounded up (125 for the default T = 100): below that it has fewer than
+  the five regression points it needs, a minimum taken from DiMA v5.0.9, which the paper does not
+  state. Such positions keep their observed entropy and stay in the summaries (see
+  [`uncorrected_eligible_positions`](/reference/diagnostics/#uncorrected_eligible_positions)).
+  With T = 2 the sentence says "at least 4 sequences" instead, because at support 3 every
+  subsample of the correction has the same size.
+- **Other estimators.** With `--estimator chao-wang-jost` or `miller-madow` the sentence names
+  that estimator "at every position supported by at least 2 sequences; positions supported by
+  one kept their observed entropy, 0 bits"; with `raw` it names the plug-in (observed)
+  estimator.
+- **Exclusions and metadata.** A run in permissive mode that excluded characters adds how many
+  occurrences were excluded, and a stratified run names its
+  [stratified fields](/reference/glossary/#stratified-field).
 
 Similarity-weighted entropy is not part of the DiMA paper's method, so a run that computed it
 (`--similarity-weighted-entropy`) also cites the paper that defines it [@wu2025, Section 2.1]
@@ -69,6 +132,25 @@ option):
 
 For a nucleotide alignment the sentence ends at "identical residues", and only Wu (2025) is
 added.
+
+With the conserved sequences of the same sample at the default 100% (`dima hcs -i mers.json -o
+mers.hcs.json`, then `dima cite --from mers.json --from mers.hcs.json`), this sentence follows:
+
+> Historically conserved sequences were identified as runs of 9-mer positions whose Index k-mer
+> had an incidence of at least 100% (Tharanga et al. 2025), joining k-mers that overlap or are
+> adjacent and agree on their shared columns (Abd Raman et al. 2020); each region was given the
+> lowest per-position exact 95% Clopper–Pearson lower bound of the Index incidence among its
+> members (Clopper & Pearson 1934). Regions that include positions supported by at most 100
+> sequences were flagged, as such positions were marked in earlier work (Abd Raman et al. 2020;
+> Hu et al. 2013).
+
+The bound is that of each member position, not of the share of sequences that carry the whole
+region, which can be much lower (see
+[what a region's numbers mean](/explanation/conserved-sequences/#what-a-regions-numbers-mean)).
+With `--hcs-eligible-only` the last sentence reads "Only positions supported by more than 100
+sequences were used, the analysis set of Hu et al. (2013); positions with less support ended a
+region (Castresana 2000)." A test checks that the three quotations on this page are what DiMA
+writes.
 
 The desktop app offers the same as **Methods & references** and **References (BibTeX)** exports,
 which include the conserved sequences at the threshold shown, and **Cite DiMA** in its Help menu.

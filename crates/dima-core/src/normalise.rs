@@ -10,7 +10,7 @@
 use rayon::prelude::*;
 
 use crate::alphabet::{ByteClassTable, is_whitespace};
-use crate::config::ValidationMode;
+use crate::config::{Alphabet, ValidationMode};
 use crate::diagnostics::Tally;
 use crate::error::{DimaError, Location, Result};
 use crate::header::{HeaderPosition, HeaderSpec, HeaderStats, parse_header};
@@ -82,6 +82,33 @@ pub fn describe_byte(b: u8) -> String {
     }
 }
 
+/// The hint for a character outside the alphabet in strict mode. A wrong `--alphabet` is the
+/// likely cause when the residues of the first records look like another alphabet, or when a
+/// nucleotide alignment holds a letter only protein sequences use, so the hint says so before it
+/// offers permissive mode (which would exclude every k-mer with such a letter).
+fn unknown_character_hint(b: u8, alphabet: Alphabet, looks_like: Option<Alphabet>) -> String {
+    const PERMISSIVE: &str = "use --validation permissive to exclude the k-mers that contain \
+                              such characters (they are counted and reported)";
+    if let Some(other) = looks_like {
+        return format!(
+            "check --alphabet first: the residues of the first records look like {other}, not \
+             {alphabet}; or {PERMISSIVE}"
+        );
+    }
+    let protein = ByteClassTable::new(Alphabet::Protein);
+    if alphabet.is_nucleotide()
+        && b.is_ascii_alphabetic()
+        && matches!(protein.class(b), ByteClass::Residue | ByteClass::Ambiguity)
+    {
+        return format!(
+            "check --alphabet first: '{}' is a protein letter, not a nucleotide one; or \
+             {PERMISSIVE}",
+            char::from(b)
+        );
+    }
+    format!("check --alphabet, or {PERMISSIVE}")
+}
+
 /// The result of normalising one batch.
 #[derive(Debug, Default)]
 pub struct NormalisedBatch {
@@ -110,6 +137,9 @@ pub struct Normaliser<'a> {
     pub header: Option<&'a HeaderSpec>,
     /// Input name for messages.
     pub source: &'a str,
+    /// The alphabet the residues of the first records look like when it is not the table's
+    /// (an explicit `--alphabet` that the data contradict; [`crate::alphabet::Resolution::looks_like`]).
+    pub looks_like: Option<Alphabet>,
 }
 
 struct ChunkOut {
@@ -278,10 +308,11 @@ impl Normaliser<'_> {
                                 self.table.alphabet()
                             ),
                         )
-                        .with_hint(
-                            "check --alphabet, or use --validation permissive to exclude the \
-                             k-mers that contain such characters (they are counted and reported)",
-                        ));
+                        .with_hint(unknown_character_hint(
+                            b,
+                            self.table.alphabet(),
+                            self.looks_like,
+                        )));
                     }
                     let (r, l, c) = (start.record, line, col + 1);
                     st.unknown.add(1, || {
@@ -406,6 +437,7 @@ mod tests {
             width,
             header,
             source: "t.fa",
+            looks_like: None,
         };
         let mut out = NormalisedBatch::default();
         n.normalise(&b, &mut out)?;
@@ -472,6 +504,37 @@ mod tests {
             "t.fa: record 2 (line 4, column 3, byte 13): character 'J' (0x4A) is not valid in a dna alignment"
         );
         assert_eq!(e.class(), crate::error::ExitClass::InvalidInput);
+        // J is a protein letter: the hint points at --alphabet before permissive mode.
+        assert_eq!(
+            e.hint(),
+            Some(
+                "check --alphabet first: 'J' is a protein letter, not a nucleotide one; or use \
+                 --validation permissive to exclude the k-mers that contain such characters \
+                 (they are counted and reported)"
+            )
+        );
+        // A character no alphabet uses keeps the general hint.
+        let e = run(
+            b">a\nACGT\n>b\nAC1T\n",
+            Alphabet::Dna,
+            ValidationMode::Strict,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            e.hint()
+                .unwrap()
+                .starts_with("check --alphabet, or use --validation permissive"),
+            "{e:?}"
+        );
+        // When the residues look like another alphabet (an explicit --alphabet the data
+        // contradict), the hint says so.
+        assert_eq!(
+            unknown_character_hint(b'F', Alphabet::Dna, Some(Alphabet::Protein)),
+            "check --alphabet first: the residues of the first records look like protein, not \
+             dna; or use --validation permissive to exclude the k-mers that contain such \
+             characters (they are counted and reported)"
+        );
         let p = run(
             b">a\nACGT\n>b\nACJT\n",
             Alphabet::Dna,

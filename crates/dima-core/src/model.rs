@@ -455,7 +455,7 @@ const fn not_requested() -> Param<bool> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AlphabetMethod {
-    /// Detected from the data (Easel's rules; Eddy 2011).
+    /// Detected from the data (the rules of Easel, the sequence library of HMMER).
     Detected,
     /// Given by the user.
     User,

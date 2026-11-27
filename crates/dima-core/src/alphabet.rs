@@ -1,8 +1,9 @@
 //! Sequence alphabets: detection from residue composition and per-byte symbol classes.
 //!
-//! **Detection** is a port of Easel's `esl_abc_GuessAlphabet()` (Eddy 2011; Easel commit
-//! 07ca83ba9ef0414dba9ce0a9331d465b5eb58f2b, `esl_alphabet.c`, BSD licence — see
-//! THIRD-PARTY-NOTICES), applied to the letters of the first input batch. Easel's rules were
+//! **Detection** is a port of `esl_abc_GuessAlphabet()` from Easel, the sequence library of
+//! HMMER (Eddy 2011 is HMMER's paper; it does not describe Easel), taken from Easel commit
+//! 07ca83ba9ef0414dba9ce0a9331d465b5eb58f2b (`esl_alphabet.c`, BSD licence — see
+//! THIRD-PARTY-NOTICES) and applied to the letters of the first input batch. Easel's rules were
 //! tuned to make no false calls on NCBI nr/nt, Pfam and Rfam; when unsure they return
 //! "unknown", and DiMA then asks the user for `--alphabet` rather than guessing.
 //!
@@ -145,6 +146,18 @@ pub struct Resolution {
     pub residues_examined: u64,
     /// Why the data contradict an explicit choice, if they do.
     pub contradiction: Option<String>,
+    /// The alphabet the letters examined indicate ([`guess`]), whether or not one was given;
+    /// `None` when they do not decide.
+    pub guessed: Option<Alphabet>,
+}
+
+impl Resolution {
+    /// The alphabet the residues look like when it is not the one used (an explicit choice that
+    /// the data contradict), for messages that point at `--alphabet`.
+    #[must_use]
+    pub fn looks_like(&self) -> Option<Alphabet> {
+        self.guessed.filter(|g| *g != self.alphabet)
+    }
 }
 
 /// Resolves the alphabet from the user's choice and the probe's letter counts.
@@ -172,6 +185,7 @@ pub fn resolve(
             method: AlphabetMethod::User,
             residues_examined,
             contradiction,
+            guessed,
         });
     }
     let Some(alphabet) = guessed else {
@@ -203,6 +217,7 @@ pub fn resolve(
         method: AlphabetMethod::Detected,
         residues_examined,
         contradiction: None,
+        guessed,
     })
 }
 

@@ -17,8 +17,11 @@ At a position with variant counts $c_1 \ge c_2 \ge \dots \ge c_D$:
 |---|---|---|
 | Index | `I` | the highest count, if it is above 1 |
 | Unique | `U` | count 1 |
-| Major | `Ma` | the highest count among the remaining variants (count above 1) |
-| Minor | `Mi` | every other variant (count above 1) |
+| Major | `Ma` | the most common of the other variants seen more than once |
+| Minor | `Mi` | every other variant seen more than once |
+
+The short codes are the values of `motif_short` (and the desktop app's variant search accepts
+them); `motif_long` spells the motif out.
 
 Ties are kept, as the paper states that "a position may exhibit more than one index or major
 variant": every variant tied at the highest count is Index, and every variant tied at the
@@ -86,6 +89,13 @@ A ratio whose denominator is 0 is undefined, and DiMA reports it as `null` (JSON
 - a **fully conserved** position (every sequence carries the Index) has a total variants
   incidence of 0 and an undefined distinct variants incidence ($0/0$).
 
+The second case does not mean that the position is conserved: a position whose variants are all
+tied Index variants gives the same two values. Position 6 of the repository's tiny test alignment
+(`tests/golden/tiny/input.fasta`) has two 3-mers, `IAK` and `LAK`, carried by 4 sequences each:
+both are Index, so no sequence carries a non-Index variant, the total variants incidence is 0 and
+the distinct variants incidence is `null` — while its entropy is 1.0742 bits (1 bit observed).
+Read the incidences together with the entropy or `diversity_motifs`.
+
 DiMA v5.0.9 reported both cases as 0, which made a conserved position indistinguishable from a
 position with no data.
 
@@ -113,14 +123,20 @@ averaging rule — every position, NS positions counted as 0 bits and LS/ELS pos
 reported entropy (the observed entropy with the `dima` and `raw` estimators) — so that results can
 be compared with earlier analyses. The `rule` key records
 the rule. It is not the paper's summary; see
-[why NS positions have no entropy](/explanation/entropy/#positions-without-support).
+[why NS positions have no entropy](/explanation/entropy/#positions-without-support). Because NS
+positions count as 0 bits, its lowest entropy can be a position without any data: on the HIV-1
+*pol* protein alignment it is position 30, at 0 bits with 671 other positions, 551 of the 672
+being NS.
 
 **Support classes.** `position_count`, `eligible_position_count`, the counts per label
 (`support_label_counts`: NS, LS, ELS, eligible) and `low_support_count` (NS + LS + ELS).
 
 **Coverage summary** (`coverage_summary`). How many positions have a sample coverage (support of
 at least 2), its minimum and mean, and with `--min-coverage` the threshold and the number of
-positions below it.
+positions below it. Unlike the eligible summary, it covers LS and ELS positions too, so its
+minimum can come from a position with very few sequences: on the HIV-1 *pol* protein alignment
+it is 0.1818, at LS position 29, whose 4 sequences carry 4 different 9-mers; over the 476
+eligible positions the lowest coverage is 0.7338.
 
 **Similarity-weighted entropy summary** (`similarity_weighted_entropy_summary`). Only with
 `--similarity-weighted-entropy`, and `null` otherwise: the mean, lowest and highest
@@ -176,6 +192,14 @@ The eligible mean leaves out the 162 LS positions, which rest on fewer than $T =
 sequences and keep their uncorrected observed entropy, and the 551 NS positions, which have no
 entropy at all: it covers the positions of the paper's summaries, those with support above $T$
 [@tharanga2025, Results and Fig. 2].
+
+It includes every eligible position with the entropy reported for it, corrected or not. Two of
+these 476 positions, 42 and 43, are supported by 105 sequences, fewer than the 125 the paper's
+correction needs at $T = 100$, so they enter the eligible mean with their observed entropies,
+4.0041 and 3.5039 bits (`entropy_fallback` `too_few_points`; see
+[the paper's correction](/explanation/entropy/#the-papers-correction-fig-2)). The warning
+[`uncorrected_eligible_positions`](/reference/diagnostics/#uncorrected_eligible_positions) says how
+many such positions a run has.
 
 A mean does not say where the diversity lies. On the MERS-CoV spike sample every position is
 eligible and the eligible mean is 0.1261 bits, while 455 of its 1,345 positions have entropy 0

@@ -236,10 +236,11 @@ impl Engine {
             return Err(DimaError::usage("k-mer length must be at least 1"));
         }
         if k > width {
-            return Err(DimaError::usage(format!(
-                "k-mer length {k} is longer than the alignment ({width} columns)"
-            ))
-            .with_hint(format!("choose a k-mer length between 1 and {width}")));
+            // An analysis checks first, naming the default k (`AnalysisParams::kmer_length_for`).
+            return Err(crate::config::kmer_too_long(
+                &format!("k-mer length {k}"),
+                width,
+            ));
         }
         let positions = width - k + 1;
         let shard_count = positions.min(4 * threads.max(1)).min(width / k).max(1);
@@ -590,6 +591,15 @@ mod tests {
         assert_eq!(
             Engine::new(5, 6, 0, 1).unwrap_err().class(),
             crate::error::ExitClass::Usage
+        );
+        let e = Engine::new(1, 2, 0, 1).unwrap_err();
+        assert_eq!(
+            e.to_string(),
+            "k-mer length 2 is longer than the alignment (1 column)"
+        );
+        assert_eq!(
+            e.hint(),
+            Some("use -k 1: an alignment of 1 column holds nothing longer")
         );
         assert_eq!(
             Engine::new(5, 0, 0, 1).unwrap_err().class(),
