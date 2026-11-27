@@ -33,7 +33,6 @@ pub fn show(
     if !state.setup.header.enabled {
         return;
     }
-    let fill = state.setup.options.fill.clone();
     card(t).show(ui, |ui| {
         ui.set_min_width(ui.available_width());
         ui.horizontal(|ui| {
@@ -139,13 +138,15 @@ pub fn show(
                         }
                     });
                     let stratify = ui.checkbox(&mut row.stratify, "");
-                    super::common::named(stratify, &format!("Stratify field {}", i + 1))
-                        .on_hover_text(if row.identifier_like {
-                        "Every checked value is different: stratifying by an identifier multiplies \
-                         the size of the results"
-                    } else {
-                        "Count variants per value of this field"
-                    });
+                    super::common::with_help(
+                        super::common::named(stratify, &format!("Stratify field {}", i + 1)),
+                        if row.identifier_like {
+                            "Every checked value is different: stratifying by an identifier \
+                             multiplies the size of the results"
+                        } else {
+                            "Count variants per value of this field"
+                        },
+                    );
                     ui.horizontal(|ui| {
                         if row.samples.is_empty() {
                             ui.weak("\u{2014}");
@@ -166,9 +167,11 @@ pub fn show(
                     ui.end_row();
                 }
             });
-        if let Err(e) = h.validate(&fill) {
+        // The library's check, in the app's words (the fill value has its own row under
+        // Advanced).
+        if let Some(problem) = h.problem() {
             ui.add_space(t.space_4);
-            ui.colored_label(t.error_color, e.report());
+            ui.colored_label(t.error_color, problem);
         }
     });
 }

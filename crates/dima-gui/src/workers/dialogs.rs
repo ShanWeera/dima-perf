@@ -88,11 +88,19 @@ pub fn spawn_native(
     }
     let future: std::pin::Pin<Box<dyn Future<Output = Option<rfd::FileHandle>> + Send>> = match kind
     {
-        DialogKind::Open => Box::pin(
-            d.add_filter("Alignments and DiMA results", &input_extensions())
-                .add_filter("All files", &["*"])
-                .pick_file(),
-        ),
+        DialogKind::Open => {
+            // Windows and Linux offer the filters as a choice, so "All files" shows a sample
+            // saved as .txt. macOS has no such choice: rfd merges every filter's extensions
+            // into the panel's allowed types, where "*" is no wildcard, so there the dialog
+            // gets no filter and every file can be chosen (the app tells by content what a
+            // file is).
+            if !cfg!(target_os = "macos") {
+                d = d
+                    .add_filter("Alignments and DiMA results", &input_extensions())
+                    .add_filter("All files", &["*"]);
+            }
+            Box::pin(d.pick_file())
+        }
         DialogKind::Save {
             default_name,
             filter,

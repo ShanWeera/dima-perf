@@ -1,15 +1,21 @@
 //! Exports: every file is written by the library's atomic [`Sink`] (a temporary file in the
 //! destination directory, synced and renamed into place), so a failed or interrupted export
-//! never leaves a partial file and never truncates an existing one (G30, E2).
+//! never leaves a partial file and never truncates an existing one (G30, E2); a failed export
+//! into a folder it created removes the folder again.
+//!
+//! The names the data exports accept are those `dima analyze` and `dima hcs` accept for the
+//! same output, read by the library (`output::read_name`): the format's extensions, plain or
+//! compressed with gzip or Zstandard, compressed as the name says, and a name the command line
+//! refuses is refused. Any other name gets the export's usual extension (D100).
 
 use std::io::Write as _;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use dima_core::hcs::{self, HcsParams};
 use dima_core::methods::{self, CitationFormat, Cited};
 use dima_core::model::Results;
-use dima_core::output::{self, OutputCompression, Sink, Table, Target};
+use dima_core::output::{self, NameError, OutputCompression, OutputFormat, Sink, Table, Target};
 use dima_core::run_report::RunReport;
 use dima_core::{DimaError, Result};
 
@@ -101,20 +107,39 @@ impl ExportKind {
         }
     }
 
-    /// Extensions accepted in the save dialog (compressed variants included).
+    /// The data format of the exports that share an output of `dima analyze` or `dima hcs`
+    /// (results, positions, conserved regions, run report), whose names are read as the command
+    /// line reads them; `None` for the folder, the figures and the texts.
     #[must_use]
-    pub fn accepted(self) -> &'static [&'static str] {
+    pub const fn format(self) -> Option<OutputFormat> {
         match self {
-            Self::ResultsJson => &["json", "json.gz", "json.zst"],
-            Self::Jsonl => &["jsonl", "jsonl.gz", "jsonl.zst", "ndjson"],
-            Self::HcsJson => &["json", "json.gz", "json.zst"],
-            Self::HcsTsv => &["tsv", "tsv.gz", "tsv.zst"],
-            Self::TsvFolder => &[],
-            Self::Png => &["png"],
-            Self::Svg => &["svg"],
-            Self::RunReport => &["json"],
-            Self::Methods => &["txt"],
-            Self::Bibtex => &["bib"],
+            Self::ResultsJson | Self::HcsJson | Self::RunReport => Some(OutputFormat::Json),
+            Self::Jsonl => Some(OutputFormat::Jsonl),
+            Self::HcsTsv => Some(OutputFormat::Tsv),
+            Self::TsvFolder | Self::Png | Self::Svg | Self::Methods | Self::Bibtex => None,
+        }
+    }
+
+    /// The endings a name keeps (without the leading dot): for the data exports every
+    /// extension of their format, plain or compressed with gzip or Zstandard (the library's
+    /// list, as `dima analyze` accepts them: `json.gz`, `ndjson.zst`, `tab`); for the figures
+    /// and texts their one extension; none for the folder.
+    #[must_use]
+    pub fn accepted(self) -> Vec<String> {
+        const COMPRESSIONS: [OutputCompression; 3] = [
+            OutputCompression::None,
+            OutputCompression::Gzip,
+            OutputCompression::Zstd,
+        ];
+        match self.format() {
+            Some(format) => format
+                .extensions()
+                .iter()
+                .flat_map(|e| {
+                    COMPRESSIONS.map(|c| format!("{}{}", e.trim_start_matches('.'), c.extension()))
+                })
+                .collect(),
+            None => self.extension().map(str::to_owned).into_iter().collect(),
         }
     }
 
@@ -136,28 +161,131 @@ impl ExportKind {
         }
     }
 
-    /// Appends the default extension when the chosen name has none of the accepted ones
-    /// (D100: "the extension is appended on save if missing").
-    #[must_use]
-    pub fn with_extension(self, path: PathBuf) -> PathBuf {
+    /// The file an export chosen as `chosen` is written to (D100: "the extension is appended
+    /// on save if missing"): a name that ends in one of the export's endings
+    /// ([`ExportKind::accepted`], any letter case) is kept; any other name gets the default
+    /// extension appended (`results` → `results.json`, `results.gz` → `results.gz.json`). The
+    /// folder is kept as chosen.
+    ///
+    /// # Errors
+    /// For the data exports, the [`NameError`] of a name the command line refuses too
+    /// (`output::read_name`: a compression DiMA does not write, such as `.bz2`; two
+    /// compressions; a name ending in a separator), instead of a name that says something else
+    /// than the file holds.
+    pub fn destination(self, chosen: PathBuf) -> std::result::Result<PathBuf, NameError> {
         let Some(ext) = self.extension() else {
-            return path;
+            return Ok(chosen);
         };
-        let name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_ascii_lowercase())
-            .unwrap_or_default();
-        if self
-            .accepted()
-            .iter()
-            .any(|a| name.ends_with(&format!(".{a}")))
-        {
-            path
+        let kept = match self.format() {
+            Some(format) => output::read_name(&chosen)?.format == Some(format),
+            None => chosen
+                .file_name()
+                .map(|n| n.to_string_lossy().to_ascii_lowercase())
+                .is_some_and(|n| n.ends_with(&format!(".{ext}"))),
+        };
+        if kept {
+            Ok(chosen)
         } else {
-            let mut s = path.into_os_string();
+            let mut s = chosen.into_os_string();
             s.push(format!(".{ext}"));
-            PathBuf::from(s)
+            Ok(PathBuf::from(s))
         }
+    }
+
+    /// The compression of the export written to `path`: the one its name asks for, for the
+    /// data exports; none for the figures, the texts and the tables.
+    ///
+    /// # Errors
+    /// The name's [`NameError`], as a usage error with its hint, for a name
+    /// [`ExportKind::destination`] would not have given.
+    fn compression(self, path: &Path) -> Result<OutputCompression> {
+        if self.format().is_none() {
+            return Ok(OutputCompression::None);
+        }
+        output::read_name(path).map(|n| n.compression).map_err(|e| {
+            let (message, hint) = e.describe(path);
+            DimaError::usage(message).with_hint(hint)
+        })
+    }
+}
+
+/// The four tables a folder export writes, in [`Table::ALL`] order: `<name>.positions.tsv`
+/// and the others, named after the results' query name as `dima analyze --tsv-dir` names them
+/// (`output::file_stem`).
+#[must_use]
+pub fn table_paths(folder: &Path, query_name: &str) -> Vec<PathBuf> {
+    let base = output::file_stem(query_name);
+    Table::ALL
+        .into_iter()
+        .map(|t| folder.join(format!("{base}.{}.tsv", t.name())))
+        .collect()
+}
+
+/// Whether writing to `dest` would replace `input`, a file the app has read: `Some(true)`
+/// when both name the same file (the library's writer follows symbolic links, so a link to the
+/// input is the input), `Some(false)` when only letter case tells them apart (one file on the
+/// default file systems of macOS and Windows), `None` otherwise. A hard link to the input is
+/// another name of it, which replacing leaves the input's own name intact. A file looked at,
+/// never changed.
+#[must_use]
+pub fn replaces(dest: &Path, input: &Path) -> Option<bool> {
+    let input = std::fs::canonicalize(input).ok()?;
+    let dest = resolved(&output::destination_of(dest));
+    if dest == input {
+        return Some(true);
+    }
+    let lower = |p: &Path| p.to_string_lossy().to_lowercase();
+    (lower(&dest) == lower(&input)).then_some(false)
+}
+
+/// `path` made absolute, with its deepest existing ancestor resolved by the file system and
+/// the rest appended (`.` and `..` resolved by name), so that two spellings of one file
+/// resolve alike, also when it does not exist yet.
+fn resolved(path: &Path) -> PathBuf {
+    let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    let parts: Vec<Component<'_>> = absolute.components().collect();
+    for split in (1..=parts.len()).rev() {
+        let head: PathBuf = parts[..split].iter().collect();
+        if let Ok(mut out) = std::fs::canonicalize(&head) {
+            for c in &parts[split..] {
+                match c {
+                    Component::ParentDir => {
+                        out.pop();
+                    }
+                    Component::CurDir => {}
+                    other => out.push(other.as_os_str()),
+                }
+            }
+            return out;
+        }
+    }
+    absolute
+}
+
+/// Creates `dir` and every missing folder above it, and returns the folders it created,
+/// deepest first, for [`remove_folders`] should the export fail.
+fn create_folders(dir: &Path) -> Result<Vec<PathBuf>> {
+    let missing: Vec<PathBuf> = dir
+        .ancestors()
+        .take_while(|d| !d.as_os_str().is_empty() && std::fs::symlink_metadata(d).is_err())
+        .map(Path::to_path_buf)
+        .collect();
+    std::fs::create_dir_all(dir).map_err(|e| {
+        remove_folders(&missing);
+        DimaError::io(
+            dima_core::error::IoAction::CreateDir,
+            dima_core::error::IoTarget::Path(dir.to_path_buf()),
+            e,
+        )
+    })?;
+    Ok(missing)
+}
+
+/// Removes the folders a failed export created, deepest first. A folder that holds anything (a
+/// table already in place, or a file put there meanwhile) is kept.
+fn remove_folders(created: &[PathBuf]) {
+    for d in created {
+        let _ = std::fs::remove_dir(d);
     }
 }
 
@@ -262,9 +390,10 @@ fn text(sink: &mut Sink, s: &str) -> Result<()> {
 /// Performs an export synchronously (the job body).
 ///
 /// # Errors
-/// Write errors with the destination; conserved-region errors; a figure without data.
+/// Write errors with the destination; conserved-region errors; a figure without data; a name
+/// that asks for what DiMA does not write.
 pub fn run(job: &Job) -> Outcome {
-    let compression = output::detect(&job.path).1;
+    let compression = job.kind.compression(&job.path)?;
     match (&job.payload, job.kind) {
         (Payload::Results { results, .. }, ExportKind::ResultsJson) => Ok(vec![write_file(
             &job.path,
@@ -285,21 +414,16 @@ pub fn run(job: &Job) -> Outcome {
             },
             ExportKind::TsvFolder,
         ) => {
-            std::fs::create_dir_all(&job.path).map_err(|e| {
-                DimaError::io(
-                    dima_core::error::IoAction::CreateDir,
-                    dima_core::error::IoTarget::Path(job.path.clone()),
-                    e,
-                )
-            })?;
+            // Before the folder exists: a computation that fails creates nothing.
             let regions = hcs::compute(results, params)?;
-            let base = dima_core::output::file_stem(&results.query_name);
+            let created = create_folders(&job.path)?;
             // Every table is written before any replaces its destination, as with
-            // `dima analyze --tsv-dir`: an error leaves the folder's tables as they were.
-            let filled = Table::ALL
+            // `dima analyze --tsv-dir`: an error leaves the folder's tables as they were, and
+            // removes the folders this export created.
+            let written = Table::ALL
                 .into_iter()
-                .map(|t| {
-                    let path = job.path.join(format!("{base}.{}.tsv", t.name()));
+                .zip(table_paths(&job.path, &results.query_name))
+                .map(|(t, path)| {
                     let role = match t {
                         Table::Positions => "positions_table",
                         Table::Variants => "variants_table",
@@ -310,8 +434,12 @@ pub fn run(job: &Job) -> Outcome {
                         output::write_tsv(results, Some(&regions), t, s)
                     })
                 })
-                .collect::<Result<Vec<_>>>()?;
-            filled.into_iter().map(Filled::commit).collect()
+                .collect::<Result<Vec<_>>>()
+                .and_then(|filled| filled.into_iter().map(Filled::commit).collect());
+            if written.is_err() {
+                remove_folders(&created);
+            }
+            written
         }
         (
             Payload::Results {
@@ -413,12 +541,10 @@ pub fn run(job: &Job) -> Outcome {
             let mut json = serde_json::to_string_pretty(report.as_ref())
                 .map_err(|e| DimaError::internal(format!("run report serialisation: {e}")))?;
             json.push('\n');
-            Ok(vec![write_file(
-                &job.path,
-                None,
-                OutputCompression::None,
-                |s| text(s, &json),
-            )?])
+            // Compressed as its name asks (run.json.gz), as `dima analyze --run-report` does.
+            Ok(vec![write_file(&job.path, None, compression, |s| {
+                text(s, &json)
+            })?])
         }
         _ => Err(DimaError::internal(
             "an export was requested without its data",
@@ -504,6 +630,240 @@ mod tests {
         );
     }
 
+    /// The data exports accept the names the command line accepts for the same output, every
+    /// extension of the format, plain or compressed, in any letter case, and refuse those it
+    /// refuses; other names get the usual extension (D100).
+    #[test]
+    fn export_names_are_the_command_lines() {
+        use ExportKind as K;
+        let dest = |k: K, name: &str| k.destination(PathBuf::from(name));
+        let kept = |k: K, name: &str| assert_eq!(dest(k, name), Ok(PathBuf::from(name)), "{k:?}");
+        for name in ["x.json", "x.json.gz", "x.JSON.zst"] {
+            kept(K::ResultsJson, name);
+            kept(K::HcsJson, name);
+            kept(K::RunReport, name);
+        }
+        for name in [
+            "p.jsonl",
+            "p.jsonl.gz",
+            "p.ndjson",
+            "p.ndjson.gz",
+            "p.NDJSON.zst",
+        ] {
+            kept(K::Jsonl, name);
+        }
+        for name in ["r.tsv", "r.tsv.zst", "r.tab", "r.tab.gz"] {
+            kept(K::HcsTsv, name);
+        }
+        // Other names get the usual extension, the format's: never a name that misstates
+        // the bytes.
+        assert_eq!(dest(K::ResultsJson, "x.gz"), Ok(PathBuf::from("x.gz.json")));
+        assert_eq!(
+            dest(K::ResultsJson, "x.tsv"),
+            Ok(PathBuf::from("x.tsv.json"))
+        );
+        assert_eq!(
+            dest(K::RunReport, "run.tsv"),
+            Ok(PathBuf::from("run.tsv.json"))
+        );
+        assert_eq!(dest(K::Jsonl, "p.json"), Ok(PathBuf::from("p.json.jsonl")));
+        assert_eq!(dest(K::HcsTsv, "r.txt"), Ok(PathBuf::from("r.txt.tsv")));
+        // The names the command line refuses.
+        for (k, name) in [
+            (K::ResultsJson, "x.json.bz2"),
+            (K::HcsTsv, "r.tsv.xz"),
+            (K::RunReport, "run.json.zip"),
+            (K::Jsonl, "p.jsonl.zstd"),
+        ] {
+            assert!(
+                matches!(dest(k, name), Err(NameError::UnsupportedCompression { .. })),
+                "{name}"
+            );
+        }
+        assert!(matches!(
+            dest(K::ResultsJson, "x.json.gz.zst"),
+            Err(NameError::TwoCompressions { .. })
+        ));
+        assert_eq!(dest(K::ResultsJson, "out/"), Err(NameError::Folder));
+        // The figures and texts keep their own extension only; nothing is refused there.
+        assert_eq!(
+            dest(K::Svg, "chart.bz2"),
+            Ok(PathBuf::from("chart.bz2.svg"))
+        );
+        assert_eq!(dest(K::Methods, "m.TXT"), Ok(PathBuf::from("m.TXT")));
+        // Every accepted ending is one the library reads as the export's format, and the
+        // dialog's filter lists them.
+        for k in ExportKind::ALL {
+            for a in k.accepted() {
+                assert_eq!(
+                    dest(k, &format!("x.{a}")),
+                    Ok(PathBuf::from(format!("x.{a}")))
+                );
+                if let Some(f) = k.format() {
+                    let named = output::read_name(Path::new(&format!("x.{a}"))).unwrap();
+                    assert_eq!(named.format, Some(f), "{a}");
+                }
+            }
+        }
+        assert_eq!(
+            K::Jsonl.accepted(),
+            [
+                "jsonl",
+                "jsonl.gz",
+                "jsonl.zst",
+                "ndjson",
+                "ndjson.gz",
+                "ndjson.zst"
+            ]
+        );
+        assert_eq!(K::RunReport.accepted(), ["json", "json.gz", "json.zst"]);
+        assert!(K::TsvFolder.accepted().is_empty());
+        assert_eq!(K::Png.accepted(), ["png"]);
+    }
+
+    /// A run report named .json.gz or .json.zst is written compressed, as the command line
+    /// writes one; a results file too.
+    #[test]
+    fn compressed_names_are_written_compressed() {
+        use std::io::Read as _;
+        let dir = tempfile::tempdir().unwrap();
+        let facts = crate::workers::analysis::RunFacts {
+            start_time: std::time::SystemTime::UNIX_EPOCH,
+            end_time: std::time::SystemTime::UNIX_EPOCH,
+            wall: std::time::Duration::ZERO,
+            threads: 1,
+            threads_started: Some(1),
+            phases: Vec::new(),
+            records: 191,
+            positions: Some(1345),
+            waited_for_input: None,
+        };
+        let report = crate::report::build(
+            &crate::tests::fixtures::mers_path(),
+            &dima_core::config::AnalysisParams::default(),
+            &facts,
+            dima_core::run_report::Status::Completed,
+            None,
+            Some(&crate::tests::fixtures::mers()),
+            &[],
+        );
+        for (name, magic) in [
+            ("run.json.gz", &[0x1F, 0x8B][..]),
+            ("run.json.zst", &[0x28, 0xB5, 0x2F, 0xFD][..]),
+            ("run.json", b"{\n"),
+        ] {
+            let path = dir.path().join(name);
+            let job = Job {
+                kind: ExportKind::RunReport,
+                metric: ChartMetric::Entropy,
+                path: path.clone(),
+                payload: Payload::Report(Box::new(report.clone())),
+            };
+            run(&job).unwrap();
+            let bytes = std::fs::read(&path).unwrap();
+            assert!(bytes.starts_with(magic), "{name}");
+            let mut text = String::new();
+            match magic[0] {
+                0x1F => {
+                    flate2::read::GzDecoder::new(&bytes[..])
+                        .read_to_string(&mut text)
+                        .unwrap();
+                }
+                0x28 => text = String::from_utf8(zstd::decode_all(&bytes[..]).unwrap()).unwrap(),
+                _ => text = String::from_utf8(bytes).unwrap(),
+            }
+            let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+            assert_eq!(v["status"], "completed", "{name}");
+        }
+        // A name the command line refuses is never written, even when asked directly.
+        let job = Job {
+            kind: ExportKind::RunReport,
+            metric: ChartMetric::Entropy,
+            path: dir.path().join("run.json.bz2"),
+            payload: Payload::Report(Box::new(report)),
+        };
+        let e = run(&job).unwrap_err();
+        assert!(e.to_string().contains("bzip2 compression"), "{e}");
+        assert!(!dir.path().join("run.json.bz2").exists());
+    }
+
+    /// A folder export that fails removes the folders it created (a table name too long for
+    /// the file system), and one whose computation fails creates none; a folder that existed is
+    /// kept.
+    #[test]
+    fn a_failed_folder_export_removes_the_folders_it_created() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut long = (*crate::tests::fixtures::mers()).clone();
+        long.query_name = "q".repeat(300);
+        let folder = dir.path().join("new").join("tables");
+        let job = |results: Results, path: PathBuf| Job {
+            kind: ExportKind::TsvFolder,
+            metric: ChartMetric::Entropy,
+            path,
+            payload: Payload::Results {
+                results: Arc::new(results),
+                hcs: HcsParams::default(),
+            },
+        };
+        assert!(run(&job(long.clone(), folder.clone())).is_err());
+        assert!(!dir.path().join("new").exists(), "both levels removed");
+        // Into a folder that existed: it stays.
+        std::fs::create_dir(dir.path().join("kept")).unwrap();
+        assert!(run(&job(long, dir.path().join("kept"))).is_err());
+        assert!(dir.path().join("kept").is_dir());
+        // Results whose positions do not start at 1: the conserved regions fail first.
+        let mut gap = (*crate::tests::fixtures::mers()).clone();
+        gap.results.remove(0);
+        assert!(run(&job(gap, folder)).is_err());
+        assert!(!dir.path().join("new").exists(), "nothing created");
+    }
+
+    /// The files an export must not replace are recognised however their path is spelt, and
+    /// through a symbolic link; another file, or a hard link (a second name the replacement
+    /// leaves alone), is not refused.
+    #[test]
+    fn an_export_never_replaces_the_input() {
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("in.fasta");
+        std::fs::write(&input, ">a\nACGT\n").unwrap();
+        assert_eq!(replaces(&input, &input), Some(true));
+        let spelt = dir.path().join("sub").join("..").join(".").join("in.fasta");
+        std::fs::create_dir(dir.path().join("sub")).unwrap();
+        assert_eq!(replaces(&spelt, &input), Some(true));
+        assert_eq!(replaces(&dir.path().join("other.json"), &input), None);
+        // Letter case: one file on macOS and Windows, possibly two elsewhere.
+        assert!(replaces(&dir.path().join("IN.fasta"), &input).is_some());
+        // A file that is gone protects nothing.
+        assert_eq!(replaces(&input, &dir.path().join("gone.fasta")), None);
+        #[cfg(unix)]
+        {
+            let link = dir.path().join("link.json");
+            std::os::unix::fs::symlink(&input, &link).unwrap();
+            assert_eq!(
+                replaces(&link, &input),
+                Some(true),
+                "the writer follows links"
+            );
+            let hard = dir.path().join("hard.fasta");
+            std::fs::hard_link(&input, &hard).unwrap();
+            assert_eq!(replaces(&hard, &input), None);
+        }
+        // The tables a folder export writes.
+        assert_eq!(
+            table_paths(Path::new("out"), "MERS spike")
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect::<Vec<_>>(),
+            [
+                Path::new("out").join("MERS_spike.positions.tsv"),
+                Path::new("out").join("MERS_spike.variants.tsv"),
+                Path::new("out").join("MERS_spike.metadata.tsv"),
+                Path::new("out").join("MERS_spike.hcs.tsv"),
+            ]
+            .map(|p| p.to_string_lossy().into_owned())
+        );
+    }
+
     #[test]
     fn failed_exports_leave_nothing_behind() {
         let dir = tempfile::tempdir().unwrap();
@@ -584,22 +944,15 @@ mod tests {
             ExportKind::RunReport.label(ChartMetric::SimilarityWeighted),
             "Run report\u{2026}"
         );
+        let dest = |k: ExportKind, name: &str| k.destination(PathBuf::from(name));
+        assert_eq!(dest(k, "a"), Ok(PathBuf::from("a.json")));
+        assert_eq!(dest(k, "a.JSON.ZST"), Ok(PathBuf::from("a.JSON.ZST")));
+        assert_eq!(dest(ExportKind::TsvFolder, "d"), Ok(PathBuf::from("d")));
         assert_eq!(
-            k.with_extension(PathBuf::from("a")),
-            PathBuf::from("a.json")
+            dest(ExportKind::Png, "f.svg"),
+            Ok(PathBuf::from("f.svg.png"))
         );
-        assert_eq!(
-            k.with_extension(PathBuf::from("a.JSON.ZST")),
-            PathBuf::from("a.JSON.ZST")
-        );
-        assert_eq!(
-            ExportKind::TsvFolder.with_extension(PathBuf::from("d")),
-            PathBuf::from("d")
-        );
-        assert_eq!(
-            ExportKind::Png.with_extension(PathBuf::from("f.svg")),
-            PathBuf::from("f.svg.png")
-        );
+        assert_eq!(dest(ExportKind::Png, "f.PNG"), Ok(PathBuf::from("f.PNG")));
         for k in ExportKind::ALL {
             for m in ChartMetric::ALL {
                 assert!(!k.label(m).is_empty());

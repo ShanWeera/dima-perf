@@ -1,19 +1,21 @@
 //! Facts about the selected position: its class, entropy (with the method or fallback that
-//! produced it), observed entropy, support, distinct and total variants, sample coverage and,
-//! when the run computed them, similarity-weighted entropy and the two normalised entropies.
-//! Undefined values show "—" (D42); a normalised entropy reads "— (one variant)" where a
-//! single distinct k-mer leaves it undefined, and is marked "(low support)" at support ≤ T.
+//! produced it, in words and as the results file names it), observed entropy, support, distinct
+//! and total variants, sample coverage and, when the run computed them, similarity-weighted
+//! entropy and the two normalised entropies. Undefined values show "—" (D42); a normalised
+//! entropy reads "— (one variant)" where a single distinct k-mer leaves it undefined, and is
+//! marked "(low support)" at support ≤ T; a coverage below the run's minimum never reads as
+//! reaching it.
 
 use egui::{RichText, Ui};
 
 use dima_core::config::Estimator;
-use dima_core::model::PositionResult;
+use dima_core::model::{EntropyMethod, PositionResult};
 
 use super::common::{fact, fact_at, heading, key_column_width, normalised_value, with_help};
 use super::help_text;
 use crate::charts::series::Class;
 use crate::theme::DesignTokens;
-use crate::util::{opt_coverage, opt_f64, opt_percent};
+use crate::util::{opt_f64, opt_percent, position_coverage};
 
 /// The keys of the facts every run has.
 const FACTS: [&str; 7] = [
@@ -32,16 +34,34 @@ const SIMILARITY_FACTS: [&str; 3] = [
     "Normalised\nsimilarity-weighted entropy",
 ];
 
-/// Draws the facts; `similarity_weighted` says whether the run computed similarity-weighted
-/// entropy.
-pub fn show(
-    ui: &mut Ui,
-    p: Option<&PositionResult>,
-    threshold: u64,
-    estimator: Estimator,
-    similarity_weighted: bool,
-    t: &DesignTokens,
-) {
+/// What the facts need to know about the run.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RunFacts {
+    /// The support threshold T.
+    pub threshold: u64,
+    /// The run's estimator.
+    pub estimator: Estimator,
+    /// Whether the run computed similarity-weighted entropy.
+    pub similarity_weighted: bool,
+    /// The run's minimum sample coverage, if it set one.
+    pub min_coverage: Option<f64>,
+}
+
+impl RunFacts {
+    /// The facts of `r`.
+    #[must_use]
+    pub fn of(r: &dima_core::model::Results) -> Self {
+        Self {
+            threshold: r.support_threshold,
+            estimator: r.run.parameters.estimator.value,
+            similarity_weighted: r.run.parameters.similarity_weighted_entropy.value,
+            min_coverage: r.coverage_summary.min_coverage,
+        }
+    }
+}
+
+/// Draws the facts of the selected position `p` of a run.
+pub fn show(ui: &mut Ui, p: Option<&PositionResult>, run: RunFacts, t: &DesignTokens) {
     let Some(p) = p else {
         heading(ui, t, "Position");
         ui.colored_label(t.text_muted, "Select a position in the chart or the table");
@@ -56,26 +76,22 @@ pub fn show(
     let width = (ui.available_width() - room).max(0.0);
     ui.scope(|ui| {
         ui.set_max_width(width);
-        facts(ui, p, threshold, estimator, similarity_weighted, t);
+        facts(ui, p, run, t);
     });
 }
 
 /// The class line and the facts' grids of `p`.
-fn facts(
-    ui: &mut Ui,
-    p: &PositionResult,
-    threshold: u64,
-    estimator: Estimator,
-    similarity_weighted: bool,
-    t: &DesignTokens,
-) {
+fn facts(ui: &mut Ui, p: &PositionResult, run: RunFacts, t: &DesignTokens) {
+    let similarity_weighted = run.similarity_weighted;
     let class = Class::of(p);
     let color = if class == Class::Eligible {
         t.success_color
     } else {
         t.warning_color
     };
-    ui.label(RichText::new(class.describe(threshold, estimator, p.entropy_method)).color(color));
+    ui.label(
+        RichText::new(class.describe(run.threshold, run.estimator, p.entropy_method)).color(color),
+    );
     ui.add_space(t.space_4);
     // With the similarity facts, both grids give their keys the width of the widest, so their
     // values line up; without them the grid is as it always was.
@@ -101,13 +117,10 @@ fn facts(
         .spacing([t.space_12, t.space_4])
         .max_col_width(max_width)
         .show(ui, |ui| {
-            let method = match (p.entropy_method.as_str(), p.entropy_fallback) {
-                (m, Some(f)) => format!("{m}; fallback: {}", f.as_str().replace('_', " ")),
-                (m, None) => m.to_owned(),
-            };
+            let coverage = position_coverage(p, run.min_coverage, 4);
             let values = [
                 format!("{} bits", opt_f64(p.entropy, 4)),
-                method,
+                method_text(p),
                 format!("{} bits", opt_f64(p.observed_entropy, 4)),
                 p.support.to_string(),
                 format!(
@@ -117,14 +130,15 @@ fn facts(
                 ),
                 opt_percent(p.total_variants_incidence, 2),
                 match p.below_min_coverage {
-                    Some(true) => {
-                        format!("{} (below the minimum)", opt_coverage(p.sample_coverage, 4))
-                    }
-                    _ => opt_coverage(p.sample_coverage, 4),
+                    Some(true) => format!("{coverage} (below the minimum)"),
+                    _ => coverage,
                 },
             ];
             for (key, value) in FACTS.into_iter().zip(values) {
-                row(ui, key, value);
+                let response = row(ui, key, value);
+                if let Some(help) = fact_help(key) {
+                    with_help(response, help);
+                }
             }
         });
     if !similarity_weighted {
@@ -152,6 +166,53 @@ fn facts(
         });
 }
 
+/// The method that gave a position's entropy, in words and then as the results file writes it
+/// (`entropy_method`, and `entropy_fallback` with spaces when there is one): `paper's
+/// correction (dima)`, `observed entropy (plug_in; fallback: too few points)`. The position
+/// facts and the chart's tooltip show it.
+#[must_use]
+pub fn method_text(p: &PositionResult) -> String {
+    let words = match p.entropy_method {
+        EntropyMethod::Dima => "paper's correction",
+        EntropyMethod::ChaoWangJost => "Chao\u{2013}Wang\u{2013}Jost",
+        EntropyMethod::MillerMadow => "Miller\u{2013}Madow",
+        EntropyMethod::PlugIn => "observed entropy",
+        EntropyMethod::NotEstimable => "no entropy",
+    };
+    let code = p.entropy_method.as_str();
+    match p.entropy_fallback {
+        Some(f) => format!(
+            "{words} ({code}; fallback: {})",
+            f.as_str().replace('_', " ")
+        ),
+        None => format!("{words} ({code})"),
+    }
+}
+
+/// The tooltip of a fact whose value needs explaining (screen readers read it too).
+fn fact_help(key: &str) -> Option<&'static str> {
+    match key {
+        "Method" => Some(
+            "How the entropy was computed: the paper's correction (dima), \
+             Chao\u{2013}Wang\u{2013}Jost (chao_wang_jost), Miller\u{2013}Madow (miller_madow), \
+             the observed entropy (plug_in), or none, without support (not_estimable). A \
+             fallback says why the run's estimator did not apply: support at or below threshold \
+             (LS, ELS), too few points (support below 1.25 T), degenerate regression (T = 2, \
+             N = 3) or single observation (one sequence).",
+        ),
+        "Distinct variants" => Some(
+            "The number of variants other than the Index and, in parentheses, the \
+             distinct-variants incidence: that number per 100 sequences that carry one of them \
+             (not per 100 supporting sequences); \u{2014} when every sequence carries the Index.",
+        ),
+        "Total variants" => Some(
+            "The total-variants incidence: the share of the supporting sequences that carry a \
+             variant other than the Index.",
+        ),
+        _ => None,
+    }
+}
+
 /// The values of the similarity facts: similarity-weighted entropy in bits (0.0000 with one
 /// distinct k-mer, a plain "—" without support), then the two normalised entropies.
 #[must_use]
@@ -168,9 +229,48 @@ pub fn similarity_values(p: &PositionResult) -> [String; 3] {
 
 #[cfg(test)]
 mod tests {
-    use super::similarity_values;
+    use super::{method_text, similarity_values};
     use crate::charts::series::Class;
     use crate::tests::fixtures;
+
+    /// The method in words, then as the results file names it: the paper's correction on the
+    /// MERS spike sample; on the HIV-1 pol protein data set the observed entropy of an eligible
+    /// position the correction does not reach (support 105 < 125) and of a low-support one,
+    /// and no entropy without support.
+    #[test]
+    fn methods_are_named_in_words_and_codes() {
+        let mers = fixtures::mers();
+        assert_eq!(method_text(&mers.results[0]), "paper's correction (dima)");
+        let hiv = fixtures::hiv_pro_swe();
+        let at = |position: usize| &hiv.results[position - 1];
+        assert_eq!(at(42).support, 105);
+        assert_eq!(
+            method_text(at(42)),
+            "observed entropy (plug_in; fallback: too few points)"
+        );
+        assert_eq!(
+            method_text(at(3)),
+            "observed entropy (plug_in; fallback: support at or below threshold)"
+        );
+        assert_eq!(method_text(at(30)), "no entropy (not_estimable)");
+        let mut p = mers.results[0].clone();
+        p.entropy_method = dima_core::model::EntropyMethod::ChaoWangJost;
+        assert_eq!(
+            method_text(&p),
+            "Chao\u{2013}Wang\u{2013}Jost (chao_wang_jost)"
+        );
+        p.entropy_method = dima_core::model::EntropyMethod::MillerMadow;
+        assert_eq!(method_text(&p), "Miller\u{2013}Madow (miller_madow)");
+        // The class line of position 42: eligible, but observed.
+        assert_eq!(
+            Class::of(at(42)).describe(
+                100,
+                dima_core::config::Estimator::Dima,
+                at(42).entropy_method
+            ),
+            "eligible (support > 100): observed entropy (the correction did not apply)"
+        );
+    }
 
     /// MERS spike position 25, the methodology page's worked example.
     #[test]

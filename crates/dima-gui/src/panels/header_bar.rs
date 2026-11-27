@@ -46,6 +46,26 @@ pub fn waiting_for_dialog(ui: &mut Ui, out: &mut Vec<Msg>) {
     }
 }
 
+/// What the light/dark switch does in `theme`: its glyph (egui's: ☀ in dark mode, 🌙 in light
+/// mode), its name in words, which is its tooltip and what screen readers say (egui's own
+/// switch is named by its glyph), and the theme it switches to.
+#[must_use]
+pub fn theme_switch_of(theme: egui::Theme) -> (&'static str, &'static str, egui::Theme) {
+    match theme {
+        egui::Theme::Dark => ("\u{2600}", "Switch to light mode", egui::Theme::Light),
+        egui::Theme::Light => ("\u{1F319}", "Switch to dark mode", egui::Theme::Dark),
+    }
+}
+
+/// The light/dark switch, as egui draws it, named in words.
+fn theme_switch(ui: &mut Ui) {
+    let (glyph, name, next) = theme_switch_of(ui.ctx().theme());
+    let button = ui.add(egui::Button::new(glyph).frame(false));
+    if super::common::with_name(button, name).clicked() {
+        ui.ctx().set_theme(next);
+    }
+}
+
 /// Draws the bar.
 pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<Msg>) {
     egui::MenuBar::new().ui(ui, |ui| {
@@ -102,20 +122,25 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
             }
         });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            egui::widgets::global_theme_preference_switch(ui);
-            if ui
-                .button("Preferences")
-                .on_hover_text("File dialogs and the size of exported figures")
-                .clicked()
+            theme_switch(ui);
+            let preferences = ui.button("Preferences");
+            if super::common::with_help(
+                preferences,
+                "File dialogs and the size of exported figures",
+            )
+            .clicked()
             {
                 state.windows.preferences = !state.windows.preferences;
             }
-            ui.weak(if cfg!(target_os = "macos") {
+            let palette = ui.weak(if cfg!(target_os = "macos") {
                 "\u{2318}K"
             } else {
                 "Ctrl+K"
-            })
-            .on_hover_text("Command palette: go to a position, find a k-mer, run a command");
+            });
+            super::common::with_help(
+                palette,
+                "Command palette: go to a position, find a k-mer, run a command",
+            );
             if has_results {
                 let (warnings, notes) = diagnostic_counts(state);
                 let text = if warnings > 0 {
@@ -129,11 +154,8 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                 } else {
                     RichText::new("No warnings")
                 };
-                if ui
-                    .button(text)
-                    .on_hover_text("Diagnostics and input validation")
-                    .clicked()
-                {
+                let badge = ui.button(text);
+                if super::common::with_help(badge, "Diagnostics and input validation").clicked() {
                     state.windows.diagnostics = !state.windows.diagnostics;
                 }
                 if ui.button("Run details").clicked() {

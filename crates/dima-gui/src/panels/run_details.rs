@@ -154,7 +154,8 @@ fn contents(ui: &mut Ui, s: &Session, t: &DesignTokens, out: &mut Vec<Msg>) {
                     ui,
                     t,
                     "Estimator",
-                    r.run.parameters.estimator.value.as_str().to_owned(),
+                    // As `dima analyze --estimator` takes it (the file writes chao_wang_jost).
+                    r.run.parameters.estimator.value.cli_name().to_owned(),
                 );
                 fact(
                     ui,

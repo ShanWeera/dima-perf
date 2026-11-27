@@ -17,7 +17,7 @@ use crate::charts::series::Class;
 use crate::state::session::{SelectSource, Session};
 use crate::state::sort::position_columns as col;
 use crate::theme::DesignTokens;
-use crate::util::{opt_coverage, opt_f64, opt_percent};
+use crate::util::{opt_f64, opt_percent, position_coverage};
 
 /// A column of the table.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -191,7 +191,7 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
                         }
                         response.context_menu(|ui| {
                             if ui.button("Copy row").clicked() {
-                                ui.ctx().copy_text(row_text(&columns, p));
+                                ui.ctx().copy_text(row_text(&columns, p, r));
                                 ui.close();
                             }
                         });
@@ -218,8 +218,9 @@ fn table_salt(columns: &[Column]) -> (&'static str, &[Column]) {
     ("positions", columns)
 }
 
-/// The text of one cell, as the table shows it (also what "Copy row" copies).
-fn cell_text(c: Column, p: &PositionResult) -> String {
+/// The text of one cell of `p`, a position of `r`, as the table shows it (also what "Copy row"
+/// copies).
+fn cell_text(c: Column, p: &PositionResult, r: &Results) -> String {
     match c {
         Column::Position => p.position.to_string(),
         Column::Entropy => opt_f64(p.entropy, 4),
@@ -231,7 +232,7 @@ fn cell_text(c: Column, p: &PositionResult) -> String {
         },
         Column::TotalVariants => opt_percent(p.total_variants_incidence, 1),
         Column::Coverage => {
-            let text = opt_coverage(p.sample_coverage, 3);
+            let text = position_coverage(p, r.coverage_summary.min_coverage, 3);
             if p.below_min_coverage == Some(true) {
                 format!("{text} \u{25BC}")
             } else {
@@ -250,17 +251,17 @@ fn cell_text(c: Column, p: &PositionResult) -> String {
 
 /// A row as "Copy row" copies it: the text of the columns shown, separated by tabs, so that it
 /// pastes into a spreadsheet as one row.
-fn row_text(columns: &[Column], p: &PositionResult) -> String {
+fn row_text(columns: &[Column], p: &PositionResult, r: &Results) -> String {
     columns
         .iter()
-        .map(|&c| cell_text(c, p))
+        .map(|&c| cell_text(c, p, r))
         .collect::<Vec<_>>()
         .join("\t")
 }
 
 /// One cell; `hovered` italicises the position of a row the chart hovers.
 fn cell(ui: &mut Ui, c: Column, p: &PositionResult, r: &Results, t: &DesignTokens, hovered: bool) {
-    let text = cell_text(c, p);
+    let text = cell_text(c, p, r);
     match c {
         Column::Position => {
             let text = RichText::new(text);

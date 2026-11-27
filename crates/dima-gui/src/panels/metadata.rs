@@ -142,14 +142,20 @@ fn field_header(ui: &mut Ui, t: &DesignTokens, field: &str, values: usize, open:
         name,
         t.text_primary,
     );
-    let label = format!(
-        "{field}, {values} values, {}",
-        if open { "expanded" } else { "collapsed" }
-    );
+    let label = field_label(field, values, open);
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
         .clicked()
+}
+
+/// What a field's header says to screen readers: "Host, 5 values, expanded" ("1 value").
+fn field_label(field: &str, values: usize, open: bool) -> String {
+    format!(
+        "{field}, {}, {}",
+        dima_core::human::plural(values as u64, "value", "values"),
+        if open { "expanded" } else { "collapsed" }
+    )
 }
 
 /// "84.5% (169)": a value's `share` of the sequences (0 to 1) as a percentage, which never
@@ -218,5 +224,18 @@ mod tests {
         assert_eq!(text(10_000, 10_000), "100.0% (10000)");
         assert_eq!(text(1, 100_000), "< 0.1% (1)");
         assert_eq!(text(169, 200), "84.5% (169)");
+    }
+
+    /// A field's header counts its values in words that fit one.
+    #[test]
+    fn field_headers_count_in_words() {
+        assert_eq!(
+            super::field_label("Host", 1, true),
+            "Host, 1 value, expanded"
+        );
+        assert_eq!(
+            super::field_label("Year", 5, false),
+            "Year, 5 values, collapsed"
+        );
     }
 }

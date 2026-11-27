@@ -66,28 +66,8 @@ pub fn show(
 }
 
 fn analyze_button(ui: &mut Ui, state: &AppState, t: &DesignTokens, out: &mut Vec<Msg>) {
-    let alignment_length = state.setup.inspection.as_ref().map(|i| i.alignment_length);
-    let problems = state
-        .setup
-        .options
-        .problems(&state.setup.header, alignment_length);
-    let undetermined = state
-        .setup
-        .inspection
-        .as_ref()
-        .is_some_and(|i| i.alphabet.is_none())
-        && state.setup.options.alphabet.alphabet().is_none();
-    let ready = state.setup.file.is_some()
-        && state.setup.opening.is_none()
-        && problems.is_empty()
-        && !undetermined;
-    let reason = if state.setup.file.is_none() {
-        Some("Open an alignment first".to_owned())
-    } else if undetermined {
-        Some("Choose the alphabet: the file has too few residues to detect it".to_owned())
-    } else {
-        problems.first().cloned()
-    };
+    let reason = state.not_ready();
+    let ready = state.setup.opening.is_none() && reason.is_none();
     let button = egui::Button::new(RichText::new("\u{25B6}  Analyze").size(t.font_size_body + 2.0))
         .min_size(egui::vec2(ui.available_width(), 40.0));
     let response = ui.add_enabled(ready, button);
