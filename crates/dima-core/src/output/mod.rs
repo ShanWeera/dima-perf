@@ -11,6 +11,7 @@
 //!   rejects other schema major versions with a clear message. Errors reading the file are I/O
 //!   errors (exit 3); corrupt or truncated compressed data is invalid input (exit 4).
 
+pub mod name;
 mod sink;
 pub mod tsv;
 
@@ -19,6 +20,7 @@ use std::io::{self, BufReader, Read, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+pub use name::{NameError, Named, read_name};
 pub use sink::{OutputCompression, Sink, Target, Written, destination_of, remove_temporaries};
 pub use tsv::{NA, Table, write_table};
 
@@ -74,7 +76,8 @@ impl OutputFormat {
 
 /// Format and compression implied by a file name's extensions (case-insensitive): an optional
 /// `.gz`/`.zst` after `.json`, `.jsonl`/`.ndjson` or `.tsv`/`.tab`. `None` when the name has no
-/// recognised format extension.
+/// recognised format extension. It does not refuse names that cannot be honoured; prefer
+/// [`read_name`], which does.
 #[must_use]
 pub fn detect(path: &Path) -> (Option<OutputFormat>, OutputCompression) {
     let name = path
