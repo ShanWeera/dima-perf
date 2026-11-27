@@ -77,9 +77,29 @@ where the records that carry the variant give 80 and 4 (the other hosts agree).
 ## Outputs
 
 The JSON keys of v5.0.9 are kept (`query_name`, `support_threshold`, `low_support_count`,
-`highest_entropy`, `results`, `position`, `low_support`, `entropy`, `support`,
+`average_entropy`, `highest_entropy`, `results`, `position`, `low_support`, `entropy`, `support`,
 `distinct_variants_count`, `distinct_variants_incidence`, `total_variants_incidence`,
-`diversity_motifs`, `sequence`, `count`, `incidence`, `motif_short`, `motif_long`, `metadata`).
+`diversity_motifs`, `sequence`, `count`, `incidence`, `motif_short`, `motif_long`, `metadata`),
+but some hold a different value under the same name. To compare a DiMA result with one of v5.0.9,
+compare these:
+
+| Key | DiMA v5.0.9 | This implementation | Compare v5.0.9's value with |
+|---|---|---|---|
+| `average_entropy` | the mean over every position, NS counted as 0 bits | the [eligible mean](/reference/glossary/#eligible-mean): positions with support above $T$ only | `all_positions_summary.average_entropy` |
+| `highest_entropy` | the **last** position with the highest entropy over every position, numbered from 0, without a tie count | the **first** eligible position with the highest entropy, numbered from 1, with `tied_position_count` | `all_positions_summary.highest_entropy` (first position, from 1) |
+| `entropy`, `distinct_variants_incidence`, `total_variants_incidence` at NS positions | 0 | `null` (`NA` in tables) | DiMA's `null` where v5.0.9 wrote 0 |
+| `distinct_variants_incidence` at a fully conserved position | 0 | `null` ($0/0$) | DiMA's `null` where v5.0.9 wrote 0 |
+| `diversity_motifs` at NS positions | `null` | `[]`, an empty list | |
+
+On the 26 sequences of v5.0.9's test data (`tests/data/dima-v5.0.9/input.afa.bz2`) with
+`-s 30`, v5.0.9's `average_entropy` is 0.06854034285524647 bits and DiMA's
+`all_positions_summary.average_entropy` 0.06854034285524646 (the last digit is rounding); there
+DiMA's own `average_entropy` is `null`, because no position has support above 30. v5.0.9's
+`highest_entropy` names position 186, counted from 0: the last of eight tied positions, which
+DiMA numbers 180 to 187; DiMA's `all_positions_summary.highest_entropy` names position 180 with
+8 tied positions. On the HIV-1 *pol* DNA alignment, the mean over every position is 3.443 bits
+and the eligible mean 5.350 bits.
+
 New keys add what v5.0.9 left implicit: positions are 1-based, the method and fallback of each
 entropy, the observed entropy, the sample coverage, the summaries described above, and the full
 provenance of the run (`run`: parameters with their origin, input checksum, alphabet decision,

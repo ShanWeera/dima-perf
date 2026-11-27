@@ -268,10 +268,11 @@ regions from positions with support above the threshold only with `--hcs-eligibl
 In the results: a fill value (`--header-fillna`) was given without `--header-format`. *Hint:*
 name the header fields with `--header-format`.
 
-## Warnings and notes of the command line
+## Warnings of the command line
 
-These are printed by `dima` on standard error and are not recorded in the results, which do not
-depend on them. Warnings count in the summary line's "N warnings"; `-q` hides them.
+These warnings, and the notes after them, are printed by `dima` on standard error and are not
+recorded in the results, which do not depend on them. Warnings count in the summary line's
+"N warnings"; `-q` hides them.
 
 | Code | Raised when |
 |---|---|

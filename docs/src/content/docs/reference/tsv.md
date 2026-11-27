@@ -4,8 +4,9 @@ description: The four tidy tab-separated tables DiMA writes (positions, variants
 ---
 
 DiMA writes four **tidy** tables: one observation per row, one variable per column, one table
-per kind of observation [@wickham2014; @broman2018]. They hold the same values as the
-[JSON results](/reference/json/), arranged for R, pandas, spreadsheets and command-line tools.
+per kind of observation [@wickham2014; @broman2018]. They hold the per-position, per-variant and
+per-region values of the [JSON results](/reference/json/), arranged for R, pandas, spreadsheets
+and command-line tools.
 
 | Table | One row per | Written by |
 |---|---|---|
@@ -14,10 +15,27 @@ per kind of observation [@wickham2014; @broman2018]. They hold the same values a
 | `metadata` | variant × header field × value | `--tsv-dir DIR`, or `-o FILE.tsv --table metadata` |
 | `hcs` | conserved region | `--tsv-dir DIR`, `-o FILE.tsv --table hcs`, `--hcs-output FILE.tsv`, `dima hcs -O tsv` |
 
+:::caution[The tables do not record the settings]
+A table holds values only: not the settings that produced them (alphabet, k, support threshold,
+estimator, HCS threshold and eligibility), not the summaries (eligible mean, extremes, coverage
+summary) and not the provenance (version, input checksum, diagnostics, references). Keep the JSON
+results with them, written in the same command — for example
+`dima analyze -i aln.fasta -o results.json --tsv-dir tables` — because `--tsv-dir` alone writes
+no JSON. The settings of an `hcs` table are recorded only in a conserved-sequences JSON file
+(`--hcs-output regions.json` or `dima hcs -o regions.json`).
+:::
+
 With `--tsv-dir DIR` (created if needed), the four files are named
-`<name>.positions.tsv`, `<name>.variants.tsv`, `<name>.metadata.tsv` and `<name>.hcs.tsv`,
-where `<name>` is the query name with characters other than letters, digits, `.`, `-` and `_`
-replaced by `_`. `dima view` converts existing results the same way.
+`<name>.positions.tsv`, `<name>.variants.tsv`, `<name>.metadata.tsv` and `<name>.hcs.tsv`.
+`<name>` is a file-name-safe form of a name: every character that is not a Unicode letter or
+number, `.`, `-` or `_` becomes `_`; dots and underscores at either end are removed, so no hidden
+file is made; and an empty result becomes `dima`. The name it starts from depends on the command:
+
+- `dima analyze` uses `--query-name` if given, otherwise the input file name without its
+  extensions; reading standard input, `/dev/stdin` or `<(…)` without `--query-name` gives
+  `dima`. `--query-name 'spike (MERS)'` gives `spike__MERS.positions.tsv`.
+- `dima view` uses the query name recorded in the results, so results analysed from standard input
+  give `Unknown_Protein.positions.tsv` (or `Unknown_DNA`, `Unknown_RNA`).
 
 ## Format
 
@@ -27,8 +45,9 @@ replaced by `_`. `dima view` converts existing results the same way.
   names and values (in the `metadata` table) are the only fields that can need it.
 - **`NA`** marks an undefined or not requested value (`null` in JSON). Only the columns marked
   "or NA" below can hold it.
-- Numbers are written in their shortest exact form (for example `75.88235294117646`); booleans as
-  `true` and `false`.
+- Numbers are written in their shortest exact form (for example `75.88235294117646`), and in
+  exponent form below 0.00001 (for example `7.7504169928695e-6`), which R, pandas and
+  spreadsheets read as numbers; booleans as `true` and `false`.
 - Files written with `-o` can be compressed by name (`.tsv.gz`, `.tsv.zst`); `--tsv-dir` writes
   plain files.
 
@@ -44,17 +63,17 @@ have no missing values. Recipes are in [Choose and read outputs](/how-to/outputs
 | Column | Type | Meaning |
 |---|---|---|
 | `position` | integer | 1-based position (first column of the k-mer) |
-| `low_support` | `NS`, `LS`, `ELS` or NA | Support class; NA when eligible (support > $T$) |
+| `low_support` | `NS`, `LS`, `ELS` or NA | [Support class](/reference/glossary/#support-class); NA when eligible (support > $T$) |
 | `support` | integer | Sequences with a valid k-mer |
 | `distinct_variants_count` | integer | Distinct non-Index variants |
 | `entropy` | number or NA | Entropy in bits by `entropy_method`; NA without support |
 | `observed_entropy` | number or NA | Observed (plug-in) entropy; NA without support |
-| `entropy_method` | text | `dima`, `chao_wang_jost`, `miller_madow`, `plug_in`, `not_estimable` |
-| `entropy_fallback` | text or NA | Why the requested estimator was not used |
-| `distinct_variants_incidence` | number or NA | Non-Index variants per 100 non-Index sequences |
-| `total_variants_incidence` | number or NA | Non-Index sequences per 100 supporting sequences |
+| `entropy_method` | text | `dima`, `chao_wang_jost`, `miller_madow`, `plug_in`, `not_estimable` (see [method and fallback](/reference/json/#position)) |
+| `entropy_fallback` | text or NA | Why the requested estimator was not used: `support_at_or_below_threshold`, `too_few_points`, `degenerate_regression` or `single_observation`; NA when it was used, with `raw`, and without support |
+| `distinct_variants_incidence` | number or NA | Non-Index variants per 100 non-Index sequences; NA where no sequence carries a non-Index variant (a fully conserved position, tied Index variants only, or no support) |
+| `total_variants_incidence` | number or NA | Non-Index sequences per 100 supporting sequences; NA without support |
 | `sample_coverage` | number or NA | Estimated sample coverage (NA when support < 2) |
-| `below_min_coverage` | `true`, `false` or NA | Coverage below `--min-coverage` (NA without the option) |
+| `below_min_coverage` | `true`, `false` or NA | Coverage below `--min-coverage`; NA without the option, and also with it where `sample_coverage` is NA |
 | `similarity_weighted_entropy` | number or NA | [Similarity-weighted entropy](/explanation/entropy/#similarity-weighted-entropy-opt-in) in bits (NA without `--similarity-weighted-entropy` or without support) |
 | `normalised_observed_entropy` | number or NA | Observed entropy divided by $\log_2 D$, where $D$ is the number of distinct k-mers, Index included (NA without the option or with fewer than two distinct k-mers) |
 | `normalised_similarity_weighted_entropy` | number or NA | Similarity-weighted entropy divided by the same $\log_2 D$ (NA without the option or with fewer than two distinct k-mers) |
@@ -84,9 +103,11 @@ Empty (header row only) without `--header-format`.
 | `value` | text | Cleaned header value (never empty: empty values get the fill value) |
 | `count` | integer | Sequences with this k-mer at this position and this value |
 
-The counts of one variant and one field add up to the variant's count. This table grows with
-positions × variants × values: stratifying by an identifier-like field (an accession) adds one
-row per sequence for every variant; see
+Rows are ordered by position, then variant (as in the `variants` table), then field (in
+header-format order), then value in byte order, so upper case comes before lower case: on the
+MERS-CoV spike sample, `Homo sapiens` comes before `a`. The counts of one variant and one field add
+up to the variant's count. This table grows with positions × variants × values: stratifying by an
+identifier-like field (an accession) adds one row per sequence for every variant; see
 [Stratify by header metadata](/how-to/metadata/#identifier-like-fields).
 
 ## hcs
@@ -97,15 +118,35 @@ row per sequence for every variant; see
 | `start_column`, `end_column`, `length` | integers | Alignment columns covered |
 | `min_incidence` | number | Lowest Index incidence among the members (%) |
 | `min_support` | integer | Lowest support among the members |
-| `conservation_lower_bound_95` | number | Lowest exact 95% Clopper–Pearson lower bound (proportion) |
+| `conservation_lower_bound_95` | number | The lowest per-position exact 95% Clopper–Pearson lower bound among the members (proportion) |
 | `flagged` | `true`, `false` | The region includes positions with support ≤ $T$ |
-| `low_support_position_count` | integer | How many |
+| `low_support_position_count` | integer | How many, from the first member to the last |
 | `sequence` | text | The conserved sequence |
 
-The member positions and the list of low-support positions are in the
+The member positions, the list of low-support positions and `split_from_previous` are in the
 [JSON output](/reference/json/#conserved-sequences). In `dima analyze` the table follows
 `--hcs-min-incidence` and `--hcs-eligible-only`; `dima view` always uses the defaults (100%, all
-positions), and `dima hcs` any other setting.
+positions), and `dima hcs` any other setting. The table does not record which; see the caution
+above.
+
+**Split regions.** The table has no `split_from_previous` column. A region was split from the
+previous one when it starts inside it (`start_column` ≤ the previous row's `end_column`) and their
+sequences differ on the shared columns. This prints the `region_id` of every split region (MERS-CoV
+spike gene at 95%: regions 35 and 36):
+
+```sh
+awk -F'\t' 'NR > 1 && $2 <= end { n = end - $2 + 1
+    if (substr(seq, length(seq) - n + 1) != substr($10, 1, n)) print $1 }
+  NR > 1 { end = $3; seq = $10 }' regions.tsv
+```
+
+```text
+35
+36
+```
+
+With `--hcs-eligible-only` a region can also start inside the previous one without a split, when
+a position with support ≤ $T$ ended that region; the sequences then agree on the shared columns.
 
 ## References
 

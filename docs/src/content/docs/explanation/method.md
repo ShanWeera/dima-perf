@@ -33,6 +33,14 @@ The default $k$ follows the alphabet: 9 for proteins, the length of the peptides
 class I molecules [@falk1991; @rammensee1993; @tharanga2025], and 27 for nucleotides, the codons
 of a 9-mer. Any $k$ from 1 to $L$ can be chosen with `-k`.
 
+**Nucleotide windows and codons.** A window of 27 nucleotides also slides one column at a time,
+so only one position in three starts at the first base of a codon; the other two start inside a
+codon and cover parts of ten. The HIV-1 *pol* DNA alignment (3,390 columns) has
+$3{,}390 - 27 + 1 = 3{,}364$ positions, not 1,130. When an alignment starts at the first base of
+a codon and its columns stay in frame, the 27-mer at nucleotide position $3q - 2$ holds the codons
+of the 9-mer at protein position $q$: protein position 25 corresponds to nucleotide position 73.
+Inserted columns that shift the frame break this correspondence.
+
 ## Valid k-mers and support
 
 A k-mer is **valid** when all its $k$ characters are residues. A gap, a missing-data symbol, an
@@ -41,9 +49,10 @@ in the window makes the k-mer invalid, and that sequence does not contribute at 
 
 The **support** $N$ of a position is the number of sequences with a valid k-mer there. The
 distinct valid k-mers are the position's **variants**; if variant $i$ occurs $c_i$ times, then
-$c_1 + c_2 + \dots + c_D = N$, where $D$ is the number of distinct variants. Every other measure
-of a position is computed from these counts alone, except the optional similarity-weighted
-entropy, which also compares the variants residue by residue.
+$c_1 + c_2 + \dots + c_D = N$, where $D$ is the number of variants — the
+[distinct k-mers](/reference/glossary/#distinct-k-mers-d), the most common one (the Index)
+included. Every other measure of a position is computed from these counts alone, except the
+optional similarity-weighted entropy, which also compares the variants residue by residue.
 
 ## The support threshold and the low-support labels
 
@@ -59,10 +68,19 @@ shows 30, the default of DiMA v5.0.9:
 | ELS | $N = T$ | support equal to the threshold |
 | eligible (no label) | $N > T$ | enough support |
 
-Only **eligible** positions receive the paper's sample-size correction of the entropy, and only
-they enter the summary statistics (mean, lowest and highest entropy). LS and ELS positions are
-still reported, with their observed values; NS positions have no entropy at all, because there is
-nothing to measure — where the paper assigns them a pseudo-entropy of 0 (see
+Only **eligible** positions enter the summary statistics (mean, lowest and highest entropy), and
+with the paper's estimator (`dima`, the default) only they can receive its sample-size correction
+of the entropy. It is applied *where possible*: the correction needs at least five points (the
+full data set included; a minimum taken from DiMA v5.0.9, which the paper does not state), so an
+eligible position is corrected only when its support is at least $1.25\,T$, rounded up (125
+sequences for $T = 100$). With support between $T$ and that, and in the one tiny case $T = 2$ with
+support 3, it keeps its observed entropy; such positions are still eligible and are included in
+the summaries (see [the paper's correction](/explanation/entropy/#the-papers-correction-fig-2)).
+
+LS and ELS positions are still reported: with the `dima` and `raw` estimators they keep their
+observed entropy, while `chao-wang-jost` and `miller-madow` estimate them like every other position
+with at least 2 sequences. NS positions have no entropy at all, because there is nothing to
+measure — where the paper assigns them a pseudo-entropy of 0 (see
 [why DiMA departs from it](/explanation/entropy/#positions-without-support)). The
 `low_support_count` of a run is the number of NS, LS and ELS positions, as in DiMA v5.0.9.
 
@@ -86,7 +104,8 @@ nothing to measure — where the paper assigns them a pseudo-entropy of 0 (see
 
 ## A worked example: MERS-CoV spike position 25
 
-The paper's Fig. 1C dataset ships with DiMA as `samples/mers_spike_aa.fasta`: 191 MERS-CoV spike
+The paper's Fig. 1C dataset is in the repository as `samples/mers_spike_aa.fasta` (see
+[your first analysis](/getting-started/first-analysis/) to download it): 191 MERS-CoV spike
 protein sequences, 1,353 columns, so $P = 1{,}353 - 9 + 1 = 1{,}345$ positions of 9-mers.
 Position 25 covers columns 25–33:
 
@@ -101,10 +120,18 @@ Position 25 covers columns 25–33:
 | `SAKSVCIEV`, `SIKSACIEV`, `SVKSACIKV`, `SVKSVCIEV` | 1 each | 0.59% each | Unique |
 
 The support is $N = 170$: 21 of the 191 sequences have a gap or an ambiguity code somewhere in
-columns 25–33. With the default $T = 100$ the position is eligible. Its observed entropy is
-1.4224 bits and its corrected entropy 1.4617 bits; 41 sequences (24.12%) carry a non-Index
-variant, and those 41 sequences carry 9 distinct variants (21.95%, the paper's 22.0%). The
-following pages show how each of these numbers is obtained.
+columns 25–33. With the default $T = 100$ the position is eligible, and its support is above
+125, so its entropy is corrected. Its observed entropy is 1.4224 bits and its corrected entropy
+1.4617 bits; 41 sequences (24.12%) carry a non-Index variant, and those 41 sequences carry 9
+distinct variants (21.95%, the paper's 22.0%). The following pages show how each of these numbers
+is obtained.
+
+**Peaks are k positions wide.** The variants of position 25 differ from its Index at columns 26,
+28, 29 and 32. Column 26 lies in the windows of the nine positions 18 to 26, so its variation
+raises the entropy of all nine: 0.9285 bits at position 18 against 0.0557 at position 17, and the
+highest entropies of the whole protein are at positions 26 (1.5878 bits), 25, 24 and 21–23. A
+single variable column can therefore show up as a plateau of up to $k$ consecutive positions; the
+variant lists and the alignment show which columns vary.
 
 ## Determinism
 
