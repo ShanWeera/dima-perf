@@ -1088,7 +1088,7 @@ dependencies = [
  "criterion",
  "csv",
  "flate2",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
  "jsonschema",
  "libm",
  "memchr",
