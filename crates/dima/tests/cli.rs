@@ -2486,6 +2486,35 @@ fn a_closed_pipe_keeps_the_messages() {
     assert!(e.contains("note: JSONL holds one position per line"), "{e}");
 }
 
+/// Standard output is written last, after the other streams too: a reader of standard output
+/// that goes away never costs an output written in place, such as a FIFO.
+#[cfg(unix)]
+#[test]
+fn standard_output_is_written_last() {
+    let d = tmp();
+    let dir = d.path();
+    let fifo = dir.join("regions.fifo");
+    assert!(
+        Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let reader = std::thread::spawn({
+        let fifo = fifo.clone();
+        move || std::fs::read(fifo).unwrap()
+    });
+    let input = tiny();
+    let mut args: Vec<&str> = vec!["analyze", "-i", s(&input)];
+    args.extend(TINY);
+    args.extend(["-o", "-", "--hcs-output", "regions.fifo", "-q"]);
+    let (e, status) = with_closed_stdout(&args, dir);
+    assert_eq!(status, 0, "{e}");
+    let regions: Value = serde_json::from_slice(&reader.join().unwrap()).unwrap();
+    assert!(regions["region_count"].is_u64(), "{regions}");
+}
+
 /// B9: `dima cite --from` describes one run: conserved sequences computed from other results
 /// (another input, k or T) are refused.
 #[test]

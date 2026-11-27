@@ -616,13 +616,15 @@ fn shown(target: &Target) -> String {
     }
 }
 
-/// `true` when `planned` is written in place, as it is produced: standard output and other
-/// streams. They are written after the files, so a reader that stops early (`| head`) never
-/// costs a file output.
-fn written_in_place(planned: &Planned) -> bool {
+/// When an output is written: files first, then the streams written in place as they are
+/// produced (devices, FIFOs, other descriptors), and standard output last, so a reader of
+/// standard output that stops early (`| head`) never costs another output.
+fn writing_rank(planned: &Planned) -> u8 {
     match &planned.target {
-        Target::Stdout => true,
-        Target::Path(p) => is_stream(p),
+        Target::Stdout => 2,
+        Target::Path(p) if super::destinations::names_stdout(p) => 2,
+        Target::Path(p) if is_stream(p) => 1,
+        Target::Path(_) => 0,
     }
 }
 
@@ -673,8 +675,10 @@ impl<'a> Opened<'a> {
         ledger: &Ledger,
     ) -> Result<()> {
         let plan = self.plan;
-        let (streams, files): (Vec<usize>, Vec<usize>) =
-            (0..plan.outputs.len()).partition(|&i| written_in_place(&plan.outputs[i]));
+        let (mut streams, files): (Vec<usize>, Vec<usize>) =
+            (0..plan.outputs.len()).partition(|&i| writing_rank(&plan.outputs[i]) > 0);
+        // A stable sort: the streams keep the plan's order, standard output after the others.
+        streams.sort_by_key(|&i| writing_rank(&plan.outputs[i]));
         for &i in &files {
             check()?;
             fill(&plan.outputs[i], self.sink(i)?, results, hcs, None)?;

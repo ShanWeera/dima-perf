@@ -280,7 +280,8 @@ impl Identity {
 }
 
 /// `/dev/stdout`, `/dev/fd/1` and `/proc/self/fd/1` are standard output (Unix).
-fn names_stdout(p: &Path) -> bool {
+#[must_use]
+pub fn names_stdout(p: &Path) -> bool {
     cfg!(unix)
         && ["/dev/stdout", "/dev/fd/1", "/proc/self/fd/1"]
             .iter()
