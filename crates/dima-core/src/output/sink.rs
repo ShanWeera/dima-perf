@@ -298,6 +298,36 @@ pub fn written_in_place(path: &Path) -> bool {
     }
 }
 
+/// Why no file can be written at `dest`, known before writing: a symbolic-link loop (the
+/// resolution gave up on a link), or a file name longer than any file system allows (more
+/// than 255 bytes on Linux, 255 UTF-16 units elsewhere), which would otherwise fail only when
+/// the finished output is renamed into place.
+fn unusable_name(dest: &Path) -> Option<io::Error> {
+    if fs::symlink_metadata(dest).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Some(io::Error::other("too many levels of symbolic links"));
+    }
+    let name = dest.file_name()?;
+    let too_long = if cfg!(target_os = "linux") {
+        name.len() > NAME_MAX
+    } else {
+        name.to_string_lossy().encode_utf16().count() > NAME_MAX
+    };
+    too_long.then(|| {
+        io::Error::other(format!(
+            "file name too long (more than {NAME_MAX} {})",
+            if cfg!(target_os = "linux") {
+                "bytes"
+            } else {
+                "characters"
+            }
+        ))
+    })
+}
+
+/// The longest file name file systems accept: 255 bytes on Linux (its `NAME_MAX`), 255 UTF-16
+/// units on NTFS and HFS+.
+const NAME_MAX: usize = 255;
+
 impl Sink {
     /// Opens `target` for writing with the given compression.
     ///
@@ -330,6 +360,9 @@ impl Sink {
                     (Raw::File(f), None)
                 }
                 Destination::Atomic(dest) => {
+                    if let Some(e) = unusable_name(&dest) {
+                        return Err(io_err(IoAction::Create, e));
+                    }
                     let dir = match dest.parent() {
                         Some(d) if !d.as_os_str().is_empty() => d.to_path_buf(),
                         _ => PathBuf::from("."),
@@ -640,6 +673,40 @@ mod tests {
         let to_dir = dir.path().join("to_dir");
         std::os::unix::fs::symlink(dir.path(), &to_dir).unwrap();
         assert!(!written_in_place(&to_dir), "nor is a link to one");
+    }
+
+    /// A link loop and a name too long for any file system fail when the sink is created,
+    /// before anything is computed, and nothing is left behind.
+    #[cfg(unix)]
+    #[test]
+    fn unusable_names_fail_at_creation() {
+        let dir = tempfile::tempdir().unwrap();
+        let (a, b) = (dir.path().join("a.json"), dir.path().join("b.json"));
+        std::os::unix::fs::symlink("b.json", &a).unwrap();
+        std::os::unix::fs::symlink("a.json", &b).unwrap();
+        let Err(e) = Sink::create(&Target::Path(a.clone()), OutputCompression::None) else {
+            panic!("a link loop is refused");
+        };
+        assert!(
+            e.to_string().contains("too many levels of symbolic links") || {
+                let cause = std::error::Error::source(&e).map(ToString::to_string);
+                cause.is_some_and(|c| c.contains("too many levels"))
+            },
+            "{e:?}"
+        );
+        assert!(fs::symlink_metadata(&a).unwrap().file_type().is_symlink());
+        let long = dir.path().join(format!("{}.json", "a".repeat(300)));
+        let Err(e) = Sink::create(&Target::Path(long), OutputCompression::None) else {
+            panic!("a name too long is refused");
+        };
+        assert!(format!("{e:?}").contains("file name too long"), "{e:?}");
+        assert_eq!(entries(dir.path()).len(), 2, "only the two links");
+        // The longest name that fits is written.
+        let fits = dir.path().join(format!("{}.json", "a".repeat(250)));
+        let mut sink = Sink::create(&Target::Path(fits.clone()), OutputCompression::None).unwrap();
+        sink.write_all(b"{}").unwrap();
+        sink.commit().unwrap();
+        assert_eq!(fs::read(&fits).unwrap(), b"{}");
     }
 
     #[test]

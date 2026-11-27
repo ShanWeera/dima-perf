@@ -7,12 +7,17 @@
 //! another output is refused before it could be written. [`check`] then compares every pair.
 //!
 //! Two destinations are the same file when their names lead to it: spelled
-//! differently (`./x`, `d/../x`), through symbolic links (dangling ones included), or with
-//! other letter case (one file on macOS and Windows, so refused everywhere). Hard links are
-//! not refused: an output replaces its own name only, so the other name keeps the old file.
-//! Standard input and output have no name: on Unix they are compared by the file behind them
-//! (its device and inode), so `dima analyze < x.fa -o x.fa` and `-o r.json --hcs-output - >
-//! r.json` are refused too. Devices such as `/dev/null` can take any number of outputs, and
+//! differently (`./x`, `d/../x`) or through symbolic links (dangling ones included). Names that
+//! differ only in letter case, or in the Unicode form of an accented letter, are one file on
+//! macOS (and, for letter case, on Windows): they are refused unless the file system shows
+//! that they are two files — only one of them exists, or (on Unix) both exist with different
+//! inodes. Hard links are not refused: an output replaces its own name only, so the other name
+//! keeps the old file. Standard input and output have no name: on Unix they are compared by
+//! the file behind them (its device and inode), so `dima analyze < x.fa -o x.fa` and `-o r.json
+//! --hcs-output - > r.json` are refused too (and so is a hard link of the input given to
+//! standard input). Two outputs that lead to one pipe, FIFO or socket (`-o /dev/fd/3
+//! --hcs-output /dev/fd/3`, or a link to `/dev/stdout` next to `-`) would be mixed in it and
+//! are refused. Devices such as `/dev/null` and terminals can take any number of outputs, and
 //! appending standard output to a log (`>> log`) is never a clash.
 
 use std::path::{Component, Path, PathBuf};
@@ -34,6 +39,8 @@ pub enum Kind {
     Hcs,
     /// The run report (`--run-report`).
     RunReport,
+    /// The citation `dima cite` prints on standard output.
+    Citation,
 }
 
 impl Kind {
@@ -48,6 +55,7 @@ impl Kind {
             Self::Table(Table::Hcs) => "the hcs table",
             Self::Hcs => "the conserved sequences",
             Self::RunReport => "the run report",
+            Self::Citation => "the citation",
         }
     }
 }
@@ -69,9 +77,11 @@ impl Destination {
     /// (--tsv-dir)`.
     #[must_use]
     pub fn describe(&self) -> String {
-        match self.option {
-            Some(option) => format!("{} ({option})", self.kind.describe()),
-            None => format!("{} (standard output by default)", self.kind.describe()),
+        match (self.option, self.kind) {
+            (Some(option), _) => format!("{} ({option})", self.kind.describe()),
+            // `dima cite` has no other destination.
+            (None, Kind::Citation) => self.kind.describe().to_owned(),
+            (None, _) => format!("{} (standard output by default)", self.kind.describe()),
         }
     }
 }
@@ -147,8 +157,21 @@ impl Destinations {
         Self {
             files: vec![Destination {
                 kind: Kind::Hcs,
-                option: Some("-o"),
+                option: output.map(|_| "-o"),
                 target: output.map_or(Target::Stdout, Target::from_arg),
+            }],
+            folders: Vec::new(),
+        }
+    }
+
+    /// The destination of `dima cite`: the citation, on standard output.
+    #[must_use]
+    pub fn of_cite() -> Self {
+        Self {
+            files: vec![Destination {
+                kind: Kind::Citation,
+                option: None,
+                target: Target::Stdout,
             }],
             folders: Vec::new(),
         }
@@ -212,17 +235,21 @@ enum Place {
         /// The file a write would reach: symbolic links followed as the writer follows them,
         /// the rest of the path resolved as far as it exists.
         exact: String,
-        /// `exact` without letter case: equal for two names that may be one file.
+        /// `exact` without letter case, in Unicode normalization form C: equal for two names
+        /// that may be one file.
         key: String,
     },
 }
 
-/// What tells two entries apart: their place and, on Unix, the existing regular file behind
-/// them, by device and inode.
+/// What tells two entries apart: their place and, on Unix, the existing file behind them, by
+/// device and inode.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Identity {
     place: Place,
     inode: Option<(u64, u64)>,
+    /// What is behind them is a pipe, a FIFO or a socket, not a regular file: two outputs
+    /// written to it would be mixed.
+    pipe: bool,
 }
 
 impl Identity {
@@ -230,10 +257,7 @@ impl Identity {
     fn of_target(target: &Target) -> Self {
         match target {
             Target::Path(p) if !names_stdout(p) => Self::of_path(p),
-            _ => Self {
-                place: Place::Stdout,
-                inode: stream_inode(Stream::Stdout),
-            },
+            _ => Self::of_stream(Place::Stdout, Stream::Stdout),
         }
     }
 
@@ -241,35 +265,45 @@ impl Identity {
     fn of_input(input: Input<'_>) -> Self {
         match input {
             Input::Path(p) => Self::of_path(p),
-            Input::Stdin => Self {
-                place: Place::Descriptor,
-                inode: stream_inode(Stream::Stdin),
-            },
+            Input::Stdin => Self::of_stream(Place::Descriptor, Stream::Stdin),
+        }
+    }
+
+    fn of_stream(place: Place, stream: Stream) -> Self {
+        let id = stream_id(stream);
+        Self {
+            place,
+            inode: id.map(|(inode, _)| inode),
+            pipe: id.is_some_and(|(_, pipe)| pipe),
         }
     }
 
     fn of_path(path: &Path) -> Self {
         let meta = std::fs::metadata(path).ok();
-        let inode = meta.as_ref().and_then(regular_inode);
         if meta.as_ref().is_some_and(is_device) {
             return Self {
                 place: Place::Device,
                 inode: None,
+                pipe: false,
             };
         }
+        let id = meta.as_ref().and_then(file_id);
+        let (inode, pipe) = (id.map(|(inode, _)| inode), id.is_some_and(|(_, p)| p));
         if dima_core::input::is_descriptor_alias(path) {
             return Self {
                 place: Place::Descriptor,
                 inode,
+                pipe,
             };
         }
         let exact = resolved(&output::destination_of(path))
             .to_string_lossy()
             .into_owned();
-        let key = exact.to_lowercase();
+        let key = output::folded(Path::new(&exact));
         Self {
             place: Place::Named { exact, key },
             inode,
+            pipe,
         }
     }
 
@@ -302,12 +336,13 @@ fn is_device(m: &std::fs::Metadata) -> bool {
     }
 }
 
-/// The device and inode of a regular file (Unix).
-fn regular_inode(m: &std::fs::Metadata) -> Option<(u64, u64)> {
+/// The device and inode of what a write to `m` reaches (Unix), and whether it is a pipe, a
+/// FIFO or a socket (`true`) rather than a regular file; `None` for devices and folders.
+fn file_id(m: &std::fs::Metadata) -> Option<((u64, u64), bool)> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        m.is_file().then(|| (m.dev(), m.ino()))
+        (!is_device(m) && !m.is_dir()).then(|| ((m.dev(), m.ino()), !m.is_file()))
     }
     #[cfg(not(unix))]
     {
@@ -322,9 +357,10 @@ enum Stream {
     Stdout,
 }
 
-/// The regular file behind standard input or output, if it is one (Unix): `< x.fa`, `> r.json`
-/// or `>> log`. Read from a duplicate of the descriptor, so nothing is consumed.
-fn stream_inode(stream: Stream) -> Option<(u64, u64)> {
+/// The file behind standard input or output (Unix), as [`file_id`]: a regular file (`< x.fa`,
+/// `> r.json`, `>> log`), or a pipe, FIFO or socket (`| wc`). Read from a duplicate of the
+/// descriptor, so nothing is consumed.
+fn stream_id(stream: Stream) -> Option<((u64, u64), bool)> {
     #[cfg(unix)]
     {
         use std::os::fd::AsFd;
@@ -333,7 +369,7 @@ fn stream_inode(stream: Stream) -> Option<(u64, u64)> {
             Stream::Stdout => std::io::stdout().as_fd().try_clone_to_owned(),
         };
         let meta = std::fs::File::from(fd.ok()?).metadata().ok()?;
-        regular_inode(&meta)
+        file_id(&meta)
     }
     #[cfg(not(unix))]
     {
@@ -400,7 +436,7 @@ impl Entry<'_> {
     }
 
     const fn is_default_results(&self) -> bool {
-        matches!(self.role, Role::Output(d) if d.option.is_none())
+        matches!(self.role, Role::Output(d) if d.option.is_none() && matches!(d.kind, Kind::Results))
     }
 }
 
@@ -477,11 +513,12 @@ fn fix(a: &Entry<'_>, b: &Entry<'_>) -> String {
         return "choose another output path; the input is never overwritten".to_owned();
     }
     if let Some(report) = [a, b].into_iter().find(|e| e.is_report()) {
+        // A device or descriptor (`/dev/stdout`) is no folder to suggest a name in.
         let suggestion = match report.role {
             Role::Output(Destination {
                 target: Target::Path(p),
                 ..
-            }) => report_suggestion(p),
+            }) if !output::written_in_place(p) => report_suggestion(p),
             _ => "run-report.json".to_owned(),
         };
         return format!("give the run report its own file, such as '{suggestion}'");
@@ -533,14 +570,38 @@ fn clash(a: &Entry<'_>, b: &Entry<'_>) -> Option<DimaError> {
         (&a.id.place, &b.id.place)
     {
         if ka == kb {
-            return named_clash(a, b, ea == eb);
+            if ea == eb {
+                return named_clash(a, b, true);
+            }
+            match output::one_file(Path::new(ea), Path::new(eb)) {
+                Some(true) => return named_clash(a, b, true),
+                None => return named_clash(a, b, false),
+                Some(false) => {}
+            }
         }
     }
     let same_file = a.id.inode.is_some() && a.id.inode == b.id.inode;
-    if same_file && (a.id.is_stream() || b.id.is_stream()) {
-        return Some(stream_clash(a, b));
+    if same_file {
+        let input = matches!(a.role, Role::Input) || matches!(b.role, Role::Input);
+        // Two outputs into one pipe would be mixed in it. The input may share a socket with
+        // standard output (a service started by inetd), and reading a pipe replaces nothing.
+        if a.id.pipe && !input {
+            return Some(stream_clash(a, b));
+        }
+        if !a.id.pipe && (a.id.is_stream() || b.id.is_stream()) {
+            return Some(stream_clash(a, b));
+        }
     }
     None
+}
+
+/// Why the two named entries may be one file ([`output::why_one_file`]).
+fn possibly_one_file(a: &Entry<'_>, b: &Entry<'_>) -> &'static str {
+    let exact = |e: &Entry<'_>| match &e.id.place {
+        Place::Named { exact, .. } => PathBuf::from(exact),
+        _ => PathBuf::new(),
+    };
+    output::why_one_file(&exact(a), &exact(b))
 }
 
 /// Two names of one file: `certain` when they resolve alike, possible when only letter case
@@ -599,18 +660,28 @@ fn named_clash(a: &Entry<'_>, b: &Entry<'_>, certain: bool) -> Option<DimaError>
     Some(if certain {
         usage(message, fix)
     } else {
-        usage(
-            possible,
-            format!(
-                "names that differ only in letter case are one file on macOS and Windows; {fix}"
-            ),
-        )
+        usage(possible, format!("{}; {fix}", possibly_one_file(a, b)))
     })
 }
 
-/// Standard input or output (or another descriptor) is the file another entry names.
+/// Standard input or output (or another descriptor) is the file another entry names, or two
+/// outputs lead to one pipe.
 fn stream_clash(a: &Entry<'_>, b: &Entry<'_>) -> DimaError {
+    if !a.id.is_stream() && !b.id.is_stream() {
+        // Two names (links to `/dev/stdout`, a FIFO's two links) of one pipe.
+        return usage(
+            format!(
+                "'{}' and '{}' lead to one pipe: {} and {} would both be written to it",
+                a.shown,
+                b.shown,
+                a.what(),
+                b.what()
+            ),
+            fix(a, b),
+        );
+    }
     let (stream, other) = if a.id.is_stream() { (a, b) } else { (b, a) };
+    let it = if a.id.pipe { "pipe" } else { "file" };
     let message = match (stream.role, other.role) {
         (Role::Input, _) => {
             if other.id.is_stream() {
@@ -636,14 +707,14 @@ fn stream_clash(a: &Entry<'_>, b: &Entry<'_>) -> DimaError {
             other.shown
         ),
         (_, _) if other.id.is_stream() => format!(
-            "{} and {} are the same file: {} and {} would both be written to it",
+            "{} and {} are the same {it}: {} and {} would both be written to it",
             stream.shown,
             other.shown,
             stream.what(),
             other.what()
         ),
         (_, _) => format!(
-            "{}, where {} would go, is the file '{}', which is also written as {}",
+            "{}, where {} would go, is the {it} '{}', which is also written as {}",
             stream.shown,
             stream.what(),
             other.shown,
@@ -708,7 +779,14 @@ mod tests {
         assert_eq!(d.folders.len(), 1);
         let d = Destinations::of_hcs(None);
         assert_eq!(d.files[0].target, Target::Stdout);
+        assert_eq!(
+            d.files[0].describe(),
+            "the conserved sequences (standard output by default)",
+            "as dima analyze says it"
+        );
+        let d = Destinations::of_hcs(Some(Path::new("h.json")));
         assert_eq!(d.files[0].describe(), "the conserved sequences (-o)");
+        assert_eq!(Destinations::of_cite().files[0].describe(), "the citation");
     }
 
     #[test]
@@ -924,6 +1002,7 @@ mod tests {
             id: Identity {
                 place: Place::Descriptor,
                 inode: Identity::of_path(&file).inode,
+                pipe: false,
             },
         };
         let output = Destination {
@@ -957,6 +1036,7 @@ mod tests {
             id: Identity {
                 place: Place::Stdout,
                 inode: Identity::of_path(&file).inode,
+                pipe: false,
             },
         };
         let e = clash(&out, &s).unwrap();
@@ -974,5 +1054,87 @@ mod tests {
         };
         assert_eq!(null.id.place, Place::Device);
         assert!(clash(&null, &s).is_none());
+    }
+
+    /// Two outputs into one pipe (a FIFO here, as `| wc` or `>(…)` would be) are refused,
+    /// whatever names lead to it; the input may share one with an output.
+    #[cfg(unix)]
+    #[test]
+    fn two_outputs_into_one_pipe_are_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let fifo = dir.path().join("p");
+        assert!(
+            std::process::Command::new("mkfifo")
+                .arg(&fifo)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let named = Identity::of_path(&fifo);
+        assert!(named.pipe && named.inode.is_some(), "{named:?}");
+        let on = |place: Place| Identity {
+            place,
+            inode: named.inode,
+            pipe: true,
+        };
+        let results = Destination {
+            kind: Kind::Results,
+            option: Some("-o"),
+            target: Target::Path("/dev/fd/3".into()),
+        };
+        let hcs = Destination {
+            kind: Kind::Hcs,
+            option: Some("--hcs-output"),
+            target: Target::Stdout,
+        };
+        let entry = |d: &'static str, role, id| Entry {
+            role,
+            shown: d.into(),
+            id,
+        };
+        let a = entry("/dev/fd/3", Role::Output(&results), on(Place::Descriptor));
+        let b = entry("standard output", Role::Output(&hcs), on(Place::Stdout));
+        let m = clash(&a, &b).unwrap().to_string();
+        assert!(
+            m.contains("/dev/fd/3 and standard output are the same pipe"),
+            "{m}"
+        );
+        // A link to the pipe next to it, both named: one pipe.
+        let link = dir.path().join("so.json");
+        std::os::unix::fs::symlink(&fifo, &link).unwrap();
+        let c = Entry {
+            role: Role::Output(&hcs),
+            shown: "x".into(),
+            id: Identity {
+                place: Place::Named {
+                    exact: "elsewhere".into(),
+                    key: "elsewhere".into(),
+                },
+                ..Identity::of_path(&link)
+            },
+        };
+        let d = Entry {
+            role: Role::Output(&results),
+            ..entry("y", Role::Input, named.clone())
+        };
+        let m = clash(&c, &d).unwrap().to_string();
+        assert!(m.contains("lead to one pipe"), "{m}");
+        // The input on the same pipe as an output: not refused (a socket can be both).
+        let input = entry("standard input", Role::Input, on(Place::Descriptor));
+        assert!(clash(&input, &b).is_none());
+    }
+
+    /// The Unicode form of an accented letter is part of the key, like letter case (the rule
+    /// itself is `output::one_file`, tested in the library).
+    #[test]
+    fn names_that_differ_only_in_case() {
+        let dir = tempfile::tempdir().unwrap();
+        // The Unicode form of an accented letter is part of the key, like case.
+        let nfc = Identity::of_path(&dir.path().join("caf\u{e9}.json"));
+        let nfd = Identity::of_path(&dir.path().join("cafe\u{301}.json"));
+        match (nfc.place, nfd.place) {
+            (Place::Named { key: a, .. }, Place::Named { key: b, .. }) => assert_eq!(a, b),
+            other => panic!("{other:?}"),
+        }
     }
 }

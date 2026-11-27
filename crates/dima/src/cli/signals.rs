@@ -1,7 +1,8 @@
 //! Interrupts and termination (D65, D96).
 //!
 //! The first SIGINT/SIGTERM/SIGHUP (Ctrl-C/Ctrl-Break/console close on Windows) sets the
-//! cancellation flag the analysis polls and prints a notice naming it; the run then stops, its
+//! cancellation flag the analysis polls and prints a notice naming it (SIGINT is named Ctrl-C
+//! when a terminal is attached); the run then stops, its
 //! sinks are dropped (removing their temporary files) and the process ends *by the same
 //! signal*, so shells and workflow managers see the conventional status (130, 143, 129). A
 //! second signal, or the end of a grace period of 3 seconds that starts with the first signal
@@ -65,11 +66,13 @@ fn notice(name: &str) -> String {
     }
 }
 
-/// The name of a handled signal for [`notice`]: SIGINT is Ctrl-C on a terminal.
+/// The name of a handled signal for [`notice`]: SIGINT is Ctrl-C when a terminal is attached
+/// (`interactive`), where the key sends it; otherwise another program sent it.
 #[cfg(unix)]
-const fn signal_name(sig: i32) -> &'static str {
+const fn signal_name(sig: i32, interactive: bool) -> &'static str {
     match sig {
-        libc::SIGINT => "Ctrl-C",
+        libc::SIGINT if interactive => "Ctrl-C",
+        libc::SIGINT => "SIGINT",
         libc::SIGTERM => "SIGTERM",
         libc::SIGHUP => "SIGHUP",
         libc::SIGUSR1 => "SIGUSR1",
@@ -190,7 +193,14 @@ pub fn install(announce: bool) -> std::io::Result<Signals> {
                         } else {
                             ""
                         };
-                        let _ = writeln!(std::io::stderr(), "{fresh}{}", notice(signal_name(sig)));
+                        let _ = writeln!(
+                            std::io::stderr(),
+                            "{fresh}{}",
+                            notice(signal_name(
+                                sig,
+                                std::io::stdin().is_terminal() || std::io::stderr().is_terminal(),
+                            ))
+                        );
                     }
                     let code = s.exit_code();
                     let _ =
@@ -346,8 +356,10 @@ mod tests {
             libc::SIGXCPU,
             libc::SIGALRM,
         ] {
-            assert!(super::signal_name(sig).starts_with("SIG"), "{sig}");
+            assert!(super::signal_name(sig, false).starts_with("SIG"), "{sig}");
         }
-        assert_eq!(super::signal_name(libc::SIGINT), "Ctrl-C");
+        assert_eq!(super::signal_name(libc::SIGINT, true), "Ctrl-C");
+        // Without a terminal, another program sent it.
+        assert_eq!(super::signal_name(libc::SIGINT, false), "SIGINT");
     }
 }

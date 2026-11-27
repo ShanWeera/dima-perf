@@ -1117,18 +1117,23 @@ fn export_names_are_those_of_the_command_line() {
         last_toast(&s)
     );
     assert!(!dir.path().join("x.json.bz2").exists());
-    // The save dialogs' filters list the last extension of every accepted ending.
+    // The save dialogs' filters list the last extension of every accepted ending, the usual
+    // one first: Windows and macOS add the first to a name typed without an extension.
     assert_eq!(
         filter_extensions(ExportKind::Jsonl),
-        ["gz", "jsonl", "ndjson", "zst"]
+        ["jsonl", "ndjson", "gz", "zst"]
     );
     assert_eq!(
         filter_extensions(ExportKind::HcsTsv),
-        ["gz", "tab", "tsv", "zst"]
+        ["tsv", "tab", "gz", "zst"]
     );
     assert_eq!(
         filter_extensions(ExportKind::RunReport),
-        ["gz", "json", "zst"]
+        ["json", "gz", "zst"]
+    );
+    assert_eq!(
+        filter_extensions(ExportKind::ResultsJson),
+        ["json", "gz", "zst"]
     );
     assert_eq!(filter_extensions(ExportKind::Png), ["png"]);
 }

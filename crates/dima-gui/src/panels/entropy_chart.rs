@@ -17,6 +17,7 @@ use std::sync::Arc;
 use dima_core::human;
 use egui::{Color32, Pos2, Rect, Stroke, Ui};
 
+use super::common::Described;
 use super::common::{
     Swatch, fixed_width_slot, hatch_rect, heading, legend_entry, legend_entry_at_least,
     legend_entry_width, row_with_trailing, text_width, with_help,
@@ -382,7 +383,7 @@ fn zoom_buttons(ui: &mut Ui, s: &Session) -> Option<Option<(f64, f64)>> {
     let mut asked = None;
     if ui
         .add_enabled(zoomed, egui::Button::new("Fit").small())
-        .on_hover_text("Show every shown position (or double-click the chart)")
+        .described("Show every shown position (or double-click the chart)")
         .clicked()
     {
         asked = Some(None);
@@ -390,14 +391,14 @@ fn zoom_buttons(ui: &mut Ui, s: &Session) -> Option<Option<(f64, f64)>> {
     if let Some(full) = s.extent() {
         if ui
             .small_button("+")
-            .on_hover_text("Zoom in (or scroll over the chart)")
+            .described("Zoom in (or scroll over the chart)")
             .clicked()
         {
             asked = Some(viewport::zoom(s.viewport, full, 0.8, 0.5));
         }
         if ui
             .add_enabled(zoomed, egui::Button::new("\u{2212}").small())
-            .on_hover_text("Zoom out")
+            .described("Zoom out")
             .clicked()
         {
             asked = Some(viewport::zoom(s.viewport, full, 1.25, 0.5));

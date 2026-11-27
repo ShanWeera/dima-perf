@@ -87,8 +87,12 @@ pub fn chips(r: &Results, session: &Session) -> Vec<(String, String)> {
             ),
             format!(
                 "Positions with support \u{2264} T: none (NS), below T (LS), equal to T (ELS). \
-                 They are excluded from the summaries; {} positions are eligible.",
-                c.eligible
+                 They are excluded from the summaries; {} eligible.",
+                if c.eligible == 1 {
+                    "1 position is".to_owned()
+                } else {
+                    format!("{} positions are", c.eligible)
+                }
             ),
         ),
     ]);

@@ -20,7 +20,7 @@ use std::io::{self, BufReader, Read, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-pub use name::{NameError, Named, read_name};
+pub use name::{NameError, Named, folded, one_file, read_name, why_one_file};
 pub use sink::{
     OutputCompression, Sink, Target, Written, destination_of, remove_temporaries, written_in_place,
 };
@@ -587,14 +587,17 @@ fn unreadable_compression(name: &str, format: &str) -> DimaError {
             "decompress it or recompress it with gzip or zstd",
         )
     };
+    // Of these formats only bzip2 is one `dima analyze` reads alignments in.
+    let alignment = if format.starts_with("bzip2") {
+        " (an alignment is read by dima analyze, not by dima view, hcs or cite)"
+    } else {
+        ""
+    };
     DimaError::input_data(
         Some(Location::new(name.to_owned())),
         format!("{what}, which DiMA does not read results from"),
     )
-    .with_hint(format!(
-        "if it holds DiMA results, {fix} (an alignment is read by dima analyze, not by dima \
-         view, hcs or cite)"
-    ))
+    .with_hint(format!("if it holds DiMA results, {fix}{alignment}"))
 }
 
 /// An error while reading a JSON file: a cancellation, an I/O error on the stored bytes,

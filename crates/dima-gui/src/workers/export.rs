@@ -223,10 +223,11 @@ pub fn table_paths(folder: &Path, query_name: &str) -> Vec<PathBuf> {
 
 /// Whether writing to `dest` would replace `input`, a file the app has read: `Some(true)`
 /// when both name the same file (the library's writer follows symbolic links, so a link to the
-/// input is the input), `Some(false)` when only letter case tells them apart (one file on the
-/// default file systems of macOS and Windows), `None` otherwise. A hard link to the input is
-/// another name of it, which replacing leaves the input's own name intact. A file looked at,
-/// never changed.
+/// input is the input; names that differ only in letter case or Unicode form are when the
+/// file system says so), `Some(false)` when only such a difference tells them apart and the
+/// file system cannot say whether it ignores it ([`output::one_file`]: on Windows, where no
+/// inode is available), `None` otherwise. A hard link to the input is another name of it,
+/// which replacing leaves the input's own name intact. A file looked at, never changed.
 #[must_use]
 pub fn replaces(dest: &Path, input: &Path) -> Option<bool> {
     let input = std::fs::canonicalize(input).ok()?;
@@ -234,8 +235,14 @@ pub fn replaces(dest: &Path, input: &Path) -> Option<bool> {
     if dest == input {
         return Some(true);
     }
-    let lower = |p: &Path| p.to_string_lossy().to_lowercase();
-    (lower(&dest) == lower(&input)).then_some(false)
+    if output::folded(&dest) != output::folded(&input) {
+        return None;
+    }
+    match output::one_file(&dest, &input) {
+        Some(true) => Some(true),
+        Some(false) => None,
+        None => Some(false),
+    }
 }
 
 /// `path` made absolute, with its deepest existing ancestor resolved by the file system and
@@ -831,8 +838,17 @@ mod tests {
         std::fs::create_dir(dir.path().join("sub")).unwrap();
         assert_eq!(replaces(&spelt, &input), Some(true));
         assert_eq!(replaces(&dir.path().join("other.json"), &input), None);
-        // Letter case: one file on macOS and Windows, possibly two elsewhere.
-        assert!(replaces(&dir.path().join("IN.fasta"), &input).is_some());
+        // Letter case: the file system tells. Where `IN.fasta` is not found, it is another file
+        // (Linux); where it is, it is the input (macOS by inode, Windows possibly).
+        let upper = dir.path().join("IN.fasta");
+        let expected = if std::fs::metadata(&upper).is_err() {
+            None
+        } else if cfg!(unix) {
+            Some(true)
+        } else {
+            Some(false)
+        };
+        assert_eq!(replaces(&upper, &input), expected);
         // A file that is gone protects nothing.
         assert_eq!(replaces(&input, &dir.path().join("gone.fasta")), None);
         #[cfg(unix)]

@@ -101,13 +101,17 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                     let max = alignment_length.unwrap_or(usize::MAX / 2).max(1);
                     // A default longer than a short alignment is shown as it is (the pre-check
                     // below Analyze says so), never silently replaced by the alignment length;
-                    // a value the user drags or types is kept in range.
+                    // a value the user drags, types or steps is kept in range. A whole step per
+                    // key press: a smaller speed rounds Up and Down (and a screen reader's
+                    // increment) back to the same k.
                     let field = egui::DragValue::new(&mut k)
                         .range(1..=max)
                         .clamp_existing_to_range(false)
-                        .speed(0.2);
+                        .speed(1.0);
                     let field = ui.add(field).labelled_by(label);
                     if with_help(field, &help::kmer_length()).changed() {
+                        // Keyboard steps are not clamped when the existing value is not.
+                        k = k.clamp(1, max);
                         // The default is passed as unset, like every other option, so the run
                         // records it as derived from the alphabet (as `dima analyze` without -k).
                         o.kmer_length = (Some(k) != default_k).then_some(k);
@@ -393,6 +397,8 @@ fn advanced(
             ui.horizontal(|ui| {
                 let mut on = o.min_coverage.is_some();
                 let flag = ui.checkbox(&mut on, "flag below");
+                // Its text alone ("flag below") would not say which option it switches.
+                let flag = named(flag, "Minimum coverage: flag below");
                 if with_help(flag, &help::min_coverage()).changed() {
                     o.min_coverage = on.then_some(0.95);
                     changed = true;

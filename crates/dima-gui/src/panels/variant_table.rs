@@ -7,6 +7,7 @@ use egui::{RichText, Ui};
 
 use dima_core::model::Variant;
 
+use super::common::Described;
 use crate::app::msg::Msg;
 use crate::state::session::Session;
 use crate::state::sort::variant_columns as col;
@@ -24,7 +25,7 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
             if filtering
                 && ui
                     .small_button("Clear")
-                    .on_hover_text("Clear the variant filters")
+                    .described("Clear the variant filters")
                     .clicked()
             {
                 s.variants.search.clear();
@@ -54,7 +55,7 @@ pub fn show(ui: &mut Ui, s: &mut Session, t: &DesignTokens, out: &mut Vec<Msg>) 
                     .speed(0.1)
                     .range(0.0..=100.0),
             )
-            .on_hover_text("Hide variants below this incidence (0 shows all)");
+            .described("Hide variants below this incidence (0 shows all)");
         // The field's text is only its value: screen readers get the label beside it as its
         // name.
         field

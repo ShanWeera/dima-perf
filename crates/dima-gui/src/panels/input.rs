@@ -7,6 +7,7 @@ use egui::{RichText, Ui};
 use dima_core::model::Compression;
 use dima_core::validation::Inspection;
 
+use super::common::Described;
 use super::common::{card, fact, heading};
 use super::error_card;
 use crate::app::msg::Msg;
@@ -25,7 +26,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
         ui.horizontal(|ui| {
             let open = ui
                 .add_enabled(!busy_dialog, egui::Button::new("Open\u{2026}"))
-                .on_hover_text(
+                .described(
                     "An aligned FASTA file (optionally gzip, bzip2 or Zstandard compressed), \
                      or a DiMA results file (.json, .json.gz, .json.zst) to explore",
                 );
@@ -164,7 +165,7 @@ pub fn summary(
                 ui,
                 t,
                 "Alignment length",
-                format!("{} columns", i.alignment_length),
+                dima_core::human::plural(i.alignment_length as u64, "column", "columns"),
             );
             fact(ui, t, "Alphabet", alphabet_fact(i, choice));
             if let Some(a) = i.alphabet {

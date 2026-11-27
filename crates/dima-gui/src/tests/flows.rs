@@ -1828,7 +1828,11 @@ fn every_option_reads_its_tooltip() {
         (Role::ComboBox, "Entropy estimator", help::estimator()),
         (Role::ComboBox, "Validation", help::validation()),
         (Role::TextInput, "Fill value", help::fill()),
-        (Role::CheckBox, "flag below", help::min_coverage()),
+        (
+            Role::CheckBox,
+            "Minimum coverage: flag below",
+            help::min_coverage(),
+        ),
         (
             Role::CheckBox,
             "Compute similarity-weighted entropy (Wu 2025)",
@@ -2064,4 +2068,28 @@ fn the_legend_tooltips_are_their_descriptions() {
             1345
         ))
     );
+}
+
+/// The k-mer length field steps by one with Up and Down, as the other number fields do, and
+/// a step never leaves the range the alignment allows.
+#[test]
+fn the_kmer_field_steps_with_the_arrow_keys() {
+    let mut h = harness();
+    open(&mut h, &fixtures::mers_path());
+    h.run_steps(3);
+    let k = || {
+        let h: &H = &h;
+        h.state().state.setup.options.kmer_length
+    };
+    assert_eq!(k(), None, "the alphabet's default (9)");
+    h.get_by_role_and_label(Role::SpinButton, "k-mer length")
+        .focus();
+    h.run_steps(2);
+    h.key_press(egui::Key::ArrowUp);
+    h.run_steps(2);
+    assert_eq!(h.state().state.setup.options.kmer_length, Some(10));
+    h.key_press(egui::Key::ArrowDown);
+    h.key_press(egui::Key::ArrowDown);
+    h.run_steps(2);
+    assert_eq!(h.state().state.setup.options.kmer_length, Some(8));
 }

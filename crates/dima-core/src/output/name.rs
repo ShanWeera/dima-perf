@@ -47,7 +47,8 @@ pub enum NameError {
         /// The outer compression extension, with its dot.
         second: String,
     },
-    /// The name ends in a path separator, so it names a folder.
+    /// The name ends in a path separator, or its last part is `.` or `..`, so it names a
+    /// folder.
     Folder,
 }
 
@@ -91,9 +92,7 @@ impl NameError {
             }
             Self::Folder => (
                 format!("'{shown}' names a folder, not a file"),
-                "give a file name such as results.json; --tsv-dir writes the tables into a \
-                 folder"
-                    .to_owned(),
+                "give the name of a file, not of a folder".to_owned(),
             ),
         }
     }
@@ -123,6 +122,9 @@ const UNSUPPORTED: &[(&str, &str, Option<&str>)] = &[
         "gzip compression under the name .gzip",
         Some(".gz"),
     ),
+    (".tar.gz", "a compressed tar archive", None),
+    (".tar.zst", "a compressed tar archive", None),
+    (".tar", "a tar archive", None),
     (".tgz", "a compressed tar archive", None),
     (".tbz2", "a compressed tar archive", None),
     (".txz", "a compressed tar archive", None),
@@ -165,7 +167,7 @@ impl OutputCompression {
 /// compressions, or names a folder.
 pub fn read_name(path: &Path) -> Result<Named, NameError> {
     let raw = path.as_os_str().to_string_lossy();
-    if raw.len() > 1 && raw.ends_with(std::path::is_separator) {
+    if names_folder(&raw) {
         return Err(NameError::Folder);
     }
     // ASCII lower-casing keeps every byte position, so a suffix found in `lower` can be cut
@@ -210,6 +212,67 @@ pub fn read_name(path: &Path) -> Result<Named, NameError> {
         format,
         compression,
     })
+}
+
+/// `path` as file systems that ignore letter case and Unicode form compare names (macOS's by
+/// default for both, Windows' for case): in lower case and normalization form C. Two names
+/// equal once folded may be one file; [`one_file`] tells when the file system can.
+#[must_use]
+pub fn folded(path: &Path) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    path.to_string_lossy().to_lowercase().nfc().collect()
+}
+
+/// Whether two names that are equal once [`folded`] but differ as written are one file:
+/// `Some(false)` when only one of them exists (a file system that ignores the difference would
+/// find both), the comparison of their device and inode when both exist (Unix), `None` when
+/// the file system cannot tell (neither exists yet, or both exist where inodes are not
+/// available). Neither name's symbolic links are followed: resolve them first.
+#[must_use]
+pub fn one_file(a: &Path, b: &Path) -> Option<bool> {
+    match (std::fs::symlink_metadata(a), std::fs::symlink_metadata(b)) {
+        (Ok(x), Ok(y)) => same_inode(&x, &y),
+        (Err(_), Err(_)) => None,
+        _ => Some(false),
+    }
+}
+
+/// Why two names equal once [`folded`] may be one file, for messages: they differ only in
+/// letter case, or only in how their accented letters are encoded.
+#[must_use]
+pub fn why_one_file(a: &Path, b: &Path) -> &'static str {
+    if a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase() {
+        "names that differ only in letter case are one file on macOS and Windows"
+    } else {
+        "names that differ only in how their accented letters are encoded (Unicode form) are one \
+         file on macOS"
+    }
+}
+
+#[cfg(unix)]
+#[allow(clippy::unnecessary_wraps)]
+fn same_inode(x: &std::fs::Metadata, y: &std::fs::Metadata) -> Option<bool> {
+    use std::os::unix::fs::MetadataExt;
+    Some((x.dev(), x.ino()) == (y.dev(), y.ino()))
+}
+
+#[cfg(not(unix))]
+const fn same_inode(_: &std::fs::Metadata, _: &std::fs::Metadata) -> Option<bool> {
+    None
+}
+
+/// `true` when `raw` can only name a folder: it ends in a path separator (other than a lone
+/// `/`, which [`read_name`]'s callers refuse as an existing folder), or its last part is `.` or
+/// `..` (`out.json/.`), which `Path::file_name` would skip.
+fn names_folder(raw: &str) -> bool {
+    if raw.len() > 1 && raw.ends_with(std::path::is_separator) {
+        return true;
+    }
+    let last = raw
+        .rsplit(std::path::is_separator)
+        .next()
+        .unwrap_or_default();
+    last == "." || last == ".."
 }
 
 /// `shown` without its ending `suffix` (compared case-insensitively), for a hint; when `shown`
@@ -257,7 +320,7 @@ mod tests {
         assert_eq!(ok("x"), n(None, C::None));
         assert_eq!(ok("x.json."), n(None, C::None));
         assert_eq!(ok("x.gz"), n(None, C::Gzip));
-        assert_eq!(ok("x.tar.gz"), n(None, C::Gzip));
+        assert_eq!(ok("x.targz"), n(None, C::None));
         assert_eq!(ok("-"), n(None, C::None));
         assert_eq!(ok("/dev/null"), n(None, C::None));
         assert_eq!(ok("/"), n(None, C::None));
@@ -277,6 +340,9 @@ mod tests {
             ("x.json.lz4", ".lz4"),
             ("x.json.bgz", ".bgz"),
             ("x.tgz", ".tgz"),
+            ("x.TAR.gz", ".TAR.gz"),
+            ("x.json.tar.zst", ".tar.zst"),
+            ("x.tar", ".tar"),
         ] {
             match err(name) {
                 NameError::UnsupportedCompression { suffix: s, .. } => {
@@ -330,8 +396,38 @@ mod tests {
     fn folders_are_refused() {
         assert_eq!(err("out.json/"), NameError::Folder);
         assert_eq!(err("out/"), NameError::Folder);
+        // A last part `.` or `..` names a folder too, though `Path::file_name` skips it.
+        for name in ["out.json/.", "out.json/..", ".", "..", "a/b/.."] {
+            assert_eq!(err(name), NameError::Folder, "{name}");
+        }
+        assert_eq!(ok("a.json"), ok("./a.json"));
+        assert_eq!(ok("..json").format, Some(F::Json));
         let (msg, _) = err("out.json/").describe(Path::new("out.json/"));
         assert_eq!(msg, "'out.json/' names a folder, not a file");
+    }
+
+    /// Names that differ only in letter case or Unicode form fold alike, and are one file
+    /// only where the file system says so.
+    #[test]
+    fn names_that_differ_only_in_case_or_form() {
+        use super::{folded, one_file};
+        assert_eq!(
+            folded(Path::new("Caf\u{e9}.JSON")),
+            folded(Path::new("cafe\u{301}.json"))
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let (upper, lower) = (dir.path().join("R.json"), dir.path().join("r.json"));
+        assert_eq!(one_file(&upper, &lower), None, "neither exists yet");
+        std::fs::write(&upper, "{}").unwrap();
+        if std::fs::metadata(&lower).is_ok() {
+            // A file system that ignores case (macOS, Windows): one file, where inodes say so.
+            assert_ne!(one_file(&upper, &lower), Some(false));
+        } else {
+            assert_eq!(one_file(&upper, &lower), Some(false), "only one exists");
+            std::fs::write(&lower, "{}").unwrap();
+            #[cfg(unix)]
+            assert_eq!(one_file(&upper, &lower), Some(false), "two inodes");
+        }
     }
 
     #[test]

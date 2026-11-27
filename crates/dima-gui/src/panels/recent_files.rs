@@ -4,6 +4,7 @@
 
 use egui::{RichText, Ui};
 
+use super::common::Described;
 use super::common::{card, heading};
 use crate::app::msg::Msg;
 use crate::state::recent::{RecentFiles, RecentKind, now_unix};
@@ -23,7 +24,7 @@ pub fn show(ui: &mut Ui, recent: &RecentFiles, t: &DesignTokens, out: &mut Vec<M
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .small_button("Clear all")
-                    .on_hover_text("Forget every recent file")
+                    .described("Forget every recent file")
                     .clicked()
                 {
                     out.push(Msg::RecentCleared);
@@ -73,7 +74,7 @@ pub fn show(ui: &mut Ui, recent: &RecentFiles, t: &DesignTokens, out: &mut Vec<M
                                     .truncate(),
                             )
                             .on_hover_cursor(egui::CursorIcon::PointingHand)
-                            .on_hover_text(f.path.display().to_string());
+                            .described(f.path.display().to_string());
                         if link.clicked() {
                             out.push(Msg::OpenPath(f.path.clone()));
                         }

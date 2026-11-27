@@ -179,7 +179,7 @@ pub fn warn_assumed_format(plan: &Plan, format_option: bool, v: Verbosity) -> u6
     for (path, compression) in &plan.assumed_json {
         let mut hint = format!(
             "name it {}",
-            renamed(path, None, *compression, &[".json", ".tsv"])
+            renamed(path, None, *compression, &[".json", ".tsv"], ".hcs")
         );
         if format_option {
             hint.push_str(", or choose the format with -O json or -O tsv");
@@ -257,20 +257,15 @@ pub fn settle(kind: Kind, target: &Target, explicit: Option<OutputFormat>) -> Re
     };
     let named = output::read_name(path).map_err(|e| {
         let (message, hint) = e.describe(path);
-        usage(message, hint)
+        match e {
+            output::NameError::Folder => usage(message, file_in_folder(kind, path)),
+            _ => usage(message, hint),
+        }
     })?;
     if std::fs::metadata(path).is_ok_and(|m| m.is_dir()) {
-        let example = match kind {
-            Kind::Hcs => "hcs.json",
-            Kind::RunReport => "run-report.json",
-            Kind::Results | Kind::Table(_) => "results.json",
-        };
         return Err(usage(
             format!("'{}' is a folder, not a file", path.display()),
-            format!(
-                "give a file name, such as '{}'",
-                path.join(example).display()
-            ),
+            file_in_folder(kind, path),
         ));
     }
     let shown = path.display();
@@ -306,7 +301,13 @@ pub fn settle(kind: Kind, target: &Target, explicit: Option<OutputFormat>) -> Re
                 ),
                 format!(
                     "name it {}",
-                    renamed(path, named.format, named.compression, &[".json", ".tsv"])
+                    renamed(
+                        path,
+                        named.format,
+                        named.compression,
+                        &[".json", ".tsv"],
+                        ".hcs"
+                    )
                 ),
             )),
             (Some(f), Some(e)) if f != e => Err(mismatch(f, e, ".json or .tsv")),
@@ -328,12 +329,39 @@ pub fn settle(kind: Kind, target: &Target, explicit: Option<OutputFormat>) -> Re
                 ),
                 format!(
                     "name it {}",
-                    renamed(path, named.format, named.compression, &[".json"])
+                    renamed(
+                        path,
+                        named.format,
+                        named.compression,
+                        &[".json"],
+                        ".run-report"
+                    )
                 ),
             )),
         },
         Kind::Table(_) => Ok(settled(OutputFormat::Tsv)),
+        // `dima cite` prints on standard output only (settled above).
+        Kind::Citation => Err(usage(
+            "the citation is printed on standard output",
+            "redirect standard output to a file",
+        )),
     }
+}
+
+/// The hint for a destination of `kind` that names the folder `path`: a file in it, named as
+/// that output usually is (`out/` → `out/hcs.json`).
+fn file_in_folder(kind: Kind, path: &Path) -> String {
+    let example = match kind {
+        Kind::Hcs => "hcs.json",
+        Kind::RunReport => "run-report.json",
+        Kind::Results | Kind::Table(_) | Kind::Citation => "results.json",
+    };
+    // Components drop the `.` of `x/.`, so the example reads `x/hcs.json`.
+    let folder: std::path::PathBuf = path.components().collect();
+    format!(
+        "give a file name, such as '{}'",
+        folder.join(example).display()
+    )
 }
 
 /// `true` when `path` is written in place rather than replaced (D77): a descriptor such as
@@ -342,16 +370,19 @@ fn is_stream(path: &Path) -> bool {
     dima_core::output::written_in_place(path)
 }
 
-/// `path` as written, with each of `extensions` in place of the extension that names another
-/// format, or added to a name that names none, and its compression kept: `run.tsv.gz` →
-/// `run.json.gz`; `regions.txt` → `regions.txt.json or regions.txt.tsv (optionally followed by
-/// .gz or .zst)`. A name is only ever extended, never cut, so the suggestion cannot become the
-/// name of another output (`mers.hcs` next to `-o mers.json`).
+/// `path` as written, its compression kept, with each of `extensions` added to a name that
+/// names no format (`regions.txt` → `regions.txt.json or regions.txt.tsv (optionally followed
+/// by .gz or .zst)`; `mers.hcs` → `mers.hcs.json`), or, in place of the extension of another
+/// format, the output's `own` name and each of `extensions` (`run.tsv.gz` →
+/// `run.run-report.json.gz`). The suggestion thus never becomes the name the results of the
+/// same base usually have (`run.json`); the collision check still compares it with every
+/// other output.
 fn renamed(
     path: &Path,
     format: Option<OutputFormat>,
     compression: OutputCompression,
     extensions: &[&str],
+    own: &str,
 ) -> String {
     let shown = path.display().to_string();
     // ASCII lower-casing keeps every byte position, so lengths found in `lower` cut `shown`.
@@ -368,8 +399,15 @@ fn renamed(
             .map(|e| e.len())
     }) {
         end -= len;
+        if !lower[..end].ends_with(own) {
+            return names(&format!("{}{own}", &shown[..end]), extensions, compressed);
+        }
     }
-    let stem = &shown[..end];
+    names(&shown[..end], extensions, compressed)
+}
+
+/// `stem` with each of `extensions` and the compression, for a hint.
+fn names(stem: &str, extensions: &[&str], compressed: &str) -> String {
     let names: Vec<String> = extensions
         .iter()
         .map(|e| format!("{stem}{e}{compressed}"))
@@ -383,7 +421,10 @@ fn renamed(
 }
 
 /// Refuses a `--tsv-dir` that exists and is not a folder.
-fn refuse_non_folder(dir: &Path) -> Result<()> {
+///
+/// # Errors
+/// A usage error naming it.
+pub fn refuse_non_folder(dir: &Path) -> Result<()> {
     match std::fs::metadata(dir) {
         Ok(m) if !m.is_dir() => Err(usage(
             if m.is_file() {
@@ -462,7 +503,7 @@ pub fn plan(
                 content: Content::Tsv(t),
             }),
             Kind::Hcs => plan.push_hcs(d, None, args.pretty, stdout_is_terminal)?,
-            Kind::RunReport => {}
+            Kind::RunReport | Kind::Citation => {}
         }
     }
     Ok(plan)
@@ -629,7 +670,8 @@ fn writing_rank(planned: &Planned) -> u8 {
 
 /// The outputs of a plan with their files opened (temporary files created), before the
 /// analysis runs: a destination that cannot be written — a missing or read-only folder, a name
-/// too long for the file system — stops the run before a long computation. Dropped without
+/// longer than file systems allow (255 bytes), a symbolic-link loop — stops the run before a
+/// long computation. Dropped without
 /// [`Opened::write`] (an error or an interruption), it removes its temporary files.
 pub struct Opened<'a> {
     plan: &'a Plan,
@@ -1018,7 +1060,7 @@ mod tests {
         );
         assert_eq!(
             hint,
-            "name it x.json or x.tsv (optionally followed by .gz or .zst)"
+            "name it x.hcs.json or x.hcs.tsv (optionally followed by .gz or .zst)"
         );
         let (message, _) = refusal(settled(Kind::Hcs, "x.json", Some(F::Tsv)));
         assert!(message.contains("-O tsv does not match"), "{message}");
@@ -1034,11 +1076,11 @@ mod tests {
         );
         assert_eq!(
             hint,
-            "name it run.json (optionally followed by .gz or .zst)"
+            "name it run.run-report.json (optionally followed by .gz or .zst)"
         );
         let (message, hint) = refusal(settled(Kind::RunReport, "run.jsonl.gz", None));
         assert!(message.ends_with("names JSON Lines"), "{message}");
-        assert_eq!(hint, "name it run.json.gz");
+        assert_eq!(hint, "name it run.run-report.json.gz");
     }
 
     #[test]
@@ -1074,9 +1116,10 @@ mod tests {
 
     #[test]
     fn renamed_names_keep_the_compression() {
-        let r = |p: &str, f, c, e: &[&str]| renamed(Path::new(p), f, c, e);
+        let r = |p: &str, f, c, e: &[&str]| renamed(Path::new(p), f, c, e, ".hcs");
         use OutputCompression as C;
-        // Only ever extended: `mers.hcs` must not become `mers.json`, the results' name.
+        // A name of no format is extended: `mers.hcs` must not become `mers.json`, the
+        // results' usual name.
         assert_eq!(
             r("regions.txt", None, C::None, &[".json", ".tsv"]),
             "regions.txt.json or regions.txt.tsv (optionally followed by .gz or .zst)"
@@ -1089,7 +1132,8 @@ mod tests {
             r("out/regions.gz", None, C::Gzip, &[".json", ".tsv"]),
             "out/regions.json.gz or out/regions.tsv.gz"
         );
-        // An extension of another format is replaced.
+        // An extension of another format gives way to the output's own name: `x.jsonl` next
+        // to `-o x.json` must not become `x.json`.
         assert_eq!(
             r(
                 "x.JSONL",
@@ -1097,11 +1141,21 @@ mod tests {
                 C::None,
                 &[".json", ".tsv"]
             ),
-            "x.json or x.tsv (optionally followed by .gz or .zst)"
+            "x.hcs.json or x.hcs.tsv (optionally followed by .gz or .zst)"
         );
         assert_eq!(
             r("run.TSV.zst", Some(OutputFormat::Tsv), C::Zstd, &[".json"]),
-            "run.json.zst"
+            "run.hcs.json.zst"
+        );
+        // A name that already has the output's own name keeps it once.
+        assert_eq!(
+            r(
+                "x.HCS.jsonl",
+                Some(OutputFormat::Jsonl),
+                C::None,
+                &[".json"]
+            ),
+            "x.HCS.json (optionally followed by .gz or .zst)"
         );
         assert_eq!(
             r(".hidden", None, C::None, &[".json"]),

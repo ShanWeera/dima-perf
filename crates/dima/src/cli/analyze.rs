@@ -220,6 +220,8 @@ fn open_report(
     destinations::check_run_report(destinations, input)?;
     if let Target::Path(path) = &planned.target {
         if let Some(dir) = destinations.folder_for(path) {
+            // A `--tsv-dir` that is a file is a usage error here too, not a failed creation.
+            outputs::refuse_non_folder(dir)?;
             folders.create(dir)?;
         }
     }

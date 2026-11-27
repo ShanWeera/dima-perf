@@ -52,6 +52,7 @@ fn hooks_run_in_every_analysis_thread_and_once_before_counting() {
     assert_eq!(
         names,
         [
+            "dima-open",
             "dima-reader",
             "dima-sha256",
             "dima-worker-0",

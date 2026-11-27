@@ -264,15 +264,28 @@ fn name_of(path: &Path) -> String {
 
 /// The extensions of a save dialog's filter for `kind`: native filters match a name's last
 /// extension, so the endings it accepts are cut to theirs (`json.gz` → `gz`), and compound
-/// names pass.
+/// names pass. The format's usual extension comes first, then its others, then the
+/// compressions: a dialog adds the first one to a name typed without any (Windows' default
+/// extension, the first type macOS allows), so `results` becomes `results.json`, never
+/// `results.gz`.
 fn filter_extensions(kind: ExportKind) -> Vec<String> {
-    let mut exts: Vec<String> = kind
-        .accepted()
+    let compression = |e: &str| {
+        [
+            dima_core::output::OutputCompression::Gzip,
+            dima_core::output::OutputCompression::Zstd,
+        ]
         .iter()
-        .map(|a| a.rsplit('.').next().unwrap_or(a.as_str()).to_owned())
-        .collect();
-    exts.sort();
-    exts.dedup();
+        .any(|c| c.extension().trim_start_matches('.') == e)
+    };
+    let mut exts: Vec<String> = Vec::new();
+    for a in kind.accepted() {
+        let last = a.rsplit('.').next().unwrap_or(a.as_str()).to_owned();
+        if !exts.contains(&last) {
+            exts.push(last);
+        }
+    }
+    // Stable: the format's extensions keep their order, ahead of the compressions.
+    exts.sort_by_key(|e| compression(e));
     exts
 }
 
@@ -984,8 +997,8 @@ fn replaced_input(state: &AppState, kind: ExportKind, dest: &Path) -> Option<Str
                     format!("Nothing was saved: '{name}' is {what}; choose another name")
                 } else {
                     format!(
-                        "Nothing was saved: '{name}' may be {what} (names that differ only in \
-                         letter case are one file on macOS and Windows); choose another name"
+                        "Nothing was saved: '{name}' may be {what} ({}); choose another name",
+                        dima_core::output::why_one_file(file, input)
                     )
                 }
             })

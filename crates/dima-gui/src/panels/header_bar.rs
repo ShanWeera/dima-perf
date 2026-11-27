@@ -5,6 +5,7 @@ use egui::{RichText, Ui};
 
 use dima_core::diagnostics::Severity as DiagSeverity;
 
+use super::common::Described;
 use super::export_menu;
 use crate::app::msg::Msg;
 use crate::state::{AppState, View};
@@ -39,7 +40,7 @@ pub fn waiting_for_dialog(ui: &mut Ui, out: &mut Vec<Msg>) {
     ui.label("Waiting for the system file dialog\u{2026}");
     if ui
         .button("Use built-in browser")
-        .on_hover_text("Use DiMA's own file browser if the system dialog does not appear")
+        .described("Use DiMA's own file browser if the system dialog does not appear")
         .clicked()
     {
         out.push(Msg::UseBuiltInBrowser);

@@ -266,10 +266,10 @@ fn results_in_formats_dima_does_not_read_are_named() {
                 q.display()
             )
         );
-        assert!(
-            e.hint()
-                .unwrap()
-                .starts_with(&format!("if it holds DiMA results, {fix} (")),
+        // `dima analyze` does not read alignments in these formats either: no word about it.
+        assert_eq!(
+            e.hint().unwrap(),
+            format!("if it holds DiMA results, {fix}"),
             "{e:?}"
         );
     }

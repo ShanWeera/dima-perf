@@ -15,7 +15,7 @@ use rayon::prelude::*;
 
 use crate::alphabet::{self, ByteClassTable};
 use crate::config::{AnalysisParams, Origin, Param, ValidationMode};
-use crate::control::{Phase, RunControl};
+use crate::control::{Hook, Phase, RunControl};
 use crate::diagnostics::Tally;
 use crate::engine::Engine;
 use crate::error::{DimaError, Result};
@@ -141,7 +141,7 @@ impl<'a> Run<'a> {
     fn execute(mut self) -> Result<Analysis> {
         self.enter(Phase::Opening);
         let thread_start = self.control.thread_start.clone();
-        let opened = input::open_with(self.source, &self.control.progress, thread_start.as_ref())?;
+        let opened = self.open_input(thread_start.as_ref())?;
         let input::Opened {
             compression,
             batches,
@@ -221,6 +221,38 @@ impl<'a> Run<'a> {
             };
             self.finish(counting, input_info)
         })
+    }
+
+    /// Opens the input on a thread of its own (D96): opening reads the first bytes (to
+    /// recognise the compression, a byte-order mark and leading blank lines), and a pipe or
+    /// FIFO with no bytes yet would block a cancellation until the grace period ends the
+    /// process without its closing message or run report. Waiting here notices it within
+    /// [`CANCEL_POLL`]; a thread blocked on an idle pipe is left behind, as the reader is.
+    fn open_input(&self, thread_start: Option<&Hook>) -> Result<input::Opened> {
+        let (tx, rx) = mpsc::sync_channel(1);
+        let source = self.source.clone();
+        let progress = Arc::clone(&self.control.progress);
+        let hook = thread_start.cloned();
+        thread::Builder::new()
+            .name("dima-open".into())
+            .spawn(move || {
+                if let Some(h) = &hook {
+                    h.call();
+                }
+                let _ = tx.send(input::open_with(&source, &progress, hook.as_ref()));
+            })
+            .map_err(|e| DimaError::system("the thread that opens the input", e))?;
+        loop {
+            match rx.recv_timeout(CANCEL_POLL) {
+                Ok(opened) => return opened,
+                Err(mpsc::RecvTimeoutError::Timeout) => self.control.check()?,
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(DimaError::internal(
+                        "the thread that opens the input panicked",
+                    ));
+                }
+            }
+        }
     }
 
     /// The next batch, `None` at the end of the input. Waiting for a slow pipe still notices a

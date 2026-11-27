@@ -9,6 +9,7 @@ use dima_core::output;
 use dima_core::{DimaError, Result};
 
 use super::args::{CiteArgs, CiteFormat};
+use super::destinations::{self, Destinations, Input};
 use super::ui;
 
 const fn format_of(f: CiteFormat) -> CitationFormat {
@@ -26,6 +27,15 @@ const fn format_of(f: CiteFormat) -> CitationFormat {
 /// Errors reading `--from`, conserved sequences of another run than the results, or errors
 /// writing to standard output.
 pub fn run(a: &CiteArgs) -> Result<()> {
+    if a.from.iter().filter(|p| p.as_os_str() == "-").count() > 1 {
+        return Err(DimaError::usage("--from - is given twice")
+            .with_hint("standard input can be read once: give the other file by its name"));
+    }
+    // Standard output must not be a file the citation is computed from (`>> r.json`).
+    let out = Destinations::of_cite();
+    for path in &a.from {
+        destinations::check(&out, Input::of(Some(path)))?;
+    }
     let mut results = None;
     let mut hcs = None;
     for path in &a.from {
@@ -71,55 +81,46 @@ pub fn run(a: &CiteArgs) -> Result<()> {
         })
 }
 
-/// A `--from` file as named in messages.
-fn shown(path: &Path) -> String {
+/// Where a `--from` document was read, as messages say it: `in 'r.json'`, `from standard
+/// input`.
+fn read_at(path: &Path) -> String {
     if path.as_os_str() == "-" {
-        "standard input".to_owned()
+        "from standard input".to_owned()
     } else {
-        format!("'{}'", path.display())
+        format!("in '{}'", path.display())
     }
 }
 
 /// Refuses conserved sequences computed from other results than `r`: their input (checksum),
 /// k or T differ, so one methods text would describe two analyses.
 fn same_run(r: &Results, results_path: &Path, h: &HcsResults, hcs_path: &Path) -> Result<()> {
+    let (at_r, at_h) = (read_at(results_path), read_at(hcs_path));
     let mut differ = Vec::new();
     if h.source.input_checksum != r.run.input.checksum {
-        differ.push("the input".to_owned());
+        differ.push("their inputs differ (another checksum)".to_owned());
     }
     if h.source.kmer_length != r.kmer_length {
         differ.push(format!(
-            "k ({} and {})",
+            "k is {} {at_r} and {} {at_h}",
             r.kmer_length, h.source.kmer_length
         ));
     }
     if h.source.support_threshold != r.support_threshold {
         differ.push(format!(
-            "T ({} and {})",
+            "T is {} {at_r} and {} {at_h}",
             r.support_threshold, h.source.support_threshold
         ));
     }
-    let Some((last, rest)) = differ.split_last() else {
+    if differ.is_empty() {
         return Ok(());
-    };
-    let list = if rest.is_empty() {
-        last.clone()
-    } else {
-        format!("{} and {last}", rest.join(", "))
-    };
+    }
+    let list = differ.join("; ");
     let command = match ui::shell_word(results_path) {
         Some(word) if results_path.as_os_str() != "-" => format!("dima hcs -i {word}"),
         _ => "dima hcs -i RESULTS".to_owned(),
     };
     Err(DimaError::usage(format!(
-        "the conserved sequences in {} were not computed from the results in {}: {list} {}",
-        shown(hcs_path),
-        shown(results_path),
-        if differ.len() == 1 {
-            "differs"
-        } else {
-            "differ"
-        }
+        "the conserved sequences {at_h} were not computed from the results {at_r}: {list}"
     ))
     .with_hint(format!(
         "compute the conserved sequences from these results: {command}"

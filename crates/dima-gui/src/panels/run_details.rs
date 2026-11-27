@@ -9,6 +9,7 @@ use egui::{RichText, Ui};
 use dima_core::human;
 use dima_core::run_report::{Platform, rfc3339};
 
+use super::common::Described;
 use super::common::fact;
 use crate::app::msg::Msg;
 use crate::state::session::{Origin, Session};
@@ -121,7 +122,7 @@ fn contents(ui: &mut Ui, s: &Session, t: &DesignTokens, out: &mut Vec<Msg>) {
             ui.add_space(t.space_8);
             if ui
                 .button("Save run report\u{2026}")
-                .on_hover_text(super::help_text::export(ExportKind::RunReport, s.metric))
+                .described(super::help_text::export(ExportKind::RunReport, s.metric))
                 .clicked()
             {
                 out.push(Msg::Export(ExportKind::RunReport));

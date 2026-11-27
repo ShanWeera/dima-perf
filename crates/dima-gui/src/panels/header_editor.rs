@@ -5,6 +5,7 @@
 
 use egui::{RichText, Ui};
 
+use super::common::Described;
 use super::common::{card, heading};
 use super::help_text as help;
 use crate::app::msg::Msg;
@@ -40,7 +41,7 @@ pub fn show(
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .button("Copy as --header-format")
-                    .on_hover_text("The equivalent command-line options, for `dima analyze`")
+                    .described("The equivalent command-line options, for `dima analyze`")
                     .clicked()
                 {
                     ui.ctx().copy_text(state.setup.header.cli_args());

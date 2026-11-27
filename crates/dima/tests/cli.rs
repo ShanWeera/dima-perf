@@ -1366,12 +1366,9 @@ fn signals_cancel_cleanly() {
                 .any(|l| l.contains("cancelled; no results were written")),
             "{signal}: {lines:?}"
         );
-        // The notice names the signal; only Ctrl-C (SIGINT) is a key to press again.
-        let notice = if signal == "INT" {
-            "cancelling... (press Ctrl-C again to stop immediately)".to_owned()
-        } else {
-            format!("cancelling on SIG{signal}... (a second signal stops immediately)")
-        };
+        // The notice names the signal. Without a terminal (as here), SIGINT came from another
+        // program, not from the Ctrl-C key, so it is named like the others.
+        let notice = format!("cancelling on SIG{signal}... (a second signal stops immediately)");
         assert!(
             lines.iter().any(|l| l == &notice),
             "{signal}: {notice:?} in {lines:?}"
@@ -1398,6 +1395,49 @@ fn signals_cancel_cleanly() {
     }
 }
 
+/// An input with no bytes yet (an idle pipe or FIFO) is opened on a thread of its own, so an
+/// interruption is noticed at once: the closing message is printed and the run report written,
+/// instead of the process ending by the 3 s grace period without either.
+#[cfg(unix)]
+#[test]
+fn an_idle_input_is_cancelled_promptly() {
+    use std::os::unix::process::ExitStatusExt;
+    let d = tmp();
+    let mut child = dima()
+        .args(["analyze", "-v", "-o", "r.json", "--run-report", "run.json"])
+        .args(TINY)
+        .current_dir(d.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // Nothing is written: opening waits for the first bytes.
+    let stdin = child.stdin.take().unwrap();
+    let rx = stderr_lines(&mut child);
+    wait_for(&rx, "threads: ");
+    std::thread::sleep(Duration::from_millis(200));
+    let sent = Instant::now();
+    kill(&child, "TERM");
+    let status = wait_exit(&mut child, Duration::from_secs(10));
+    assert!(
+        sent.elapsed() < Duration::from_secs(2),
+        "{:?}",
+        sent.elapsed()
+    );
+    assert_eq!(status.signal(), Some(libc::SIGTERM), "{status:?}");
+    let lines: Vec<String> = rx.try_iter().collect();
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("cancelled; no results were written")),
+        "{lines:?}"
+    );
+    let r = json(&d.path().join("run.json"));
+    assert_eq!(r["status"], "cancelled");
+    drop(stdin);
+}
+
 #[cfg(unix)]
 #[test]
 fn ignored_hangup_stays_ignored() {
@@ -1422,10 +1462,11 @@ fn ignored_hangup_stays_ignored() {
 #[test]
 fn a_second_signal_forces_exit() {
     use std::os::unix::process::ExitStatusExt;
-    // Opening a FIFO without a writer blocks the main thread: the first signal can only cancel
-    // at the next check, so a second one must end the process at once.
+    // Opening an output FIFO without a reader blocks the main thread (an input is opened on a
+    // thread of its own, see `an_idle_input_is_cancelled_promptly`): the first signal can only
+    // cancel at the next check, so a second one must end the process at once.
     let d = tmp();
-    let fifo = d.path().join("in.fifo");
+    let fifo = d.path().join("out.fifo");
     assert!(
         Command::new("mkfifo")
             .arg(&fifo)
@@ -1435,7 +1476,9 @@ fn a_second_signal_forces_exit() {
     );
     let spawn = || {
         let mut child = dima()
-            .args(["analyze", "-v", "-i", "in.fifo", "-o", "r.json"])
+            .args(["analyze", "-v", "-o", "out.fifo", "-O", "json", "-i"])
+            .arg(tiny())
+            .args(TINY)
             .current_dir(d.path())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
@@ -1473,7 +1516,11 @@ fn a_second_signal_forces_exit() {
         sent.elapsed()
     );
     assert_eq!(status.signal(), Some(15));
-    assert!(!d.path().join("r.json").exists());
+    let names: Vec<String> = std::fs::read_dir(d.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names, ["out.fifo"], "nothing else is left");
 }
 
 /// D96 on Windows: Ctrl-Break (delivered to the process group) cancels the run, removes its
@@ -2543,7 +2590,7 @@ fn cite_describes_one_run() {
     assert!(
         stderr(&o).contains(
             "error: the conserved sequences in 'b.hcs.json' were not computed from the results in \
-             'a.json': T (100 and 4) differs"
+             'a.json': T is 100 in 'a.json' and 4 in 'b.hcs.json'"
         ),
         "{}",
         stderr(&o)
@@ -2578,7 +2625,44 @@ fn cite_describes_one_run() {
     assert_eq!(code(&o), 0, "{}", stderr(&o));
     let o = run(&["cite", "--from", "a.json", "--from", "c.hcs.json"], dir);
     assert_eq!(code(&o), 2, "{}", stderr(&o));
-    assert!(stderr(&o).contains("the input differs"), "{}", stderr(&o));
+    assert!(
+        stderr(&o).contains("their inputs differ (another checksum)"),
+        "{}",
+        stderr(&o)
+    );
+    // Standard input is read once.
+    let o = run(&["cite", "--from", "-", "--from", "-"], dir);
+    assert_eq!(code(&o), 2, "{}", stderr(&o));
+    assert!(
+        stderr(&o).contains("--from - is given twice"),
+        "{}",
+        stderr(&o)
+    );
+    // Standard output appended to a file the citation reads would corrupt it: refused, and the
+    // file is unchanged.
+    #[cfg(unix)]
+    {
+        let before = std::fs::read(dir.join("a.json")).unwrap();
+        let log = std::fs::OpenOptions::new()
+            .append(true)
+            .open(dir.join("a.json"))
+            .unwrap();
+        let o = dima()
+            .args(["cite", "--from", "a.json"])
+            .current_dir(dir)
+            .stdout(log)
+            .output()
+            .unwrap();
+        assert_eq!(code(&o), 2, "{}", stderr(&o));
+        assert!(
+            stderr(&o).contains(
+                "standard output, where the citation would go, is the input file 'a.json'"
+            ),
+            "{}",
+            stderr(&o)
+        );
+        assert_eq!(std::fs::read(dir.join("a.json")).unwrap(), before);
+    }
 }
 
 /// B6: an interruption is an error, so its message is printed with -q too.

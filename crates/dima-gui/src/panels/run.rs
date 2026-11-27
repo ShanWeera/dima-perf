@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use egui::{RichText, Ui};
 
+use super::common::Described;
 use super::error_card;
 use crate::app::msg::Msg;
 use crate::state::{AppState, RunState, View};
@@ -85,7 +86,7 @@ fn analyze_button(ui: &mut Ui, state: &AppState, t: &DesignTokens, out: &mut Vec
         ui.add_space(t.space_4);
         if ui
             .button("Back to the results \u{25B6}")
-            .on_hover_text("Return to the results already loaded")
+            .described("Return to the results already loaded")
             .clicked()
         {
             out.push(Msg::ShowView(View::Workspace));

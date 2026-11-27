@@ -413,8 +413,8 @@ pub fn threshold_chip(t: u64, estimator: Estimator) -> String {
         ),
     };
     format!(
-        "Positions supported by more than T = {t} sequences are eligible: they enter the \
-         summaries. {what}"
+        "Positions supported by more than {} (T) are eligible: they enter the summaries. {what}",
+        dima_core::human::plural(t, "sequence", "sequences")
     )
 }
 
@@ -611,7 +611,7 @@ mod tests {
         assert!(super::threshold_chip(100, Estimator::Dima).contains(&shared));
         assert!(
             super::threshold_chip(30, Estimator::Dima)
-                .starts_with("Positions supported by more than T = 30 sequences are eligible")
+                .starts_with("Positions supported by more than 30 sequences (T) are eligible")
         );
         // The other estimators: no correction rule, and no claim that a position with one
         // sequence is estimated like the others.
