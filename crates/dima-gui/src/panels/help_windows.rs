@@ -78,45 +78,77 @@ fn cite(ui: &mut Ui) {
     );
 }
 
-fn shortcuts(ui: &mut Ui, t: &DesignTokens) {
-    let cmd = if cfg!(target_os = "macos") {
-        "\u{2318}"
+/// The keyboard shortcuts as the window lists them, for macOS (`mac`) or the other systems: the
+/// keys and what they do. The interface zoom and Ctrl/⌘ Q are egui's, on by default: the zoom
+/// is remembered with the window, and Ctrl+Q closes the window as its close button does.
+#[must_use]
+pub fn shortcut_list(mac: bool) -> Vec<(String, String)> {
+    let cmd = if mac { "\u{2318}" } else { "Ctrl+" };
+    let (zoom, also) = if mac {
+        ("\u{2318}+ / \u{2318}\u{2212} / \u{2318}0", "\u{2318}=")
     } else {
-        "Ctrl+"
+        ("Ctrl+Plus / Ctrl+Minus / Ctrl+0", "Ctrl+=")
     };
+    [
+        (
+            format!("{cmd}K"),
+            "Command palette: go to a position, find a k-mer, run a command".to_owned(),
+        ),
+        (
+            "\u{2190} \u{2191} / \u{2192} \u{2193}".to_owned(),
+            "Previous / next row of the position table".to_owned(),
+        ),
+        ("Home / End".to_owned(), "First / last row".to_owned()),
+        (
+            "Tab / Shift+Tab".to_owned(),
+            "Move between controls".to_owned(),
+        ),
+        ("Space / Enter".to_owned(), "Press or select".to_owned()),
+        (
+            "Enter".to_owned(),
+            "In a filter field: apply the value typed (Tab or a click elsewhere does too)"
+                .to_owned(),
+        ),
+        (
+            "Right-click a table row".to_owned(),
+            "Copy row, or a variant's k-mer".to_owned(),
+        ),
+        (
+            "Scroll over the chart".to_owned(),
+            "Zoom about the cursor".to_owned(),
+        ),
+        (
+            "Drag / Shift-drag".to_owned(),
+            "Pan / zoom to a region".to_owned(),
+        ),
+        (
+            "Double-click the chart".to_owned(),
+            "Show every position".to_owned(),
+        ),
+        (
+            "Esc".to_owned(),
+            "Close the palette; in a filter field, leave it unchanged; also gives the arrow \
+             keys back to the table"
+                .to_owned(),
+        ),
+        (
+            zoom.to_owned(),
+            format!(
+                "Make the whole interface larger / smaller / its usual size ({also} also makes \
+                 it larger)"
+            ),
+        ),
+        (format!("{cmd}Q"), "Quit DiMA".to_owned()),
+    ]
+    .into()
+}
+
+fn shortcuts(ui: &mut Ui, t: &DesignTokens) {
     egui::Grid::new("shortcuts")
         .num_columns(2)
         .spacing([t.space_16, t.space_4])
         .show(ui, |ui| {
-            for (k, what) in [
-                (
-                    format!("{cmd}K"),
-                    "Command palette: go to a position, find a k-mer, run a command",
-                ),
-                (
-                    "\u{2190} \u{2191} / \u{2192} \u{2193}".to_owned(),
-                    "Previous / next row of the position table",
-                ),
-                ("Home / End".to_owned(), "First / last row"),
-                ("Tab / Shift+Tab".to_owned(), "Move between controls"),
-                ("Space / Enter".to_owned(), "Press or select"),
-                (
-                    "Enter".to_owned(),
-                    "In a filter field: apply the value typed (Tab or a click elsewhere does too)",
-                ),
-                (
-                    "Right-click a table row".to_owned(),
-                    "Copy row, or a variant's k-mer",
-                ),
-                ("Scroll over the chart".to_owned(), "Zoom about the cursor"),
-                ("Drag / Shift-drag".to_owned(), "Pan / zoom to a region"),
-                ("Double-click the chart".to_owned(), "Show every position"),
-                (
-                    "Esc".to_owned(),
-                    "Close the palette; in a filter field, leave it unchanged; also gives the \
-                     arrow keys back to the table",
-                ),
-            ] {
+            for (k, what) in shortcut_list(cfg!(target_os = "macos")) {
                 ui.monospace(k);
                 ui.label(what);
                 ui.end_row();
@@ -195,6 +227,45 @@ mod tests {
         assert!(c.contains("version"));
         assert!(super::LICENSE.contains("MIT"));
         assert!(!super::OFL.is_empty() && !super::NOTICES.is_empty());
+    }
+
+    /// The interface zoom and quitting are listed, with each system's keys; they are egui's own
+    /// shortcuts, still on in the app.
+    #[test]
+    fn the_shortcuts_list_the_zoom_and_quit() {
+        let others = super::shortcut_list(false);
+        assert!(
+            others
+                .iter()
+                .any(|(k, what)| k == "Ctrl+Plus / Ctrl+Minus / Ctrl+0"
+                    && what.contains(
+                        "larger / smaller / its usual size (Ctrl+= also makes it larger)"
+                    ))
+        );
+        assert!(
+            others
+                .iter()
+                .any(|(k, what)| k == "Ctrl+Q" && what == "Quit DiMA")
+        );
+        assert!(others.iter().any(|(k, _)| k == "Ctrl+K"));
+        let mac = super::shortcut_list(true);
+        assert!(mac.iter().any(|(k, _)| k == "\u{2318}Q"));
+        assert!(
+            mac.iter()
+                .any(|(k, _)| k == "\u{2318}+ / \u{2318}\u{2212} / \u{2318}0")
+        );
+        assert_eq!(mac.len(), others.len());
+        // egui still provides them: keyboard zoom on, Ctrl/⌘ Q a quit shortcut.
+        let options = egui::Options::default();
+        assert!(options.zoom_with_keyboard);
+        assert!(
+            options
+                .quit_shortcuts
+                .contains(&egui::KeyboardShortcut::new(
+                    egui::Modifiers::COMMAND,
+                    egui::Key::Q
+                ))
+        );
     }
 
     #[test]

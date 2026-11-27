@@ -317,6 +317,30 @@ impl AppState {
             || self.session.as_ref().is_some_and(|s| s.filter_dirty)
     }
 
+    /// Why Analyze cannot start, shown under it and as its tooltip (and, should it be asked
+    /// anyway, as "Not started: …"); `None` when it can: no file yet, an alphabet that Auto
+    /// could not detect (with the library's reason, without the command line's hint), or the
+    /// first problem of the options.
+    #[must_use]
+    pub fn not_ready(&self) -> Option<String> {
+        if self.setup.file.is_none() {
+            return Some("Open an alignment first".to_owned());
+        }
+        let inspection = self.setup.inspection.as_deref();
+        if self.setup.options.alphabet.alphabet().is_none()
+            && let Some(i) = inspection.filter(|i| i.alphabet.is_none())
+        {
+            let why = options::undetected_alphabet(i)
+                .unwrap_or_else(|| "it could not be detected".to_owned());
+            return Some(format!("Choose the alphabet: {why}"));
+        }
+        self.setup
+            .options
+            .problems(&self.setup.header, inspection)
+            .into_iter()
+            .next()
+    }
+
     /// The settings with the current form values copied in.
     #[must_use]
     pub fn settings_snapshot(&self) -> Settings {

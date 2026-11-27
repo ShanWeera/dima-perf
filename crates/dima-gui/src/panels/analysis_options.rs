@@ -12,7 +12,7 @@ use dima_core::config::{
     DEFAULT_FILL, DEFAULT_SUPPORT_THRESHOLD, Estimator, Percent, ValidationMode,
 };
 
-use super::common::{card, heading, option_label, with_help};
+use super::common::{card, heading, named, option_label, with_help};
 use super::help_text as help;
 use crate::app::msg::Msg;
 use crate::state::AppState;
@@ -38,11 +38,8 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                 let differs = state.setup.options.differs_from_defaults()
                     || state.settings.threads.is_some()
                     || state.hcs.params != dima_core::hcs::HcsParams::default();
-                if ui
-                    .add_enabled(differs, egui::Button::new("Reset to defaults"))
-                    .on_hover_text("Restore every option to the DiMA defaults")
-                    .clicked()
-                {
+                let reset = ui.add_enabled(differs, egui::Button::new("Reset to defaults"));
+                if with_help(reset, "Restore every option to the DiMA defaults").clicked() {
                     out.push(Msg::ResetOptions);
                 }
             });
@@ -65,7 +62,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                     Some(a) => format!("Auto (detected: {})", a.display_name()),
                     None => "Auto".to_owned(),
                 };
-                egui::ComboBox::from_id_salt("alphabet")
+                let combo = egui::ComboBox::from_id_salt("alphabet")
                     .selected_text(if o.alphabet == AlphabetChoice::Auto {
                         auto_text.clone()
                     } else {
@@ -85,6 +82,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                     })
                     .response
                     .labelled_by(label);
+                with_help(combo, &help::alphabet());
                 ui.end_row();
 
                 // k.
@@ -101,19 +99,23 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                 ui.horizontal(|ui| {
                     let mut k = o.kmer_length.or(default_k).unwrap_or(9);
                     let max = alignment_length.unwrap_or(usize::MAX / 2).max(1);
-                    if ui
-                        .add(egui::DragValue::new(&mut k).range(1..=max).speed(0.2))
-                        .labelled_by(label)
-                        .on_hover_text(help::kmer_length())
-                        .changed()
-                    {
+                    // A default longer than a short alignment is shown as it is (the pre-check
+                    // below Analyze says so), never silently replaced by the alignment length;
+                    // a value the user drags or types is kept in range.
+                    let field = egui::DragValue::new(&mut k)
+                        .range(1..=max)
+                        .clamp_existing_to_range(false)
+                        .speed(0.2);
+                    let field = ui.add(field).labelled_by(label);
+                    if with_help(field, &help::kmer_length()).changed() {
                         // The default is passed as unset, like every other option, so the run
                         // records it as derived from the alphabet (as `dima analyze` without -k).
                         o.kmer_length = (Some(k) != default_k).then_some(k);
                         changed = true;
                     }
                     if o.kmer_length.is_some() {
-                        if ui.small_button("Use default").clicked() {
+                        let button = ui.small_button("Use default");
+                        if with_help(button, "Use the default k of the alphabet").clicked() {
                             o.kmer_length = None;
                             changed = true;
                         }
@@ -136,15 +138,14 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                         .then(|| DEFAULT_SUPPORT_THRESHOLD.to_string()),
                 );
                 ui.horizontal(|ui| {
-                    changed |= ui
+                    let field = ui
                         .add(
                             egui::DragValue::new(&mut o.support_threshold)
                                 .range(1..=u64::MAX)
                                 .speed(1.0),
                         )
-                        .labelled_by(label)
-                        .on_hover_text(help::support_threshold())
-                        .changed();
+                        .labelled_by(label);
+                    changed |= with_help(field, &help::support_threshold()).changed();
                     ui.weak("positions with support > T are eligible");
                 });
                 ui.end_row();
@@ -160,26 +161,22 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
                 let hint = suggested_name
                     .clone()
                     .unwrap_or_else(|| "from the file name".to_owned());
-                changed |= ui
+                let field = ui
                     .add(
                         egui::TextEdit::singleline(&mut o.query_name)
                             .hint_text(hint)
                             .desired_width(260.0),
                     )
-                    .labelled_by(label)
-                    .on_hover_text(help::query_name())
-                    .changed();
+                    .labelled_by(label);
+                changed |= with_help(field, &help::query_name()).changed();
                 ui.end_row();
             });
         ui.add_space(t.space_8);
         hcs_controls(ui, state, t, out);
         ui.add_space(t.space_8);
         let header_on = &mut state.setup.header.enabled;
-        if ui
-            .checkbox(header_on, "Stratify variants by FASTA header fields")
-            .on_hover_text(help::header_format())
-            .changed()
-        {
+        let stratify = ui.checkbox(header_on, "Stratify variants by FASTA header fields");
+        if with_help(stratify, &help::header_format()).changed() {
             changed = true;
         }
         ui.add_space(t.space_8);
@@ -197,6 +194,14 @@ pub fn show(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<M
     }
 }
 
+/// The screen-reader name of the HCS threshold's slider.
+pub const HCS_SLIDER: &str = "HCS threshold (Index incidence), slider in 0.5% steps";
+/// The screen-reader name of the HCS threshold's exact field.
+pub const HCS_FIELD: &str = "HCS threshold (Index incidence), exact value in percent";
+/// The tooltip of the exact field.
+const HCS_FIELD_HELP: &str =
+    "Exact value in percent, e.g. 95.25: above 50, at most 100, with at most 9 decimals";
+
 /// The conserved-region threshold and switch (one state with the workspace strip, G40).
 pub fn hcs_controls(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &mut Vec<Msg>) {
     let h = &mut state.hcs;
@@ -210,15 +215,18 @@ pub fn hcs_controls(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &m
             (h.params.threshold != default).then(|| format!("{default}%")),
         );
         let mut value = h.params.threshold.to_f64();
+        // The slider and the exact field set the same threshold: each has a name of its own,
+        // so a screen reader tells them apart. The exact field shows the value, so the slider
+        // shows none of its own (which would be a third control, named like the slider).
         let slider = ui
             .add(
                 egui::Slider::new(&mut value, 50.5..=100.0)
                     .step_by(0.5)
-                    .suffix("%")
+                    .show_value(false)
                     .text("Index incidence"),
             )
-            .labelled_by(label)
-            .on_hover_text(help::hcs_threshold());
+            .labelled_by(label);
+        let slider = with_help(named(slider, HCS_SLIDER), &help::hcs_threshold());
         if slider.changed()
             && let Ok(p) = Percent::hcs_threshold(&format!("{value}"))
         {
@@ -227,16 +235,13 @@ pub fn hcs_controls(ui: &mut Ui, state: &mut AppState, t: &DesignTokens, out: &m
         }
         let field = ui
             .add(egui::TextEdit::singleline(&mut h.text).desired_width(64.0))
-            .labelled_by(label)
-            .on_hover_text("Exact value, e.g. 95.25");
+            .labelled_by(label);
+        let field = with_help(named(field, HCS_FIELD), HCS_FIELD_HELP);
         if field.changed() {
             out.push(Msg::HcsEdited);
         }
-        if ui
-            .checkbox(&mut h.params.eligible_only, "Eligible positions only")
-            .on_hover_text(help::hcs_eligible_only())
-            .changed()
-        {
+        let eligible = ui.checkbox(&mut h.params.eligible_only, "Eligible positions only");
+        if with_help(eligible, &help::hcs_eligible_only()).changed() {
             out.push(Msg::HcsEdited);
         }
     });
@@ -319,7 +324,7 @@ fn advanced(
                 &help::estimator(),
                 defaults.estimator.clone(),
             );
-            egui::ComboBox::from_id_salt("estimator")
+            let combo = egui::ComboBox::from_id_salt("estimator")
                 .selected_text(estimator_label(o.estimator))
                 .show_ui(ui, |ui| {
                     for e in Estimator::ALL {
@@ -330,6 +335,7 @@ fn advanced(
                 })
                 .response
                 .labelled_by(label);
+            with_help(combo, &help::estimator());
             ui.end_row();
 
             let label = option_label(
@@ -339,7 +345,7 @@ fn advanced(
                 &help::validation(),
                 defaults.validation.clone(),
             );
-            egui::ComboBox::from_id_salt("validation")
+            let combo = egui::ComboBox::from_id_salt("validation")
                 .selected_text(validation_label(o.validation))
                 .show_ui(ui, |ui| {
                     for v in [
@@ -354,22 +360,24 @@ fn advanced(
                 })
                 .response
                 .labelled_by(label);
+            with_help(combo, &help::validation());
             ui.end_row();
 
             let label = option_label(ui, t, "Fill value", &help::fill(), defaults.fill.clone());
             ui.horizontal(|ui| {
-                changed |= ui
+                let field = ui
                     .add_enabled(
                         metadata,
                         egui::TextEdit::singleline(&mut o.fill).desired_width(140.0),
                     )
-                    .labelled_by(label)
-                    .on_hover_text(help::fill())
+                    .labelled_by(label);
+                changed |= with_help(field, &help::fill())
                     .on_disabled_hover_text(
                         "Used only when variants are stratified by header fields",
                     )
                     .changed();
-                if o.fill.trim().is_empty() {
+                // Only a value that is used can stop the run.
+                if metadata && o.fill.trim().is_empty() {
                     ui.colored_label(t.error_color, "must not be empty");
                 }
             });
@@ -384,24 +392,21 @@ fn advanced(
             );
             ui.horizontal(|ui| {
                 let mut on = o.min_coverage.is_some();
-                if ui
-                    .checkbox(&mut on, "flag below")
-                    .on_hover_text(help::min_coverage())
-                    .changed()
-                {
+                let flag = ui.checkbox(&mut on, "flag below");
+                if with_help(flag, &help::min_coverage()).changed() {
                     o.min_coverage = on.then_some(0.95);
                     changed = true;
                 }
                 if let Some(c) = o.min_coverage.as_mut() {
-                    changed |= ui
+                    let field = ui
                         .add(
                             egui::DragValue::new(c)
                                 .range(0.0..=1.0)
                                 .speed(0.005)
                                 .max_decimals(3),
                         )
-                        .labelled_by(label)
-                        .changed();
+                        .labelled_by(label);
+                    changed |= with_help(field, &help::min_coverage()).changed();
                 }
             });
             ui.end_row();
@@ -433,14 +438,15 @@ fn advanced(
             ui.horizontal(|ui| {
                 let mut n =
                     crate::workers::analysis::worker_threads(state.settings.threads, cpus).get();
-                if ui
-                    .add(egui::Slider::new(&mut n, 1..=cpus.max(1)).text(format!("of {cpus} CPUs")))
-                    .labelled_by(label)
-                    .on_hover_text(help::threads())
-                    .changed()
-                {
+                // One control named by its row (a slider's own value box and text would name
+                // themselves "of 8 CPUs"); the count is written after it.
+                let slider = ui
+                    .add(egui::Slider::new(&mut n, 1..=cpus.max(1)).show_value(false))
+                    .labelled_by(label);
+                if with_help(named(slider, "Worker threads"), &help::threads()).changed() {
                     out.push(Msg::ThreadsChanged((n != default).then_some(n)));
                 }
+                ui.label(format!("{n} of {cpus} CPUs"));
             });
             ui.end_row();
         });

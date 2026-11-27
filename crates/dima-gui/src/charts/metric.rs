@@ -114,13 +114,14 @@ impl ChartMetric {
     }
 
     /// The subtitle of an exported figure: the run's facts (the estimator only for entropy,
-    /// the one metric it applies to) and how many positions are shown.
+    /// the one metric it applies to, spelt as `dima analyze --estimator` takes it) and how many
+    /// positions are shown.
     #[must_use]
     pub fn figure_subtitle(self, r: &Results, shown: usize) -> String {
         let estimator = match self {
             Self::Entropy => format!(
                 "{ITEM}estimator {}",
-                r.run.parameters.estimator.value.as_str()
+                r.run.parameters.estimator.value.cli_name()
             ),
             Self::SimilarityWeighted => String::new(),
         };
@@ -184,6 +185,16 @@ mod tests {
         assert_eq!(
             ChartMetric::SimilarityWeighted.figure_subtitle(&r, 12),
             format!("191 sequences, k = 9, T = 100; 12 of 1345 positions shown; DiMA {version}")
+        );
+        // The estimator as the command line spells it.
+        let mut cwj = (*r).clone();
+        cwj.run.parameters.estimator.value = dima_core::config::Estimator::ChaoWangJost;
+        assert!(
+            ChartMetric::Entropy
+                .figure_subtitle(&cwj, 12)
+                .contains(", estimator chao-wang-jost; "),
+            "{}",
+            ChartMetric::Entropy.figure_subtitle(&cwj, 12)
         );
     }
 }

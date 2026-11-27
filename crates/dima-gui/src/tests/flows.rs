@@ -418,6 +418,10 @@ fn header_editor() {
             .iter()
             .any(|p| p.contains("more than once"))
     );
+    assert!(
+        !has_label(&h, "hint:"),
+        "the library's message without the command line's hint"
+    );
     // Paste a format.
     h.get_by_label("Paste format\u{2026}").click();
     h.run_steps(2);
@@ -474,7 +478,10 @@ fn no_support_bands_and_low_support_lines() {
     assert!(has_label(&h, "NS: no usable support"), "legend");
     assert!(has_label(&h, "support \u{2264} 100: uncorrected"), "legend");
     let chart = h.get_by_label_contains("Entropy chart:");
-    assert!(format!("{chart:?}").contains("1 spans with no usable support"));
+    assert!(
+        format!("{chart:?}").contains("1 span with no usable support"),
+        "counted in words that fit one: {chart:?}"
+    );
     // Hover the middle of the band: its tooltip names the span.
     let span = s.series.ns_spans[0];
     let (lo, hi) = s.extent().unwrap();
@@ -1778,6 +1785,161 @@ fn every_setup_control_has_a_name() {
     assert!(unnamed.is_empty(), "unnamed: {unnamed:?}");
 }
 
+/// Every option of the setup screen gives screen readers what its tooltip shows (its AccessKit
+/// description); the HCS threshold's slider and exact field, which set one value, have names
+/// of their own, as does the worker-threads slider (not "of N CPUs", its visible text).
+#[test]
+fn every_option_reads_its_tooltip() {
+    use crate::panels::analysis_options::{HCS_FIELD, HCS_SLIDER};
+    use crate::panels::help_text as help;
+    use egui_kittest::kittest::NodeT;
+    let mut h = harness();
+    open(&mut h, &fixtures::mers_path());
+    h.get_by_role_and_label(Role::Button, "Advanced").click();
+    h.run_steps(2);
+    h.get_by_label("Stratify variants by FASTA header fields")
+        .click();
+    h.run_steps(3);
+    let described = |h: &H, role: Role, name: &str| {
+        h.get_by_role_and_label(role, name)
+            .accesskit_node()
+            .description()
+    };
+    for (role, name, tip) in [
+        (Role::ComboBox, "Alphabet", help::alphabet()),
+        (Role::SpinButton, "k-mer length", help::kmer_length()),
+        (
+            Role::SpinButton,
+            "Support threshold T",
+            help::support_threshold(),
+        ),
+        (Role::TextInput, "Query name", help::query_name()),
+        (Role::Slider, HCS_SLIDER, help::hcs_threshold()),
+        (
+            Role::CheckBox,
+            "Eligible positions only",
+            help::hcs_eligible_only(),
+        ),
+        (
+            Role::CheckBox,
+            "Stratify variants by FASTA header fields",
+            help::header_format(),
+        ),
+        (Role::ComboBox, "Entropy estimator", help::estimator()),
+        (Role::ComboBox, "Validation", help::validation()),
+        (Role::TextInput, "Fill value", help::fill()),
+        (Role::CheckBox, "flag below", help::min_coverage()),
+        (
+            Role::CheckBox,
+            "Compute similarity-weighted entropy (Wu 2025)",
+            help::similarity_weighted_entropy(),
+        ),
+        (Role::Slider, "Worker threads", help::threads()),
+    ] {
+        assert_eq!(described(&h, role, name), Some(tip), "{name}");
+    }
+    assert!(
+        described(&h, Role::TextInput, HCS_FIELD).is_some_and(|d| d.starts_with("Exact value")),
+        "the exact field has its own name and tooltip"
+    );
+    assert_ne!(HCS_SLIDER, HCS_FIELD);
+    assert!(
+        described(&h, Role::CheckBox, "Stratify field 1").is_some(),
+        "the header editor's boxes too"
+    );
+    // Each slider is one control: no value box of its own named after its text.
+    assert!(
+        h.query_by_role_and_label(Role::Slider, "Index incidence")
+            .is_none()
+    );
+    assert!(
+        h.query_by_role_and_label(Role::SpinButton, "Index incidence")
+            .is_none()
+    );
+    assert!(
+        !h.query_all_by_role(Role::SpinButton).any(|n| n
+            .accesskit_node()
+            .label()
+            .is_some_and(|l| l.contains("CPUs"))),
+        "the threads slider is named by its row"
+    );
+    let cpus = crate::workers::analysis::cpus();
+    let threads = crate::workers::analysis::default_threads().get();
+    assert!(
+        has_label(&h, &format!("{threads} of {cpus} CPUs")),
+        "the count after the threads slider"
+    );
+    // The theme switch is named in words, never by its glyph.
+    assert!(
+        has_label(&h, "Switch to light mode") || has_label(&h, "Switch to dark mode"),
+        "theme switch"
+    );
+    for glyph in ["\u{2600}", "\u{1F319}"] {
+        assert!(
+            h.query_by_role_and_label(Role::Button, glyph).is_none(),
+            "{glyph}"
+        );
+    }
+    // The figure size fields are named apart.
+    h.get_by_role_and_label(Role::Button, "Preferences").click();
+    h.run_steps(3);
+    for name in [
+        crate::panels::preferences::FIGURE_WIDTH_NAME,
+        crate::panels::preferences::FIGURE_HEIGHT_NAME,
+    ] {
+        assert!(described(&h, Role::SpinButton, name).is_some(), "{name}");
+    }
+}
+
+/// A default k longer than a short alignment is shown as it is and named under Analyze, which
+/// it keeps disabled; it is never silently replaced by the alignment length.
+#[test]
+fn a_default_k_longer_than_the_alignment_is_named_not_replaced() {
+    use egui_kittest::kittest::NodeT;
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("short.fasta");
+    std::fs::write(&p, ">a\nMKVLAE\n>b\nMKVLAE\n>c\nMKVLAQ\n").unwrap();
+    let mut h = harness();
+    open(&mut h, &p);
+    h.run_steps(3);
+    assert_eq!(
+        h.state().state.setup.options.kmer_length,
+        None,
+        "not clamped"
+    );
+    let reason = "the default k for proteins (9) exceeds the alignment length (6 columns): \
+                  choose a k-mer length of at most 6";
+    assert!(has_label(&h, reason), "shown under Analyze");
+    assert_eq!(h.state().state.not_ready().as_deref(), Some(reason));
+    assert!(
+        h.get_by_label_contains("Analyze")
+            .accesskit_node()
+            .is_disabled()
+    );
+}
+
+/// An alphabet Auto cannot detect is explained with the library's reason while Auto is chosen;
+/// choosing one removes the warning, and Analyze names the reason until then.
+#[test]
+fn an_undetected_alphabet_is_explained() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("tiny.fasta");
+    std::fs::write(&p, ">a\nACD\n").unwrap();
+    let mut h = harness();
+    open(&mut h, &p);
+    let why = "only 3 residue letters in the first record; that is too few to tell protein from \
+               nucleotide sequences";
+    assert!(has_label(
+        &h,
+        &format!("Alphabet not detected: {why}. Choose it under Alphabet below.")
+    ));
+    assert!(has_label(&h, &format!("Choose the alphabet: {why}")));
+    h.state_mut().state.setup.options.alphabet = crate::state::options::AlphabetChoice::Protein;
+    h.run_steps(3);
+    assert!(!has_label(&h, "Alphabet not detected"));
+    assert!(has_label(&h, "undetermined (Protein chosen below)"));
+}
+
 /// Ticking an option that is the widest row of its grid adds its dot without moving any
 /// control (the dot's place is kept), so a second click at the same place reaches the same
 /// check box; the main grid keeps its controls when T changes.
@@ -1818,7 +1980,8 @@ fn the_change_dot_moves_no_option() {
 
 /// The selected position's facts end before the panel's scroll bar, which floats over the
 /// panel's right edge while the pointer is over the panel: the method with its fallback
-/// ("plug_in; fallback: support at or below threshold") used to run under it.
+/// ("observed entropy (plug_in; fallback: support at or below threshold)", the longest) used
+/// to run under it.
 #[test]
 fn the_position_facts_end_before_the_scroll_bar() {
     use egui_kittest::kittest::NodeT;
@@ -1831,7 +1994,7 @@ fn the_position_facts_end_before_the_scroll_bar() {
         );
         h.run_steps(4);
         let method = h
-            .get_by_label("plug_in; fallback: support at or below threshold")
+            .get_by_label("observed entropy (plug_in; fallback: support at or below threshold)")
             .rect();
         let bar = h
             .root()

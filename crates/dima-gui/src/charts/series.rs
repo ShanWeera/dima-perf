@@ -2,12 +2,13 @@
 //! entropy when the run computed it), derived once per dataset, filter and metric change.
 //!
 //! * **Eligible** positions (support > T): solid Okabe–Ito blue; with the paper's estimator
-//!   their entropy is corrected.
+//!   their entropy is corrected where possible (support of at least 1.25 T gives the five
+//!   regression points DiMA v5.0.9 requires; below that it is the observed entropy).
 //! * **LS/ELS** positions (0 < support ≤ T): dashed vermillion; with the paper's estimator they
 //!   carry the *uncorrected* (observed) entropy and are labelled "uncorrected, support ≤ T"
-//!   (other estimators treat every position alike, so only the support differs; no
-//!   similarity-weighted value is corrected, and the label says that they are not in its
-//!   summary). ELS is grouped with LS (G43).
+//!   (other estimators estimate every position with at least two sequences, so only the
+//!   support differs; no similarity-weighted value is corrected, and the label says that they
+//!   are not in its summary). ELS is grouped with LS (G43).
 //! * **NS** positions (support 0) have no value of either metric (D34/D56): they become hatched
 //!   full-height bands labelled "no usable support", never a value of 0 (Kent 2010; Kerpedjiev
 //!   2018: missing values are not zeros). The band means support 0 and nothing else: a
@@ -26,7 +27,7 @@ use super::metric::ChartMetric;
 /// Line style of a point (and of the segments touching it).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Style {
-    /// Support > T: solid (corrected entropy with the paper's estimator).
+    /// Support > T: solid (corrected where possible with the paper's estimator).
     Eligible,
     /// Support ≤ T (LS or ELS): dashed (observed entropy with the paper's estimator).
     LowSupport,
@@ -72,15 +73,19 @@ impl Class {
     /// the method that gave the position's entropy.
     #[must_use]
     pub fn describe(self, t: u64, estimator: Estimator, method: EntropyMethod) -> String {
-        let (eligible, low) = entropy_kinds(estimator);
         match self {
-            // A fallback (too few subsample sizes) leaves an eligible position uncorrected.
-            Self::Eligible if estimator == Estimator::Dima && method != EntropyMethod::Dima => {
-                format!("eligible (support > {t}): observed entropy (the correction did not apply)")
-            }
-            Self::Eligible => format!("eligible (support > {t}): {eligible} entropy"),
-            Self::Low => format!("LS, low support (support < {t}): {low} entropy"),
-            Self::EqualToThreshold => format!("ELS, support = {t}: {low} entropy"),
+            Self::Eligible => format!(
+                "eligible (support > {t}): {}",
+                entropy_kind(estimator, method, true)
+            ),
+            Self::Low => format!(
+                "LS, low support (support < {t}): {}",
+                entropy_kind(estimator, method, false)
+            ),
+            Self::EqualToThreshold => format!(
+                "ELS, support = {t}: {}",
+                entropy_kind(estimator, method, false)
+            ),
             Self::NoSupport => "NS, no usable support: no entropy".to_owned(),
         }
     }
@@ -96,18 +101,27 @@ impl Class {
     }
 }
 
-/// The entropy shown at eligible and at LS/ELS positions. The paper's estimator corrects
-/// positions with support > T and reports the observed entropy at the others (Tharanga et al.
-/// 2025, Fig. 2); the other estimators treat every position alike.
-const fn entropy_kinds(estimator: Estimator) -> (&'static str, &'static str) {
-    match estimator {
-        Estimator::Dima => ("corrected", "uncorrected"),
-        Estimator::ChaoWangJost => (
-            "Chao\u{2013}Wang\u{2013}Jost",
-            "Chao\u{2013}Wang\u{2013}Jost",
-        ),
-        Estimator::MillerMadow => ("Miller\u{2013}Madow", "Miller\u{2013}Madow"),
-        Estimator::Raw => ("observed", "observed"),
+/// The entropy a position shows, from the method that gave it (`eligible`: support > T). The
+/// paper's estimator corrects eligible positions where possible and reports the observed
+/// entropy at the others (Tharanga et al. 2025, Fig. 2); Chao–Wang–Jost and Miller–Madow
+/// estimate every position with at least 2 sequences and keep the observed entropy (0 bits) at
+/// a position with one (`single_observation`); raw is the observed entropy everywhere.
+const fn entropy_kind(estimator: Estimator, method: EntropyMethod, eligible: bool) -> &'static str {
+    match (method, estimator) {
+        (EntropyMethod::Dima, _) => "corrected entropy",
+        (EntropyMethod::ChaoWangJost, _) => "Chao\u{2013}Wang\u{2013}Jost entropy",
+        (EntropyMethod::MillerMadow, _) => "Miller\u{2013}Madow entropy",
+        (EntropyMethod::NotEstimable, _) => "no entropy",
+        // Too few subsample sizes (support below 1.25 T) leave an eligible position
+        // uncorrected.
+        (EntropyMethod::PlugIn, Estimator::Dima) if eligible => {
+            "observed entropy (the correction did not apply)"
+        }
+        (EntropyMethod::PlugIn, Estimator::Dima) => "uncorrected entropy",
+        (EntropyMethod::PlugIn, Estimator::Raw) => "observed entropy",
+        (EntropyMethod::PlugIn, Estimator::ChaoWangJost | Estimator::MillerMadow) => {
+            "observed entropy (a single sequence)"
+        }
     }
 }
 
@@ -487,6 +501,84 @@ pub(crate) mod tests {
         assert!(ls.ends_with("uncorrected entropy"), "{ls}");
         let mm = Class::Eligible.describe(100, Estimator::MillerMadow, EntropyMethod::MillerMadow);
         assert!(mm.contains("Miller"), "{mm}");
+        // Chao–Wang–Jost and Miller–Madow estimate low-support positions too, but a position
+        // with a single sequence keeps its observed entropy (single_observation): it is never
+        // called an estimate.
+        for e in [Estimator::ChaoWangJost, Estimator::MillerMadow] {
+            for class in [Class::Low, Class::EqualToThreshold] {
+                let single = class.describe(1, e, EntropyMethod::PlugIn);
+                assert!(
+                    single.ends_with(": observed entropy (a single sequence)"),
+                    "{single}"
+                );
+            }
+        }
+        assert_eq!(
+            Class::Low.describe(100, Estimator::ChaoWangJost, EntropyMethod::ChaoWangJost),
+            "LS, low support (support < 100): Chao\u{2013}Wang\u{2013}Jost entropy"
+        );
+        assert_eq!(
+            Class::EqualToThreshold.describe(1, Estimator::MillerMadow, EntropyMethod::PlugIn),
+            "ELS, support = 1: observed entropy (a single sequence)"
+        );
+        assert_eq!(
+            Class::Low.describe(100, Estimator::Raw, EntropyMethod::PlugIn),
+            "LS, low support (support < 100): observed entropy"
+        );
+        assert_eq!(
+            Class::NoSupport.describe(100, Estimator::Dima, EntropyMethod::NotEstimable),
+            "NS, no usable support: no entropy"
+        );
+    }
+
+    /// As the library writes them: with Miller–Madow (or Chao–Wang–Jost) a position supported
+    /// by two sequences is estimated, one supported by a single sequence keeps its observed
+    /// entropy (`plug_in`, `single_observation`), and the class line says which.
+    #[test]
+    fn a_single_sequence_with_miller_madow_is_observed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("three.fa");
+        // Position 1 (ACD): two valid 3-mers; position 3 (DEF): one.
+        std::fs::write(&path, ">a\nACDEF\n>b\nACDE-\n>c\nAC---\n").unwrap();
+        for estimator in [Estimator::MillerMadow, Estimator::ChaoWangJost] {
+            let params = dima_core::config::AnalysisParams {
+                alphabet: Some(dima_core::config::Alphabet::Protein),
+                kmer_length: Some(3),
+                estimator: Some(estimator),
+                ..dima_core::config::AnalysisParams::default()
+            };
+            let r = dima_core::analyze(
+                &dima_core::input::Source::Path(path.clone()),
+                &params,
+                &dima_core::control::RunControl::new(),
+            )
+            .unwrap()
+            .results;
+            let describe = |position: u64| {
+                let p = &r.results[usize::try_from(position).unwrap() - 1];
+                Class::of(p).describe(r.support_threshold, estimator, p.entropy_method)
+            };
+            let single = &r.results[2];
+            assert_eq!(single.support, 1);
+            assert_eq!(single.entropy_method, EntropyMethod::PlugIn);
+            assert_eq!(
+                single.entropy_fallback,
+                Some(dima_core::model::EntropyFallback::SingleObservation)
+            );
+            assert_eq!(
+                describe(3),
+                "LS, low support (support < 100): observed entropy (a single sequence)"
+            );
+            assert_eq!(r.results[0].support, 2);
+            let name = match estimator {
+                Estimator::MillerMadow => "Miller\u{2013}Madow",
+                _ => "Chao\u{2013}Wang\u{2013}Jost",
+            };
+            assert_eq!(
+                describe(1),
+                format!("LS, low support (support < 100): {name} entropy")
+            );
+        }
     }
 
     #[test]
