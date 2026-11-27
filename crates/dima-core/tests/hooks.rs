@@ -1,6 +1,7 @@
 //! The run's hooks: `thread_start` runs in every thread the analysis starts (the desktop app
 //! lowers their priority there, D101), and `threads_ready` once they all run, before counting
-//! (the command line starts its progress display there, D110).
+//! (the command line starts its progress display there, D110). A `thread_start` hook that
+//! delays the reader also shows where the wait for the first batch is counted.
 
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -57,5 +58,40 @@ fn hooks_run_in_every_analysis_thread_and_once_before_counting() {
             "dima-worker-1",
             "dima-worker-2"
         ]
+    );
+}
+
+/// The wait for the first batch belongs to the opening phase: a reader that is slow to start
+/// (a slow disk, a pipe that has not written yet) is not counted as input that limited the
+/// counting (`waited_for_input`), which the command line reports with `-v`.
+#[test]
+fn the_first_batch_is_waited_for_while_opening() {
+    let source = Source::Path(
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../samples/mers_spike_aa.fasta"
+        )
+        .into(),
+    );
+    const DELAY: std::time::Duration = std::time::Duration::from_millis(800);
+    let control = RunControl {
+        thread_start: Some(Hook::new(|| {
+            if std::thread::current().name() == Some("dima-reader") {
+                std::thread::sleep(DELAY);
+            }
+        })),
+        ..RunControl::new()
+    };
+    let e = dima_core::analyze(&source, &AnalysisParams::default(), &control)
+        .unwrap()
+        .execution;
+    let (first, opening) = e.phases[0];
+    assert_eq!(first, Phase::Opening);
+    assert!(opening >= DELAY * 3 / 4, "opening took {opening:?}");
+    // The sample is one batch: counting waits only for the end of the input.
+    assert!(
+        e.waited_for_input < DELAY / 2,
+        "waited {:?} while counting",
+        e.waited_for_input
     );
 }

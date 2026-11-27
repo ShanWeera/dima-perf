@@ -35,7 +35,8 @@ impl Severity {
 macro_rules! codes {
     ($($(#[$doc:meta])* $variant:ident = $name:literal, $severity:ident;)+) => {
         /// Stable diagnostic codes. The serialised names never change within a schema major
-        /// version; new codes may be added in minor versions.
+        /// version; a new release may add codes without changing the schema version, because
+        /// `code` is a free string that readers keep when they do not know it.
         #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub enum Code {
             $($(#[$doc])* $variant,)+
@@ -93,6 +94,10 @@ codes! {
     ThresholdExceedsSequenceCount = "threshold_exceeds_sequence_count", Warning;
     /// No position has support above the threshold.
     NoEligiblePositions = "no_eligible_positions", Warning;
+    /// With the `dima` estimator, eligible positions with more than one k-mer kept their
+    /// observed entropy because the correction could not be computed (`too_few_points`,
+    /// `degenerate_regression`).
+    UncorrectedEligiblePositions = "uncorrected_eligible_positions", Warning;
     /// Positions have sample coverage below `--min-coverage`.
     BelowMinCoverage = "below_min_coverage", Warning;
     /// Conserved regions include positions with support at or below the threshold.
@@ -109,7 +114,7 @@ impl Serialize for Code {
 
 /// One reported condition.
 ///
-/// `code` is stored as a string so that results written by a newer minor version (which may add
+/// `code` is stored as a string so that results written by a newer release (which may add
 /// codes) can still be read and converted.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Diagnostic {

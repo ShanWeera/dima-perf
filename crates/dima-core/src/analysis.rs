@@ -41,8 +41,9 @@ pub struct Execution {
     pub threads_requested: usize,
     /// Wall time per phase, in order.
     pub phases: Vec<(Phase, Duration)>,
-    /// Time the counting loop waited for the reader (high values mean reading or
-    /// decompression is the bottleneck).
+    /// Time the counting loop waited for the reader while counting k-mers (high values mean
+    /// reading or decompression is the bottleneck). The wait for the first batch, which is read
+    /// while opening, is part of that phase and not included.
     pub waited_for_input: Duration,
     /// Records read.
     pub records: u64,
@@ -256,8 +257,12 @@ impl<'a> Run<'a> {
         recycle: &mpsc::Sender<RawBatch>,
     ) -> Result<Counting> {
         let control = self.control;
+        // The first batch arrives while opening; `waited` covers the counting phase only, so a
+        // slow start (opening a file, a pipe that has not written yet) is not counted as input
+        // limiting the counting.
+        let mut first_wait = Duration::ZERO;
         let mut waited = Duration::ZERO;
-        let first = Self::next_batch(rx, &mut waited, control)?.ok_or_else(|| {
+        let first = Self::next_batch(rx, &mut first_wait, control)?.ok_or_else(|| {
             control
                 .check()
                 .err()
@@ -294,16 +299,21 @@ impl<'a> Run<'a> {
             width,
             header: self.spec,
             source: &source_name,
+            looks_like: resolution.looks_like(),
         };
         let mut norm = NormalisedBatch::default();
         normaliser.normalise(&first, &mut norm)?;
-        let k = self.params.kmer_length(resolution.alphabet).value;
+        let k = self
+            .params
+            .kmer_length_for(resolution.alphabet, width)?
+            .value;
         let strata = self.spec.map_or(0, |s| s.stratified().len());
         let mut engine = Engine::new(width, k, strata, self.threads)?;
         tracing::debug!(
             alphabet = %resolution.alphabet,
             method = ?resolution.method,
             probe_records,
+            first_batch_wait_ms = first_wait.as_millis(),
             alignment_length = width,
             k,
             positions = engine.positions(),
@@ -439,8 +449,11 @@ impl<'a> Run<'a> {
             .filter(|p| p.below_min_coverage == Some(true))
         {
             let coverage = p.sample_coverage.unwrap_or_default();
+            let min = params.min_coverage.unwrap_or(1.0);
             below.add(1, || {
-                format!("position {} (coverage {coverage:.4})", p.position)
+                // Bounded by the minimum, so a coverage just below it never reads as reaching it.
+                let shown = crate::human::fixed_bounded(coverage, 4, min);
+                format!("position {} (coverage {shown})", p.position)
             });
         }
         let value_diagnostics = self
@@ -455,7 +468,9 @@ impl<'a> Run<'a> {
             identifier: c.identifier.clone(),
             sequence_count: c.records,
             threshold: threshold.value,
+            estimator: estimator.value,
             eligible_positions: label_counts.eligible,
+            positions: &positions,
             below_min_coverage: params.min_coverage.map(|m| (m, below)),
             fill_without_format: params.header_fill.is_some() && self.spec.is_none(),
         });

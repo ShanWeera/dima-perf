@@ -355,10 +355,38 @@ pub fn mismatch_error(source: &str, spec: &HeaderSpec, stats: &HeaderStats) -> D
             stats.mismatch_count - stats.mismatches.len() as u64
         ));
     }
-    DimaError::input_data(Some(Location::new(source)), msg).with_hint(
-        "fix the headers, change --header-format, or use --validation permissive to give \
-         mismatched headers the fill value",
-    )
+    let hint = match wrong_format(spec, stats) {
+        Some(wrong) => format!(
+            "{wrong}; otherwise fix the headers, or use --validation permissive to give \
+             mismatched headers the fill value"
+        ),
+        None => "fix the headers, change --header-format, or use --validation permissive to \
+                 give mismatched headers the fill value"
+            .to_owned(),
+    };
+    DimaError::input_data(Some(Location::new(source)), msg).with_hint(hint)
+}
+
+/// The hint of the `header_field_count_mismatch` warning (permissive mode).
+#[must_use]
+pub fn mismatch_diagnostic_hint(spec: &HeaderSpec, stats: &HeaderStats) -> String {
+    let list = "run.metadata.mismatches lists the first headers in full";
+    match wrong_format(spec, stats) {
+        Some(wrong) => format!("{wrong}; {list}"),
+        None => list.to_owned(),
+    }
+}
+
+/// When no header read has the format's number of fields, the format rather than the headers
+/// is probably wrong: the advice that says so first.
+fn wrong_format(spec: &HeaderSpec, stats: &HeaderStats) -> Option<String> {
+    (stats.records > 0 && stats.mismatch_count == stats.records).then(|| {
+        format!(
+            "no header has the {} of --header-format, so the format is probably wrong: check \
+             it against the headers",
+            plural(spec.fields.len() as u64, "field", "fields")
+        )
+    })
 }
 
 fn truncate_for_display(s: &str, max_chars: usize) -> String {

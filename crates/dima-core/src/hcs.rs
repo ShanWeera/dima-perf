@@ -10,9 +10,11 @@
 //! **Low support (D86).** Like the paper and DiMA v5.0.9, any position may qualify. Each region
 //! lists the positions in its span with support ≤ T and is *flagged* when there are any — the
 //! practice of Abd Raman et al. 2020 (conserved-sequence tables with low-support positions
-//! asterisked) and Hu et al. 2013 — and reports the exact 95% Clopper–Pearson lower bound of
-//! its members' conservation (Clopper & Pearson 1934): a k-mer shared by 3 of 3 sequences is
-//! "100% conserved" but only bounded below by 29.2%. With `eligible_only`, only positions
+//! asterisked) and Hu et al. 2013 — and reports the lowest per-position exact 95%
+//! Clopper–Pearson lower bound among its members (Clopper & Pearson 1934): a k-mer shared by 3
+//! of 3 sequences is "100% conserved" but only bounded below by 29.2%. The bound is that of
+//! each member position's Index incidence, not of the share of sequences that carry the whole
+//! region, which can be far lower. With `eligible_only`, only positions
 //! with support > T qualify and NS/LS/ELS positions end regions (the analysis set of Hu et al.
 //! 2013; cf. Gblocks, Castresana 2000).
 
@@ -169,16 +171,7 @@ pub fn compute(results: &Results, params: &HcsParams) -> Result<HcsResults> {
     if !flagged.is_empty() {
         let mut tally = Tally::default();
         for r in &flagged {
-            tally.add(1, || {
-                format!(
-                    "region {} (columns {} to {}): min support {}, lower bound {:.1}%",
-                    r.id,
-                    r.start_column,
-                    r.end_column,
-                    r.min_support,
-                    r.conservation_lower_bound_95 * 100.0
-                )
-            });
+            tally.add(1, || flagged_example(r));
         }
         diagnostics.push(
             Diagnostic::new(
@@ -247,4 +240,47 @@ pub fn compute(results: &Results, params: &HcsParams) -> Result<HcsResults> {
             .map(|k| Reference::of(k))
             .collect(),
     })
+}
+
+/// A flagged region as an example of `hcs_low_support_regions`. The bound is shown bounded by
+/// 100%, so a bound just below it never reads as reaching it.
+fn flagged_example(r: &HcsRegion) -> String {
+    format!(
+        "region {} (columns {} to {}): min support {}, lower bound {}",
+        r.id,
+        r.start_column,
+        r.end_column,
+        r.min_support,
+        crate::human::percent_bounded(r.conservation_lower_bound_95 * 100.0, 1)
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flagged_examples_never_round_a_bound_up_to_100_percent() {
+        let mut r = HcsRegion {
+            id: 3,
+            start_column: 10,
+            end_column: 18,
+            length: 9,
+            sequence: "MKVLAAGIL".to_owned(),
+            min_incidence: 100.0,
+            min_support: 3,
+            conservation_lower_bound_95: lower_bound_95(3, 3),
+            low_support_positions: vec![10],
+            flagged: true,
+            split_from_previous: false,
+            members: Vec::new(),
+        };
+        assert_eq!(
+            flagged_example(&r),
+            "region 3 (columns 10 to 18): min support 3, lower bound 29.2%"
+        );
+        // 10,000 of 10,000 sequences: 99.963%, which one decimal would round to 100.0%.
+        r.conservation_lower_bound_95 = lower_bound_95(10_000, 10_000);
+        assert!(flagged_example(&r).ends_with("lower bound > 99.9%"));
+    }
 }

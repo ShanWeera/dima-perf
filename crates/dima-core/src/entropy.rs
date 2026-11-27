@@ -256,6 +256,38 @@ pub fn rarefaction_grid(n: u64, t: u64) -> Vec<u64> {
     (start..100).step_by(RAREFACTION_STEP as usize).collect()
 }
 
+/// The smallest support at which the `dima` estimator corrects a position's entropy with
+/// support threshold `threshold` (T ≥ 1): ⌈1.25·T⌉, below which the grid has fewer than
+/// [`RAREFACTION_MIN_POINTS`] points (`too_few_points`), except T = 2, where support 3 gives
+/// equal subsample sizes (`degenerate_regression`) and 4 is the smallest. Messages and help
+/// texts state the rule with it; a unit test checks it against [`dima_corrected`].
+#[must_use]
+pub const fn min_corrected_support(threshold: u64) -> u64 {
+    if threshold == 2 {
+        return 4;
+    }
+    // ⌈5T/4⌉ = ⌈1.25·T⌉ in exact integer arithmetic, saturating for absurd thresholds.
+    let s = (threshold as u128 * 5).div_ceil(4);
+    if s > u64::MAX as u128 {
+        u64::MAX
+    } else {
+        s as u64
+    }
+}
+
+/// The largest support threshold T ≥ 1 with which the `dima` estimator corrects a position of
+/// support `support`: ⌊0.8·N⌋ (the inverse of [`min_corrected_support`]), 1 for N = 3, and
+/// `None` for N ≤ 1, which no threshold makes eligible.
+#[must_use]
+pub const fn max_correcting_threshold(support: u64) -> Option<u64> {
+    match support {
+        0 | 1 => None,
+        3 => Some(1),
+        // ⌊4N/5⌋ = ⌊0.8·N⌋ in exact integer arithmetic; at most N, so it fits.
+        n => Some((n as u128 * 4 / 5) as u64),
+    }
+}
+
 /// Subsample size ⌈R·N/100⌉ for R % of `n` sequences (Fig. 2, "Upperbound").
 #[must_use]
 pub fn subsample_size(n: u64, percent: u64) -> u64 {
@@ -515,6 +547,51 @@ mod tests {
         let e = estimate(&profile(&[500]), Estimator::Dima, 100).unwrap();
         assert_eq!(e.entropy, Some(0.0));
         assert!(e.entropy.unwrap().is_sign_positive());
+    }
+
+    /// The rule that messages and help texts state, against the estimator itself: with T ≥ 1,
+    /// a position of support N > T is corrected exactly when N ≥ ⌈1.25·T⌉, except T = 2, N = 3
+    /// (equal subsample sizes); `max_correcting_threshold` is its inverse.
+    #[test]
+    fn the_correction_rule_is_exact() {
+        // The fallback depends on N and T only; two variants keep the entropy above 0.
+        let two = |n: u64| profile(&[n - 1, 1]);
+        let corrected = |n: u64, t: u64| dima_corrected(&two(n), t).is_ok();
+        for t in 1..=300u64 {
+            let min = min_corrected_support(t);
+            for n in t + 1..=2 * t + 3 {
+                assert_eq!(corrected(n, t), n >= min, "T = {t}, N = {n}");
+                if n > t && n < min {
+                    let reason = dima_corrected(&two(n), t).unwrap_err();
+                    let expected = if t == 2 {
+                        EntropyFallback::DegenerateRegression
+                    } else {
+                        EntropyFallback::TooFewPoints
+                    };
+                    assert_eq!(reason, expected, "T = {t}, N = {n}");
+                }
+            }
+        }
+        for n in 0..=400u64 {
+            match max_correcting_threshold(n) {
+                None => assert!(n <= 1, "N = {n}"),
+                Some(t) => {
+                    assert!(t >= 1 && corrected(n, t), "N = {n}, T = {t}");
+                    assert!(!corrected(n, t + 1), "N = {n}, T = {}", t + 1);
+                }
+            }
+        }
+        assert_eq!(
+            [1, 2, 20, 25, 30, 100].map(min_corrected_support),
+            [2, 4, 25, 32, 38, 125]
+        );
+        assert_eq!(max_correcting_threshold(105), Some(84));
+        assert_eq!(max_correcting_threshold(26), Some(20));
+        assert_eq!(min_corrected_support(u64::MAX), u64::MAX);
+        assert_eq!(
+            max_correcting_threshold(u64::MAX),
+            Some(14_757_395_258_967_641_292)
+        );
     }
 
     #[test]
