@@ -1815,8 +1815,8 @@ fn output_names_are_read_before_anything_runs() {
     assert!(
         e.contains(
             "warning[output_format_assumed]: 'regions.txt' does not name JSON or TSV, so the \
-             conserved sequences are written to it as JSON\n  hint: name it regions.json or \
-             regions.tsv (optionally followed by .gz or .zst)\n"
+             conserved sequences are written to it as JSON\n  hint: name it regions.txt.json or \
+             regions.txt.tsv (optionally followed by .gz or .zst)\n"
         ),
         "{e}"
     );

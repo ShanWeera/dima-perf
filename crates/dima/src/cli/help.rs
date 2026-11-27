@@ -78,12 +78,14 @@ pub fn support_threshold() -> String {
 
 pub fn alphabet() -> String {
     format!(
-        "Sequence alphabet. 'auto' detects it from the first records with Easel's rules (as \
-         in HMMER), which make no false calls and otherwise ask for this option. T and U are \
-         folded to the alphabet's letter; lower case is folded to upper case. Symbols: gaps \
-         - . _, missing ~ ?, stops * $ ^, frameshift #, and ambiguity codes (protein X B J Z; \
-         nucleotide R Y K M S W B D H V N X I) exclude the k-mers that contain them; protein \
-         U (selenocysteine) and O (pyrrolysine) are residues.{}",
+        "Sequence alphabet. 'auto' detects it from the residues of the first records with the \
+         rules of Easel's esl_abc_GuessAlphabet (Easel is the sequence library of HMMER, Eddy \
+         2011); when the rules do not decide, DiMA stops and asks for this option instead of \
+         guessing. T and U are folded to the alphabet's letter; lower case is folded to upper \
+         case. Symbols: gaps - . _, missing ~ ?, stops * $ ^, frameshift #, and ambiguity codes \
+         (protein X B J Z; nucleotide R Y K M S W B D H V N, the IUPAC-IUB codes, and X and I, \
+         which DiMA also reads as ambiguous) exclude the k-mers that contain them; protein U \
+         (selenocysteine) and O (pyrrolysine) are residues.{}",
         refs(&[
             c("eddy2011"),
             c("cornishbowden1985"),
@@ -146,9 +148,14 @@ pub fn similarity_weighted_entropy() -> String {
 pub fn min_coverage() -> String {
     format!(
         "Flag positions whose estimated sample coverage (the probability that one more sequence \
-         carries an already-seen k-mer) is below this value, between 0 and 1. Coverage is always \
-         reported; this only adds the flag and a warning.{}",
-        refs(&[c("chao2012").at("Eq. 4a")])
+         carries an already-seen k-mer) is below this value, between 0 and 1. Coverage is \
+         estimated with Chao and Jost's formula and, where no k-mer is seen exactly twice, with \
+         the form of Chao, Wang and Jost. It is always reported; this option only adds the flag \
+         and a warning.{}",
+        refs(&[
+            c("chao2012").at("Eq. 4a"),
+            c("chao2013").at("Materials and methods")
+        ])
     )
 }
 

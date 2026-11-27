@@ -87,7 +87,7 @@ Aligned FASTA file (plain, .gz, .bz2 or .zst; '-' or omitted = standard input)
 
 #### `-a, --alphabet <ALPHABET>`
 
-Sequence alphabet. 'auto' detects it from the first records with Easel's rules (as in HMMER), which make no false calls and otherwise ask for this option. T and U are folded to the alphabet's letter; lower case is folded to upper case. Symbols: gaps - . \_, missing \~ ?, stops \* $ ^, frameshift #, and ambiguity codes (protein X B J Z; nucleotide R Y K M S W B D H V N X I) exclude the k-mers that contain them; protein U (selenocysteine) and O (pyrrolysine) are residues.
+Sequence alphabet. 'auto' detects it from the residues of the first records with the rules of Easel's esl\_abc\_GuessAlphabet (Easel is the sequence library of HMMER, Eddy 2011); when the rules do not decide, DiMA stops and asks for this option instead of guessing. T and U are folded to the alphabet's letter; lower case is folded to upper case. Symbols: gaps - . \_, missing \~ ?, stops \* $ ^, frameshift #, and ambiguity codes (protein X B J Z; nucleotide R Y K M S W B D H V N, the IUPAC-IUB codes, and X and I, which DiMA also reads as ambiguous) exclude the k-mers that contain them; protein U (selenocysteine) and O (pyrrolysine) are residues.
 
 **References:** Eddy 2011, [doi:10.1371/journal.pcbi.1002195](https://doi.org/10.1371/journal.pcbi.1002195); Cornish-Bowden 1985, [doi:10.1093/nar/13.9.3021](https://doi.org/10.1093/nar/13.9.3021); Los Alamos HIV Sequence Database 2009, <https://www.hiv.lanl.gov/content/sequence/HelpDocs/IUPAC.html>; Los Alamos HIV Sequence Database 2024, <https://www.hiv.lanl.gov/content/sequence/GENE_CUTTER/cutter-help.html>; Böck et al. 1991, [doi:10.1111/j.1365-2958.1991.tb00722.x](https://doi.org/10.1111/j.1365-2958.1991.tb00722.x); Srinivasan et al. 2002, [doi:10.1126/science.1069588](https://doi.org/10.1126/science.1069588)
 
@@ -145,9 +145,9 @@ None of the three values is corrected for sample size: observed entropy is lower
 
 #### `--min-coverage <X>`
 
-Flag positions whose estimated sample coverage (the probability that one more sequence carries an already-seen k-mer) is below this value, between 0 and 1. Coverage is always reported; this only adds the flag and a warning.
+Flag positions whose estimated sample coverage (the probability that one more sequence carries an already-seen k-mer) is below this value, between 0 and 1. Coverage is estimated with Chao and Jost's formula and, where no k-mer is seen exactly twice, with the form of Chao, Wang and Jost. It is always reported; this option only adds the flag and a warning.
 
-**References:** Chao & Jost 2012, Eq. 4a, [doi:10.1890/11-1952.1](https://doi.org/10.1890/11-1952.1)
+**References:** Chao & Jost 2012, Eq. 4a, [doi:10.1890/11-1952.1](https://doi.org/10.1890/11-1952.1); Chao et al. 2013, Materials and methods, [doi:10.1111/2041-210X.12108](https://doi.org/10.1111/2041-210X.12108)
 
 ### Metadata
 

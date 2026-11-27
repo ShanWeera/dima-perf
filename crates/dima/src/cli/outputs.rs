@@ -343,10 +343,11 @@ fn is_stream(path: &Path) -> bool {
         || std::fs::metadata(path).is_ok_and(|m| !m.is_file() && !m.is_dir())
 }
 
-/// `path` as written, with each of `extensions` in place of its format extension (or of a last
-/// extension that names no format, such as `.txt`), keeping its compression: `regions.txt` →
-/// `regions.json or regions.tsv (optionally followed by .gz or .zst)`, `run.tsv.gz` →
-/// `run.json.gz`.
+/// `path` as written, with each of `extensions` in place of the extension that names another
+/// format, or added to a name that names none, and its compression kept: `run.tsv.gz` →
+/// `run.json.gz`; `regions.txt` → `regions.txt.json or regions.txt.tsv (optionally followed by
+/// .gz or .zst)`. A name is only ever extended, never cut, so the suggestion cannot become the
+/// name of another output (`mers.hcs` next to `-o mers.json`).
 fn renamed(
     path: &Path,
     format: Option<OutputFormat>,
@@ -361,22 +362,13 @@ fn renamed(
     if !compressed.is_empty() && lower.ends_with(compressed) {
         end -= compressed.len();
     }
-    let known = format.and_then(|f| {
+    if let Some(len) = format.and_then(|f| {
         f.extensions()
             .iter()
             .find(|e| lower[..end].ends_with(*e))
             .map(|e| e.len())
-    });
-    match known {
-        Some(len) => end -= len,
-        None => {
-            let name_start = shown[..end]
-                .rfind(std::path::is_separator)
-                .map_or(0, |i| i + 1);
-            if let Some(dot) = shown[name_start..end].rfind('.').filter(|&d| d > 0) {
-                end = name_start + dot;
-            }
-        }
+    }) {
+        end -= len;
     }
     let stem = &shown[..end];
     let names: Vec<String> = extensions
@@ -1081,13 +1073,28 @@ mod tests {
     fn renamed_names_keep_the_compression() {
         let r = |p: &str, f, c, e: &[&str]| renamed(Path::new(p), f, c, e);
         use OutputCompression as C;
+        // Only ever extended: `mers.hcs` must not become `mers.json`, the results' name.
         assert_eq!(
             r("regions.txt", None, C::None, &[".json", ".tsv"]),
-            "regions.json or regions.tsv (optionally followed by .gz or .zst)"
+            "regions.txt.json or regions.txt.tsv (optionally followed by .gz or .zst)"
         );
         assert_eq!(
-            r("out/regions", None, C::Gzip, &[".json", ".tsv"]),
+            r("mers.hcs", None, C::None, &[".json"]),
+            "mers.hcs.json (optionally followed by .gz or .zst)"
+        );
+        assert_eq!(
+            r("out/regions.gz", None, C::Gzip, &[".json", ".tsv"]),
             "out/regions.json.gz or out/regions.tsv.gz"
+        );
+        // An extension of another format is replaced.
+        assert_eq!(
+            r(
+                "x.JSONL",
+                Some(OutputFormat::Jsonl),
+                C::None,
+                &[".json", ".tsv"]
+            ),
+            "x.json or x.tsv (optionally followed by .gz or .zst)"
         );
         assert_eq!(
             r("run.TSV.zst", Some(OutputFormat::Tsv), C::Zstd, &[".json"]),
