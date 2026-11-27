@@ -7,6 +7,15 @@
 # Default binary: target/release/dima (built if missing). Needs python3 (standard library only).
 set -euo pipefail
 
+case "${1:-}" in
+  -h|--help)
+    # The comment block above, without its leading "# ".
+    awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"
+    exit 0
+    ;;
+  -*) echo "unknown option $1 (see --help)" >&2; exit 2 ;;
+esac
+
 root=$(cd "$(dirname "$0")/.." && pwd)
 dima=${1:-$root/target/release/dima}
 if [ ! -x "$dima" ]; then

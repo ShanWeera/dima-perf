@@ -105,6 +105,9 @@ def read_libraries(path: Path) -> dict[str, tuple[list[tuple[str, int]], int]]:
 
 
 def main() -> int:
+    if sys.argv[1:] in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
     if len(sys.argv) != 3:
         print(__doc__.strip().splitlines()[-1], file=sys.stderr)
         return 2

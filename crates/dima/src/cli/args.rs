@@ -62,6 +62,20 @@ pub enum Command {
     },
 }
 
+impl Command {
+    /// The subcommand's name on the command line.
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Analyze(_) => "analyze",
+            Self::View(_) => "view",
+            Self::Hcs(_) => "hcs",
+            Self::Cite(_) => "cite",
+            Self::Completions { .. } => "completions",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum AlphabetArg {
     /// Detect from the data.
@@ -238,23 +252,60 @@ pub struct AnalyzeArgs {
     #[arg(help_heading = "Run", short, long, value_name = "N", value_parser = parse_threads, help = help::short::THREADS, long_help = help::threads())]
     pub threads: Option<NonZeroUsize>,
 
-    #[arg(help_heading = "Run", long, value_enum, value_name = "WHEN", default_value_t = ProgressArg::Auto, env = "DIMA_PROGRESS", help = help::short::PROGRESS, long_help = help::progress())]
-    pub progress: ProgressArg,
+    /// The progress display; `None` leaves it to the environment ([`AnalyzeArgs::progress`]).
+    #[arg(help_heading = "Run", long, value_enum, value_name = "WHEN", overrides_with = "no_progress", help = help::short::PROGRESS, long_help = help::progress())]
+    pub progress: Option<ProgressArg>,
 
     /// The same as `--progress off` (kept for scripts written before `--progress`).
-    #[arg(long, hide = true, env = "DIMA_NO_PROGRESS", value_parser = clap::builder::FalseyValueParser::new())]
+    #[arg(long, hide = true, overrides_with = "progress")]
     pub no_progress: bool,
 }
 
 impl AnalyzeArgs {
-    /// The progress display asked for (`--no-progress` means `off`).
-    #[must_use]
-    pub const fn progress(&self) -> ProgressArg {
-        if self.no_progress {
-            ProgressArg::Off
-        } else {
-            self.progress
+    /// The progress display asked for (D109): `--progress` or `--no-progress` (`off`),
+    /// whichever is given last; otherwise `off` when `DIMA_NO_PROGRESS` is set to a true value
+    /// (the older variable keeps its meaning); otherwise `DIMA_PROGRESS`, where an empty value
+    /// counts as unset; otherwise `auto`. `env` reads a variable. Only `dima analyze` shows
+    /// progress, so only it reads the variables.
+    ///
+    /// # Errors
+    /// A usage error when `DIMA_PROGRESS` holds anything but `auto`, `plain` or `off`. The value
+    /// is not repeated: messages end up in run reports, which never hold environment values
+    /// (D103).
+    pub fn progress(
+        &self,
+        env: &dyn Fn(&str) -> Option<std::ffi::OsString>,
+    ) -> dima_core::Result<ProgressArg> {
+        if let Some(p) = self.progress {
+            return Ok(p);
         }
+        if self.no_progress || env("DIMA_NO_PROGRESS").is_some_and(|v| truthy(&v)) {
+            return Ok(ProgressArg::Off);
+        }
+        match env("DIMA_PROGRESS") {
+            None => Ok(ProgressArg::Auto),
+            Some(v) if v.is_empty() => Ok(ProgressArg::Auto),
+            Some(v) => v
+                .to_str()
+                .and_then(|v| ProgressArg::from_str(v, false).ok())
+                .ok_or_else(|| {
+                    dima_core::DimaError::usage(
+                        "DIMA_PROGRESS is set, but not to a progress mode (auto, plain or off)",
+                    )
+                    .with_hint("set it to auto, plain or off, in lower case, or unset it")
+                }),
+        }
+    }
+}
+
+/// A variable that is set and not false: anything but an empty value or `0`, `false`, `no`,
+/// `off`, `n` or `f` in any letter case (the rule of clap's `FalseyValueParser`, which read
+/// `DIMA_NO_PROGRESS` before).
+fn truthy(v: &std::ffi::OsStr) -> bool {
+    const FALSE: [&str; 6] = ["n", "no", "f", "false", "off", "0"];
+    match v.to_str() {
+        Some(s) => !s.is_empty() && !FALSE.iter().any(|f| s.eq_ignore_ascii_case(f)),
+        None => true,
     }
 }
 
@@ -277,12 +328,10 @@ pub struct HcsArgs {
     #[command(flatten)]
     pub hcs: HcsOptions,
 
-    /// Write the regions here ('-' = standard output, the default).
-    #[arg(short, long, value_name = "PATH")]
+    #[arg(short, long, value_name = "PATH", help = help::short::HCS_TARGET, long_help = help::hcs_target())]
     pub output: Option<PathBuf>,
 
-    /// Format (default: from the extension, else JSON).
-    #[arg(short = 'O', long, value_name = "FORMAT")]
+    #[arg(short = 'O', long, value_name = "FORMAT", help = help::short::HCS_FORMAT, long_help = help::hcs_format())]
     pub output_format: Option<HcsFormatArg>,
 
     /// Indent JSON output.
@@ -296,8 +345,10 @@ pub struct CiteArgs {
     #[arg(long, value_enum, default_value_t = CiteFormat::Text)]
     pub format: CiteFormat,
 
-    /// Results of a run, and/or the conserved sequences computed from it (repeat the option):
-    /// print a methods text and the references of the methods used.
+    /// Results of a run, and/or the conserved sequences computed from them (give the option
+    /// twice; '-' reads standard input): print a methods text and the references of the methods
+    /// used, or with --format bibtex, ris or cff the references only. Both files must come
+    /// from one run: conserved sequences of another input, k or T are refused.
     #[arg(long, value_name = "FILE", action = clap::ArgAction::Append)]
     pub from: Vec<PathBuf>,
 }
@@ -368,5 +419,68 @@ mod tests {
         assert!(parse(&["dima", "-q", "-v", "analyze"]).is_err());
         let c = parse(&["dima", "analyze", "-qq"]).unwrap();
         assert_eq!(c.global.quiet, 2);
+    }
+
+    /// B7: the option (the last of --progress and --no-progress), then DIMA_NO_PROGRESS, then
+    /// DIMA_PROGRESS (empty = unset), then auto.
+    #[test]
+    fn progress_order() {
+        let analyze = |args: &[&str]| {
+            let all: Vec<&str> = ["dima", "analyze"].iter().chain(args).copied().collect();
+            match Cli::try_parse_from(all).unwrap().command {
+                Some(Command::Analyze(a)) => a,
+                _ => panic!(),
+            }
+        };
+        let with = |args: &[&str], env: &[(&str, &str)]| {
+            let env: Vec<(String, std::ffi::OsString)> = env
+                .iter()
+                .map(|(k, v)| ((*k).to_owned(), (*v).into()))
+                .collect();
+            analyze(args).progress(&|k| {
+                env.iter()
+                    .find(|(name, _)| name == k)
+                    .map(|(_, v)| v.clone())
+            })
+        };
+        use ProgressArg::{Auto, Off, Plain};
+        assert_eq!(with(&[], &[]).unwrap(), Auto);
+        assert_eq!(with(&[], &[("DIMA_PROGRESS", "")]).unwrap(), Auto);
+        assert_eq!(with(&[], &[("DIMA_PROGRESS", "plain")]).unwrap(), Plain);
+        assert!(with(&[], &[("DIMA_PROGRESS", "PLAIN")]).is_err());
+        assert!(with(&[], &[("DIMA_PROGRESS", "x")]).is_err());
+        for no in ["1", "yes", "anything"] {
+            assert_eq!(
+                with(&[], &[("DIMA_NO_PROGRESS", no), ("DIMA_PROGRESS", "plain")]).unwrap(),
+                Off,
+                "{no}"
+            );
+        }
+        for not in ["", "0", "false", "No", "OFF", "n", "f"] {
+            assert_eq!(
+                with(
+                    &[],
+                    &[("DIMA_NO_PROGRESS", not), ("DIMA_PROGRESS", "plain")]
+                )
+                .unwrap(),
+                Plain,
+                "{not:?}"
+            );
+        }
+        // An explicit option beats both variables, even an invalid one.
+        let env = [("DIMA_NO_PROGRESS", "1"), ("DIMA_PROGRESS", "x")];
+        assert_eq!(with(&["--progress", "plain"], &env).unwrap(), Plain);
+        assert_eq!(with(&["--no-progress"], &[]).unwrap(), Off);
+        assert_eq!(
+            with(&["--progress", "plain", "--no-progress"], &[]).unwrap(),
+            Off
+        );
+        assert_eq!(
+            with(&["--no-progress", "--progress", "plain"], &[]).unwrap(),
+            Plain
+        );
+        let e = with(&[], &[("DIMA_PROGRESS", "sparkles")]).unwrap_err();
+        assert_eq!(e.class().code(), 2);
+        assert!(!e.to_string().contains("sparkles"), "{e}");
     }
 }

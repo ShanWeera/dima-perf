@@ -3,6 +3,7 @@
 pub mod analyze;
 pub mod args;
 pub mod cite;
+pub mod destinations;
 pub mod hcs;
 pub mod help;
 pub mod outputs;
@@ -43,6 +44,9 @@ pub struct Context {
     /// Errors that followed the command's own error (writing the run report of a failed run),
     /// printed after it.
     pub later_errors: std::cell::RefCell<Vec<DimaError>>,
+    /// The outputs the command committed, for the message after an interruption and the run
+    /// report.
+    pub ledger: outputs::Ledger,
 }
 
 impl Context {
@@ -150,6 +154,19 @@ pub fn main() -> ExitCode {
     };
     init_logging(verbosity);
     if cli.licenses {
+        if let Some(command) = &cli.command {
+            // `exclusive` covers options only, and clap's conflict with subcommands would also
+            // refuse `dima -q analyze`.
+            Cli::command()
+                .error(
+                    clap::error::ErrorKind::ArgumentConflict,
+                    format!(
+                        "the argument '--licenses' cannot be used with '{}'",
+                        command.name()
+                    ),
+                )
+                .exit();
+        }
         let _ = write!(std::io::stdout(), "{LICENSE}\n{NOTICES}");
         return ExitCode::SUCCESS;
     }
@@ -178,6 +195,7 @@ pub fn main() -> ExitCode {
         stderr_is_terminal,
         redraw_terminal,
         later_errors: std::cell::RefCell::default(),
+        ledger: outputs::Ledger::default(),
     };
     let result = match &command {
         Command::Analyze(a) => analyze::run(a, &ctx),
@@ -219,9 +237,9 @@ fn finish(result: Result<()>, ctx: &Context) -> ExitCode {
         }
         Err(DimaError::Cancelled) => {
             signals::cleanup_done();
-            if ctx.verbosity.normal() {
-                ui::error_message("cancelled; no results were written", None);
-            }
+            // An error, so printed even with -q: what is complete, and whether standard output
+            // holds a partial document.
+            ui::error_message(&ctx.ledger.cancelled_message(), None);
             for later in ctx.later_errors.take() {
                 ui::error(&later);
             }

@@ -20,13 +20,19 @@ import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 ## What DiMA does
 
-For every overlapping k-mer position of a viral protein or gene alignment, DiMA counts the
-k-mers and the sequences that support them, estimates their Shannon entropy with the paper's
-correction for sample size, classifies variants as Index, Major, Minor and Unique motifs with
-their incidences, can count them per host, country, year or any header field, and finds the
-historically conserved sequences of the alignment [@tharanga2025]. On request it also computes
-similarity-weighted entropy, an addition to the paper's method in which near-identical variants
-count for less [@wu2025].
+For every overlapping [k-mer](/reference/glossary/#k-mer-and-k) position of a viral protein or
+gene alignment, DiMA counts the k-mers and the sequences that [support](/reference/glossary/#support)
+them, estimates their Shannon entropy with the paper's
+[correction for sample size](/reference/glossary/#corrected-entropy), labels the positions
+supported by too few sequences ([NS, LS and ELS](/reference/glossary/#ns-ls-and-els)),
+classifies variants as [Index, Major, Minor and Unique motifs](/reference/glossary/#index-major-minor-and-unique)
+with their [incidences](/reference/glossary/#incidence), estimates the
+[sample coverage](/reference/glossary/#sample-coverage) of each position, can count variants per
+host, country, year or any header field, and finds the
+[historically conserved sequences](/reference/glossary/#historically-conserved-sequence-hcs) of
+the alignment [@tharanga2025]. On request it also computes
+[similarity-weighted entropy](/reference/glossary/#similarity-weighted-entropy), an addition to
+the paper's method in which near-identical variants count for less [@wu2025].
 
 <CardGrid>
   <Card title="Faithful to the paper" icon="open-book">
@@ -54,6 +60,11 @@ count for less [@wu2025].
     title="Get started"
     description="Install DiMA and analyse the MERS-CoV spike alignment of the paper step by step."
     href="/getting-started/install/"
+  />
+  <LinkCard
+    title="Use the desktop app"
+    description="Open an alignment, run the analysis, explore the chart and export figures and tables, without the command line."
+    href="/how-to/desktop-app/#first-analysis-in-the-app"
   />
   <LinkCard
     title="How-to guides"

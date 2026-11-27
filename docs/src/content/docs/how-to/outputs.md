@@ -26,25 +26,132 @@ dima analyze -i spike.fasta -o spike.json.zst --tsv-dir tables --hcs-output spik
 - **Format from the extension**, case-insensitive: `.json`; `.jsonl` or `.ndjson`; `.tsv` or
   `.tab`; each optionally followed by `.gz` or `.zst` to compress it. `-O json|jsonl|tsv` sets the
   format explicitly and must agree with the extension (`-O jsonl -o out.json` is an error, not a
-  silent choice). A name without a known extension needs `-O`:
+  silent choice). A results name (`-o`) without a known extension needs `-O`:
   `-o /dev/null -O json`.
 - **`-o -`** writes to standard output. Without `-o`, `--tsv-dir` and `--hcs-output`, JSON goes
   to standard output; with only `--tsv-dir` or `--hcs-output`, no JSON is written.
 - **Compact JSON** by default; `--pretty` indents it, and JSON written to a terminal is indented
-  automatically.
-- **Safe replacement.** Each file is written to a temporary file next to it and renamed into
-  place when complete, so an existing file is never left half-written. Writing the same file
-  twice in one command (for example `-o x.json --hcs-output x.json`), or writing over the input,
-  is refused before the analysis starts.
-- **`--tsv-dir`** is created if needed; its four files are replaced, other files in it are left
-  alone. Their names start with the query name (`--query-name`, by default the input file name
-  without extensions).
+  automatically. The run report is always indented.
+- **`--tsv-dir`** is created if needed (with any missing folder above it); its four files are
+  replaced, other files in it are left alone. See [the table names](#the-table-names) below.
+- **Checked before anything runs.** Every name, and every pair of outputs, is checked before the
+  input is read, so a mistyped option never costs a long analysis. What is refused, with an
+  error and exit status 2, is listed under [Names DiMA refuses](#names-dima-refuses) and
+  [Outputs that would overwrite each other](#outputs-that-would-overwrite-each-other).
+- **Safe replacement.** Each file — the results, every table, the conserved sequences and the
+  run report — is written to a hidden temporary file next to it and renamed into place when
+  complete, so an existing file is never left half-written: after an error or an interruption it
+  is either as it was or complete. Standard output is different: it is written as the output is
+  produced, so a run interrupted while writing it can leave a partial document there (DiMA then
+  says so). Prefer `-o FILE` to `> FILE` when a partial file would be mistaken for a result.
+
+### Names DiMA refuses
+
+DiMA writes only gzip (`.gz`) and Zstandard (`.zst`). Since 1.2.0, a name that asks for anything
+it would not honour is refused before anything runs, even with `-O`, instead of being written
+under a name that misstates its bytes:
+
+| Name | Why | Message |
+|---|---|---|
+| `mers.json.bz2`, `.xz`, `.lzma`, `.lz`, `.lz4`, `.Z`, `.br`, `.sz`, `.bgz` | A compression DiMA does not write | `'mers.json.bz2' asks for bzip2 compression, which DiMA does not write`<br/>`hint: DiMA compresses with gzip or Zstandard: name it mers.json.gz or mers.json.zst` |
+| `.zip`, `.7z`, `.tgz`, `.tbz2`, `.txz` | An archive: DiMA writes one file per output | `… asks for a ZIP archive, which DiMA does not write` |
+| `.zstd`, `.gzip` | A compression DiMA writes, under another name | the hint gives `.zst` or `.gz` |
+| `mers.tsv.gz.zst` | Two compressions | `'mers.tsv.gz.zst' asks for two compressions (.gz, then .zst); DiMA applies one` |
+| `results/` (ends in `/`, or `\` on Windows) | A folder's name | `'results/' names a folder, not a file` |
+| `results`, an existing folder | A folder | `'results' is a folder, not a file`<br/>`hint: give a file name, such as 'results/results.json'` |
+| `--hcs-output hcs.jsonl` | Conserved sequences are JSON or TSV | `'hcs.jsonl' names JSON Lines, but conserved sequences are written as JSON or TSV` |
+| `--run-report run.tsv` (or `.jsonl`) | The run report is always JSON | `the run report is JSON, but 'run.tsv' names a TSV table`<br/>`hint: name it run.json (optionally followed by .gz or .zst)` |
+| `--tsv-dir mers.json`, an existing file | `--tsv-dir` is a folder | `'mers.json' is a file, not a folder` |
+
+A run report whose own name is refused is not written; any other refusal is still recorded in
+the run report.
+
+A file of conserved sequences (`--hcs-output`, or `-o` of `dima hcs`) whose name gives neither
+`.json` nor `.tsv` gets JSON, the documented default, with a warning, because the name does not
+say what the file holds:
+
+```sh
+dima analyze -i mers_spike_aa.fasta -o mers.json --hcs-output mers.hcs
+```
+
+```text
+warning[output_format_assumed]: 'mers.hcs' does not name JSON or TSV, so the conserved sequences are written to it as JSON
+  hint: name it mers.hcs.json or mers.hcs.tsv (optionally followed by .gz or .zst)
+analysed 191 sequences, 1345 positions (1345 eligible) in 0.01 s; entropy mean 0.1261, min 0.0000, max 1.5878 bits; 44 conserved regions; 1 warning (see above)
+```
+
+The warning counts in the summary line and `-q` hides it; with `dima hcs`, `-O json` or
+`-O tsv` chooses the format instead. Standard output (`-`) and other streams, such as
+`/dev/stdout` or `/dev/null`, have no name to read, so they get JSON without a warning. The run
+report is JSON whatever its name (other than the refused ones above).
+
+### Outputs that would overwrite each other
+
+Two outputs on one file, or an output on the input, are refused, with both named, before
+anything runs. Two names are one file when they lead to it: spelled differently (`./x.json`,
+`d/../x.json`), through a symbolic link, or with other letter case — names that differ only in
+letter case are one file on macOS and Windows, so they are refused everywhere. For example:
+
+```text
+error: 'mers.json' would be written twice: as the results (-o) and as the conserved sequences (--hcs-output)
+  hint: give every output its own file
+error: output 'mers_spike_aa.fasta' (the results (-o)) is the input file
+  hint: choose another output path; the input is never overwritten
+error: the results (-o) 'Mers.json' may be the same file as the conserved sequences (--hcs-output) 'mers.JSON'
+  hint: names that differ only in letter case are one file on macOS and Windows; give every output its own file
+```
+
+The run report is checked first, against every other output — the four `--tsv-dir` tables
+included — the `--tsv-dir` folder and the input, because it is written even when a run fails:
+a report that would replace another file is refused and not written. (Before 1.2.0 a run
+report named like one of the tables could replace it.)
+
+Standard output takes one output: `-o -` and `--hcs-output -`, or `/dev/stdout`, together are
+refused (`two outputs would go to standard output`). So is `--run-report -` alone, because the
+results already go to standard output when no output is named:
+
+```text
+error: two outputs would go to standard output: the run report (--run-report) and the results (standard output by default)
+  hint: the results go to standard output when neither -o, --tsv-dir nor --hcs-output is given: write them to a file with -o FILE, or discard them with -o /dev/null -O json
+```
+
+On Linux and macOS, standard input and standard output have no name, so DiMA compares the file
+behind them with the files it replaces. `dima analyze < mers_spike_aa.fasta -O json -o mers_spike_aa.fasta`
+is refused like `-i mers_spike_aa.fasta`, and so is writing a file that standard output also
+goes to:
+
+```text
+error: standard output, where the conserved sequences (--hcs-output) would go, is the file 'mers.json', which is also written as the results (-o)
+  hint: give every output its own file
+```
+
+That was `dima analyze -i mers_spike_aa.fasta -o mers.json --hcs-output - > mers.json`. Devices
+take any number of outputs (`-o /dev/null -O json --hcs-output /dev/null` is fine), appending
+standard output to a log (`-o /dev/stdout -O json >> run.log`) is fine, and a hard link to the
+input is another name, which DiMA does not refuse: writing it replaces that name only.
+
+### The table names
+
+`--tsv-dir DIR` writes `DIR/NAME.positions.tsv`, `NAME.variants.tsv`, `NAME.metadata.tsv` and
+`NAME.hcs.tsv`. `NAME` is the [query name](/reference/glossary/#query-name) made safe for file
+names: characters other than Unicode letters, digits, `.`, `-` and `_` become `_`, leading and
+trailing `.` and `_` are removed, and an empty name becomes `dima`.
+
+| Command | Query name | Tables |
+|---|---|---|
+| `dima analyze -i mers_spike_aa.fasta --tsv-dir tables` | the input file's name without its FASTA and compression extensions | `tables/mers_spike_aa.*.tsv` |
+| `dima analyze -i mers_spike_aa.fasta --query-name "MERS spike" --tsv-dir tables` | `--query-name` | `tables/MERS_spike.*.tsv` |
+| `dima analyze --tsv-dir tables < mers_spike_aa.fasta` (also `-i /dev/stdin`, `-i <(...)`) | none | `tables/dima.*.tsv` |
+| `dima view -i mers.json --tsv-dir tables` | the query name in the results | `tables/mers_spike_aa.*.tsv` (`Unknown_Protein.*.tsv` for results analysed from standard input) |
+
+`dima view` reads the query name from the results, so it checks the table names against its
+other outputs once it has read them, before it writes anything.
 
 ## Compression
 
 `.gz` (gzip) and `.zst` (Zstandard) outputs are compressed as they are written. JSON results
-compress very well — the MERS-CoV sample's 986 KB of JSON become about 40 KB as `.json.zst` —
-and every DiMA command reads compressed results directly (`dima view`, `dima hcs`,
+compress very well — the MERS-CoV sample's 986 KB of JSON become 41 KB as `.json.zst` and 43 KB
+as `.json.gz` — and every DiMA command reads compressed results directly (`dima view`, `dima hcs`,
 `dima cite --from`, the desktop app). R and pandas read `.gz` tables directly; `.zst` needs the
 `zstandard` Python package or `zstd -d` first.
 

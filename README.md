@@ -10,16 +10,24 @@ Bioinformatics* 26(1):bbae607, [doi:10.1093/bib/bbae607](https://doi.org/10.1093
 with a command-line tool and a desktop app. For every k-mer position of a viral protein or
 nucleotide alignment it:
 
-- counts the k-mers and their support, and labels positions without enough data (NS, LS, ELS);
-- estimates Shannon entropy with the paper's sample-size correction (or an alternative
-  estimator), and the sample coverage;
+- counts the [k-mers](https://shanweera.github.io/dima-perf/latest/reference/glossary/#k-mer-and-k)
+  and their [support](https://shanweera.github.io/dima-perf/latest/reference/glossary/#support),
+  and labels positions without enough data
+  ([NS, LS, ELS](https://shanweera.github.io/dima-perf/latest/reference/glossary/#ns-ls-and-els));
+- estimates Shannon entropy with the paper's
+  [sample-size correction](https://shanweera.github.io/dima-perf/latest/reference/glossary/#corrected-entropy)
+  (or an alternative [estimator](https://shanweera.github.io/dima-perf/latest/reference/glossary/#estimator)),
+  and the [sample coverage](https://shanweera.github.io/dima-perf/latest/reference/glossary/#sample-coverage);
 - optionally computes similarity-weighted entropy, in which near-identical variants count for
   less (Wu 2025, *Virus Evolution* 11(1):veaf029,
   [doi:10.1093/ve/veaf029](https://doi.org/10.1093/ve/veaf029)), an addition to the paper's
   method;
-- classifies variants as Index, Major, Minor and Unique motifs with their incidences;
+- classifies variants as
+  [Index, Major, Minor and Unique motifs](https://shanweera.github.io/dima-perf/latest/reference/glossary/#index-major-minor-and-unique)
+  with their [incidences](https://shanweera.github.io/dima-perf/latest/reference/glossary/#incidence);
 - optionally counts variants per value of FASTA header fields (host, country, year, …);
-- finds historically conserved sequences, with a confidence bound for each.
+- finds [historically conserved sequences](https://shanweera.github.io/dima-perf/latest/reference/glossary/#historically-conserved-sequence-hcs),
+  with a confidence bound for each.
 
 Results are identical on every platform, thread count and run, and every methodological choice
 is documented with its sources.
@@ -47,18 +55,27 @@ cargo install --locked --git https://github.com/ShanWeera/dima-perf --tag v1.1.1
 A Bioconda package (and with it BioContainers Docker and Apptainer images) will follow; the
 recipe is in [`packaging/bioconda`](packaging/bioconda).
 
-**Desktop app.** The same release has a macOS disk image, Windows installers and Linux
-AppImage, `.deb` and `.tar.gz` packages. They are not code-signed yet; the
-[installation guide](https://shanweera.github.io/dima-perf/) explains the first launch.
+The archives also hold shell completions for bash, zsh, fish, PowerShell and elvish
+(`completions/`; `dima completions SHELL` prints them too) and, for Linux and macOS, manual pages
+(`man/man1/`).
+
+**Desktop app.** The same release has a macOS disk image, a Windows installer (`.msi`, x86_64)
+and Linux AppImage, `.deb` and `.tar.gz` packages; they contain the app only, not `dima`. They
+are not code-signed yet; the
+[installation guide](https://shanweera.github.io/dima-perf/latest/getting-started/install/)
+explains how to install, start and remove the app, and the first launch.
 
 ## Quick start
 
 ```sh
-# Analyse the MERS-CoV spike protein alignment of the paper (Fig. 1C): JSON results
-dima analyze -i samples/mers_spike_aa.fasta -o mers.json
+# The MERS-CoV spike protein alignment of the paper (Fig. 1C); the archives hold no samples
+curl -fLO https://raw.githubusercontent.com/ShanWeera/dima-perf/master/samples/mers_spike_aa.fasta
+
+# Analyse it: JSON results
+dima analyze -i mers_spike_aa.fasta -o mers.json
 
 # The same as four tidy tables, plus the conserved sequences
-dima analyze -i samples/mers_spike_aa.fasta --tsv-dir tables --hcs-output mers.hcs.json
+dima analyze -i mers_spike_aa.fasta --tsv-dir tables --hcs-output mers.hcs.json
 
 # Metadata from '|'-separated headers, stratified by host and country
 dima analyze -i alignment.fasta.gz --header-format 'Accession|Host|Country|Year' \
@@ -85,13 +102,15 @@ Input can be plain, gzip, bzip2 or zstd FASTA, from a file, a pipe or standard i
   separate so the results stay byte-identical from run to run.
 
 Every JSON output has a [JSON Schema](schemas/). Exit codes: 0 success, 1 internal error,
-2 usage error, 3 input/output or system error, 4 invalid input data, 130/143/129 interrupted.
+2 usage error, 3 input/output or system error, 4 invalid input data, and 128 + N when signal N
+interrupted the run (130 Ctrl-C, 143 SIGTERM, 129 SIGHUP; see
+[Exit codes](https://shanweera.github.io/dima-perf/latest/reference/exit-codes/)).
 
 Numbers are written at full double precision. As in any floating-point program they carry a
-small rounding error: about the 14th significant digit on alignments of thousands of sequences,
-and no earlier than the 11th at 17.5 million sequences per position (the 10th for the opt-in
-similarity-weighted entropy). That is at least 10¹⁰ times smaller than the sampling error
-(10⁹ times for similarity-weighted entropy).
+small rounding error: in the last one or two of the 17 significant digits on the test datasets
+in the repository, and no earlier than the 11th at 17.5 million sequences per position (the 10th
+for the opt-in similarity-weighted entropy). That is at least 10¹⁰ times smaller than the
+sampling error (10⁹ times for similarity-weighted entropy).
 [Numerical accuracy](https://shanweera.github.io/dima-perf/latest/explanation/numerical-accuracy/)
 has the measurements, and explains why a prototyped fix for the last digits is deferred.
 
@@ -107,7 +126,9 @@ command-line and output reference.
 
 - [Frequently asked questions](https://shanweera.github.io/dima-perf/latest/getting-started/faq/)
   and [Troubleshooting](https://shanweera.github.io/dima-perf/latest/how-to/troubleshooting/),
-  which explains every error and warning.
+  which explains every error and warning, of the command line and of the desktop app, with its
+  cause and fix; the [Glossary](https://shanweera.github.io/dima-perf/latest/reference/glossary/)
+  defines every term.
 - Questions and ideas: [GitHub Discussions](https://github.com/ShanWeera/dima-perf/discussions).
 - Bugs: [GitHub Issues](https://github.com/ShanWeera/dima-perf/issues/new/choose).
 

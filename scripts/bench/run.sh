@@ -20,6 +20,11 @@ v509=""
 out="$root/BENCHMARK.md"
 while [ $# -gt 0 ]; do
   case "$1" in
+    -h|--help)
+      # The comment block above, without its leading "# ".
+      awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"
+      exit 0
+      ;;
     --quick) quick=1 ;;
     --dima) dima=$2; shift ;;
     --v509) v509=$2; shift ;;

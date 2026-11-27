@@ -8,7 +8,8 @@ use dima_core::output;
 
 use super::Context;
 use super::args::ViewArgs;
-use super::outputs;
+use super::destinations::{self, Destinations, Input};
+use super::outputs::{self, Folders};
 use super::ui;
 
 /// Runs `dima view`.
@@ -16,27 +17,35 @@ use super::ui;
 /// # Errors
 /// Errors reading the results or writing the outputs.
 pub fn run(a: &ViewArgs, ctx: &Context) -> Result<()> {
-    let plan_for = |base: &str| -> Result<outputs::Plan> {
-        let plan = outputs::plan(&a.output, None, None, base, std::io::stdout().is_terminal())?;
-        outputs::check_collisions(&plan, &[a.input.as_path()])?;
-        Ok(plan)
-    };
-    // Usage errors first, and the destinations opened, before a possibly large file is read.
-    let first = plan_for("dima")?;
+    let input = Input::of(Some(&a.input));
+    let terminal = std::io::stdout().is_terminal();
+    let mut folders = Folders::default();
+    // Usage errors first, and the destinations checked and opened, before a possibly large file
+    // is read. The `--tsv-dir` tables are named after the query, as `dima analyze --tsv-dir`
+    // names them, so they are listed, checked and opened once the results are read.
+    let early = Destinations::of(&a.output, None, None, None);
+    let first = outputs::plan(&a.output, &early, terminal)?;
+    destinations::check(&early, input)?;
     outputs::warn_unused_pretty(a.output.pretty, &first, ctx.verbosity);
-    let early = if a.output.tsv_dir.is_none() {
-        Some(outputs::Opened::open(&first, &ctx.signals.cancel)?)
+    let opened = if a.output.tsv_dir.is_none() {
+        Some(outputs::Opened::open(
+            &first,
+            &mut folders,
+            &ctx.signals.cancel,
+        )?)
     } else {
         None
     };
     let results = output::read_results(&a.input)?;
     let named;
-    let (plan, opened) = match early {
+    let (plan, opened) = match opened {
         Some(opened) => (&first, opened),
         None => {
-            // The tables are named after the query, as `dima analyze --tsv-dir` names them.
-            named = plan_for(&results.query_name)?;
-            (&named, outputs::Opened::open(&named, &ctx.signals.cancel)?)
+            let all = Destinations::of(&a.output, None, None, Some(&results.query_name));
+            named = outputs::plan(&a.output, &all, terminal)?;
+            destinations::check(&all, input)?;
+            let opened = outputs::Opened::open(&named, &mut folders, &ctx.signals.cancel)?;
+            (&named, opened)
         }
     };
     report_schema(&results, plan, ctx);
@@ -45,7 +54,14 @@ pub fn run(a: &ViewArgs, ctx: &Context) -> Result<()> {
     } else {
         None
     };
-    opened.write(Some(&results), hcs.as_ref(), &|| ctx.signals_check())?;
+    // A reader of standard output that went away (`| head`) ends that output only.
+    outputs::unless_reader_gone(opened.write(
+        Some(&results),
+        hcs.as_ref(),
+        &|| ctx.signals_check(),
+        &ctx.ledger,
+    ))?;
+    folders.keep();
     if plan
         .outputs
         .iter()
