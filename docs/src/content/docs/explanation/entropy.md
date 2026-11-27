@@ -39,9 +39,36 @@ MERS-CoV spike position 25, ten variants of which the Index carries 76% give 1.4
 below the 3.32 bits of ten equally common ones. The bound is that of the observed entropy; the
 corrected entropy estimates that of the population.
 
-<!-- PHASE0: what the size of an entropy value means (the effective number 2^H: Leinster &
-Cobbold 2012, Jost 2006 or Hill 1973), per the research results; only the arithmetic is written
-above. -->
+**The effective number of variants.** An entropy is easier to read as a count: $2^H$ is the
+number of *equally common* variants that would give the same entropy. Ecology calls this the
+Hill number of order 1, or Shannon diversity, and expresses diversity in "effective numbers": *"the
+number of equally abundant species that would be needed to give the same value of a diversity
+measure"* [@chao2014, p. 48]; the effective number of species is $\exp(H)$, the exponential of the
+entropy in natural logarithms [@chao2013, Introduction; @chao2014, Eq. 3b]. DiMA's entropies are in
+bits, so the same number is $2^H$ (a change of base, nothing more):
+
+| Entropy | Effective number of variants |
+|---|---|
+| 0 bits | 1: one k-mer in every sequence |
+| 1 bit | 2 equally common k-mers |
+| 1.4617 bits (MERS-CoV spike position 25, corrected) | about 2.75 |
+| 2 bits | 4 |
+| 5.3504 bits (HIV-1 *pol* DNA, eligible mean) | about 41 |
+| 9.4755 bits (HIV-1 *pol* DNA, most diverse position) | about 712 |
+
+So position 25, with ten distinct 9-mers of which one carries 76% of the sequences, is as diverse
+as fewer than three equally common ones. The effective number is a reading aid that DiMA does not
+report: it inherits every limitation of the entropy it comes from, including its dependence on
+the number of sequences, so read it next to the support and the sample coverage. The concept was
+developed for species in an ecological community [@chao2014]; applying it to the k-mers of an
+alignment position is DiMA's reading, as for [similarity-weighted entropy](#similarity-weighted-entropy-opt-in).
+
+**The largest possible entropy** of a k-mer, when every possible k-mer is equally common, is
+$\log_2$ of the number of possible k-mers: about 39 bits for a 9-residue protein k-mer
+($\log_2 20^9$) and 54 bits for a 27-nucleotide one ($\log_2 4^{27}$); real alignments stay far
+below it, *"in practice, however, the upper bound is very much lower for alignments of closely
+related sequences"* [@khan2008, Results; @tharanga2025, Methods and Results]. At a position the observed
+entropy is also at most $\log_2 N$, since there cannot be more variants than sequences.
 
 ## The paper's correction (Fig. 2)
 
@@ -592,7 +619,7 @@ one sample but not for the other (see [Comparison with the papers](/explanation/
 The three values describe the k-mers observed at a position, not the population they were
 sampled from, and none of them is corrected for sample size. Observed entropy is lower on average
 with fewer sequences [@zhao2019, Section 3.1], normalised entropy also depends on sample size
-[@gregori2014, Sections 2.4 and 3.2], and similarity-weighted entropy changes too: with fewer
+[@gregori2014, Sections 2.4 and 3.2; @chao2014, Discussion, p. 64], and similarity-weighted entropy changes too: with fewer
 sequences the values can be higher or lower. Table 1 shows this at MERS-CoV spike position 25 by
 averaging each value over every subset of $n$ of the position's sequences; its last row is the
 position itself. The observed and similarity-weighted entropies fall as $n$ falls, while the
@@ -659,7 +686,8 @@ without bound as $p \to 0$, which a polynomial's never does.
 support can rank differently from their populations, as shown for observed and normalised entropy
 [@zhao2019, Section 3.1; @gregori2014, Section 3.2]. Compare positions of similar support and
 similar sample coverage (both are reported): equally complete samples can be compared directly,
-as shown for species richness [@chao2012, p. 2538]. For quasispecies data, Gregori et al. recommend rarefying the larger sample
+as shown for species richness [@chao2012, p. 2538] and extended to Shannon diversity
+[@chao2014, Discussion]. For quasispecies data, Gregori et al. recommend rarefying the larger sample
 to the size of the smaller by repeated subsampling without replacement [@gregori2014, Sections
 2.5 and 3.2]; DiMA does not.
 

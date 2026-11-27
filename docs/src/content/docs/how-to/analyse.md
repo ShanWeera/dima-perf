@@ -410,12 +410,90 @@ eligible HIV-1 positions (support 105, below $1.25\,T = 125$) keep their observe
 the `entropy_fallback` count of [Choose the support threshold](#choose-the-support-threshold)
 shows (`{"corrected":474,"too_few_points":2}`).
 
-<!-- PHASE0: research-backed guidance on reading the comparison goes here: how the paper and its
-lineage compare diversity between proteins or datasets (tharanga2025, hu2013, khan2008), what a
-difference in entropy means in size (effective number 2^H: Leinster & Cobbold 2012, Jost 2006 or
-Hill 1973), and how to compare datasets of different size (rarefaction or coverage-based
-subsampling: Gregori 2014 §2.5/3.2, chao2012; Chao et al. 2014). Add only statements read in
-full, with their locators. -->
+### Read the comparison
+
+DiMA's entropies can be compared across alignments of different size because the paper's
+estimator corrects for the number of sequences, which the DiMA lineage introduced "so that
+alignment sequence counts could be ignored in comparisons" [@khan2008, Methods]; the correction
+applies to eligible positions only [@tharanga2025, Methods], which is why the comparison above
+uses the eligible summary. The lineage compares proteins in three ways:
+
+- **The eligible mean, per protein or per region**: the paper compares the spike's subunits this
+  way (S1 about 0.40 bits, S2 about 0.18) [@tharanga2025, Results].
+- **The highest entropy**, as a coarse benchmark between viruses: about 9.2 bits for HIV-1, 6 for
+  avian influenza, 4 for dengue and 2 for West Nile virus, all as 9-mers [@hu2013, Results],
+  which the paper suggests "may be used as a benchmark for comparative proteome diversity
+  dynamics analyses" [@tharanga2025, Methods].
+- **The share of positions at each level of conservation**, by the incidence of the Index:
+  highly conserved at 90% or more, mixed-variable between 20% and 90%, highly diverse at 20% or
+  less, counted over positions with enough support [@hu2013, Fig. 3 and Methods; @raman2020,
+  Methods]:
+
+```sh
+jq -c '[.results[] | select(.low_support == null)
+        | ([.diversity_motifs[] | select(.motif_short == "I") | .incidence] | max // 0)]
+       | {positions: length, highly_conserved: map(select(. >= 90)) | length,
+          mixed_variable: map(select(. > 20 and . < 90)) | length,
+          highly_diverse: map(select(. <= 20)) | length}' mers.json hiv.json
+```
+
+```text
+{"positions":1345,"highly_conserved":1320,"mixed_variable":25,"highly_diverse":0}
+{"positions":476,"highly_conserved":128,"mixed_variable":336,"highly_diverse":12}
+```
+
+98.1% of the eligible MERS-CoV spike positions are highly conserved, against 26.9% of the
+eligible HIV-1 *pol* positions. (A position where no 9-mer occurs twice has no Index and counts
+as 0%.)
+
+To see what a difference in entropy amounts to, turn each entropy into its
+[effective number of variants](/explanation/entropy/#observed-plug-in-entropy), $2^H$: the
+eligible means above, 0.1261 and 1.9072 bits, are those of about 1.09 and 3.75 equally common
+9-mers.
+
+**Datasets of very different size.** Entropy computed from counts falls when fewer sequences are
+available, so two datasets of very different size can rank the wrong way round [@zhao2019,
+Section 3.1]. The paper's correction removes much of that effect at eligible positions, not all
+of it. Three ways to check a comparison, in increasing order of effort:
+
+1. **Compare at similar completeness.** Samples that are equally complete, by their sample
+   coverage, "can be compared directly, without any need for rarefaction" [@chao2012, p. 2538],
+   a reasoning later extended from species richness to Shannon diversity [@chao2014,
+   Discussion]. Report `coverage_summary` for both runs, and flag positions below the coverage
+   you are willing to compare with `--min-coverage`.
+2. **Use another corrected estimator.** `--estimator chao-wang-jost` is an estimator its authors
+   found "nearly unbiased when sample size is not unreasonably small" [@chao2013, Results]. A
+   conclusion that holds with both estimators is sturdier.
+3. **Subsample to equal size and repeat.** Draw the larger alignment down to the size of the
+   smaller several times and look at the spread, as has been done for viral sequence data (ten
+   replicate downsamplings, reported as the mean and ±2 standard deviations) [@zhao2019,
+   Section 2.2 and Fig. 4]. With [seqkit](https://bioinf.shenwei.me/seqkit/) [@shen2016;
+   @shen2024], 20 replicates of 191 HIV-1 sequences (the size of the MERS-CoV sample), each
+   shuffled with its own seed so that it can be repeated:
+
+```sh
+for i in $(seq 1 20); do
+  seqkit shuffle -s "$i" HIV1_ALL_2020_pol_PRO.fasta.bz2 | seqkit head -n 191 \
+    | dima analyze -q -i - --query-name "hiv_sub_$i" -o "hiv_sub_$i.json"
+done
+jq -s 'map(.average_entropy) | {min: min, max: max}' hiv_sub_*.json
+```
+
+   The last command prints the smallest and the largest of the 20 eligible means. With 191
+   sequences and the default $T = 100$, a position is eligible only where more than 100 of the
+   191 have a valid 9-mer, so compare also each run's `eligible_position_count`.
+
+Subsampling whole sequences does not give every position the same support, because support
+varies between positions; and the size-based and coverage-based ways can rank samples
+differently for Shannon diversity [@chao2014, Discussion], so say which one you used. DiMA
+reports no test of whether two means differ, and none of the lineage's papers gives one; where
+such statistics are compared, an estimate of their uncertainty should be made as well
+[@zhao2019, Section 4].
+
+**Build the alignments the same way.** The DiMA lineage removed duplicate sequences and
+near-empty columns before analysing, because "proteins that have a high fraction of gaps have
+reduced statistical support, yielding an artificially low entropy value" [@khan2008, Methods;
+@raman2020, Methods]. Report how each alignment was made.
 
 ## Speed
 

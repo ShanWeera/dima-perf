@@ -53,11 +53,11 @@ regions flagged, with lower bounds of 29.2% and 15.8%. See
 | Line-wrapped FASTA | lines joined after trimming their ends | all white space inside sequence lines ignored | FASTA files are commonly wrapped; formatting must not change results |
 | Lines before the first record | any line, even a blank one, stops the program | blank and white-space-only lines skipped; anything else is an error with its line and column | they carry no data; MAFFT, Clustal Omega and EMBOSS, which these pages recommend, skip them too |
 | Case | case-sensitive (`a` and `A` differ) | folded to upper case, count reported | soft-masked and lower-case alignments are common |
-| Alphabet | not detected | detected with the rules of `esl_abc_GuessAlphabet` in Easel, the sequence library of HMMER [@eddy2011], or set with `--alphabet` | no false calls; asks when undetermined |
+| Alphabet | not detected | detected with the rules of `esl_abc_GuessAlphabet` in Easel, the sequence library of HMMER [@eddy2011], or set with `--alphabet` | no false calls [@easel]; asks when undetermined |
 | T and U | different symbols | one symbol, spelled per alphabet | a mixed T/U file is a formatting artefact |
 | Protein U and O | excluded | residues | selenocysteine and pyrrolysine are encoded amino acids [@bock1991; @srinivasan2002] |
 | Nucleotide X and I | residues | ambiguity codes, excluded | not one of A, C, G, T/U [@cornishbowden1985] |
-| `.` `*` `#` `$` and spaces between residues | residues | gap, stop, frameshift, stop: excluded; spaces ignored | the symbol conventions of LANL alignments [@lanlcodes] and of Easel, the sequence library of HMMER [@eddy2011] |
+| `.` `*` `#` `$` and spaces between residues | residues | gap, stop, frameshift, stop: excluded; spaces ignored | the symbol conventions of LANL alignments [@lanlcodes] and of Easel, the sequence library of HMMER [@eddy2011; @easel] |
 | Other characters (digits, punctuation) | residues | an error (strict) or excluded with a warning | a digit or stray symbol is never a residue |
 
 ## Headers and metadata

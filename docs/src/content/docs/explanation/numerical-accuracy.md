@@ -5,9 +5,10 @@ description: How accurate DiMA's floating-point results are, measured up to the 
 
 DiMA computes in IEEE 754 double precision, where every operation rounds to about 16 significant
 digits. This page measures how much that rounding adds up to at the sizes DiMA is used for, and
-compares it with the uncertainty that comes from sampling. Analysing round-off in this way, and
-showing that it is tolerable, is what the field's software-quality literature asks of
-scientific software [@darriba2018; @eddy2011].
+compares it with the uncertainty that comes from sampling. Analysing round-off in this way is
+what the field's software-quality literature asks of scientific software [@darriba2018], and it
+is what HMMER does for its own reduced-precision scores, concluding that their accumulated error
+is tolerable [@eddy2011, Results].
 
 ## Summary
 
@@ -390,8 +391,11 @@ the exact $\alpha/2$ also the conserved-sequence tables.
 3. **What the field asks for is analysis, not last-digit accuracy.** Darriba et al. ask
    developers to analyse round-off. They also show two runs that differed only in round-off
    giving different trees, which likelihood-based significance tests could not tell apart
-   [@darriba2018]. HMMER justifies even reduced precision by a numerical stability analysis
-   showing that the accumulated error is tolerable [@eddy2011]. This page is that analysis.
+   [@darriba2018]. HMMER justifies even 8-bit scores by analysing underflow, overflow and
+   accumulated round-off and measuring it against a full-precision implementation, finding the
+   error "tolerable" for a filter whose surviving sequences are then rescored at full precision
+   [@eddy2011, Results, "Analysis of consequences of reduced numerical precision"]. This page is
+   that analysis, for values DiMA reports rather than filters on.
 4. **Established practice.** Tools fix floating-point precision in ordinary releases, for example
    scikit-bio 0.2.3, bcftools 1.13 and SciPy 1.7.0 by their release notes. They promise
    identical numbers only for the same version: HMMER's user guide points to its archived

@@ -122,9 +122,13 @@ shows which numbers to set side by side — the eligible mean, the share of the 
 covers, and the support behind it — with a worked example. See also
 [Entropy and its correction](/explanation/entropy/).
 
-<!-- PHASE0: research-backed guidance on comparing diversity between proteins or datasets (how the
-paper and its lineage compare them; what a difference in entropy means; datasets of different
-size) goes here, consistent with how-to/analyse.md "Compare two alignments". -->
+The DiMA lineage compares proteins by their mean entropy over eligible positions, by their
+highest entropy, and by the share of positions that are highly conserved (Index incidence of 90%
+or more), mixed-variable or highly diverse (20% or less) [@tharanga2025, Results; @hu2013,
+Results and Fig. 3]. It reports no statistical test of a difference, and neither does DiMA.
+Datasets of very different size can still rank the wrong way round [@zhao2019, Section 3.1]:
+[Read the comparison](/how-to/analyse/#read-the-comparison) gives three ways to check, from
+comparing at similar sample coverage to subsampling the larger dataset.
 
 The optional similarity-weighted and normalised entropies need the same care, and they are not
 corrected for sample size at all: the observed entropy is lower on average with fewer sequences

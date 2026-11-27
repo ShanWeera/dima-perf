@@ -137,9 +137,27 @@ nonamer sequence", and their table marks such positions: "Positions that do not 
 concatenating criteria are indicated as small letter case" [@raman2020, Methods and Table 3]; Hu
 et al. give their statistics per nonamer position [@hu2013, Results].
 
-<!-- PHASE0: further reading of conserved regions below 100% (raman2020 Table 3 note; hu2013
-"Index Switching"; bui2007's whole-epitope definition), per the research results. Only the
-arithmetic and the two quotations above are written. -->
+Per-position agreement overstates agreement over a longer stretch, as the lineage measured
+directly: individual HIV-1 sequences matched the historical Index at more than 82% of single
+amino acids, but only 61% (HXB2) and 49% (C1P) of their 9-mers matched the Index 9-mers, so
+"approximately half of the overlapping nonamer sequences of a given HIV-1 strain can be expected
+to differ from the historical index sequences" [@hu2013, Results]. Hu et al. also describe
+**index switching**: positions where the most common k-mer is not the continuation of the
+preceding position's, revealed by "amino acid mutations that did not follow the consecutive
+concatenation of the index sequences" [@hu2013, Results]. Where an overlapping k-mer disagrees
+with a region, DiMA starts a new one and marks it `split_from_previous`.
+
+When the share of sequences carrying a whole stretch is the question, it is a measure of its own:
+in epitope analysis, conservancy is "the fraction of protein sequences that contain the epitope
+considered at or above a specified level of identity" [@bui2007, Background], and the DiMA
+lineage selected its pan-dengue sequences that way, keeping only "sequence fragments that were
+identical in at least 80% of the sequences of each of the 4 types" [@khan2008, Methods]. So
+below 100%, read `min_incidence` as an upper bound on the share of the alignment's sequences that
+carry the whole region (no more sequences can carry it than carry the Index at any one member, and
+each member's support is at most the number of sequences), say so when you report it, and count
+the carriers in the alignment when that share matters (the recipe in [Find conserved sequences](/how-to/conserved-sequences/)). No published
+rule converts per-position incidences into a whole-region share: the positions are not
+independent, so multiplying their incidences would be wrong.
 
 The member positions, their k-mers and bounds are in the conserved-sequences JSON (`members`);
 the TSV table gives the region-level values only (see [TSV tables](/reference/tsv/#hcs)).

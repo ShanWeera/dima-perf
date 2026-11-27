@@ -85,9 +85,34 @@ The 170 sequences are the position's support. *Camelus dromedarius* carries 9 of
 from saved results: `dima view -i mers.json -O tsv --table metadata` writes the table to standard
 output.
 
-<!-- PHASE0: how to read a variant's metadata counts against the position's background mix
-(tharanga2025's relative incidence; any lineage paper), per the research results. Only the
-arithmetic is written above. -->
+### Read the counts with care
+
+The paper calls a value's share of a variant's own sequences its **relative incidence**
+[@tharanga2025, Methods]: the 64.3% above. Comparing it with the position's mix (33.5%) shows that
+the Major variant is found more often in dromedaries than the position as a whole, but DiMA does
+not test that difference, and neither the paper nor the studies it builds on define a measure of
+enrichment for it. The paper goes no further than *"Such a distribution may suggest regional
+adaptation and selective pressures favoring the specific 9-mer"* [@tharanga2025, Results]. Treat a
+difference as something to look into, not as a result, for three reasons:
+
+- **The counts describe the sequences in your file, which describe who sequenced what.** For
+  SARS-CoV-2, high-income countries submitted ten times more sequences per reported case than
+  low- and middle-income countries, and the number of lineages seen in a country followed the
+  number of its genomes; such counts *"can only tell if a lineage is present, not how prevalent
+  it is"* [@brito2022, Results].
+- **Public databases hold duplicates** of the same isolate, which the paper suggests checking by
+  analysing the data with and without them [@tharanga2025, Methods], and they often record little
+  about each isolate's history [@hu2013, Methods].
+- **Small numbers.** A share of 64.3% here rests on 14 sequences; *"Ideally, large sample size is
+  preferred to mitigate the effect of any potential data biases"* [@tharanga2025, Methods].
+
+In practice: report a variant's counts *and* the position's totals for the same field, as above;
+expect a field that one value dominates (99% of the sequences from one host) to show that value
+for almost every variant; compare shares over time as the paper does, the Index's falling
+monthly share against the Major variant's rising one over the same months [@tharanga2025,
+Results]; and to compare hosts or countries, split the alignment and analyse each group on its
+own, as the DiMA lineage compared avian and human influenza [@raman2020, Discussion] (see
+[How do I get the entropy per host, country or year?](/getting-started/faq/#how-do-i-get-the-entropy-per-host-country-or-year)).
 
 ### Dates and other fine-grained values
 
