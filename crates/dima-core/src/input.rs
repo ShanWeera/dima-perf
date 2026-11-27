@@ -277,12 +277,12 @@ fn read_up_to(r: &mut impl Read, buf: &mut [u8]) -> io::Result<usize> {
 
 /// What the first bytes of the stored data say.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Sniffed {
+pub(crate) enum Sniffed {
     Supported(Compression),
     Unsupported(&'static str, &'static str),
 }
 
-fn sniff(prefix: &[u8]) -> Sniffed {
+pub(crate) fn sniff(prefix: &[u8]) -> Sniffed {
     use Compression as C;
     match prefix {
         [0x1F, 0x8B, ..] => Sniffed::Supported(C::Gzip),

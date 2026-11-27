@@ -51,6 +51,26 @@ pub fn file_stem(name: &str) -> String {
     }
 }
 
+/// The number of leading bytes [`unreadable_results_compression`] needs to recognise every
+/// format it names.
+pub const RESULTS_SIGNATURE_LEN: usize = 6;
+
+/// The compression or archive format of a results file that DiMA cannot read results from,
+/// named in words (for example `bzip2`), from the file's first bytes; `None` for plain text,
+/// gzip and Zstandard, which [`read_results`] reads. Alignments are also read when compressed
+/// with bzip2, but results are not, so the command line and the desktop app can say so
+/// instead of calling the file "not a DiMA results file".
+#[must_use]
+pub fn unreadable_results_compression(prefix: &[u8]) -> Option<&'static str> {
+    use crate::input::Sniffed;
+    use crate::model::Compression;
+    match crate::input::sniff(prefix) {
+        Sniffed::Supported(Compression::Bzip2) => Some("bzip2"),
+        Sniffed::Supported(_) => None,
+        Sniffed::Unsupported(name, _) => Some(name),
+    }
+}
+
 /// Serialisation format of an output.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum OutputFormat {
@@ -949,6 +969,22 @@ pub fn check_finite_hcs(h: &HcsResults) -> Result<()> {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    #[test]
+    fn unreadable_results_compressions_are_named() {
+        let f = unreadable_results_compression;
+        assert_eq!(f(b"BZh91AY&SY"), Some("bzip2"));
+        assert_eq!(f(&[0xFD, b'7', b'z', b'X', b'Z', 0x00]), Some("xz (.xz)"));
+        assert_eq!(f(&[b'P', b'K', 0x03, 0x04, 0, 0]), Some("a zip archive"));
+        assert_eq!(
+            f(&[b'7', b'z', 0xBC, 0xAF, 0x27, 0x1C]),
+            Some("a 7z archive")
+        );
+        assert_eq!(f(&[0x1F, 0x8B, 8, 0, 0, 0]), None);
+        assert_eq!(f(&[0x28, 0xB5, 0x2F, 0xFD, 0, 0]), None);
+        assert_eq!(f(b"{\"sch"), None);
+        assert_eq!(f(b""), None);
+    }
 
     #[test]
     fn file_stems_are_safe_names() {
