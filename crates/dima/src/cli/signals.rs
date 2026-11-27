@@ -1,11 +1,13 @@
 //! Interrupts and termination (D65, D96).
 //!
 //! The first SIGINT/SIGTERM/SIGHUP (Ctrl-C/Ctrl-Break/console close on Windows) sets the
-//! cancellation flag the analysis polls; the run then stops, its sinks are dropped (removing
-//! their temporary files) and the process ends *by the same signal*, so shells and workflow
-//! managers see the conventional status (130, 143, 129). A second signal, or 3 seconds without
-//! progress, removes any remaining temporary files and ends the process at once. Signals that
-//! were ignored when the process started (`nohup`, background jobs) stay ignored.
+//! cancellation flag the analysis polls and prints a notice naming it; the run then stops, its
+//! sinks are dropped (removing their temporary files) and the process ends *by the same
+//! signal*, so shells and workflow managers see the conventional status (130, 143, 129). A
+//! second signal, or the end of a grace period of 3 seconds that starts with the first signal
+//! (however the run is progressing), removes any remaining temporary files and ends the
+//! process at once. Signals that were ignored when the process started (`nohup`, background
+//! jobs) stay ignored.
 //!
 //! On Unix the other signals that end a process by default and that batch systems send ahead
 //! of a limit are handled like SIGTERM: SIGUSR1 and SIGUSR2 (Grid Engine's warnings before a
@@ -46,6 +48,35 @@ impl Signals {
     /// Ends the process the way the received signal would have (call after cleaning up).
     pub fn terminate(&self) -> ! {
         terminate(self.received.load(Ordering::SeqCst), self.exit_code())
+    }
+}
+
+/// The notice of the first interrupt, `name`d as the user knows it (`Ctrl-C`, `Ctrl-Break`,
+/// `SIGTERM`): a key is pressed again to stop at once; a signal another program sent is sent
+/// again.
+#[cfg_attr(not(any(unix, windows)), allow(dead_code))]
+fn notice(name: &str) -> String {
+    if name == "Ctrl-C" {
+        "cancelling... (press Ctrl-C again to stop immediately)".to_owned()
+    } else if name.starts_with("Ctrl-") {
+        format!("cancelling on {name}... (press {name} again to stop immediately)")
+    } else {
+        format!("cancelling on {name}... (a second signal stops immediately)")
+    }
+}
+
+/// The name of a handled signal for [`notice`]: SIGINT is Ctrl-C on a terminal.
+#[cfg(unix)]
+const fn signal_name(sig: i32) -> &'static str {
+    match sig {
+        libc::SIGINT => "Ctrl-C",
+        libc::SIGTERM => "SIGTERM",
+        libc::SIGHUP => "SIGHUP",
+        libc::SIGUSR1 => "SIGUSR1",
+        libc::SIGUSR2 => "SIGUSR2",
+        libc::SIGXCPU => "SIGXCPU",
+        libc::SIGALRM => "SIGALRM",
+        _ => "a signal",
     }
 }
 
@@ -159,10 +190,7 @@ pub fn install(announce: bool) -> std::io::Result<Signals> {
                         } else {
                             ""
                         };
-                        let _ = writeln!(
-                            std::io::stderr(),
-                            "{fresh}cancelling... (press Ctrl-C again to stop immediately)"
-                        );
+                        let _ = writeln!(std::io::stderr(), "{fresh}{}", notice(signal_name(sig)));
                     }
                     let code = s.exit_code();
                     let _ =
@@ -226,10 +254,12 @@ mod windows {
                         } else {
                             "\n"
                         };
-                        let _ = writeln!(
-                            std::io::stderr(),
-                            "{fresh}cancelling... (press Ctrl-C again to stop immediately)"
-                        );
+                        let name = if ctrl == CTRL_BREAK_EVENT {
+                            "Ctrl-Break"
+                        } else {
+                            "Ctrl-C"
+                        };
+                        let _ = writeln!(std::io::stderr(), "{fresh}{}", super::notice(name));
                     }
                     TRUE
                 } else {
@@ -285,4 +315,39 @@ pub fn install(_announce: bool) -> std::io::Result<Signals> {
         cancel: Arc::new(AtomicBool::new(false)),
         received: Arc::new(AtomicI32::new(0)),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_notice_names_the_interrupt() {
+        assert_eq!(
+            super::notice("Ctrl-C"),
+            "cancelling... (press Ctrl-C again to stop immediately)"
+        );
+        assert_eq!(
+            super::notice("Ctrl-Break"),
+            "cancelling on Ctrl-Break... (press Ctrl-Break again to stop immediately)"
+        );
+        assert_eq!(
+            super::notice("SIGTERM"),
+            "cancelling on SIGTERM... (a second signal stops immediately)"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn every_handled_signal_has_a_name() {
+        for sig in [
+            libc::SIGTERM,
+            libc::SIGHUP,
+            libc::SIGUSR1,
+            libc::SIGUSR2,
+            libc::SIGXCPU,
+            libc::SIGALRM,
+        ] {
+            assert!(super::signal_name(sig).starts_with("SIG"), "{sig}");
+        }
+        assert_eq!(super::signal_name(libc::SIGINT), "Ctrl-C");
+    }
 }
