@@ -208,7 +208,8 @@ fn command_section(out: &mut String, cmd: &Command, title: &str) {
         out.push('\n');
     }
     if is_root {
-        out.push_str(
+        let version = dima_core::citations::SOFTWARE_VERSION;
+        out.push_str(&format!(
             "### Help and version\n\n\
              Every command also takes these options.\n\n\
              #### `-h, --help`\n\n\
@@ -216,10 +217,10 @@ fn command_section(out: &mut String, cmd: &Command, title: &str) {
              page. `dima help` and `dima help COMMAND` print the same as `dima --help` and \
              `dima COMMAND --help`. Help is printed on standard output, with status 0.\n\n\
              #### `-V, --version`\n\n\
-             Prints the version, such as `dima 1.2.0`, and exits with status 0. After a \
-             subcommand it names that subcommand: `dima analyze --version` prints \
-             `dima-analyze 1.2.0`.\n\n",
-        );
+             Prints the version (`dima {version}`) and exits with status 0. After a subcommand \
+             it names that subcommand: `dima analyze --version` prints \
+             `dima-analyze {version}`.\n\n",
+        ));
     } else {
         out.push_str(
             "Global options (`--color`, `-q`, `-v`) and `-h`/`--help`, `-V`/`--version` apply to \

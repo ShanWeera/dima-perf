@@ -67,7 +67,7 @@ Every command also takes these options.
 
 #### `-V, --version`
 
-Prints the version, such as `dima 1.2.0`, and exits with status 0. After a subcommand it names that subcommand: `dima analyze --version` prints `dima-analyze 1.2.0`.
+Prints the version (`dima 1.2.0`) and exits with status 0. After a subcommand it names that subcommand: `dima analyze --version` prints `dima-analyze 1.2.0`.
 
 ## `dima analyze`
 

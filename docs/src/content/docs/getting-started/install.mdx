@@ -11,7 +11,7 @@ other software installed (on Linux the desktop app uses the system's graphics: X
 and Vulkan or OpenGL, present on any desktop), published for 64-bit Linux, macOS and Windows on
 x86_64 and ARM64 (the desktop app for Windows on x86_64 only) on the
 [releases page](https://github.com/ShanWeera/dima-perf/releases). The commands below use version
-1.1.1; replace it with the release you want.
+1.2.0; replace it with the release you want.
 
 ## Command line
 
@@ -20,7 +20,7 @@ x86_64 and ARM64 (the desktop app for Windows on x86_64 only) on the
 
 Choose the build for your system:
 
-| System | Archive (`dima-1.1.1-….tar.gz`) |
+| System | Archive (`dima-1.2.0-….tar.gz`) |
 |---|---|
 | x86_64 with glibc 2.17 or newer: CentOS/RHEL 7 and later, Rocky and Alma Linux, Ubuntu, Debian, most HPC clusters | `x86_64-unknown-linux-gnu` |
 | ARM64 with glibc 2.28 or newer: RHEL/Rocky 8 and later, Ubuntu 18.10 and later, Debian 10 and later | `aarch64-unknown-linux-gnu` |
@@ -30,7 +30,7 @@ Choose the build for your system:
 builds are fully static and use the mimalloc allocator to stay fast with many threads.
 
 ```sh
-VERSION=1.1.1
+VERSION=1.2.0
 TARGET=x86_64-unknown-linux-gnu
 BASE=https://github.com/ShanWeera/dima-perf/releases/download/v$VERSION
 curl -fLO "$BASE/dima-$VERSION-$TARGET.tar.gz"
@@ -58,7 +58,7 @@ One archive per processor: `aarch64-apple-darwin` for Apple silicon (M1 and late
 `x86_64-apple-darwin` for Intel Macs (`uname -m` prints `arm64` or `x86_64`).
 
 ```sh
-VERSION=1.1.1
+VERSION=1.2.0
 TARGET=aarch64-apple-darwin
 BASE=https://github.com/ShanWeera/dima-perf/releases/download/v$VERSION
 curl -fLO "$BASE/dima-$VERSION-$TARGET.tar.gz"
@@ -88,7 +88,7 @@ One archive per processor: `x86_64-pc-windows-msvc` for most PCs, `aarch64-pc-wi
 ARM64 devices. In PowerShell:
 
 ```powershell
-$Version = "1.1.1"
+$Version = "1.2.0"
 $Target = "x86_64-pc-windows-msvc"
 $Base = "https://github.com/ShanWeera/dima-perf/releases/download/v$Version"
 Invoke-WebRequest "$Base/dima-$Version-$Target.zip" -OutFile "dima-$Version-$Target.zip"
@@ -156,9 +156,9 @@ Besides the archives and desktop packages, every release on the
 | File | What it is |
 |---|---|
 | `SHA256SUMS` | The SHA-256 checksum of every other file ([Verify the download](#verify-the-download)) |
-| `dima-1.1.1-TARGET.cdx.json` | A software bill of materials (CycloneDX JSON) for each command-line build: every Rust package compiled into it, with its version and declared licence |
-| `dima-1.1.1-docs.tar.gz` | The documentation of this version, as published on the website (its links expect the website's address, `…/v1.1/`) |
-| `dima-1.1.1.intoto.jsonl` | The signed build-provenance attestations of the release files, in one bundle, to verify them offline: `gh attestation verify FILE --bundle dima-1.1.1.intoto.jsonl --repo ShanWeera/dima-perf` |
+| `dima-1.2.0-TARGET.cdx.json` | A software bill of materials (CycloneDX JSON) for each command-line build: every Rust package compiled into it, with its version and declared licence |
+| `dima-1.2.0-docs.tar.gz` | The documentation of this version, as published on the website (its links expect the website's address, `…/v1.2/`) |
+| `dima-1.2.0.intoto.jsonl` | The signed build-provenance attestations of the release files, in one bundle, to verify them offline: `gh attestation verify FILE --bundle dima-1.2.0.intoto.jsonl --repo ShanWeera/dima-perf` |
 
 ### Verify the download
 
@@ -167,7 +167,7 @@ carries a signed build-provenance attestation that ties each file to the release
 built it from the tagged source. With the GitHub CLI:
 
 ```sh
-gh attestation verify dima-1.1.1-x86_64-unknown-linux-gnu.tar.gz --repo ShanWeera/dima-perf
+gh attestation verify dima-1.2.0-x86_64-unknown-linux-gnu.tar.gz --repo ShanWeera/dima-perf
 ```
 
 ### Build from source
@@ -175,7 +175,7 @@ gh attestation verify dima-1.1.1-x86_64-unknown-linux-gnu.tar.gz --repo ShanWeer
 With Rust 1.85 or newer ([rustup](https://rustup.rs/)):
 
 ```sh
-cargo install --locked --git https://github.com/ShanWeera/dima-perf --tag v1.1.1 dima
+cargo install --locked --git https://github.com/ShanWeera/dima-perf --tag v1.2.0 dima
 ```
 
 `--locked` builds with exactly the dependency versions of the release. On Windows, `cargo install`
@@ -188,7 +188,7 @@ A build from source links the documentation of the development version (`…/lat
 release builds do, set `DIMA_RELEASE=1` while building:
 
 ```sh
-DIMA_RELEASE=1 cargo install --locked --git https://github.com/ShanWeera/dima-perf --tag v1.1.1 dima
+DIMA_RELEASE=1 cargo install --locked --git https://github.com/ShanWeera/dima-perf --tag v1.2.0 dima
 ```
 
 (In PowerShell, run `$env:DIMA_RELEASE = "1"` first.)
@@ -213,21 +213,21 @@ separately, as above, if you want it too.
 
 | Package | For |
 |---|---|
-| `DiMA-1.1.1-x86_64.AppImage`, `…-aarch64.AppImage` | any distribution: make it executable and run it |
-| `dima-gui_1.1.1_x86_64.deb`, `…_aarch64.deb` | Debian, Ubuntu and derivatives |
-| `dima-gui-1.1.1-x86_64-linux.tar.gz`, `…-aarch64-linux.tar.gz` | systems without FUSE, such as many HPC login nodes |
+| `DiMA-1.2.0-x86_64.AppImage`, `…-aarch64.AppImage` | any distribution: make it executable and run it |
+| `dima-gui_1.2.0_x86_64.deb`, `…_aarch64.deb` | Debian, Ubuntu and derivatives |
+| `dima-gui-1.2.0-x86_64-linux.tar.gz`, `…-aarch64-linux.tar.gz` | systems without FUSE, such as many HPC login nodes |
 
 **AppImage.** Make it executable and run it; there is nothing to install:
 
 ```sh
-chmod +x DiMA-1.1.1-x86_64.AppImage
-./DiMA-1.1.1-x86_64.AppImage
+chmod +x DiMA-1.2.0-x86_64.AppImage
+./DiMA-1.2.0-x86_64.AppImage
 ```
 
 The AppImage needs FUSE 2 (`libfuse2`, called `libfuse2t64` on Ubuntu 24.04); without it, run
 it with `--appimage-extract-and-run`, or use the `.tar.gz`. To remove it, delete the file.
 
-**.deb.** Install it with `sudo apt install ./dima-gui_1.1.1_x86_64.deb`, then start **DiMA**
+**.deb.** Install it with `sudo apt install ./dima-gui_1.2.0_x86_64.deb`, then start **DiMA**
 from the applications menu, or run `dima-gui` in a terminal. Remove it with
 `sudo apt remove dima-gui`.
 
@@ -236,14 +236,14 @@ and the licence of the bundled font (`OFL.txt`), and adds no menu entry or icon.
 run the program; to remove it, delete the folder:
 
 ```sh
-tar -xzf dima-gui-1.1.1-x86_64-linux.tar.gz
-./dima-gui-1.1.1-x86_64-linux/dima-gui
+tar -xzf dima-gui-1.2.0-x86_64-linux.tar.gz
+./dima-gui-1.2.0-x86_64-linux/dima-gui
 ```
 
 </TabItem>
 <TabItem label="macOS">
 
-`DiMA-1.1.1-universal.dmg` runs on Apple silicon and Intel Macs. Open it and drag DiMA to
+`DiMA-1.2.0-universal.dmg` runs on Apple silicon and Intel Macs. Open it and drag DiMA to
 Applications; then start DiMA from Applications or Launchpad.
 
 The app is not yet signed by an Apple developer certificate, so macOS blocks the first launch.
@@ -262,7 +262,7 @@ To remove the app, drag DiMA from Applications to the Bin (Trash).
 </TabItem>
 <TabItem label="Windows">
 
-`DiMA-1.1.1-x86_64.msi` installs the app on x86_64 PCs; there is no Windows ARM64 build of the
+`DiMA-1.2.0-x86_64.msi` installs the app on x86_64 PCs; there is no Windows ARM64 build of the
 desktop app yet.
 
 1. Download the `.msi` and open it (double-click it in **Downloads**).

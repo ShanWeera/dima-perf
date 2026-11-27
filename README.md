@@ -49,7 +49,7 @@ is documented with its sources.
 Or build it from source with Rust 1.85 or newer:
 
 ```sh
-cargo install --locked --git https://github.com/ShanWeera/dima-perf --tag v1.1.1 dima
+cargo install --locked --git https://github.com/ShanWeera/dima-perf --tag v1.2.0 dima
 ```
 
 A Bioconda package (and with it BioContainers Docker and Apptainer images) will follow; the
@@ -141,7 +141,7 @@ If you use DiMA, please cite the paper:
 
 and the version of the software you used:
 
-> Tharanga S. dima: sequence diversity dynamics analyser for viruses (Rust implementation), version 1.1.1 [software]. https://github.com/ShanWeera/dima-perf
+> Tharanga S. dima: sequence diversity dynamics analyser for viruses (Rust implementation), version 1.2.0 [software]. https://github.com/ShanWeera/dima-perf
 
 `dima cite` prints both (`--format bibtex`, `ris` or `cff` for reference managers), and `dima cite --from results.json` adds a methods paragraph with the references of the methods that run used. [`CITATION.cff`](CITATION.cff) holds the same metadata for GitHub's "Cite this repository".
 
@@ -160,10 +160,10 @@ and the version of the software you used:
   doi       = {10.1093/bib/bbae607},
 }
 
-@software{dima_rs_1_1_1,
+@software{dima_rs_1_2_0,
   author    = {{Tharanga}, Shan},
   title     = {{dima: sequence diversity dynamics analyser for viruses (Rust implementation)}},
-  version   = {1.1.1},
+  version   = {1.2.0},
   url       = {https://github.com/ShanWeera/dima-perf},
   note      = {Implements the method of Tharanga et al. 2025, doi:10.1093/bib/bbae607},
 }

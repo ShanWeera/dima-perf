@@ -47,7 +47,7 @@ The modules are layered: each uses only modules of the layers above it.
 | | `methods` | The methods paragraph and reference list of `dima cite --from` |
 | engine | `engine` | The streaming k-mer counter |
 | orchestration | `analysis` | `analyze()`: wires the steps together |
-| outputs | `output` | JSON, JSON Lines and TSV writers, the atomic file `Sink`, `read_results()` |
+| outputs | `output` | JSON, JSON Lines and TSV writers, the atomic file `Sink` and `written_in_place()` (the names it writes in place), `read_results()`, and `output::name::read_name()`, the one rule for what an output's name says (its format and compression, or why it is refused), shared by the command line and the desktop app |
 | | `run_report` | The run report |
 
 ### How an analysis flows
@@ -106,7 +106,11 @@ defines them, so the library's per-offset counting is tested against a different
 
 `crates/dima/src/cli`: `args` (the command-line syntax, with clap), `help` (help texts, with
 references from the registry), `analyze`, `view`, `hcs`, `cite` (the subcommands), `outputs`
-(planning and checking every output before the analysis starts), `threads` (the default thread
+(settling each output's format from its name and `-O`, then planning, opening and writing
+every output: files first, standard output last, with a ledger of the outputs committed so far
+for the messages of a cancelled or failed run), `destinations` (every file and folder a command
+writes, listed from its options alone, and the checks that no two are the same file and none is
+the input, run report first), `threads` (the default thread
 count from the scheduler's grant), `signals` (interruptions, cleanup and exit by signal),
 `progress` (the progress line redrawn on a terminal, or plain progress lines), `resources` (peak memory and CPU time) and `ui` (messages on
 standard error). Platform-specific `unsafe` code — signal handling, host name, resource usage — is
