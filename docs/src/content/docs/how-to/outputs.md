@@ -150,7 +150,8 @@ error: /dev/fd/3 and standard output are the same pipe: the results (-o) and the
 ```
 
 Devices and terminals take any number of outputs (`-o /dev/null -O json --hcs-output /dev/null`
-is fine), appending standard output to a log (`-o /dev/stdout -O json >> run.log`) is fine, the
+is fine; on Windows the null device is `NUL`, a name reserved in every folder, in any letter case,
+like `CON`, `PRN`, `AUX`, `COM1` to `COM9` and `LPT1` to `LPT9`), appending standard output to a log (`-o /dev/stdout -O json >> run.log`) is fine, the
 input may come from a pipe while the results go to another (`cat x.fasta | dima analyze > r.json`),
 and a hard link to the input is another name, which DiMA does not refuse: writing it replaces
 that name only. (Given to standard input, which has no name, the input is known by its inode

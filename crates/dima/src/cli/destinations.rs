@@ -283,7 +283,7 @@ impl Identity {
 
     fn of_path(path: &Path) -> Self {
         let meta = std::fs::metadata(path).ok();
-        if meta.as_ref().is_some_and(is_device) {
+        if meta.as_ref().is_some_and(is_device) || output::names_device(path) {
             return Self {
                 place: Place::Device,
                 inode: None,

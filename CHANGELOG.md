@@ -180,6 +180,9 @@ some output names that 1.1.1 accepted are now refused because they misstated wha
   `dima cite --from r.json >> r.json` appended the citation to the results, which were then no
   longer valid JSON. All are refused before anything runs, and a refused run report is not
   written.
+- On Windows, an output named `NUL` (the null device, the counterpart of `/dev/null`) failed
+  after the analysis ("cannot replace 'NUL'"); Windows' reserved device names are now written
+  in place, as devices are elsewhere, and take any number of outputs.
 - Two outputs written into one pipe or descriptor (`-o /dev/fd/3 -O json --hcs-output /dev/fd/3`)
   were mixed into one stream that neither format could read; they are refused.
 - An interruption while the input was still empty (an idle pipe or FIFO) could not be noticed

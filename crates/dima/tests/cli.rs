@@ -2631,7 +2631,13 @@ fn cite_describes_one_run() {
         stderr(&o)
     );
     // Standard input is read once.
-    for twice in [["-", "-"], ["-", "/dev/stdin"]] {
+    // `/dev/stdin` is standard input on Unix only.
+    let pairs: &[[&str; 2]] = if cfg!(unix) {
+        &[["-", "-"], ["-", "/dev/stdin"]]
+    } else {
+        &[["-", "-"]]
+    };
+    for twice in pairs {
         let o = run(&["cite", "--from", twice[0], "--from", twice[1]], dir);
         assert_eq!(code(&o), 2, "{}", stderr(&o));
         assert!(
@@ -2720,6 +2726,7 @@ fn the_null_device_takes_outputs() {
     for extra in [
         vec!["-o", "NUL", "-O", "json"],
         vec!["-o", "r.json", "--hcs-output", "NUL"],
+        vec!["-o", "NUL", "-O", "json", "--hcs-output", "nul"],
     ] {
         let o = analyze_tiny(d.path(), &extra);
         assert_eq!(code(&o), 0, "{extra:?}: {}", stderr(&o));
