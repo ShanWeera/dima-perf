@@ -22,11 +22,11 @@ upper case first (and counted).
 | residue | `A C D E F G H I K L M N P Q R S T V W Y` | the 20 standard amino acids |
 | residue | `U` (selenocysteine), `O` (pyrrolysine) | genetically encoded amino acids [@bock1991; @srinivasan2002] |
 | ambiguity | `X` (any), `B` (D or N), `Z` (E or Q), `J` (I or L) | IUPAC-IUB one-letter codes |
-| gap | `-` `.` `_` | alignment gaps [@eddy2011] |
-| missing | `~` `?` | missing data [@eddy2011]; `?` is "no consensus" in LANL alignments [@lanlcodes] |
+| gap | `-` `.` `_` | alignment gaps, as Easel, the sequence library of HMMER [@eddy2011], reads them |
+| missing | `~` `?` | missing data: `~` as Easel, the sequence library of HMMER [@eddy2011], reads it; `?` is "no consensus" in LANL alignments [@lanlcodes] |
 | stop | `*` `$` `^` | `*` is the usual stop symbol of translations; `$` and `^` are stops in LANL alignments [@lanlcodes; @lanlgenecutter] |
 | frameshift | `#` | LANL alignments [@lanlcodes; @lanlgenecutter] |
-| whitespace | space, tab (`\t`), carriage return (`\r`), vertical tab, form feed | line formatting; Easel's FASTA reader ignores the first three in sequence lines [@eddy2011] |
+| whitespace | space, tab (`\t`), carriage return (`\r`), vertical tab, form feed | line formatting; the FASTA reader of Easel, the sequence library of HMMER [@eddy2011], ignores the first three in sequence lines |
 | unknown | every other byte: digits, other punctuation, the letters not listed above, non-ASCII bytes | |
 
 ## DNA

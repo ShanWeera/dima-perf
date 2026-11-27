@@ -131,10 +131,12 @@ pub fn sentence(r: &Results) -> String {
         cited(&[citations::DIMA_PAPER]),
         r.run.tool.version,
     );
+    // Eddy (2011) is HMMER's paper; it does not describe Easel or its alphabet detection, so
+    // it is cited for HMMER only.
     if uses(r, "eddy2011") {
         s.push_str(&format!(
-            " The alphabet was detected from the residues of the first records with Easel's \
-             rules, as in HMMER {}.",
+            " The alphabet was detected from the residues of the first records with the rules \
+             of esl_abc_GuessAlphabet in Easel, the sequence library of HMMER {}.",
             cited(&["eddy2011"])
         ));
     }
@@ -594,7 +596,8 @@ mod tests {
         assert!(
             s.contains(&format!(
                 "using dima {}. The alphabet was detected from the residues of the first records \
-                 with Easel's rules, as in HMMER (Eddy 2011). In the protein alignment",
+                 with the rules of esl_abc_GuessAlphabet in Easel, the sequence library of HMMER \
+                 (Eddy 2011). In the protein alignment",
                 r.run.tool.version
             )),
             "{s}"

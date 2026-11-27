@@ -80,9 +80,10 @@ For the MERS-CoV spike sample with the defaults (`dima analyze -i samples/mers_s
 -o mers.json`, then `dima cite --from mers.json`), the paragraph reads:
 
 > Sequence diversity was analysed with DiMA (Tharanga et al. 2025) using dima 1.1.1. The
-> alphabet was detected from the residues of the first records with Easel's rules, as in HMMER
-> (Eddy 2011). In the protein alignment of 191 sequences (1353 columns), the overlapping 9-mers
-> at each of the 1345 positions were counted. A position's support is the number of sequences
+> alphabet was detected from the residues of the first records with the rules of
+> esl_abc_GuessAlphabet in Easel, the sequence library of HMMER (Eddy 2011). In the protein
+> alignment of 191 sequences (1353 columns), the overlapping 9-mers at each of the 1345
+> positions were counted. A position's support is the number of sequences
 > with a valid 9-mer there: one without gaps, missing-data symbols, stops, frameshifts or
 > ambiguity codes. Positions supported by more than 100 sequences were eligible for the summary
 > statistics. Shannon entropy (Shannon 1948) was estimated with the rarefaction-regression
@@ -95,10 +96,13 @@ For the MERS-CoV spike sample with the defaults (`dima analyze -i samples/mers_s
 
 The paragraph states what this run did, so parts of it change with the run:
 
-- **Alphabet.** The sentence on Easel's rules appears when the alphabet was detected; with
-  `--alphabet` it is left out. For DNA and RNA a sentence follows the definition of support:
-  "Nucleotide ambiguity codes were those of the IUPAC-IUB nomenclature (Cornish-Bowden 1985),
-  with X and I treated as ambiguous too."
+- **Alphabet.** The sentence on alphabet detection appears when the alphabet was detected; with
+  `--alphabet` it is left out. It cites the paper of HMMER [@eddy2011], whose sequence library,
+  Easel, holds the detection rules; the paper itself does not describe them. For DNA and RNA a
+  sentence follows the definition of support: "Nucleotide ambiguity codes were those of the
+  IUPAC-IUB nomenclature (Cornish-Bowden 1985), with X and I treated as ambiguous too." The
+  nomenclature's codes for incompletely specified bases are R, Y, M, K, S, W, H, B, V, D and N
+  [@cornishbowden1985, Table 1]; X and I are DiMA's additions, so the sentence names them apart.
 - **Support and the correction.** [Support](/reference/glossary/#support) is defined as DiMA
   counts it. The paper's correction applies only at eligible positions supported by at least
   1.25 × T sequences, rounded up (125 for the default T = 100): below that it has fewer than
