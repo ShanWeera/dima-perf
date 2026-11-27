@@ -19,7 +19,8 @@ Headers must hold their fields separated by `|`. Name the fields, in order, with
 ```
 
 ```sh
-dima analyze -i samples/mers_spike_aa.fasta \
+curl -fLO https://raw.githubusercontent.com/ShanWeera/dima-perf/master/samples/mers_spike_aa.fasta
+dima analyze -i mers_spike_aa.fasta \
     --header-format 'Accession|Host|Geolocation|Year' \
     --metadata-fields 'Host|Geolocation|Year' \
     -o mers.json --tsv-dir tables
@@ -98,8 +99,10 @@ difference as something to look into, not as a result, for three reasons:
 - **The counts describe the sequences in your file, which describe who sequenced what.** For
   SARS-CoV-2, high-income countries submitted ten times more sequences per reported case than
   low- and middle-income countries, and the number of lineages seen in a country followed the
-  number of its genomes; such counts *"can only tell if a lineage is present, not how prevalent
-  it is"* [@brito2022, Results].
+  number of its genomes [@brito2022, Results]. Even the numbers of genomes needed to detect a
+  lineage, worked out for representative sampling, *"can only tell if a lineage is present, not
+  how prevalent it is"* [@brito2022, Results]. A variant counted in a group shows that it was
+  sampled there; how common it is there depends on how the group was sampled.
 - **Public databases hold duplicates** of the same isolate, which the paper suggests checking by
   analysing the data with and without them [@tharanga2025, Methods], and they often record little
   about each isolate's history [@hu2013, Methods].

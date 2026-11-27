@@ -91,7 +91,8 @@ A ratio whose denominator is 0 is undefined, and DiMA reports it as `null` (JSON
 
 The second case does not mean that the position is conserved: a position whose variants are all
 tied Index variants gives the same two values. Position 6 of the repository's tiny test alignment
-(`tests/golden/tiny/input.fasta`) has two 3-mers, `IAK` and `LAK`, carried by 4 sequences each:
+(`tests/golden/tiny/input.fasta`, analysed as its test does: `-a protein -k 3 -s 4 --validation
+permissive`) has two 3-mers, `IAK` and `LAK`, carried by 4 sequences each:
 both are Index, so no sequence carries a non-Index variant, the total variants incidence is 0 and
 the distinct variants incidence is `null` — while its entropy is 1.0742 bits (1 bit observed).
 Read the incidences together with the entropy or `diversity_motifs`.

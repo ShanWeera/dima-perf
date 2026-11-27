@@ -335,7 +335,7 @@ reason shows in red under the button and as its tooltip:
 
 | Reason | What to do |
 |---|---|
-| *Open an alignment first* | Open a file (the reason then shows only as the tooltip). |
+| *Open an alignment first* | Open a file (while no file is open, this reason shows only as the button's tooltip). |
 | *Choose the alphabet: only 3 residue letters in the first record; that is too few to tell protein from nucleotide sequences* (or another reason, as in [The pre-check](#the-pre-check)) | Choose **Protein**, **DNA** or **RNA** under **Alphabet**. |
 | *the default k for proteins (9) exceeds the alignment length (6 columns): choose a k-mer length of at most 6* (or *k = 12 exceeds …* for a k you set; *1 column* for an alignment one column wide) | Set **k-mer length** to at most the alignment length. A default k longer than the alignment is shown as it is, never replaced by the app. |
 | *the Fill value under Advanced must not be empty* | Type a fill value under **Advanced**, or stop stratifying. |
@@ -924,8 +924,9 @@ is being saved; one export runs at a time). Every item has a tooltip saying what
 The tables are named after the query name: `<name>` is the query name with every character but
 letters, digits, `.`, `-` and `_` turned into `_` and leading or trailing dots and underscores
 dropped (`dima` if nothing is left), as `dima analyze --tsv-dir` names them when it reads a file.
-For results analysed from standard input, whose query name is *Unknown Protein*, the app names
-them `Unknown_Protein.*.tsv` where `dima analyze --tsv-dir` writes `dima.*.tsv`. The other default
+For results analysed from standard input, whose query name is *Unknown Protein* (*Unknown DNA*,
+*Unknown RNA*), the app names them `Unknown_Protein.*.tsv` (`Unknown_DNA.*.tsv`,
+`Unknown_RNA.*.tsv`) where `dima analyze --tsv-dir` writes `dima.*.tsv`. The other default
 names below are made the same way.
 
 ### File names
@@ -946,6 +947,8 @@ the command line accepts for the same output, and are compressed as the name say
 The extension's letter case does not matter (`run.JSON.ZST`). A name without one of these endings
 gets the export's usual extension added: `results` becomes `results.json`, and `results.gz`
 becomes `results.gz.json` (plain JSON); to compress, end the name in `.json.gz` or `.json.zst`.
+On Windows and macOS the system dialog may add the extension itself; it adds the usual one
+(`.json`, `.jsonl`, `.tsv`), which the save dialog's file type lists first.
 The figures and texts keep `.png`, `.svg`, `.txt` and `.bib`, added when missing. When the name
 with its added extension is a file that exists, the app asks, in a dialog titled *Replace the
 file?*: *NAME already exists in FOLDER. Replace it?*, with **Replace** and **Keep as is** (the
@@ -964,8 +967,11 @@ An export never replaces a file the app has loaded — the alignment the results
 from, the alignment on the Setup screen, or the results file they were opened from — however its
 path is spelled, through a symbolic link included. Exporting **Results (JSON)…** of results opened
 from `results.json` under that same name says *Nothing was saved: 'results.json' is the results
-file these results were opened from; choose another name*. When the names differ only in letter
-case, which macOS and Windows treat as one file, the message says the file *may be* that file. A
+file these results were opened from; choose another name*. Names that differ only in letter case
+(or, on macOS, only in how their accented letters are encoded) are judged by the file system:
+when the other name does not exist, it is another file and the export goes ahead; when it
+exists, Linux and macOS tell by the file itself whether it is the loaded one; on Windows the
+message says the file *may be* that file, with the reason. A
 folder export is refused alike when one of its four tables would replace such a file.
 
 Every file is written completely or not at all: an export goes to a temporary file in the
@@ -1146,8 +1152,11 @@ Removing the app does not remove these files; delete the folders to remove them 
 ## Screen readers
 
 The app draws its interface itself and describes it to screen readers through AccessKit (on
-Windows, macOS and Linux). Every control has a name, and what its tooltip shows is its
-description, read after its name:
+Windows, macOS and Linux). Every control has a name, and every control with a tooltip has the
+tooltip's text as its description, read after its name (the Export menu and its items, the
+chart's zoom buttons, the filter bar's check boxes and **Reset**, the variant filters, **Clear
+all**, **Use built-in browser**, **Copy as --header-format**, **Save run report…** and the
+others):
 
 - each analysis option is named by its label and described by its tooltip, references included;
   the dot after a changed option reads, for example, *Support threshold T changed; default: 100*;
@@ -1157,6 +1166,7 @@ description, read after its name:
   shown, in bits* and *Highest entropy shown, in bits* (with *similarity-weighted entropy* in
   place of *entropy* while the chart plots it), *Width of exported figures* and *Height of
   exported figures*;
+- the check box of **Minimum coverage** is *Minimum coverage: flag below*;
 - the conserved-region threshold's two controls have names of their own: *HCS threshold (Index
   incidence), slider in 0.5% steps* and *HCS threshold (Index incidence), exact value in percent*;
   the worker-threads slider is *Worker threads*;
@@ -1175,7 +1185,7 @@ description, read after its name:
   *Camelus dromedarius, 9 of 14*: the value, then its count of the variant's sequences (here
   `SFKSACIEV` at MERS position 25).
 
-A count of one is read in the singular: *1 region*, *1 value*, *1 span*.
+A count of one is read in the singular: *1 region*, *1 value*, *1 span*, *1 column*.
 
 The chart's points and the strip's regions are reached by the mouse only: their tooltips are not
 read. Use the position table instead, with the arrow keys, Home and End (press Esc first when a

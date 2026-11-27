@@ -37,7 +37,7 @@ threads, `-q` and `-v` how much is printed, and `-k` the k-mer length (see
 | `-v` (`--version`) | `-V` (`--version`) | `-v` is now verbose |
 
 To run with 5.0.9's defaults, give its k and threshold explicitly — `-s 30`, and `-k 9` for a
-nucleotide alignment:
+nucleotide alignment, here a file of your own named `spike_nt.fasta`:
 
 ```sh
 dima analyze -i spike_nt.fasta -a dna -k 9 -s 30 -o spike_nt.json
@@ -84,7 +84,8 @@ the sequences with a valid k-mer there:
 - The paper's correction, the default estimator, needs at least five points (a minimum taken
   from DiMA v5.0.9, which the paper does not state), so it corrects a position only when its
   support is at least $1.25\,T$. For positions that all $N$ sequences support to be corrected,
-  choose $T$ at most $0.8\,N$: $T = 20$ for 26 sequences.
+  choose $T$ at most $0.8\,N$: $T = 20$ for 26 sequences (and $T = 1$ for 3 sequences, where
+  $T = 2$ gives subsamples of a single size, so no regression line).
 
 So with a small alignment, lower `-s` and report the value you used. The alternative estimators
 `--estimator chao-wang-jost` [@chao2013] and `--estimator miller-madow` [@miller1955] estimate
@@ -222,7 +223,7 @@ threads, and every result file records the version that produced it
 ### How exact are the numbers?
 
 Exact to far more digits than any analysis needs, but not to the last digit. Like any
-floating-point program, DiMA rounds. On the test datasets in the repository (up to 3,756
+floating-point program, DiMA rounds. On the paper's four datasets in the repository (up to 3,756
 sequences), the rounding error is in the last one or two of the 17 significant digits written to
 the results, and at 17.5 million sequences per position it reaches at most the 11th digit (the
 opt-in Chao–Wang–Jost estimator stays within a few units in the last place at any size; the

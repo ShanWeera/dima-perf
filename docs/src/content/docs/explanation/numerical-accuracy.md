@@ -15,7 +15,7 @@ is tolerable [@eddy2011, Results].
 - **Always present, always negligible.** Every result carries some rounding error, as in any
   floating-point program. It grows with the number of sequences $N$ at a position, most at
   highly conserved positions (one dominant k-mer), which are most positions of a viral alignment.
-- **The test datasets** (the paper's four datasets, in the repository's `tests/data/`, up to 3,756 sequences): every entropy is
+- **The paper's four datasets** (in the repository, `samples/` and `tests/data/`, up to 3,756 sequences): every entropy is
   within about $5 \times 10^{-15}$ of the exact result, relative to its size. That is the last one
   or two of the 17 significant digits written to the JSON. The optional similarity-weighted
   entropy is within $2 \times 10^{-14}$ (see

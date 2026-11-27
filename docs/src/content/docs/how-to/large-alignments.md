@@ -83,14 +83,15 @@ peak memory and the time spent waiting for the input.
 On a terminal, without `-v`, the progress is one line redrawn in place, for example:
 
 ```text
-counting k-mers: 96%, 10000 sequences, 26.2 MB of 27.3 MB
-computing statistics: 52%, 1769 of 3364 positions
+counting k-mers: 90%, 10000 sequences, 8.4 MB of 9.3 MB
+computing statistics: 50%, 1684 of 3364 positions
 writing...
 ```
 
 While counting, the percentage is that of the file's bytes as stored (compressed, for a
 compressed file) and stays at 99% until counting ends; the number of sequences grows a batch at
-a time, up to 10,000 sequences per batch. From standard input there is no total, so the line
+a time, up to 10,000 sequences per batch, and is left out until the first batch is counted
+(`counting k-mers: 45%, 4.2 MB of 9.3 MB`). From standard input there is no total, so the line
 shows how much has been read: `counting k-mers... 5.6 MB`. A phase without a percentage shows
 how long it has lasted after 2 seconds (`writing... 3 s`). `--progress plain` prints appended
 lines instead, for logs and screen readers; see

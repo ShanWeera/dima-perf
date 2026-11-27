@@ -113,8 +113,8 @@ at least once a minute, with the elapsed time, and `-q` limits the output to err
 Warnings are printed once per kind of problem, with counts and examples. Those about the data
 (the library's diagnostics) are also stored in the results (`run.diagnostics`); the command
 line's own warnings — `threads_exceed_cpus`, `threads_refused`, `flag_has_no_effect`,
-`output_format_assumed` and, from `dima view`, `newer_schema` — are printed and counted in the
-summary line only, so keep the log if you need them.
+`output_format_assumed` and, from `dima view`, `newer_schema` — are only printed (and counted
+in the summary line of `dima analyze`), so keep the log if you need them.
 
 ## Exit codes and interruptions
 

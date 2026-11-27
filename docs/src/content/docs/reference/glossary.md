@@ -352,7 +352,8 @@ shows as "lowest 0.0000 at position 7, 455 positions tied".
 
 ### Summary line
 
-The last line that `dima analyze` prints on standard error, for example `analysed 191 sequences,
+The last line of the messages `dima analyze` prints on standard error (on a terminal, only the
+`Cite:` line follows it), for example `analysed 191 sequences,
 1345 positions (1345 eligible) in 0.03 s; entropy mean 0.1261, min 0.0000, max 1.5878 bits`;
 `dima hcs` prints its own (`44 conserved regions with an Index incidence of at least 100%`).
 These pages call it the summary line (also known as the one-line summary or the end-of-run

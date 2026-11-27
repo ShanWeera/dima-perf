@@ -96,6 +96,22 @@ references:
     doi: "10.1890/11-1952.1"
   - type: article
     authors:
+      - family-names: "Chao"
+        given-names: "Anne"
+      - family-names: "Wang"
+        given-names: "Y. T."
+      - family-names: "Jost"
+        given-names: "Lou"
+    title: "Entropy and the species accumulation curve: a novel entropy estimator via discovery rates of new species"
+    journal: "Methods in Ecology and Evolution"
+    year: 2013
+    volume: "4"
+    issue: "11"
+    start: "1091"
+    end: "1100"
+    doi: "10.1111/2041-210X.12108"
+  - type: article
+    authors:
       - family-names: "Hu"
         given-names: "Yongli"
       - family-names: "Tan"
@@ -159,22 +175,6 @@ references:
     start: "3021"
     end: "3030"
     doi: "10.1093/nar/13.9.3021"
-  - type: article
-    authors:
-      - family-names: "Chao"
-        given-names: "Anne"
-      - family-names: "Wang"
-        given-names: "Y. T."
-      - family-names: "Jost"
-        given-names: "Lou"
-    title: "Entropy and the species accumulation curve: a novel entropy estimator via discovery rates of new species"
-    journal: "Methods in Ecology and Evolution"
-    year: 2013
-    volume: "4"
-    issue: "11"
-    start: "1091"
-    end: "1100"
-    doi: "10.1111/2041-210X.12108"
   - type: book
     authors:
       - family-names: "Miller"

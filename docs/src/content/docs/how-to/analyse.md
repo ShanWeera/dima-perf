@@ -59,7 +59,7 @@ Its parts, separated by `; `, are:
 
 | Part | When it appears | What it says |
 |---|---|---|
-| `analysed N sequences, P positions (E eligible) in T` | Always | The sequences, the [positions](/reference/glossary/#position) (one per k-mer start), how many are [eligible](/reference/glossary/#eligible-position) (support above the support threshold), and the run time |
+| `analysed N sequences, P positions (E eligible) in S` | Always | The sequences, the [positions](/reference/glossary/#position) (one per k-mer start), how many are [eligible](/reference/glossary/#eligible-position) (support above the support threshold), and the run time S, which varies from run to run |
 | `entropy mean M, min L, max H bits` | When some position is eligible | The [eligible mean](/reference/glossary/#eligible-mean) (`average_entropy` in the results: the average entropy of the eligible positions, each counted once), and the lowest and highest entropy among them |
 | `no entropy summary (no eligible positions)` | Instead, when no position is eligible | The support threshold is too high for these data (see [Choose the support threshold](#choose-the-support-threshold)) |
 | `similarity-weighted mean S bits (observed O)` | With `--similarity-weighted-entropy`, when some position is eligible | See [Add similarity-weighted entropy](#add-similarity-weighted-entropy-optional) |
@@ -131,7 +131,8 @@ So for a small dataset of $N$ sequences:
   below $N$; if it is not, no position is eligible and DiMA warns
   (`threshold_exceeds_sequence_count`; see [Troubleshooting](/how-to/troubleshooting/#no-position-is-eligible));
 - for the default estimator to correct the positions that all $N$ sequences support, $T$ must be
-  at most $0.8\,N$.
+  at most $0.8\,N$ (and 1 for $N = 3$, where $T = 2$ gives subsamples of a single size, so no
+  regression line).
 
 This command counts the eligible positions by how their entropy was obtained — `corrected`, or
 the reason it was not:
@@ -166,9 +167,10 @@ rules do not decide, DiMA stops and asks for the alphabet. That happens for thre
 
 - too few residues: at most 10 letters in the first records;
 - both T and U present, so DNA and RNA cannot be told apart;
-- a composition that is neither clearly nucleotide (A, C, G and T or U, all four seen, with at
-  most 2% other letters) nor clearly protein (any of the letters E, F, I, J, L, O, P, Q and Z,
-  which no nucleotide alphabet uses, or a wide mix of protein letters).
+- a composition that is neither clearly nucleotide (at least 98% A, C, G, T or U and N, with all
+  four of A, C, G and T, or U, seen) nor clearly protein (any of the letters E, F, I, J, L, O, P,
+  Q and Z, which no nucleotide alphabet uses); the rules are in
+  [Input and validation](/explanation/input/#the-alphabet).
 
 The message names the reason, for example
 `the residue composition of the first 4 records (420 letters) does not identify the alphabet`.
@@ -418,8 +420,8 @@ alignment sequence counts could be ignored in comparisons" [@khan2008, Methods];
 applies to eligible positions only [@tharanga2025, Methods], which is why the comparison above
 uses the eligible summary. The lineage compares proteins in three ways:
 
-- **The eligible mean, per protein or per region**: the paper compares the spike's subunits this
-  way (S1 about 0.40 bits, S2 about 0.18) [@tharanga2025, Results].
+- **The eligible mean, per protein or per region**: the paper compares the subunits of the
+  SARS-CoV-2 spike this way (S1 about 0.40 bits, S2 about 0.18) [@tharanga2025, Results].
 - **The highest entropy**, as a coarse benchmark between viruses: about 9.2 bits for HIV-1, 6 for
   avian influenza, 4 for dengue and 2 for West Nile virus, all as 9-mers [@hu2013, Results],
   which the paper suggests "may be used as a benchmark for comparative proteome diversity

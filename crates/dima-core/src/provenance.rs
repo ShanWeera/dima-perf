@@ -55,6 +55,11 @@ pub fn references(m: MethodsUsed) -> Vec<Reference> {
     keys.push("shannon1948");
     keys.extend_from_slice(estimator_references(estimator));
     keys.push("chao2012");
+    // Coverage where no k-mer is seen exactly twice takes Chao, Wang & Jost's form, which the
+    // Chao–Wang–Jost estimator already cites.
+    if !keys.contains(&"chao2013") {
+        keys.push("chao2013");
+    }
     keys.push("hu2013");
     if similarity_weighted_entropy {
         keys.push("wu2025");
@@ -403,6 +408,10 @@ fn threshold_exceeds_sequence_count(threshold: u64, n: u64, estimator: Estimator
         Estimator::Dima | Estimator::Raw => {
             "the summaries are empty and every entropy is the observed value".to_owned()
         }
+        // With one sequence no position has two: every entropy is the observed 0 bits.
+        Estimator::ChaoWangJost | Estimator::MillerMadow if n < 2 => {
+            "the summaries are empty and every entropy is the observed value".to_owned()
+        }
         Estimator::ChaoWangJost | Estimator::MillerMadow => format!(
             "the summaries are empty, but the {} estimate still applies to every position with \
              at least 2 sequences",
@@ -527,10 +536,13 @@ fn uncorrected_eligible_positions(
     let lowest = entropy::max_correcting_threshold(lowest_support).unwrap_or(1);
     Some(
         Diagnostic::new(Code::UncorrectedEligiblePositions, message, tally).with_hint(format!(
-            "to have them corrected, raise their support to at least {} (more sequences with a \
+            "to have {} corrected, raise {} support to at least {} (more sequences with a \
              valid k-mer there) or lower --support-threshold to at most {lowest}, and report \
-             the threshold you used; entropy_fallback marks them",
-            entropy::min_corrected_support(threshold)
+             the threshold you used; entropy_fallback marks {}",
+            agree(n, "it", "them"),
+            agree(n, "its", "their"),
+            entropy::min_corrected_support(threshold),
+            agree(n, "it", "them"),
         )),
     )
 }
@@ -561,6 +573,7 @@ mod tests {
                 "rao1945",
                 "blackwell1947",
                 "chao2012",
+                "chao2013",
                 "hu2013",
                 "eddy2011"
             ]
@@ -602,11 +615,11 @@ mod tests {
         };
         assert_eq!(
             with(Alphabet::Protein)[4..],
-            ["hu2013", "wu2025", "grishin1995"]
+            ["chao2013", "hu2013", "wu2025", "grishin1995"]
         );
         assert_eq!(
             with(Alphabet::Dna)[4..],
-            ["hu2013", "wu2025", "cornishbowden1985"]
+            ["chao2013", "hu2013", "wu2025", "cornishbowden1985"]
         );
     }
 
@@ -700,9 +713,9 @@ mod tests {
         assert_eq!(
             d.hint.as_deref(),
             Some(
-                "to have them corrected, raise their support to at least 7 (more sequences with \
-                 a valid k-mer there) or lower --support-threshold to at most 4, and report the \
-                 threshold you used; entropy_fallback marks them"
+                "to have it corrected, raise its support to at least 7 (more sequences with a \
+                 valid k-mer there) or lower --support-threshold to at most 4, and report the \
+                 threshold you used; entropy_fallback marks it"
             )
         );
         // Every eligible position uncorrected.
@@ -753,7 +766,7 @@ mod tests {
             d.message
         );
         assert!(d.hint.as_deref().unwrap().contains(
-            "raise their support to at least 4 (more sequences with a valid k-mer there) or \
+            "raise its support to at least 4 (more sequences with a valid k-mer there) or \
                  lower --support-threshold to at most 1,"
         ));
     }

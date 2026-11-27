@@ -421,6 +421,12 @@
         "url": null
       },
       {
+        "key": "chao2013",
+        "citation": "Chao A, Wang YT, Jost L. Entropy and the species accumulation curve: a novel entropy estimator via discovery rates of new species. Methods in Ecology and Evolution. 2013;4(11):1091-1100. doi:10.1111/2041-210X.12108",
+        "doi": "10.1111/2041-210X.12108",
+        "url": null
+      },
+      {
         "key": "hu2013",
         "citation": "Hu Y, Tan PT, Tan TW, August JT, Khan AM. Dissecting the Dynamics of HIV-1 Protein Sequence Diversity. PLoS ONE. 2013;8(4):e59994. doi:10.1371/journal.pone.0059994",
         "doi": "10.1371/journal.pone.0059994",

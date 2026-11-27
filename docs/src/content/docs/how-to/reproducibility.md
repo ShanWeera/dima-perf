@@ -27,7 +27,7 @@ the results contain no timestamps, host names, paths or thread counts. These gua
 checked by the test suite on every change [@taschuk2017, Rule 10].
 
 Byte-identical is not the same as exact. Like any floating-point program, DiMA rounds, and its
-values carry a small rounding error. On the test datasets in the repository it is in the last
+values carry a small rounding error. On the paper's four datasets in the repository (up to 3,756 sequences) it is in the last
 one or two of the 17 significant digits (the last three or four for the opt-in similarity-weighted entropy). It
 grows with the number of sequences at a position, to at most the 11th digit at 17.5 million
 sequences (the 10th for similarity-weighted entropy). That is always at least $10^{10}$ times

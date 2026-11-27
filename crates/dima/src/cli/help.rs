@@ -223,8 +223,8 @@ pub fn tsv_dir() -> String {
      '_', leading and trailing '.' and '_' are removed, and an empty name becomes 'dima'. With \
      'dima analyze' the query name is --query-name, else the input file name without its FASTA \
      and compression extensions, and 'dima' for standard input, /dev/stdin and <(...). With \
-     'dima view' it is the query name in the results ('Unknown_Protein' for results analysed \
-     from standard input)."
+     'dima view' it is the query name in the results ('Unknown_Protein', 'Unknown_DNA' or \
+     'Unknown_RNA' for results analysed from standard input)."
         .to_owned()
 }
 
@@ -319,7 +319,7 @@ pub fn progress() -> String {
      DIMA_NO_PROGRESS is set to anything but an empty value, 0, false, no, off, n or f; \
      otherwise DIMA_PROGRESS (auto, plain or off; for example DIMA_PROGRESS=plain in a shell \
      profile), where an empty value counts as unset; otherwise 'auto'. Values are lower case, \
-     as for every option but --color."
+     as for every option."
         .to_owned()
 }
 

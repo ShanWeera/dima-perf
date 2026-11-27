@@ -259,9 +259,13 @@ pub fn validation() -> String {
 pub fn min_coverage() -> String {
     format!(
         "Flag positions whose estimated sample coverage (the probability that one more sequence \
-         carries an already seen k-mer) is below this value. Coverage is always reported; this \
-         adds the flag, a chart mark and a warning.{}",
-        refs(&[c("chao2012").at("Eq. 4a")])
+         carries an already seen k-mer) is below this value. Coverage is estimated with Chao and \
+         Jost's formula and, where no k-mer is seen exactly twice, with the form of Chao, Wang \
+         and Jost. It is always reported; this adds the flag, a chart mark and a warning.{}",
+        refs(&[
+            c("chao2012").at("Eq. 4a"),
+            c("chao2013").at("Materials and methods")
+        ])
     )
 }
 

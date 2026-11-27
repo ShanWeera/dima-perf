@@ -91,8 +91,8 @@ For the MERS-CoV spike sample with the defaults (`dima analyze -i samples/mers_s
 > Blackwell 1947), at eligible positions supported by at least 125 sequences (with fewer, it has
 > fewer than the five regression points it needs, a minimum taken from DiMA v5.0.9); the other
 > positions with support kept their observed entropy. Sample coverage was estimated after Chao &
-> Jost (2012). Variants were classified as Index, Major, Minor and Unique motifs (Hu et al.
-> 2013).
+> Jost (2012), with the form of Chao et al. (2013) where no k-mer was seen exactly twice.
+> Variants were classified as Index, Major, Minor and Unique motifs (Hu et al. 2013).
 
 The paragraph states what this run did, so parts of it change with the run:
 
@@ -115,6 +115,11 @@ The paragraph states what this run did, so parts of it change with the run:
   that estimator "at every position supported by at least 2 sequences; positions supported by
   one kept their observed entropy, 0 bits"; with `raw` it names the plug-in (observed)
   estimator.
+- **Coverage.** Sample coverage follows Chao and Jost's estimator [@chao2012, Eq. 4a]; where no
+  k-mer is seen exactly twice it takes the form of Chao, Wang and Jost [@chao2013, Materials and
+  methods] (see [Entropy and its correction](/explanation/entropy/#sample-coverage)). Since 1.2.0
+  both are among the run's references; the paragraph of results written by earlier versions
+  names the second only when the run used the Chao–Wang–Jost estimator.
 - **Exclusions and metadata.** A run in permissive mode that excluded characters adds how many
   occurrences were excluded, and a stratified run names its
   [stratified fields](/reference/glossary/#stratified-field).

@@ -10,11 +10,13 @@ project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.ht
 
 No computed value changes: the same inputs and options give the same entropies, incidences,
 coverages, motifs and conserved regions as 1.1.1. Results files differ from 1.1.1's in the
-version they record and, where a run records one, in its diagnostics: the new warning
+version they record, in their references (`run.references` adds Chao, Wang & Jost 2013 for the
+coverage, see "Changed") and, where a run records one, in its diagnostics: the new warning
 `uncorrected_eligible_positions` and the reworded `threshold_exceeds_sequence_count`,
 `alphabet_contradiction` and header hints. The results schema stays 1.1.0 (a diagnostic's `code`
-is a free string), so 1.1.x readers read these files. Some names of outputs that 1.1.1 accepted
-are now refused (see "Changed"), which is why this is a minor release.
+is a free string), so 1.1.x readers read these files. This minor release adds warnings and checks;
+some output names that 1.1.1 accepted are now refused because they misstated what was written
+(see "Changed").
 
 ### Added
 
@@ -32,15 +34,18 @@ are now refused (see "Changed"), which is why this is a minor release.
   names neither JSON nor TSV (`dima hcs -o regions.txt`, `--hcs-output regions.txt`) are JSON, as
   documented, and the warning says so, with the names to use.
 - Library: `output::read_name` (what an output's name says: format, compression, or why it is
-  refused), `output::written_in_place` (the names written as streams),
-  `output::unreadable_results_compression`, and `entropy::min_corrected_support` and
-  `entropy::max_correcting_threshold` (the exact rule of the correction, ⌈1.25 T⌉ and ⌊0.8 n⌋):
-  one rule each for the command line, the desktop app and the messages.
+  refused), `output::written_in_place` (the names written as streams), `output::folded`,
+  `output::one_file` and `output::why_one_file` (whether names that differ only in letter case or
+  Unicode form are one file), `output::unreadable_results_compression`, and
+  `entropy::min_corrected_support` and `entropy::max_correcting_threshold` (the exact rule of the
+  correction, ⌈1.25 T⌉ and ⌊0.8 n⌋, 1 for n = 3): one rule each for the command line, the desktop
+  app and the messages.
 - Desktop app: *Help ▸ Keyboard shortcuts* lists the interface zoom (Ctrl/⌘ +, −, 0) and
-  Ctrl/⌘ Q. Screen readers hear every option's tooltip as its description, distinct names for the
-  conserved-region slider and its exact field, the worker-threads slider and the figure width
-  and height, and the theme switch in words; counts read "1 region", "1 value". On macOS the Open
-  dialog offers every file, so an alignment saved as `.txt` can be opened.
+  Ctrl/⌘ Q. Screen readers hear every tooltip as its control's description, distinct names for
+  the conserved-region slider and its exact field, the worker-threads slider, the figure width and
+  height and the minimum-coverage check box, and the theme switch in words; counts read
+  "1 region", "1 value", "1 column". The k-mer length field steps by one with Up and Down. On
+  macOS the Open dialog offers every file, so an alignment saved as `.txt` can be opened.
 - Documentation:
   - Glossary: one entry per concept, with every name it has in the desktop app, the command
     line and the files.
@@ -64,26 +69,34 @@ are now refused (see "Changed"), which is why this is a minor release.
     completions, manual pages and what a release contains. FAQ: choosing T for small data sets
     and the option map from dima-cli 5.0.9. Troubleshooting and Diagnostics: cause and fix for
     every message of the command line and the desktop app.
-  - The documentation site shows the full version it describes, on the home page and in the
-    version picker, also offline.
+  - The version picker in the header of every page names the exact release the pages describe
+    (`v1.2.0`), also offline, where the list of versions cannot load.
 
 ### Changed
 
 - Output names, on the command line and in the desktop app: a name that names a compression
-  DiMA does not write (`.bz2`, `.bgz`, `.xz`, `.lzma`, `.lz`, `.lz4`, `.z`, `.zip`, `.7z`,
-  `.br`, `.sz`, `.tgz`, `.tbz2`, `.txz`, and `.zstd` or `.gzip` for `.zst` or `.gz`), two
-  compressions, a run report named as a table (`.tsv`, `.jsonl`), or a name that ends in a path
-  separator is refused with exit status 2 before anything runs, with the name to use. A name
-  that DiMA suggests is only ever extended, never cut.
+  DiMA does not write (`.bz2`, `.bgz`, `.xz`, `.lzma`, `.lz`, `.lz4`, `.z`, `.br`, `.sz`, and
+  `.zstd` or `.gzip` for `.zst` or `.gz`) or an archive (`.zip`, `.7z`, `.tar`, `.tar.gz`,
+  `.tar.zst`, `.tgz`, `.tbz2`, `.txz`), two compressions, a run report named as a table (`.tsv`,
+  `.jsonl`), or a folder (a name that ends in a path separator, or whose last part is `.` or
+  `..`) is refused with exit status 2 before anything runs, with the name to use. A name DiMA
+  suggests keeps the name given: it adds the format's extension to a name that names none
+  (`regions.txt` → `regions.txt.json`) and puts the output's own name in place of another
+  format's extension (`run.tsv` → `run.run-report.json`, `x.jsonl` → `x.hcs.json`), so it is
+  never the results' usual name.
 - The desktop app's exports accept the command line's names (`.ndjson.gz`, `.tab`, a run report
   named `.json.gz`, written compressed) and refuse the ones it refuses.
 - A folder given as an output, or a file given as `--tsv-dir`, is a usage error (exit status 2)
   on every platform.
 - Every file and folder a command writes is checked against every other and against the input
-  before anything runs, the run report first, however the names are spelled (`./`, `..`, letter
-  case, symbolic links). On Unix, standard input and standard output are compared with the files
-  a run replaces by device and inode, so `dima analyze -o x.fa < x.fa` and `-o r.json > r.json`
-  are refused. Devices such as `/dev/null` take any number of outputs, and appending standard
+  before anything runs, the run report first, however the names are spelled (`./`, `..`,
+  symbolic links). Names that differ only in letter case, or in the Unicode form of an accented
+  letter, are refused unless the file system shows two files (only one exists, or their inodes
+  differ). On Unix, standard input and standard output are compared with the files a run replaces
+  by device and inode, so `dima analyze -o x.fa < x.fa` and `-o r.json --hcs-output - > r.json`
+  are refused, and so is `dima cite --from r.json >> r.json`. Two outputs that lead to one pipe,
+  FIFO or socket (`-o /dev/fd/3 -O json --hcs-output - 3>&1 | …`, a link to `/dev/stdout` next to
+  `-`) are refused. Devices such as `/dev/null` take any number of outputs, and appending standard
   output to a log (`>> log`) is never a clash. `dima view --tsv-dir` checks the names it will
   write. Messages name the outputs in words ("the positions table (--tsv-dir)").
 - The run report is opened right after its check, so a report that cannot be written fails
@@ -95,26 +108,34 @@ are now refused (see "Changed"), which is why this is a minor release.
   that is not `auto`, `plain` or `off` is a usage error. An explicit `--progress` wins over
   `DIMA_NO_PROGRESS` (before, the variable won), and of `--progress` and `--no-progress` the last
   one given wins.
-- `dima cite --from` refuses results and conserved sequences of different runs (another input
-  checksum, k or T). `--licenses` with a subcommand is a usage error.
+- `dima cite --from` refuses results and conserved sequences of different runs, saying which
+  value is whose ("T is 100 in 'a.json' and 4 in 'b.hcs.json'"), and `--from -` given twice.
+  `--licenses` with a subcommand is a usage error.
 - The `Cite:` line names the results file only when it is a regular file, quoted for the shell
   where needed; otherwise it suggests `dima cite`.
-- An interruption's notice names the signal and how to stop at once ("press Ctrl-C again", or
-  "a second signal stops immediately").
+- An interruption's notice names the signal and how to stop at once: "press Ctrl-C again" when
+  a terminal is attached, otherwise "cancelling on SIGINT... (a second signal stops
+  immediately)", as for every signal another program sends.
 - Messages: `threshold_exceeds_sequence_count` is worded for the estimator used and its hint
-  gives the largest threshold that corrects (⌊0.8 N⌋), without the repeated example it and
+  gives the largest threshold that corrects (⌊0.8 N⌋, 1 for N = 3), without the repeated example it and
   `alphabet_contradiction` gave; when no header matches `--header-format`, the hint says the
   format is probably wrong before suggesting `--validation permissive`; a residue that is not
   valid in the alphabet given with `-a` suggests checking `--alphabet` first when the first
   records look like another alphabet; the k-mer length error names the default k when `-k` was
   not given ("27 (the default for DNA and RNA)") and says "1 column"; `--run-report -` alone
-  explains that the results already go to standard output.
+  explains that the results already go to standard output; the hint for unreadable compressed
+  results mentions `dima analyze` only for bzip2, the one of those formats it reads alignments
+  in; a run report clashing at a device or descriptor suggests `run-report.json`; the folder hint
+  gives a file name for that output (`out/hcs.json`) and mentions `--tsv-dir` only where the
+  command has it; `dima hcs` names its default output "(standard output by default)", as
+  `dima analyze` does.
 - The methods paragraph of `dima cite --from` and the desktop app's *Methods & references*
   define supported positions, state that the paper's correction applies where support is at
   least 1.25 T (credited to DiMA v5.0.9), give a conserved region's bound as the lowest
-  per-position 95% Clopper–Pearson lower bound among its members, and add sentences for the
-  detected alphabet (Easel) and the IUPAC-IUB codes when the run used them, so every reference it
-  lists is cited.
+  per-position 95% Clopper–Pearson lower bound among its members, credit the coverage's form
+  where no k-mer is seen exactly twice to Chao, Wang & Jost 2013 (Materials and methods), which
+  the run's references now list, and add sentences for the detected alphabet (Easel) and the
+  IUPAC-IUB codes when the run used them, so every reference it lists is cited.
 - Citations: Eddy 2011 is cited for HMMER only; the gap, missing-data and white-space conventions
   and the alphabet detection DiMA takes from Easel are cited to Easel's source code at the ported
   commit. New references for the reading guidance: Chao et al. 2014, Brito et al. 2022 and Bui
@@ -124,8 +145,9 @@ are now refused (see "Changed"), which is why this is a minor release.
   define N, n and D; `-q` (`-qq` is `-q`; it also hides the `--validation report` table and the
   `Cite:` line), `-v`, `--progress`, the `--tsv-dir` names of each command, the conserved-region
   options, `dima hcs -o`/`-O`, `--hcs-output`, `--run-report` and `cite --from` say exactly what
-  they do. The CLI reference adds `-h`, `-V`, `dima help`, the meaning of each value, accepted
-  alternative spellings, environment variables and the 128 + N exit statuses.
+  they do; values of every option, `--color` included, are lower case. The CLI reference adds
+  `-h`, `-V`, `dima help`, the meaning of each value, accepted alternative spellings,
+  environment variables and the 128 + N exit statuses.
 - Desktop app: the threshold and estimator tooltips, the chart's encoding and the T chip say that
   the paper's correction applies where possible; the *Method* fact and the chart's tooltip name
   the method in words and as the file writes it ("paper's correction (dima)"); figure subtitles
@@ -134,7 +156,11 @@ are now refused (see "Changed"), which is why this is a minor release.
   **Analyze** and thread messages name the app's own controls; the validation tooltip says that
   *Report* differs from *Permissive* only on the command line. The conserved-region and
   worker-threads sliders no longer draw a value box of their own: the exact field shows the
-  threshold, and "N of M CPUs" follows the threads slider.
+  threshold, and "N of M CPUs" follows the threads slider. The minimum-coverage tooltip names
+  both coverage sources. Save dialogs list the format's usual extension first, so a name typed
+  without one gets `.json`, not `.gz`, on Windows and macOS. An export is refused over a loaded
+  file whose name differs only in letter case only when the file system cannot tell the two
+  apart.
 - The Bioconda build sets `DIMA_RELEASE=1`.
 
 ### Fixed
@@ -142,15 +168,27 @@ are now refused (see "Changed"), which is why this is a minor release.
 - Data loss: a run report named like one of the `--tsv-dir` tables could replace an existing
   table of that name when the run failed before its tables were checked (an invalid option, an
   output name that names no format). Standard input or output redirected to a file a run
-  replaces could lose that file too (`-o x.fa < x.fa`, `-o r.json --hcs-output - > r.json`). All
-  are refused before anything runs, and a refused run report is not written.
+  replaces could lose that file too (`-o x.fa < x.fa`, `-o r.json --hcs-output - > r.json`), and
+  `dima cite --from r.json >> r.json` appended the citation to the results, which were then no
+  longer valid JSON. All are refused before anything runs, and a refused run report is not
+  written.
+- Two outputs written into one pipe or descriptor (`-o /dev/fd/3 -O json --hcs-output /dev/fd/3`)
+  were mixed into one stream that neither format could read; they are refused.
+- An interruption while the input was still empty (an idle pipe or FIFO) could not be noticed
+  until the 3-second grace period ended the process, without the closing message or the run
+  report; the input is now opened on a thread of its own, and the interruption is handled at
+  once.
+- A name longer than file systems allow (255) and a symbolic-link loop failed only after the
+  analysis, when the finished output was renamed into place (a looped link was even replaced);
+  both now fail before the analysis. A `--tsv-dir` that is a file, with the run report inside it,
+  is a usage error instead of a failed folder creation (exit status 3).
 - The time the counting threads waited for the input (`waited_for_input_seconds`, and the `-v`
   note "reading the input limited the run") included the first batch, which is read while
   opening; it now counts the counting phase only, and is null only when the analysis itself did
   not finish.
 - Results compressed with bzip2, xz, LZ4, zip, 7z or another format DiMA does not read results
-  from gave a JSON syntax error; `dima view`, `dima hcs`, `dima cite --from` and the desktop app
-  now name the format and what to do. Results compressed by pzstd (which start with a skippable
+  from were reported as "not a DiMA results file"; `dima view`, `dima hcs`, `dima cite --from`
+  and the desktop app now name the format and what to do. Results compressed by pzstd (which start with a skippable
   frame) are read.
 - A closed output pipe (`dima analyze … | head`) now prints the run's warnings and summary line
   before exit status 0, and the run report lists the outputs that were committed.
@@ -158,7 +196,9 @@ are now refused (see "Changed"), which is why this is a minor release.
   and says when standard output may hold a partial document; the run report lists the committed
   outputs.
 - The examples of `below_min_coverage` and of the conserved-region bounds never read as reaching
-  the bound they are below.
+  the bound they are below. `uncorrected_eligible_positions` speaks of one position in the
+  singular, and `threshold_exceeds_sequence_count` with one sequence no longer says that
+  Chao–Wang–Jost or Miller–Madow still applies.
 - Desktop app: a default k longer than a short alignment was silently replaced by the
   alignment's length; it is now shown as it is and named under **Analyze**, which stays
   disabled. The chart's text and the support-class line said that Chao–Wang–Jost and
@@ -166,13 +206,19 @@ are now refused (see "Changed"), which is why this is a minor release.
   Results compressed with bzip2 and other formats DiMA does not read results from were sent to
   the alignment pre-check; they are named for what they are, and bzip2 alignments still open. A
   coverage below the run's minimum never reads as reaching it. Exports never replace a file the
-  app has loaded, and a failed folder export removes the folders it created.
+  app has loaded, and a failed folder export removes the folders it created. A one-column
+  alignment reads "1 column", one eligible position "1 position is eligible", and T = 1 "more
+  than 1 sequence (T)".
 - `scripts/validate_paper.sh`, `scripts/bench/run.sh` and the two converters print their usage
   on `--help` and exit 0.
 - Documentation: wrong statements corrected, among them what Eddy 2011 describes, which
-  datasets the repository holds ("test datasets in the repository", not "bundled"), the
-  internal-error claim of Troubleshooting, `threads_exceed_cpus`, and "`dima view` converts the
-  same way" for table names.
+  datasets the repository holds ("the paper's four datasets in the repository", not "bundled"),
+  the internal-error claim of Troubleshooting, `threads_exceed_cpus`, "`dima view` converts the
+  same way" for table names, the name of the Linux `.deb` package (`di-ma`, so `sudo apt remove
+  di-ma`), the section of Khan et al. 2008 that holds the upper-bound quotation (Methods), what
+  the quotation of Brito et al. 2022 refers to, which files `SHA256SUMS` lists, when
+  `--run-report -` is possible, quoting in the Windows Command Prompt, and that `--color` values
+  are case-sensitive like every other.
 
 ## [1.1.1] - 2026-11-26
 

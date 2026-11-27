@@ -340,7 +340,7 @@ command line or environment values.
 It is always JSON, always indented, whatever `--pretty` says. A name ending in `.json.gz` or
 `.json.zst` gives a compressed report; a name that would mean a table or JSON Lines (`.tsv`,
 `.jsonl`) is refused. `--run-report -` writes it to standard output, which is possible only when
-the results go to a file (`-o FILE`). See
+no other output goes there: with `-o FILE`, or with only `--tsv-dir` or `--hcs-output FILE`. See
 [keep a run report](/how-to/reproducibility/#keep-a-run-report).
 
 | Key | Meaning |

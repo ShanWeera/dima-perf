@@ -399,7 +399,12 @@ fn renamed(
             .map(|e| e.len())
     }) {
         end -= len;
-        if !lower[..end].ends_with(own) {
+        // Not twice: `x.hcs.jsonl` and `hcs.jsonl` keep their name.
+        let base = lower[..end]
+            .rsplit(std::path::is_separator)
+            .next()
+            .unwrap_or_default();
+        if !base.ends_with(own) && base != own.trim_start_matches('.') {
             return names(&format!("{}{own}", &shown[..end]), extensions, compressed);
         }
     }
@@ -1148,6 +1153,15 @@ mod tests {
             "run.hcs.json.zst"
         );
         // A name that already has the output's own name keeps it once.
+        assert_eq!(
+            r(
+                "out/hcs.jsonl",
+                Some(OutputFormat::Jsonl),
+                C::Gzip,
+                &[".json"]
+            ),
+            "out/hcs.json.gz"
+        );
         assert_eq!(
             r(
                 "x.HCS.jsonl",

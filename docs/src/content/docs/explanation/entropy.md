@@ -67,7 +67,7 @@ alignment position is DiMA's reading, as for [similarity-weighted entropy](#simi
 $\log_2$ of the number of possible k-mers: about 39 bits for a 9-residue protein k-mer
 ($\log_2 20^9$) and 54 bits for a 27-nucleotide one ($\log_2 4^{27}$); real alignments stay far
 below it, *"in practice, however, the upper bound is very much lower for alignments of closely
-related sequences"* [@khan2008, Results; @tharanga2025, Methods and Results]. At a position the observed
+related sequences"* [@khan2008, Methods; @tharanga2025, Methods and Results]. At a position the observed
 entropy is also at most $\log_2 N$, since there cannot be more variants than sequences.
 
 ## The paper's correction (Fig. 2)
@@ -394,7 +394,8 @@ $$
 $$
 
 with $(N-1)(f_1-1)/((N-1)(f_1-1)+2)$ as the second factor when $f_2 = 0$ (the same convention as
-$A$ in $\eqref{eq:cwj-a}$, so that $\hat C = 1 - (f_1/N)(1-A)$), and $\hat C = 1$ when $f_1 = 0$.
+$A$ in $\eqref{eq:cwj-a}$ [@chao2013, Materials and methods], so that
+$\hat C = 1 - (f_1/N)(1-A)$), and $\hat C = 1$ when $f_1 = 0$.
 It is undefined (`null`) for $N < 2$. Low coverage means that much of the diversity at that
 position has probably not been sampled: its entropy, corrected or not, rests on an incomplete
 picture. `--min-coverage X` flags positions with $\hat C < X$ (`below_min_coverage`) and adds a
@@ -744,12 +745,12 @@ compensated (Neumaier) summation; each position is computed by one thread and su
 reduced in position order. Identical inputs therefore give byte-identical outputs.
 
 Rounding error is present in every value, as in any floating-point program, and grows with the
-number of sequences at a position. On the test datasets in the repository every entropy is within about
+number of sequences at a position. On the paper's four datasets in the repository (up to 3,756 sequences) every entropy is within about
 $5 \times 10^{-15}$ of the exact value (relative), and at the 2.2 million sequences per position
 of the paper's SARS-CoV-2 analysis within about $8 \times 10^{-12}$. That is $10^{10}$ to
 $10^{12}$ times smaller than the sampling error of the estimate. Similarity-weighted entropy has
 the same absolute error as observed entropy, but is smaller, so its relative error is larger: up
-to $2 \times 10^{-14}$ on the test datasets in the repository and $1.2 \times 10^{-10}$ at 2.2 million sequences.
+to $2 \times 10^{-14}$ on the paper's four datasets in the repository and $1.2 \times 10^{-10}$ at 2.2 million sequences.
 [Numerical accuracy](/explanation/numerical-accuracy/) gives the measurements, the one limit
 (more than $9 \times 10^{15}$ sequences at a position) and why a prototyped fix for the last
 digits is deferred.

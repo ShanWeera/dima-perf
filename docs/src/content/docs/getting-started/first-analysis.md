@@ -10,8 +10,9 @@ produces. You need `dima` ([Install DiMA](/getting-started/install/)) and, for a
 
 The commands are for a POSIX shell: a terminal on Linux or macOS, or, on Windows,
 [WSL](https://learn.microsoft.com/windows/wsl/) or Git Bash, where they work as written. The
-`dima` commands themselves work the same in PowerShell and the Command Prompt; `curl`, `grep`,
-`head`, `cut` and the line continuation `\` are the shell's. Run them in an empty folder: every
+`dima` commands themselves work the same in PowerShell; in the Command Prompt, quote values with
+double quotes (`"Accession|Host|Geolocation|Year"`), since single quotes do not quote there.
+`curl`, `grep`, `head`, `cut` and the line continuation `\` are the shell's. Run them in an empty folder: every
 file is written there.
 
 ## 1. Get the alignment
@@ -198,7 +199,7 @@ For R, Python or a spreadsheet, write the same results as four
 
 ```sh
 dima analyze -i mers_spike_aa.fasta -o mers.json --tsv-dir tables
-ls tables
+ls -1 tables
 ```
 
 ```text
@@ -248,6 +249,7 @@ warning[missing_like_values]: field "Year": 2 records have values that usually m
   e.g. "nan" (2 records)
   hint: if they mean missing, empty them in the headers so they receive the fill value, or edit them consistently
 analysed 191 sequences, 1345 positions (1345 eligible) in 0.02 s; entropy mean 0.1261, min 0.0000, max 1.5878 bits; 1 warning (see above)
+Cite: Tharanga et al. 2025, doi:10.1093/bib/bbae607 (`dima cite --from mers.meta.json` lists this run's references)
 ```
 
 ```json

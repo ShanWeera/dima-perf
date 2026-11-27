@@ -242,8 +242,7 @@ pub fn render() -> String {
          what the help does not show: the meaning of each value, the spellings `dima` accepts \
          without showing them, and the environment variables behind some options. Run \
          `dima <command> --help` for the same texts in a terminal; `-h` shows one-line \
-         summaries. Option values are lower case and case-sensitive, except those of \
-         `--color`.\n\n",
+         summaries. Option values are lower case and case-sensitive.\n\n",
     );
     out.push_str(
         "| Exit status | Meaning |\n|---|---|\n\

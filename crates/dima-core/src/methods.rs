@@ -162,13 +162,22 @@ pub fn sentence(r: &Results) -> String {
     }
     s.push_str(&format!(
         " Positions supported by more than {} were eligible for the summary statistics. Shannon \
-         entropy {} was estimated with {}{}. Sample coverage was estimated after {}. Variants \
+         entropy {} was estimated with {}{}. Sample coverage was estimated after {}{}. Variants \
          were classified as Index, Major, Minor and Unique motifs {}.",
         plural(r.support_threshold, "sequence", "sequences"),
         cited(&["shannon1948"]),
         estimator_text(p.estimator.value),
         estimator_scope(p.estimator.value, r.support_threshold),
         Cite::new("chao2012").narrative(),
+        // Results of 1.1 and earlier list it only with the Chao–Wang–Jost estimator.
+        if uses(r, "chao2013") {
+            format!(
+                ", with the form of {} where no k-mer was seen exactly twice",
+                Cite::new("chao2013").narrative()
+            )
+        } else {
+            String::new()
+        },
         cited(&["hu2013"]),
     ));
     if p.similarity_weighted_entropy.value {
@@ -502,7 +511,8 @@ mod tests {
         for cite in [
             "DiMA (Tharanga et al. 2025)",
             "Shannon entropy (Shannon 1948)",
-            "Sample coverage was estimated after Chao & Jost (2012).",
+            "Sample coverage was estimated after Chao & Jost (2012), with the form of Chao et \
+             al. (2013) where no k-mer was seen exactly twice.",
             "motifs (Hu et al. 2013).",
         ] {
             assert!(s.contains(cite), "{cite:?} not in {s:?}");

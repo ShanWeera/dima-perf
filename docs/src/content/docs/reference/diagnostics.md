@@ -170,7 +170,8 @@ warning[threshold_exceeds_sequence_count]: the support threshold (100) is not be
 ```
 
 With `dima` that largest threshold is 0.8 × N rounded down, because the paper's correction needs
-support of at least 1.25 × T (see [`uncorrected_eligible_positions`](#uncorrected_eligible_positions));
+support of at least 1.25 × T (see [`uncorrected_eligible_positions`](#uncorrected_eligible_positions)),
+except that it is 1 for N = 3, where T = 2 leaves every subsample of the correction one size;
 with the other estimators it is N − 1. With one sequence no threshold helps, and the hint says to
 add sequences. A shorter `-k` cannot help either: no position can have more support than there
 are sequences.
@@ -203,6 +204,7 @@ every position with at least 2 sequences, and `raw` corrects none.
 (`tests/data/HIV1_ALL_2020_pol_PRO.fasta.bz2`), analysed with the defaults:
 
 ```sh
+curl -fLO https://raw.githubusercontent.com/ShanWeera/dima-perf/master/tests/data/HIV1_ALL_2020_pol_PRO.fasta.bz2
 dima analyze -i HIV1_ALL_2020_pol_PRO.fasta.bz2 -o hiv.json
 ```
 
@@ -271,13 +273,14 @@ name the header fields with `--header-format`.
 ## Warnings of the command line
 
 These warnings, and the notes after them, are printed by `dima` on standard error and are not
-recorded in the results, which do not depend on them. Warnings count in the summary line's
-"N warnings"; `-q` hides them.
+recorded in the results, which do not depend on them. With `dima analyze` they count in the
+summary line's "N warnings"; `dima hcs` and `dima view` print them without a count. `-q` hides
+them.
 
 | Code | Raised when |
 |---|---|
 | `flag_has_no_effect` | `--hcs-min-incidence` or `--hcs-eligible-only` without an output of conserved sequences (*fix:* add `--hcs-output PATH` or `--tsv-dir DIR`, or write the table with `-o PATH.tsv --table hcs`); `--pretty` without JSON output; `--similarity-weighted-entropy` without an output that holds its values, the results (JSON, JSONL) or the positions table: the values are then not computed (*fix:* write the results with `-o PATH.json`, or the positions table with `-o PATH.tsv --table positions` or `--tsv-dir DIR`) |
-| `output_format_assumed` | a conserved-sequences file (`--hcs-output`, or `dima hcs -o`) is named without `.json` or `.tsv`, for example `regions.txt`: "'regions.txt' does not name JSON or TSV, so the conserved regions are written to it as JSON" (*fix:* name it `regions.json` or `regions.tsv`, optionally followed by `.gz` or `.zst`; with `dima hcs`, or choose the format with `-O json` or `-O tsv`) |
+| `output_format_assumed` | a conserved-sequences file (`--hcs-output`, or `dima hcs -o`) is named without `.json` or `.tsv`, for example `regions.txt`: "'regions.txt' does not name JSON or TSV, so the conserved sequences are written to it as JSON" (*fix:* as the hint says, name it `regions.txt.json` or `regions.txt.tsv`, optionally followed by `.gz` or `.zst`; with `dima hcs`, `-O json` or `-O tsv` chooses the format instead) |
 | `newer_schema` | `dima view` read results written with a newer (or an unrecognised 1.x) results schema version than its own, such as `1.2.0` or `1.1`; it writes them with its own version and keeps only the keys it knows. A version whose major number (before the first dot) is not 1 is refused instead (exit 4). *Fix:* to keep every key, convert the file with the DiMA version that wrote it (its `run.tool.version`) or a newer one |
 | `threads_exceed_cpus` | more threads were requested (`--threads` or `RAYON_NUM_THREADS`) than CPUs are available; they are used anyway, and more threads than CPUs slows the run down. *Fix:* lower `--threads` to the number of CPUs available, or leave it out to use them all |
 | `threads_refused` | the system refused to start some of the worker threads (a limit on processes and threads, such as `ulimit -u` or a container's pids limit, or a lack of memory), so the analysis continued with those it started; the run report records both numbers (`threads.count`, `threads.started`). Results are the same with any number of threads |

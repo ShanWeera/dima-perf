@@ -13,7 +13,9 @@ each one in full.
 
 ## The command line (exit 2)
 
-Every usage error is found before the input is read, so it costs no analysis time.
+Every usage error is found before the analysis starts, so it costs no analysis time; all but one
+are found before the input is read. The exception is a k longer than the alignment, which DiMA
+knows once it has read the first records.
 
 ### Options and their values
 
@@ -78,8 +80,9 @@ These names are refused before anything runs, whatever `-O` says; the rules are 
 [Choose and read outputs](/how-to/outputs/#names-dima-refuses).
 
 **`'…' asks for bzip2 compression, which DiMA does not write`** (or xz, LZMA, lzip, LZ4,
-compress (.Z), Brotli, Snappy, BGZF; **`… asks for a ZIP archive`**, a 7-Zip archive or a
-compressed tar archive) — DiMA writes gzip and Zstandard only. Use `.gz` or `.zst`, as the hint
+compress (.Z), Brotli, Snappy, BGZF; **`… asks for a ZIP archive`**, a 7-Zip archive, a tar
+archive (`.tar`) or a compressed tar archive (`.tar.gz`, `.tar.zst`, `.tgz`, …)) — DiMA writes
+one file per output, plain or compressed with gzip or Zstandard. Use `.gz` or `.zst`, as the hint
 says; compress the file afterwards with another tool if you need its format.
 
 **`'…' asks for Zstandard compression under the name .zstd`** (or gzip under `.gzip`) — DiMA
@@ -88,21 +91,30 @@ writes these, under `.zst` and `.gz`; rename as the hint says.
 **`'…' asks for two compressions (.gz, then .zst); DiMA applies one`** — keep one compression
 extension.
 
-**`'…' names a folder, not a file`** — the name ends in `/` (or `\` on Windows). Give a file name;
-`--tsv-dir` is the option that writes into a folder.
+**`'…' names a folder, not a file`** — the name ends in `/` (or `\` on Windows), or its last part
+is `.` or `..` (`out.json/.`). Give a file name, such as the one in the hint; with
+`dima analyze` and `dima view`, `--tsv-dir` is the option that writes into a folder.
 
 **`'…' is a folder, not a file`** — the output is an existing folder. Give a file name inside it,
 as the hint suggests.
 
-**`'…' is a file, not a folder`** — `--tsv-dir` names an existing file. Give it a folder name; it
-is created if needed.
+**`'…' is a file, not a folder`**, **`'…' is not a folder`** — `--tsv-dir` names an existing file,
+or a device or FIFO such as `/dev/null`. Give it a folder name; it is created if needed.
 
 **`'…' names JSON Lines, but conserved sequences are written as JSON or TSV`** — `--hcs-output`
-or `dima hcs -o` was given a `.jsonl` or `.ndjson` name. Use `.json` or `.tsv`.
+or `dima hcs -o` was given a `.jsonl` or `.ndjson` name. Use `.json` or `.tsv`; the hint puts
+`.hcs` in place of the JSON Lines extension (`x.jsonl` → `x.hcs.json`), so the name cannot be the
+results' `x.json`.
 
 **`the run report is JSON, but '…' names a TSV table`** (or `names JSON Lines`) — the run report
-is always JSON. Name it `.json`, optionally followed by `.gz` or `.zst`. No run report is
-written.
+is always JSON. Name it `.json`, optionally followed by `.gz` or `.zst`; the hint suggests
+`run.run-report.json` for `run.tsv`. No run report is written.
+
+**`cannot create '…'`** with **`caused by: file name too long (more than 255 bytes)`** (exit 3)
+— the file name, often a long `--query-name` in the table names, is longer than file systems
+allow. Shorten it. With **`caused by: too many levels of symbolic links`**, the name is a
+symbolic link that leads, through others, back to itself: remove the loop. Both are found before
+the analysis starts.
 
 ### Outputs that would overwrite each other
 
@@ -116,8 +128,11 @@ another spelling (`./x`, `d/../x`) or a symbolic link; the message names them, f
 name; when one is the run report, the hint suggests a free name for it.
 
 **`… may be the same file as …`** — two names differ only in letter case, which macOS and
-Windows treat as one file; DiMA refuses them on every system so that a command never loses an
-output there. Rename one.
+Windows treat as one file (or only in how their accented letters are encoded, which macOS
+ignores), and the file system cannot tell yet whether they are one file: neither exists. DiMA
+refuses them on every system so that a command never loses an output there. Rename one. When
+only one of the two exists, or (on Linux and macOS) both exist as different files, they are two
+files and nothing is refused.
 
 **`output '…' (…) is the input file`** — an output would replace the input, which DiMA never
 overwrites. Choose another output path. With `(read from standard input)`, standard input is
@@ -135,7 +150,19 @@ and `--run-report -` was — write the results to a file with `-o FILE`, or disc
 **`standard output, where … would go, is the file '…', which is also written as …`** (or
 `is the input file`) — standard output was redirected (`> file`, `>> file`) to a file that
 another output replaces, or to the input. Redirect standard output elsewhere, or give the other
-output its own file. Devices such as `/dev/null` and appending to a log are never refused.
+output its own file. Devices such as `/dev/null` and appending to a log are never refused. With
+`dima cite`, `standard output, where the citation would go, is the input file '…'` means that
+`>>` would append the citation to a `--from` file, which would then no longer be valid JSON.
+
+**`… and … are the same file: … and … would both be written to it`** — two descriptors, such as
+standard output and `/dev/fd/3`, lead to one file (`3>same.json >same.json`). Give each output
+its own file.
+
+**`… and … are the same pipe: … and … would both be written to it`**, **`… is the pipe '…',
+which is also written as …`**, **`'…' and '…' lead to one pipe: …`** — two outputs go into one
+pipe, FIFO or socket (`-o /dev/fd/3 -O json --hcs-output - 3>&1 | wc -c`, or a symbolic link to
+`/dev/stdout` next to `-`), where their bytes would be mixed into one stream that neither
+format can read. Give each output its own file or pipe.
 
 The message `--run-report '…' is also given as '…'` of earlier versions is now one of the
 messages above.
@@ -178,9 +205,13 @@ see [why](/explanation/conserved-sequences/#which-positions-qualify).
 **`--from takes at most one results file and one conserved-sequences file`** — give the results
 of one run and, optionally, the conserved sequences computed from them.
 
-**`the conserved sequences in '…' were not computed from the results in '…': … differ`** (since
-1.2.0) — the two files come from different runs (another input, k or T, as the message says), so
-one methods text would describe two analyses. Compute the conserved sequences from these results
+**`--from - is given twice`** (since 1.2.0) — standard input can be read once. Give the other
+file by its name.
+
+**`the conserved sequences in '…' were not computed from the results in '…': …`** (since 1.2.0)
+— the two files come from different runs, so one methods text would describe two analyses. The
+message says how: `their inputs differ (another checksum)`, `k is 9 in 'r.json' and 7 in
+'h.json'` or `T is …`. Compute the conserved sequences from these results
 with the command in the hint (`dima hcs -i RESULTS`), or cite each run on its own.
 
 ## Files and system resources (exit 3)
@@ -295,11 +326,13 @@ values of one field). Split the input into smaller alignments and analyse them s
 
 **`…: not a DiMA results file`** (from `dima view`, `dima hcs` or `dima cite --from`) — the file
 is not the JSON `dima analyze` writes: an alignment given to `dima view` instead of
-`dima analyze`, another JSON document, or results compressed with something other than gzip or
-Zstandard. Give the results JSON (optionally `.gz` or `.zst`).
+`dima analyze`, or another JSON document. Results compressed with a format DiMA recognises but
+does not read (bzip2, xz, LZ4, zip, 7z, …) get the message below instead. Give the results JSON
+(optionally `.gz` or `.zst`).
 
-**`'…' is compressed with bzip2, which DiMA does not read results from`** (or xz, a ZIP
-archive, …; since 1.2.0) — results are read plain, gzip- or Zstandard-compressed. If the file
+**`…: compressed with bzip2, which DiMA does not read results from`** (or `compressed with xz
+(.xz)`, `a zip archive, which DiMA does not read results from`, …; since 1.2.0) — results are
+read plain, gzip- or Zstandard-compressed. If the file
 holds DiMA results, decompress it (`bzip2 -dk r.json.bz2`) or recompress it with gzip or zstd;
 if it is an alignment, analyse it with `dima analyze`, which reads bzip2.
 
@@ -338,8 +371,9 @@ cancelling... (press Ctrl-C again to stop immediately)
 cancelling on SIGTERM... (a second signal stops immediately)
 ```
 
-The first is for Ctrl-C; the second names the signal another program sent, such as a batch
-scheduler's SIGTERM at a time limit. A second signal ends DiMA at once, as does the end of a
+The first is for Ctrl-C on a terminal; the second names the signal another program sent, such
+as a batch scheduler's SIGTERM at a time limit (a SIGINT sent where no terminal is attached reads
+`cancelling on SIGINT...`, since 1.2.0). A second signal ends DiMA at once, as does the end of a
 3-second grace period after the first. Then comes an error line, printed even with `-q`:
 
 **`cancelled; no results were written`** — every file output is as it was before the run. Run
@@ -424,8 +458,8 @@ limit on processes and threads (`ulimit -u`, a container's pids limit).
 (`-o x.json` in the same command) if you need the settings, the summaries or the provenance.
 
 The command line's own warnings (`threads_exceed_cpus`, `threads_refused`, `flag_has_no_effect`,
-`output_format_assumed`, `newer_schema`) are printed and counted in the summary line but not
-stored in the results; see
+`output_format_assumed`, `newer_schema`) are printed, and counted in the summary line of
+`dima analyze`, but not stored in the results; see
 [Diagnostics](/reference/diagnostics/#warnings-of-the-command-line). All diagnostics are
 explained in [Diagnostics](/reference/diagnostics/).
 
@@ -491,9 +525,9 @@ of the first 10000 records (60000 letters) does not identify the alphabet"). Cho
 **DNA** or **RNA** under **Alphabet**; the message then goes. See
 [the alphabet](/explanation/input/#the-alphabet).
 
-**"Not started: …"** — **Analyze** was pressed (or its shortcut used) while the analysis cannot
-start; the rest of the message, also shown under the **Analyze** button, says why, and the fix is
-the same there:
+**"Not started: …"** — shown if an analysis is asked for while it cannot start (the **Analyze**
+button is greyed out then, with the same reason under it, so this is rarely seen); the rest of
+the message says why, and the fix is the same there:
 
 - "Open an alignment first";
 - "Choose the alphabet: …" (as above);

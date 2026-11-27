@@ -107,8 +107,8 @@ interrupted the run (130 Ctrl-C, 143 SIGTERM, 129 SIGHUP; see
 [Exit codes](https://shanweera.github.io/dima-perf/latest/reference/exit-codes/)).
 
 Numbers are written at full double precision. As in any floating-point program they carry a
-small rounding error: in the last one or two of the 17 significant digits on the test datasets
-in the repository, and no earlier than the 11th at 17.5 million sequences per position (the 10th
+small rounding error: in the last one or two of the 17 significant digits on the paper's four
+datasets in the repository (up to 3,756 sequences), and no earlier than the 11th at 17.5 million sequences per position (the 10th
 for the opt-in similarity-weighted entropy). That is at least 10¹⁰ times smaller than the
 sampling error (10⁹ times for similarity-weighted entropy).
 [Numerical accuracy](https://shanweera.github.io/dima-perf/latest/explanation/numerical-accuracy/)

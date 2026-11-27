@@ -155,7 +155,7 @@ Besides the archives and desktop packages, every release on the
 
 | File | What it is |
 |---|---|
-| `SHA256SUMS` | The SHA-256 checksum of every other file ([Verify the download](#verify-the-download)) |
+| `SHA256SUMS` | The SHA-256 checksum of every other file except the attestation bundle (`.intoto.jsonl`, which holds the signed attestations of these files) ([Verify the download](#verify-the-download)) |
 | `dima-1.2.0-TARGET.cdx.json` | A software bill of materials (CycloneDX JSON) for each command-line build: every Rust package compiled into it, with its version and declared licence |
 | `dima-1.2.0-docs.tar.gz` | The documentation of this version, as published on the website (its links expect the website's address, `…/v1.2/`) |
 | `dima-1.2.0.intoto.jsonl` | The signed build-provenance attestations of the release files, in one bundle, to verify them offline: `gh attestation verify FILE --bundle dima-1.2.0.intoto.jsonl --repo ShanWeera/dima-perf` |
@@ -228,8 +228,9 @@ The AppImage needs FUSE 2 (`libfuse2`, called `libfuse2t64` on Ubuntu 24.04); wi
 it with `--appimage-extract-and-run`, or use the `.tar.gz`. To remove it, delete the file.
 
 **.deb.** Install it with `sudo apt install ./dima-gui_1.2.0_x86_64.deb`, then start **DiMA**
-from the applications menu, or run `dima-gui` in a terminal. Remove it with
-`sudo apt remove dima-gui`.
+from the applications menu, or run `dima-gui` in a terminal. The package is named `di-ma` (from
+the app's name, DiMA; `dpkg -S "$(command -v dima-gui)"` shows it), so remove it with
+`sudo apt remove di-ma`.
 
 **.tar.gz.** It holds the program `dima-gui`, the README, the licence, the third-party notices
 and the licence of the bundled font (`OFL.txt`), and adds no menu entry or icon. Unpack it and

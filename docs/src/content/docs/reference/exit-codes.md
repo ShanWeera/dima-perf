@@ -35,9 +35,10 @@ of an interrupted run. [Troubleshooting](/how-to/troubleshooting/) explains each
 ## Interruptions
 
 On the first SIGINT, SIGTERM or SIGHUP, DiMA prints a notice that names it
-(`cancelling... (press Ctrl-C again to stop immediately)` for Ctrl-C,
+(`cancelling... (press Ctrl-C again to stop immediately)` for Ctrl-C on a terminal,
 `cancelling on SIGTERM... (a second signal stops immediately)` for a signal another program
-sent; not with `-q`), stops, removes the temporary files of outputs it had not finished, prints
+sent, and `cancelling on SIGINT...` for a SIGINT sent where no terminal is attached; not with
+`-q`), stops, removes the temporary files of outputs it had not finished, prints
 what became of the outputs, and ends **by the same signal**, so a shell or workflow manager sees
 the conventional status 128 + signal number. Each file output is written to a temporary file
 next to its destination and moved into place only when it is complete, so an interruption never
